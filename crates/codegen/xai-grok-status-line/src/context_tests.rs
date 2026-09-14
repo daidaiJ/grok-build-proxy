@@ -60,11 +60,21 @@ fn every_field_survives_a_round_trip_through_the_shared_fixture() {
                 output_tokens: 9_500,
                 cache_creation_input_tokens: 2_000,
                 cache_read_input_tokens: 40_000,
+                reasoning_tokens: 1_500,
             }),
             used_percentage: Some(8),
             remaining_percentage: Some(92),
             auto_compact_threshold_percent: Some(80),
         },
+        api_calls: Some(StatusLineApiCalls {
+            succeeded: 42,
+            failed: 3,
+        }),
+        perf: Some(StatusLineTurnPerf {
+            ttft_ms: Some(850),
+            tps: Some(63.5),
+            output_tokens: Some(9_500),
+        }),
         effort: Some(StatusLineEffort {
             level: "high".into(),
         }),

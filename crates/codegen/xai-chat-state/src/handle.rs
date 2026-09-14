@@ -171,6 +171,13 @@ impl ChatStateHandle {
         });
     }
 
+    /// LOCAL: record one terminal model-call failure for the status-line health counters.
+    pub fn record_model_call_failure(&self, model_id: Option<String>) {
+        let _ = self
+            .cmd_tx
+            .send(ChatStateCommand::RecordModelCallFailure { model_id });
+    }
+
     /// Apply subagent usage; returns false if the actor did not acknowledge.
     pub async fn record_subagent_usage(
         &self,

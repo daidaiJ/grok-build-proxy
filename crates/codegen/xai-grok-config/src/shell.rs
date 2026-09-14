@@ -18,6 +18,21 @@ pub enum WindowsShell {
     Cmd,
 }
 
+// LOCAL: config `[shell] backend` override, resolved once at config load.
+// Takes precedence over `GROK_SHELL`; first call wins (detection caches after).
+// `None` leaves the env/auto-detect cascade in charge.
+#[cfg(not(unix))]
+static SHELL_OVERRIDE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// LOCAL: set the Windows shell backend from config (`[shell] backend`).
+/// Accepts the same values as `GROK_SHELL`: `pwsh` | `powershell` | `bash`
+/// (also `gitbash`/`git-bash`) | `cmd`. Call once at config load, before the
+/// first bash-tool call; later calls are ignored.
+#[cfg(not(unix))]
+pub fn set_windows_shell_override(backend: Option<String>) {
+    let _ = SHELL_OVERRIDE.set(backend);
+}
+
 /// Detect the best available shell on Windows.
 /// If `GROK_SHELL` is set, it takes precedence over auto-detection.
 /// Result is cached for the process lifetime.
@@ -27,8 +42,13 @@ pub fn detect_windows_shell() -> &'static WindowsShell {
     static CACHED: OnceLock<WindowsShell> = OnceLock::new();
 
     CACHED.get_or_init(|| {
+        // LOCAL: config `[shell] backend` override wins over the GROK_SHELL env var.
+        let explicit = SHELL_OVERRIDE
+            .get()
+            .and_then(|o| o.clone())
+            .or_else(|| std::env::var("GROK_SHELL").ok());
         // Explicit override via GROK_SHELL.
-        if let Ok(val) = std::env::var("GROK_SHELL") {
+        if let Some(val) = explicit {
             match val.trim().to_ascii_lowercase().as_str() {
                 "pwsh" => {
                     tracing::info!("Windows shell (GROK_SHELL override): pwsh");

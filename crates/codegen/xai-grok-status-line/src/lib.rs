@@ -19,7 +19,8 @@ pub const CLIENT_STATUS_LINE_META: &str = "clientStatusLine";
 pub use config::test_support;
 pub use config::{ResolvedStatusLine, StatusLineConfig, StatusLineItem, StatusLineType};
 pub use context::{
-    STATUS_LINE_SCHEMA_VERSION, StatusLineContext, StatusLineContextWindow, StatusLineCost,
-    StatusLineEffort, StatusLineModel, StatusLineRepo, StatusLineSessionUsage, StatusLineTrigger,
-    StatusLineTurn, StatusLineWorkspace, StatusLineWorktree,
+    STATUS_LINE_SCHEMA_VERSION, StatusLineApiCalls, StatusLineContext, StatusLineContextWindow,
+    StatusLineCost, StatusLineEffort, StatusLineModel, StatusLineRepo, StatusLineSessionUsage,
+    StatusLineTrigger, StatusLineTurn, StatusLineTurnPerf, StatusLineWorkspace,
+    StatusLineWorktree,
 };

@@ -857,6 +857,9 @@ pub(crate) struct SessionActor {
     /// While false, the emitter wakes and returns without building anything: no git discovery, no chat-state round trips.
     /// Live rather than fixed at spawn, because a resident session outlives the client that created it.
     pub(crate) status_line_enabled: Arc<std::sync::atomic::AtomicBool>,
+    /// LOCAL: API duration of the most recent completed model call, ms (0 = none yet).
+    /// Status-line TPS denominator; stored on the actor to keep chat-state's wire untouched.
+    pub(crate) last_turn_api_duration_ms: std::sync::atomic::AtomicU64,
     /// Shared models manager for etag-triggered refresh from response headers.
     pub(crate) models_manager: crate::agent::remote_config::ModelsManager,
     /// The system prompt's `Workspace Path` is set at build time via `AgentBuilder::with_prompt_working_directory()`.

@@ -14,6 +14,9 @@ fn vision_ok_png_b64() -> String {
         .expect("encode png");
     base64::engine::general_purpose::STANDARD.encode(buf)
 }
+
+// LOCAL: `Engine` trait must be in scope for `STANDARD.encode` (base64 0.22).
+use base64::Engine as _;
 fn mcp_screenshot_result(payload_b64: &str) -> ToolRunResult {
     let mut mcp = MCPOutput::okay_output(
         "browser_screenshot".into(),

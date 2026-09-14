@@ -204,6 +204,10 @@ impl ChatStateActor {
             } => {
                 self.record_model_call_usage(model_id, &usage, api_duration_ms, cost_usd_ticks);
             }
+            // LOCAL: endpoint-health failure counter.
+            ChatStateCommand::RecordModelCallFailure { model_id } => {
+                self.record_model_call_failure(model_id);
+            }
             ChatStateCommand::RecordSubagentUsage {
                 by_model,
                 attribute_to_prompt,

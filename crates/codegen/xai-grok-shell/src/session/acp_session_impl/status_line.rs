@@ -7,9 +7,9 @@ use super::*;
 
 use crate::extensions::notification::{PromptUsage, PromptUsageModel, ticks_to_usd};
 use xai_grok_status_line::{
-    STATUS_LINE_SCHEMA_VERSION, StatusLineContext, StatusLineContextWindow, StatusLineCost,
-    StatusLineEffort, StatusLineModel, StatusLineRepo, StatusLineSessionUsage, StatusLineTurn,
-    StatusLineWorkspace, StatusLineWorktree,
+    STATUS_LINE_SCHEMA_VERSION, StatusLineApiCalls, StatusLineContext, StatusLineContextWindow,
+    StatusLineCost, StatusLineEffort, StatusLineModel, StatusLineRepo, StatusLineSessionUsage,
+    StatusLineTurn, StatusLineTurnPerf, StatusLineWorkspace, StatusLineWorktree,
 };
 use xai_grok_workspace::session::git::normalize_repo_url;
 
@@ -95,6 +95,7 @@ fn build_context_window(
                 output_tokens: t.output_tokens,
                 cache_creation_input_tokens: t.cache_creation_tokens,
                 cache_read_input_tokens: t.cached_read_tokens,
+                reasoning_tokens: t.reasoning_tokens,
             }
         }),
         used_percentage,
@@ -216,9 +217,43 @@ impl SessionActor {
             effort,
             worktree,
             turn: live_turn(turn_start_ms, prompt_id.as_deref()),
+            // LOCAL: endpoint-health counters; present once anything was attempted.
+            api_calls: totals.filter(|t| t.model_calls > 0 || t.failed_model_calls > 0).map(
+                |t| StatusLineApiCalls {
+                    succeeded: t.model_calls,
+                    failed: t.failed_model_calls,
+                },
+            ),
+            perf: self.build_turn_perf().await,
             // Like `session_name`: a run property the client stamps, not the agent's to send
             trigger: None,
         }
+    }
+
+    /// LOCAL: assemble the status-line latency/throughput snapshot.
+    /// `ttft_ms` is the session-average TTFT from the signals actor (the exact
+    /// per-call value lives on the turn delta, which the billing path consumes);
+    /// `tps` is the last turn's output tokens over its API window (API duration
+    /// minus average TTFT). Absent before the first completed call.
+    async fn build_turn_perf(&self) -> Option<StatusLineTurnPerf> {
+        let signals = self.signals_handle().snapshot().await?;
+        let usage = self.chat_state_handle.get_last_turn_usage().await?;
+        let output_tokens = u64::from(usage.completion_tokens);
+        let ttft_ms = (signals.avg_time_to_first_token_ms > 0)
+            .then_some(signals.avg_time_to_first_token_ms);
+        let last_api_ms = self.last_turn_api_duration_ms.load(Ordering::Relaxed);
+        let tps = match (last_api_ms, ttft_ms) {
+            (api_ms, Some(first_ms)) if api_ms > first_ms && output_tokens > 0 => {
+                let stream_secs = (api_ms - first_ms) as f64 / 1000.0;
+                Some((output_tokens as f64 / stream_secs * 10.0).round() / 10.0)
+            }
+            _ => None,
+        };
+        Some(StatusLineTurnPerf {
+            ttft_ms,
+            tps,
+            output_tokens: (output_tokens > 0).then_some(output_tokens),
+        })
     }
 
     async fn repo_state(cwd: PathBuf) -> RepoState {

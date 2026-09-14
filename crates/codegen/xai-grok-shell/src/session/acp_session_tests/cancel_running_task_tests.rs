@@ -245,6 +245,7 @@ async fn persist_ack_waits_for_disk_flush_before_success() {
                 last_reported_branch: std::sync::Arc::new(parking_lot::Mutex::new(None)),
                 git_head_enabled: false,
                 status_line_enabled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                last_turn_api_duration_ms: std::sync::atomic::AtomicU64::new(0),
                 models_manager: Default::default(),
                 display_cwd: std::sync::OnceLock::new(),
                 active_agent_type: parking_lot::Mutex::new(None),
@@ -861,6 +862,7 @@ async fn first_turn_memory_injection_disabled_does_not_persist_to_chat_history()
                 last_reported_branch: std::sync::Arc::new(parking_lot::Mutex::new(None)),
                 git_head_enabled: false,
                 status_line_enabled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                last_turn_api_duration_ms: std::sync::atomic::AtomicU64::new(0),
                 models_manager: Default::default(),
                 display_cwd: std::sync::OnceLock::new(),
                 active_agent_type: parking_lot::Mutex::new(None),
@@ -1192,6 +1194,7 @@ async fn cancel_running_task_teardown_clears_running_and_pending_work() {
                 status_line_enabled: std::sync::Arc::new(
                     std::sync::atomic::AtomicBool::new(false),
                 ),
+                last_turn_api_duration_ms: std::sync::atomic::AtomicU64::new(0),
                 models_manager: Default::default(),
                 display_cwd: std::sync::OnceLock::new(),
                 active_agent_type: parking_lot::Mutex::new(None),
@@ -2773,6 +2776,7 @@ async fn cancel_propagates_to_sampler_handle_so_no_further_emission() {
                 status_line_enabled: std::sync::Arc::new(
                     std::sync::atomic::AtomicBool::new(false),
                 ),
+                last_turn_api_duration_ms: std::sync::atomic::AtomicU64::new(0),
                 models_manager: Default::default(),
                 display_cwd: std::sync::OnceLock::new(),
                 active_agent_type: parking_lot::Mutex::new(None),

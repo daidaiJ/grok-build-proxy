@@ -114,6 +114,9 @@ pub enum ChatStateCommand {
         cost_usd_ticks: Option<i64>,
     },
 
+    /// LOCAL: record one terminal model-call failure (endpoint-health counter).
+    RecordModelCallFailure { model_id: Option<String> },
+
     /// Subagent usage into session (and prompt when attributable). Replies when applied.
     RecordSubagentUsage {
         by_model: Vec<(String, crate::usage::UsageTotals)>,

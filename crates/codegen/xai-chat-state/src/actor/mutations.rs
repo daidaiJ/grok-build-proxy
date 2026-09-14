@@ -447,6 +447,19 @@ impl ChatStateActor {
         );
     }
 
+    /// LOCAL: record one terminal model-call failure (endpoint-health counter; no token impact).
+    /// Session ledger only — the status line reads cumulative session health, per-prompt bills stay token/cost shaped.
+    pub(super) fn record_model_call_failure(&mut self, model_id: Option<String>) {
+        let model_key = match model_id.as_deref() {
+            Some(id) if !id.is_empty() => id,
+            _ => self.state.sampling_config.model.as_str(),
+        }
+        .to_owned();
+        self.state
+            .session_usage
+            .record_main_loop_failure(&model_key);
+    }
+
     pub(super) fn record_subagent_usage(
         &mut self,
         by_model: &[(String, crate::usage::UsageTotals)],

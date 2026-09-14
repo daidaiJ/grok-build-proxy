@@ -1,0 +1,3 @@
+GROK_EVENT=Turn complete
+GROK_MESSAGE=test body payload
+GROK_SESSION_ID=test-session-123
