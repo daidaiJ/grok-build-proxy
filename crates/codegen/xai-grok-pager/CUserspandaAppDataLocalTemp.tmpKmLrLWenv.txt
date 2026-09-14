@@ -1,3 +1,0 @@
-GROK_EVENT=Turn complete
-GROK_MESSAGE=hello world
-GROK_SESSION_ID=sess-42
