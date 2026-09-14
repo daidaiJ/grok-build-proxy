@@ -993,8 +993,9 @@ mod platform {
 #[cfg(not(target_os = "macos"))]
 mod platform {
     use super::ImageData;
-    
-
+    // LOCAL: used by the Linux subprocess fallback; unused on Windows.
+    #[cfg_attr(windows, allow(unused_imports))]
+    use std::process::{Command, Stdio};
     /// No subprocess-free pasteboard probe exists off-macOS.
     pub(super) fn clipboard_image_snapshot() -> (Option<u64>, bool) {
         (None, false)
