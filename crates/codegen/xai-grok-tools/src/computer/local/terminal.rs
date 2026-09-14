@@ -1579,7 +1579,9 @@ impl LocalTerminalActor {
         }
     }
 
-    async fn collect_shell_state_dumps(&mut self, _task_ids: &[String]) {
+    // LOCAL: body using task_ids is unix-gated; keep the name valid on both platforms.
+    #[cfg_attr(not(unix), allow(unused_variables))]
+    async fn collect_shell_state_dumps(&mut self, task_ids: &[String]) {
         #[cfg(unix)]
         if self.persistent_shell {
             for task_id in task_ids {
