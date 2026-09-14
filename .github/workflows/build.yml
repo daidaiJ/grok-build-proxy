@@ -14,6 +14,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Some session-lifecycle tests recurse deeply enough to overflow the
+  # libtest thread's default stack on Linux CI.
+  RUST_MIN_STACK: 16777216
 
 jobs:
   linux:
