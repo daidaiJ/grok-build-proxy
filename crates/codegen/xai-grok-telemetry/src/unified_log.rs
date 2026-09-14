@@ -172,7 +172,7 @@ fn test_log_dir() -> &'static PathBuf {
             "grok-unified-log-test-{}-{nanos}",
             std::process::id()
         ));
-        let mut builder = fs::DirBuilder::new();
+        let builder = fs::DirBuilder::new();
         #[cfg(unix)]
         {
             use std::os::unix::fs::DirBuilderExt;
