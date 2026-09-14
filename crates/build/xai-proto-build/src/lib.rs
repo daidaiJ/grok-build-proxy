@@ -152,10 +152,38 @@ impl XaiProtoBuilder {
 
         // Can only process one input file when using --dependency_out=FILE.
         for proto in protos {
+            // LOCAL: /dev/stdout and /dev/null are Unix-only; on Windows route
+            // both to temp files and feed the dependency file back through the
+            // same parsing path below. protoc's make line is
+            // "<descriptor_set>: <deps>", so the prefix has to follow the
+            // descriptor target. Both temp files are removed after parsing.
+            let windows = cfg!(windows);
+            let temp_dep_file = windows.then(|| {
+                std::env::temp_dir().join(format!(
+                    "xai-proto-deps-{}-{}.txt",
+                    std::process::id(),
+                    proto.file_stem().and_then(|s| s.to_str()).unwrap_or("proto")
+                ))
+            });
+            let temp_descriptor = windows.then(|| {
+                std::env::temp_dir().join(format!(
+                    "xai-proto-null-{}-{}.bin",
+                    std::process::id(),
+                    proto.file_stem().and_then(|s| s.to_str()).unwrap_or("proto")
+                ))
+            });
+            let dependency_out: String = match &temp_dep_file {
+                Some(path) => format!("--dependency_out={}", path.display()),
+                None => "--dependency_out=/dev/stdout".to_string(),
+            };
+            let descriptor_target: String = match &temp_descriptor {
+                Some(path) => path.display().to_string(),
+                None => "/dev/null".to_string(),
+            };
             let mut command = Command::new(protoc.unwrap_or(Path::new("protoc")));
             command
-                .arg("--dependency_out=/dev/stdout")
-                .arg("--descriptor_set_out=/dev/null");
+                .arg(dependency_out)
+                .arg(format!("--descriptor_set_out={descriptor_target}"));
 
             // Add protoc's well-known types include directory first (if found).
             // This is needed for Bazel sandboxed builds where protoc and its
@@ -181,22 +209,54 @@ impl XaiProtoBuilder {
                 return Err(anyhow::anyhow!("protoc command failed"));
             }
 
-            let output =
-                String::from_utf8(output.stdout).context("protoc command output not UTF-8")?;
+            let output = if windows {
+                // LOCAL: Windows path — the dependency list went to the temp file.
+                let path = temp_dep_file
+                    .as_ref()
+                    .expect("windows dep file must exist when windows is set");
+                let contents = fs::read_to_string(path).context("protoc dependency file unreadable")?;
+                let _ = fs::remove_file(path);
+                if let Some(desc) = &temp_descriptor {
+                    let _ = fs::remove_file(desc);
+                }
+                contents
+            } else {
+                String::from_utf8(output.stdout).context("protoc command output not UTF-8")?
+            };
 
             let mut lines = output.lines();
             let first_line = lines.next().context("protoc command output is empty")?;
-            let prefix = "/dev/null:";
-            let rem = first_line.strip_prefix(prefix).with_context(|| {
-                format!("protoc command output must start with /dev/null: {output:?}")
-            })?;
+            let prefix = if windows {
+                format!(
+                    "{}:",
+                    temp_descriptor
+                        .as_ref()
+                        .expect("windows descriptor file must exist when windows is set")
+                        .display()
+                )
+            } else {
+                "/dev/null:".to_string()
+            };
+            let rem = first_line
+                .strip_prefix(&prefix)
+                .with_context(|| {
+                    format!("protoc command output must start with {prefix} {output:?}")
+                })?;
             for line in iter::once(rem).chain(lines) {
                 let line = line.trim();
-                let line = line.strip_suffix("\\").unwrap_or(line);
+                // LOCAL: Windows make-format escapes backslashes inside paths.
+                let line = if windows {
+                    line.replace("\\\\", "\\")
+                } else {
+                    line.to_string()
+                };
+                let line = line.strip_suffix('\\').unwrap_or(&line);
                 // Depending on absolute paths like
                 // /Users/user/homebrew/Cellar/protobuf/29.1/include/google/protobuf/timestamp.proto
                 // is valid, but we want to have output more deterministic.
-                if line.contains("/include/google/protobuf/") {
+                // LOCAL: match Windows backslash include paths too.
+                let normalized = line.replace('\\', "/");
+                if normalized.contains("/include/google/protobuf/") {
                     continue;
                 }
 

@@ -1,0 +1,57 @@
+# LOCAL: minimal build workflow for this fork.
+# The upstream monorepo CI is not usable here (internal runners, DotSlash
+# tools, secrets). This keeps only what a fork needs: compile checks and the
+# test suites for the crates this fork actually touches, on both Linux and
+# Windows. `bin/protoc` is a DotSlash stub that cannot run on CI; the
+# xai-proto-build helper falls back to a PATH protoc, which each job installs.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install protoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+      - name: Check touched crates
+        run: >-
+          cargo check -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
+          -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-shell -p xai-grok-pager
+      - name: Test touched crates
+        run: >-
+          cargo test -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
+          -p xai-grok-extra-ca -p xai-proto-build
+      - name: Test shell (in-process harness)
+        run: cargo test -p xai-grok-shell --features test-support
+      - name: Build CLI binary
+        run: cargo build -p xai-grok-pager-bin
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install protoc
+        run: choco install protoc -y
+      # Compile-only: several test suites are env-dependent (file locks, PATH
+      # lookups) and are exercised on the Linux job instead.
+      - name: Check touched crates
+        run: >-
+          cargo check -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
+          -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-shell
+      - name: Test portable crates
+        run: cargo test -p xai-chat-state -p xai-grok-status-line -p xai-grok-extra-ca
