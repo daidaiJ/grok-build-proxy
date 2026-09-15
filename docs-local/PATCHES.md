@@ -130,6 +130,26 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 - `src/app/cli.rs` + `src/lib.rs` + pager-bin `src/main.rs`：`Command::Stats` 接线
   （两处命令分类块 + 分发臂）
 
+### xai-grok-pager（欢迎屏品牌定制：熊猫头 logo + 彩蛋副标题）
+- `assets/logo/logo07.txt`（full tier，23x7）/ `logo05.txt`（compact tier，5 行）：
+  Grok 字标换成熊猫头盲文点阵；`.gitattributes` 强制 `assets/logo/*.txt` LF
+  （`include_str!` 原样嵌入，CRLF 会把 `\r` 带进二进制渲染成杂字形）
+- `src/views/welcome/hero_box.rs`：`HERO_SUBTITLE` 改为
+  `"Share code & cola with Panda — thanks for trying Grok Build! (/feedback)"`
+- `src/app/mod.rs`：退出尾部（终端恢复后、`Ok(false)` 前）追加 `FAREWELL`
+  常量打印（stderr）——hero 副标题会被 changelog/公告挤掉，退出告别语必打印，
+  彩蛋稳定展示；`quit_for_update` / 模式 relaunch 路径先于打印 return，不会污染
+- `tools/gen_panda_logo.py`：像素→盲文转换脚本（2x4 点/格，U+2800 空白格），
+  生成两档 art 并保证 LF，留作他人定制参考
+- `docs/user-guide/28-welcome-branding.md`：新增内置引导文档（`src/docs.rs`
+  `USER_GUIDE` 注册），面向 AI agent 的 logo/副标题定制配方——启动时会解包到
+  `<grok_home>/docs/user-guide/`，别人的 AI 可读到并自动复刻同类定制
+- `docs/user-guide/29-local-enhancements.md`：新增内置引导文档，把本地增强
+  （`[network]` 出口代理、`[shell]` 后端、状态行 `api-calls`/`perf`、
+  `${session_id}` 会话亲和头、DeepSeek/GLM `reasoning_content` 思考回传）
+  写成"作用 + 何时主动配置 + 示例"的 AI 引导表，含信号→配置对照表；
+  供 AI 解包后读到并主动帮用户配置
+
 ### xai-grok-tools（LSP 诊断合并去抖）
 - `src/implementations/lsp/mod.rs`：新 `DIAGNOSTICS_QUIET_WINDOW`（150ms）
 - `src/implementations/lsp/manager.rs`：`take_answered_diagnostics` → `take_answered_items`
