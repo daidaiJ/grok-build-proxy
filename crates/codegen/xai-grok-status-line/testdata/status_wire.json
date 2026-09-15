@@ -36,11 +36,21 @@
       "input_tokens": 10000,
       "output_tokens": 9500,
       "cache_creation_input_tokens": 2000,
-      "cache_read_input_tokens": 40000
+      "cache_read_input_tokens": 40000,
+      "reasoning_tokens": 1500
     },
     "used_percentage": 8,
     "remaining_percentage": 92,
     "auto_compact_threshold_percent": 80
+  },
+  "api_calls": {
+    "succeeded": 42,
+    "failed": 3
+  },
+  "perf": {
+    "ttft_ms": 850,
+    "tps": 63.5,
+    "output_tokens": 9500
   },
   "effort": {
     "level": "high"

@@ -1223,9 +1223,10 @@ fn make_test_handle(
         upload_queue: Arc::new(OnceLock::new()),
         upload_failures_since_success: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         tool_context: crate::tools::ToolContext::new_local_context(
-            xai_grok_paths::AbsPathBuf::new(std::path::PathBuf::from("/tmp")).unwrap(),
+            // LOCAL: "/tmp" is not an absolute path on Windows; the platform temp dir works on both.
+            xai_grok_paths::AbsPathBuf::new(std::env::temp_dir()).unwrap(),
             std::sync::Arc::new(xai_grok_workspace::file_system::LocalFs::new(
-                std::path::PathBuf::from("/tmp"),
+                std::env::temp_dir(),
             )),
             std::sync::Arc::new(crate::terminal::LocalTerminalRunner),
         ),

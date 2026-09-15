@@ -126,6 +126,39 @@ impl std::fmt::Display for EnvKeys {
         f.write_str(&self.names().join(", "))
     }
 }
+/// LOCAL: `[network]` — process-wide egress proxy for first-party API traffic.
+/// Applied by `xai_grok_extra_ca::set_process_proxy` at config resolution; only
+/// allowlisted hosts ride the tunnel, everything else (local MCP, other
+/// gateways) goes direct. `GROK_PROXY` / `GROK_PROXY_HOSTS` env vars are the
+/// no-config fallback and work even without this table.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NetworkConfig {
+    /// Egress proxy URL, e.g. `http://127.0.0.1:7897`. Unset = no proxy config.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<String>,
+    /// Hosts routed through the proxy, matched as dot-boundary suffixes:
+    /// `x.ai` covers `api.x.ai` and `auth.x.ai` but not `notx.ai`.
+    /// Unset = the built-in first-party list (`x.ai`, `grok.com`);
+    /// an empty list routes all hosts (loopback still direct).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy_hosts: Option<Vec<String>>,
+}
+
+/// LOCAL: `[shell]` — Windows shell backend selection for the bash tool.
+/// Unix shells are unaffected (they follow `$SHELL`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ShellBackendConfig {
+    /// `pwsh` | `powershell` | `bash` (also `gitbash`/`git-bash`) | `cmd`.
+    /// Unset = auto-detect: pwsh → powershell.exe → Git Bash → powershell.exe
+    /// (PowerShell is preferred because MSYS2 path translation mangles
+    /// `/flag`-style arguments of native Windows toolchains). Takes precedence
+    /// over the `GROK_SHELL` env var.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EndpointsConfig {
@@ -1324,6 +1357,12 @@ pub struct Config {
     /// `[diagnostics]`: crash handler toggle (`load_crash_handler_enabled_sync`).
     #[serde(default, skip_serializing)]
     pub diagnostics: DiagnosticsConfig,
+    /// LOCAL: `[network]` egress proxy; resolved into the HTTP layer at config load.
+    #[serde(default, skip_serializing)]
+    pub network: NetworkConfig,
+    /// LOCAL: `[shell]` Windows shell backend; resolved into the shell cascade at config load.
+    #[serde(default, skip_serializing)]
+    pub shell: ShellBackendConfig,
     /// When running in relay/headless mode, this should be set to Writeback.
     /// Defaults to reading from GROK_STORAGE_MODE env var.
     #[serde(skip)]
@@ -1597,6 +1636,8 @@ impl Default for Config {
         let endpoints = EndpointsConfig::default();
         let mut cfg = Self {
             features: Features::default(),
+            network: NetworkConfig::default(),
+            shell: ShellBackendConfig::default(),
             goal: GoalConfig::default(),
             workflows: WorkflowsConfig::default(),
             doom_loop_recovery: crate::util::config::DoomLoopRecoverySettings::default(),
@@ -2144,6 +2185,16 @@ impl Config {
     /// Call immediately after `new_from_toml_cfg()`. Fields resolved: subagents base layers (6 fields) via `SubagentsConfig::resolve` respect_gitignore via `ToolsConfig::resolve` disable_zdr_incompatible_tools via `ToolsConfig::resolve` media_gen_batch_limits via `ToolsConfig::resolve_max_parallel_*` managed_mcps_enabled via `ManagedMcpsConfig::resolve` web_search_model / session_summary_model / image_description_model / prompt_suggest_model_pin via `ModelOverrideConfig::resolve` memory_config via typed `Config::resolve_memory` disable_web_search (CLI flag ORed with config.toml) storage_mode via `StorageMode::resolve` path_not_found_hints from remote_settings
     /// Note: `worktree_type` is resolved directly in `MvpAgent::new` via `resolve_worktree_type` since it's an agent-level field, not a Config field.
     pub fn resolve_runtime_fields(&mut self, ctx: &RuntimeResolutionContext<'_>) {
+        // LOCAL: compute the process-wide egress proxy once at config load, so
+        // every HTTP client build afterwards routes through the allowlisted hosts.
+        xai_grok_extra_ca::set_process_proxy(
+            self.network.proxy.clone(),
+            self.network.proxy_hosts.clone(),
+        );
+        // LOCAL: config `[shell] backend` override for the Windows shell cascade
+        // (pwsh | powershell | bash | cmd); wins over the GROK_SHELL env var.
+        #[cfg(windows)]
+        xai_grok_config::shell::set_windows_shell_override(self.shell.backend.clone());
         self.cli_subagents = ctx.cli_subagents;
         self.web_search_model_override = ctx.cli_web_search_model.map(|s| s.to_owned());
         self.session_summary_model_override = ctx.cli_session_summary_model.map(|s| s.to_owned());

@@ -17,6 +17,131 @@ pub const ENV_GROK_EXTRA_CA_BUNDLE: &str = "GROK_EXTRA_CA_BUNDLE";
 
 pub const ENV_SSL_CERT_FILE: &str = "SSL_CERT_FILE";
 
+// ---------------------------------------------------------------------------
+// LOCAL: process-wide egress proxy with host allowlist.
+//
+// Every HTTP client in the tree is built through [`build_reqwest_client`], so
+// a proxy decision here covers model APIs, MCP HTTP, web tools, hooks, and
+// storage alike. Resolved once at config load into [`set_process_proxy`];
+// per-request host matching happens via `Proxy::custom`.
+//
+// Semantics: only the hosts in the allowlist ride the tunnel (suffix match on
+// the dot boundary, so `x.ai` covers `api.x.ai`/`auth.x.ai`); everything else —
+// local MCP servers, other gateways — goes direct. Loopback never matches.
+// An empty allowlist means "all hosts". `GROK_PROXY` env is the no-config
+// fallback and uses the default first-party list.
+// ---------------------------------------------------------------------------
+
+pub const ENV_GROK_PROXY: &str = "GROK_PROXY";
+
+/// Default allowlist: the first-party grok/xAI API hosts.
+pub const DEFAULT_PROXY_HOST_SUFFIXES: &[&str] = &["x.ai", "grok.com"];
+
+const ENV_GROK_PROXY_HOSTS: &str = "GROK_PROXY_HOSTS";
+
+#[derive(Debug, Clone)]
+pub struct ProcessProxyRule {
+    pub url: String,
+    /// Host suffixes; empty vec = all hosts.
+    pub host_suffixes: Vec<String>,
+}
+
+static PROCESS_PROXY: OnceLock<Option<ProcessProxyRule>> = OnceLock::new();
+
+/// Set the process-wide egress proxy. Call once at config load, before the
+/// first client build; later calls are ignored.
+/// `host_suffixes = None` applies [`DEFAULT_PROXY_HOST_SUFFIXES`]; an empty
+/// vec routes all hosts (except loopback). A `None` url leaves the slot unset
+/// so the `GROK_PROXY` env fallback stays reachable.
+pub fn set_process_proxy(url: Option<String>, host_suffixes: Option<Vec<String>>) {
+    let Some(url) = url else {
+        return;
+    };
+    let _ = PROCESS_PROXY.set(Some(ProcessProxyRule {
+        url,
+        host_suffixes: host_suffixes.unwrap_or_else(|| {
+            DEFAULT_PROXY_HOST_SUFFIXES
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect()
+        }),
+    }));
+}
+
+/// The resolved rule, if any. `GROK_PROXY` (plus optional comma-separated
+/// `GROK_PROXY_HOSTS`) is the no-config fallback.
+pub fn process_proxy_rule() -> Option<ProcessProxyRule> {
+    if let Some(rule) = PROCESS_PROXY.get() {
+        return rule.clone();
+    }
+    let url = std::env::var(ENV_GROK_PROXY).ok().filter(|v| !v.trim().is_empty())?;
+    let host_suffixes = std::env::var(ENV_GROK_PROXY_HOSTS).ok().map(|v| {
+        v.split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect()
+    });
+    Some(ProcessProxyRule {
+        url,
+        host_suffixes: host_suffixes.unwrap_or_else(|| {
+            DEFAULT_PROXY_HOST_SUFFIXES
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect()
+        }),
+    })
+}
+
+/// Dot-boundary suffix match: `x.ai` matches `api.x.ai` but not `notx.ai`.
+fn host_matches_suffix(host: &str, suffix: &str) -> bool {
+    let suffix = suffix.trim().trim_start_matches('.');
+    !suffix.is_empty() && (host == suffix || host.strip_suffix(suffix).is_some_and(|rest| rest.ends_with('.')))
+}
+
+fn host_is_loopback(host: &str) -> bool {
+    // IPv6 loopback arrives bracketed per WHATWG serialization; accept both forms.
+    host == "localhost"
+        || host.starts_with("127.")
+        || host == "::1"
+        || host.starts_with("[::1]")
+}
+
+fn apply_process_proxy(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
+    let Some(rule) = process_proxy_rule() else {
+        return builder;
+    };
+    let all_hosts = rule.host_suffixes.is_empty();
+    let url = rule.url.clone();
+    builder.proxy(reqwest::Proxy::custom(move |uri| {
+        proxy_match(&rule.host_suffixes, all_hosts, &url, uri)
+    }))
+}
+
+fn apply_process_proxy_blocking(
+    builder: reqwest::blocking::ClientBuilder,
+) -> reqwest::blocking::ClientBuilder {
+    let Some(rule) = process_proxy_rule() else {
+        return builder;
+    };
+    let all_hosts = rule.host_suffixes.is_empty();
+    let url = rule.url.clone();
+    builder.proxy(reqwest::Proxy::custom(move |uri| {
+        proxy_match(&rule.host_suffixes, all_hosts, &url, uri)
+    }))
+}
+
+/// Shared host-allowlist decision: `Some(proxy_url)` when the request host is
+/// allowlisted (and not loopback), `None` to go direct.
+fn proxy_match(host_suffixes: &[String], all_hosts: bool, url: &str, uri: &reqwest::Url) -> Option<String> {
+    let host = uri.host_str()?;
+    if host_is_loopback(host) {
+        return None;
+    }
+    let matched = all_hosts || host_suffixes.iter().any(|suffix| host_matches_suffix(host, suffix));
+    matched.then(|| url.to_string())
+}
+
 /// First install wins; without a default, `ClientConfig::builder()` panics when `ring` and `aws-lc-rs` are both compiled in.
 pub fn ensure_default_crypto_provider() {
     static ONCE: std::sync::Once = std::sync::Once::new();
@@ -48,7 +173,7 @@ pub fn build_reqwest_client(
     configure: impl Fn(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
 ) -> reqwest::Result<reqwest::Client> {
     ensure_default_crypto_provider();
-    let mut builder = configure(reqwest::Client::builder())
+    let mut builder = apply_process_proxy(configure(reqwest::Client::builder()))
         .use_rustls_tls()
         .tls_built_in_native_certs(false)
         .tls_built_in_webpki_certs(true);
@@ -64,10 +189,11 @@ pub fn build_blocking_reqwest_client(
     configure: impl Fn(reqwest::blocking::ClientBuilder) -> reqwest::blocking::ClientBuilder,
 ) -> reqwest::Result<reqwest::blocking::Client> {
     ensure_default_crypto_provider();
-    let mut builder = configure(reqwest::blocking::Client::builder())
-        .use_rustls_tls()
-        .tls_built_in_native_certs(false)
-        .tls_built_in_webpki_certs(true);
+    let mut builder =
+        apply_process_proxy_blocking(configure(reqwest::blocking::Client::builder()))
+            .use_rustls_tls()
+            .tls_built_in_native_certs(false)
+            .tls_built_in_webpki_certs(true);
     for cert in shared_reqwest_roots() {
         builder = builder.add_root_certificate(cert);
     }
@@ -383,3 +509,37 @@ fn first_der_item(der: &[u8]) -> Option<&[u8]> {
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
+
+// LOCAL: proxy allowlist matcher tests.
+#[cfg(test)]
+mod process_proxy_tests {
+    use super::{host_is_loopback, host_matches_suffix};
+
+    #[test]
+    fn suffix_matches_on_dot_boundary() {
+        assert!(host_matches_suffix("api.x.ai", "x.ai"));
+        assert!(host_matches_suffix("auth.x.ai", "x.ai"));
+        assert!(host_matches_suffix("x.ai", "x.ai"));
+        assert!(!host_matches_suffix("notx.ai", "x.ai"));
+        assert!(!host_matches_suffix("evi-lx.ai", "x.ai"));
+    }
+
+    #[test]
+    fn trims_leading_dot_in_configured_suffix() {
+        assert!(host_matches_suffix("api.x.ai", ".x.ai"));
+        assert!(host_matches_suffix("cli-chat-proxy.grok.com", "grok.com"));
+    }
+
+    #[test]
+    fn empty_suffix_never_matches() {
+        assert!(!host_matches_suffix("api.x.ai", ""));
+    }
+
+    #[test]
+    fn loopback_detection() {
+        assert!(host_is_loopback("localhost"));
+        assert!(host_is_loopback("127.0.0.1"));
+        assert!(host_is_loopback("[::1]"));
+        assert!(!host_is_loopback("api.x.ai"));
+    }
+}

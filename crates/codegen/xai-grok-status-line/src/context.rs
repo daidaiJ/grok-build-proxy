@@ -41,6 +41,12 @@ pub struct StatusLineContext {
     pub worktree: Option<StatusLineWorktree>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub turn: Option<StatusLineTurn>,
+    /// LOCAL: session model-call outcomes, present after the first call or failure.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_calls: Option<StatusLineApiCalls>,
+    /// LOCAL: last completed turn's TTFT/TPS snapshot.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub perf: Option<StatusLineTurnPerf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trigger: Option<StatusLineTrigger>,
 }
@@ -70,6 +76,8 @@ impl Default for StatusLineContext {
             effort: None,
             worktree: None,
             turn: None,
+            api_calls: None,
+            perf: None,
             trigger: None,
         }
     }
@@ -175,6 +183,31 @@ pub struct StatusLineSessionUsage {
     pub output_tokens: u64,
     pub cache_creation_input_tokens: u64,
     pub cache_read_input_tokens: u64,
+    /// LOCAL: thinking/reasoning tokens reported by the model.
+    pub reasoning_tokens: u64,
+}
+
+/// LOCAL: cumulative model-call outcomes for the session — the endpoint-health
+/// signal for gateway adapters (GLM/DeepSeek/OpenCode Go) whose failures show up
+/// as rate limits, 5xx, and timeouts rather than billing anomalies.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StatusLineApiCalls {
+    pub succeeded: u64,
+    pub failed: u64,
+}
+
+/// LOCAL: last completed turn's latency/throughput snapshot.
+/// `tps` is output tokens over the streaming window (response time minus TTFT).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StatusLineTurnPerf {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttft_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<u64>,
 }
 
 #[cfg(test)]

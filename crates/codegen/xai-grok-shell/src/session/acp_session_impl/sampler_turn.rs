@@ -70,6 +70,49 @@ pub(super) const TRANSIENT_TURN_RETRY_BACKOFF: [std::time::Duration; 3] = [
 
 const _: () = assert!(MAX_TRANSIENT_TURN_RETRIES as usize == TRANSIENT_TURN_RETRY_BACKOFF.len());
 
+/// LOCAL: expand `${session_id}` in configured extra-header values.
+/// One stable id per conversation, so gateways can pin routing and prompt cache
+/// to the session (e.g. OpenCode Go's `x-opencode-session`). Unmatched values
+/// pass through untouched; the placeholder may appear anywhere in the value.
+fn expand_session_header_templates(headers: &mut indexmap::IndexMap<String, String>, session_id: &str) {
+    for value in headers.values_mut() {
+        if value.contains("${session_id}") {
+            *value = value.replace("${session_id}", session_id);
+        }
+    }
+}
+
+#[cfg(test)]
+mod session_header_template_tests {
+    use super::expand_session_header_templates;
+
+    #[test]
+    fn expands_session_id_placeholder() {
+        let mut headers = indexmap::IndexMap::new();
+        headers.insert("x-opencode-session".to_string(), "${session_id}".to_string());
+        headers.insert("x-fixed".to_string(), "abc".to_string());
+        expand_session_header_templates(&mut headers, "sess-42");
+        assert_eq!(headers["x-opencode-session"], "sess-42");
+        assert_eq!(headers["x-fixed"], "abc");
+    }
+
+    #[test]
+    fn supports_embedded_placeholder() {
+        let mut headers = indexmap::IndexMap::new();
+        headers.insert("x-route".to_string(), "pool-${session_id}-a".to_string());
+        expand_session_header_templates(&mut headers, "s1");
+        assert_eq!(headers["x-route"], "pool-s1-a");
+    }
+
+    #[test]
+    fn leaves_values_without_placeholder_alone() {
+        let mut headers = indexmap::IndexMap::new();
+        headers.insert("x-plain".to_string(), "${session} ${SESSION_ID}".to_string());
+        expand_session_header_templates(&mut headers, "s1");
+        assert_eq!(headers["x-plain"], "${session} ${SESSION_ID}");
+    }
+}
+
 /// Delay before resubmit `attempts_used + 1`, clamped to the last rung.
 pub(super) fn transient_backoff_delay(attempts_used: u32) -> std::time::Duration {
     TRANSIENT_TURN_RETRY_BACKOFF[usize::min(
@@ -681,6 +724,9 @@ impl SessionActor {
             creds.alpha_test_key.as_deref(),
             &cfg.base_url,
         );
+        // LOCAL: expand `${session_id}` in configured extra-header values — per-conversation
+        // session-affinity headers as gateways like OpenCode Go expect (`x-opencode-session`).
+        expand_session_header_templates(&mut extra_headers, &self.session_info.id.0);
         let compaction_at_tokens = self.compaction_at_tokens.get();
         let compactions_remaining = self.compactions_remaining.get();
         if compactions_remaining.is_some() || compaction_at_tokens.is_some() {
@@ -1080,6 +1126,8 @@ impl SessionActor {
     }
 
     fn log_terminal_failure(&self, error_type: &str, status_code: Option<u16>, message: &str) {
+        // LOCAL: feed the status-line endpoint-health counters; the actor attributes by its current sampling model when None.
+        self.chat_state_handle.record_model_call_failure(None);
         let auth = self
             .auth_manager
             .as_ref()
@@ -2135,6 +2183,9 @@ impl SessionActor {
         if let Some(ref u) = response.usage {
             self.tool_context
                 .record_task_model_output(u64::from(u.completion_tokens));
+            // LOCAL: last-call API duration for the status-line TPS window.
+            self.last_turn_api_duration_ms
+                .store(api_duration_ms.unwrap_or(0), std::sync::atomic::Ordering::Relaxed);
             self.chat_state_handle
                 .record_token_usage(u64::from(u.total_tokens));
             self.chat_state_handle.record_last_turn_usage(u.clone());

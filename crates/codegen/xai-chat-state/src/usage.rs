@@ -36,6 +36,8 @@ pub struct UsageTotals {
     pub cache_creation_tokens: u64,
     pub reasoning_tokens: u64,
     pub model_calls: u64,
+    /// LOCAL: terminal model-call failures (retries exhausted or non-retryable), for status-line endpoint-health display.
+    pub failed_model_calls: u64,
     pub api_duration_ms: u64,
     /// USD ticks (1e10 per USD). Absent when no call reported cost.
     pub cost_usd_ticks: Option<i64>,
@@ -56,6 +58,7 @@ impl UsageTotals {
             cache_creation_tokens: u64::from(usage.cache_creation_prompt_tokens),
             reasoning_tokens: u64::from(usage.reasoning_tokens),
             model_calls: 1,
+            failed_model_calls: 0,
             api_duration_ms: api_duration_ms.unwrap_or(0),
             cost_usd_ticks,
             cost_missing_calls: u64::from(cost_usd_ticks.is_none()),
@@ -78,6 +81,7 @@ impl UsageTotals {
             cache_creation_tokens,
             reasoning_tokens,
             model_calls,
+            failed_model_calls,
             api_duration_ms,
             cost_usd_ticks,
             cost_missing_calls,
@@ -90,6 +94,7 @@ impl UsageTotals {
             .saturating_add(*cache_creation_tokens);
         self.reasoning_tokens = self.reasoning_tokens.saturating_add(*reasoning_tokens);
         self.model_calls = self.model_calls.saturating_add(*model_calls);
+        self.failed_model_calls = self.failed_model_calls.saturating_add(*failed_model_calls);
         self.api_duration_ms = self.api_duration_ms.saturating_add(*api_duration_ms);
         self.cost_missing_calls = self.cost_missing_calls.saturating_add(*cost_missing_calls);
         self.cost_usd_ticks = merge_cost_ticks(self.cost_usd_ticks, *cost_usd_ticks);
@@ -126,6 +131,16 @@ impl UsageLedger {
     ) {
         let call = UsageTotals::from_call(usage, api_duration_ms, cost_usd_ticks);
         self.main_loop_model_calls = self.main_loop_model_calls.saturating_add(1);
+        self.fold_entry(model_id, &call);
+    }
+
+    /// LOCAL: fold one terminal model-call failure (retries exhausted or non-retryable).
+    /// Counts the endpoint-health signal only; no token or cost impact.
+    pub fn record_main_loop_failure(&mut self, model_id: &str) {
+        let call = UsageTotals {
+            failed_model_calls: 1,
+            ..UsageTotals::default()
+        };
         self.fold_entry(model_id, &call);
     }
 

@@ -587,6 +587,7 @@ struct LocalTerminalActor {
 
     persistent_shell: bool,
 
+    #[allow(dead_code)] // LOCAL: silences upstream warning; config flag kept for future use
     login_shell_capture: bool,
 
     /// Baked in at construction, not read from a process-global, so a subagent
@@ -615,7 +616,8 @@ impl LocalTerminalActor {
         cgroup_guard: CgroupGuard,
         memory_monitor: MemoryMonitor,
         persistent_shell: bool,
-        login_shell_capture: bool,
+        #[allow(dead_code)] // LOCAL: silences upstream warning; config flag kept for future use
+    login_shell_capture: bool,
         search_shadows: SearchShadowConfig,
         settings: ActorSettings,
         scope: crate::util::ProcessScope,
@@ -1577,6 +1579,8 @@ impl LocalTerminalActor {
         }
     }
 
+    // LOCAL: body using task_ids is unix-gated; keep the name valid on both platforms.
+    #[cfg_attr(not(unix), allow(unused_variables))]
     async fn collect_shell_state_dumps(&mut self, task_ids: &[String]) {
         #[cfg(unix)]
         if self.persistent_shell {
@@ -2309,6 +2313,7 @@ struct LocalTerminalConfig {
     memory_config: Option<CgroupMemoryConfig>,
     use_spawn_local: bool,
     persistent_shell: bool,
+    #[allow(dead_code)] // LOCAL: silences upstream warning; config flag kept for future use
     login_shell_capture: bool,
     search_shadows: SearchShadowConfig,
     shell_env_policy: Option<crate::util::ShellEnvironmentPolicy>,
@@ -2368,7 +2373,8 @@ impl LocalTerminalBackend {
 
     pub fn new_local_with_login_shell_capture(
         search_shadows: SearchShadowConfig,
-        login_shell_capture: bool,
+        #[allow(dead_code)] // LOCAL: silences upstream warning; config flag kept for future use
+    login_shell_capture: bool,
         shell_env_policy: Option<crate::util::ShellEnvironmentPolicy>,
         process_scope: Option<crate::util::ProcessScope>,
     ) -> Self {
@@ -3304,7 +3310,7 @@ fn spawn_shell_command(
     };
 
     #[cfg(not(unix))]
-    let mut build_cmd = |with_breakaway: bool| {
+    let build_cmd = |with_breakaway: bool| {
         use windows::Win32::System::Threading::{
             CREATE_BREAKAWAY_FROM_JOB, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW,
         };

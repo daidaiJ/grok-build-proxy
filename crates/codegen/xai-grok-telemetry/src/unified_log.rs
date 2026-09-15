@@ -172,6 +172,7 @@ fn test_log_dir() -> &'static PathBuf {
             "grok-unified-log-test-{}-{nanos}",
             std::process::id()
         ));
+        #[cfg_attr(not(unix), allow(unused_mut))] // LOCAL: .mode(0o700) is unix-only
         let mut builder = fs::DirBuilder::new();
         #[cfg(unix)]
         {

@@ -128,6 +128,8 @@ impl ParentPlan {
 pub(super) struct ParentAnchor {
     path: PathBuf,
     identity: FileIdentity,
+    /// Kept open for the lifetime of the anchor; never read directly.
+    #[allow(dead_code)] // LOCAL: silences upstream warning; upstream may read it later
     directory: fs::File,
 }
 
