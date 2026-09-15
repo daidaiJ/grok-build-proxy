@@ -43,6 +43,7 @@ pub mod pty_wrap;
 pub mod recent_dirs;
 pub mod scrollback;
 pub mod sessions_cmd;
+pub mod stats_cmd;
 pub mod settings;
 pub mod share_cmd;
 pub mod slash;

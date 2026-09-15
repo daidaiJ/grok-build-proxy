@@ -37,6 +37,13 @@ use async_lsp::lsp_types::{Position, TextDocumentIdentifier, TextDocumentPositio
 /// given up. Kept here, next to the pieces that have to agree on it, rather than as a number at the call site.
 pub const DIAGNOSTICS_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(500);
 
+/// After the first answered file reports a problem, the drain holds the summary
+/// open this long before returning it, so a server that publishes in several
+/// pushes — or a second server a few milliseconds behind — merges into one
+/// injection instead of two overlapping ones. Small next to
+/// [`DIAGNOSTICS_DRAIN_TIMEOUT`] so a single-edit turn barely notices it.
+pub const DIAGNOSTICS_QUIET_WINDOW: std::time::Duration = std::time::Duration::from_millis(150);
+
 #[derive(Debug, thiserror::Error)]
 pub enum LspError {
     #[error("failed to spawn LSP server: {0}")]

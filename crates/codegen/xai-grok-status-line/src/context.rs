@@ -190,7 +190,7 @@ pub struct StatusLineSessionUsage {
 /// LOCAL: cumulative model-call outcomes for the session — the endpoint-health
 /// signal for gateway adapters (GLM/DeepSeek/OpenCode Go) whose failures show up
 /// as rate limits, 5xx, and timeouts rather than billing anomalies.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StatusLineApiCalls {
     pub succeeded: u64,

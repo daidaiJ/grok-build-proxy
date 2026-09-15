@@ -1204,11 +1204,20 @@ pub async fn run(
                 let width = crossterm::terminal::size().map_or(80, |(cols, _)| cols as usize);
                 print_exit_resume_hint(&info, width, &mut io::stderr());
             }
+            // LOCAL: guaranteed easter-egg farewell — unlike the hero subtitle, this
+            // is never displaced by a changelog/announcement, and lands after the
+            // terminal restore so it prints on the normal screen below the prompt.
+            if terminal_reading {
+                let _ = writeln!(io::stderr());
+                let _ = writeln!(io::stderr(), "{FAREWELL}");
+            }
             Ok(false)
         }
         Err(run_error) => Err(run_error),
     }
 }
+/// LOCAL: the goodbye line printed on every graceful quit (see the quit tail in [`run`]).
+const FAREWELL: &str = "🐼 Share code & cola with Panda — thanks for trying Grok Build! (/feedback)";
 /// Plain-quit "Resume this session with…" lines (after terminal restore).
 /// Best-effort: closed-pane EIO/BrokenPipe must not panic (`panic = "abort"`).
 /// TODO: extend beyond --minimal by rebuilding resume argv from launch flags (see screen_mode_relaunch)
@@ -2543,6 +2552,11 @@ mod tests {
             String::from_utf8(buf).unwrap(),
             "\nResume this session with:\n  grok --minimal --resume sess-abc\n"
         );
+    }
+    #[test]
+    fn farewell_line_carries_the_easter_egg() {
+        assert!(FAREWELL.contains("Share code & cola with Panda"));
+        assert!(FAREWELL.contains("/feedback"));
     }
     #[test]
     fn print_exit_resume_hint_includes_session_summary() {

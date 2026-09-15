@@ -651,6 +651,27 @@ serve({
     )
 }
 
+/// A push server that answers a two-file edit in two pushes about 200ms apart —
+/// the shape of a server that publishes per file as its analysis finishes. One
+/// drain should merge both into a single summary.
+pub(super) fn write_staggered_push_server() -> (tempfile::TempDir, PathBuf) {
+    write_python_server(
+        "staggered_push_lsp.py",
+        r#"
+import time
+
+def handle(msg, method):
+    if method in ("textDocument/didOpen", "textDocument/didChange"):
+        uri = msg["params"]["textDocument"]["uri"]
+        if "slow" in uri:
+            time.sleep(0.2)
+        publish(uri, "a problem in %s" % uri.rsplit("/", 1)[-1])
+
+serve({"textDocumentSync": {"openClose": True, "change": 1}}, handle)
+"#,
+    )
+}
+
 /// A server that accepts everything and never reports a diagnostic.
 pub(super) fn write_silent_server() -> (tempfile::TempDir, PathBuf) {
     write_python_server(

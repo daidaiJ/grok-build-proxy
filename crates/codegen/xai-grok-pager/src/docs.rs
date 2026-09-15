@@ -183,6 +183,18 @@ pub static USER_GUIDE: &[Doc] = &[
         description: "Depth-1 Grove clone, --full-history, and safe deepen/switch commands",
         content: include_str!("../docs/user-guide/27-grok-clone.md"),
     },
+    Doc {
+        filename: "28-welcome-branding.md",
+        title: "Welcome Screen Branding",
+        description: "Swap the braille welcome logo and hero subtitle in a source build",
+        content: include_str!("../docs/user-guide/28-welcome-branding.md"),
+    },
+    Doc {
+        filename: "29-local-enhancements.md",
+        title: "Local Enhancements",
+        description: "Fork extras: egress proxy, shell backend, status-line api-calls/perf, session-affinity headers, DeepSeek/GLM thinking",
+        content: include_str!("../docs/user-guide/29-local-enhancements.md"),
+    },
 ];
 
 /// Non-user-guide reference docs. Bundled via `include_str!` so they are available at runtime without a docs path.

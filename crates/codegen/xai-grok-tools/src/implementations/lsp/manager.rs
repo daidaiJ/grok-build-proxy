@@ -91,6 +91,11 @@ impl CollectedDiagnostics {
         }
     }
 
+    /// Whether anything was found. A run of clean verdicts collects nothing:
+    /// "no problems" is an answer, but it is not a report worth injecting.
+    fn is_empty(&self) -> bool {
+        self.lines.is_empty() && self.diagnostic_count == 0
+    }
     /// The line that tells the reader something was left out, if anything was. Silently truncating
     /// would be worse than not reporting at all: the reader would take a partial list for the whole
     /// truth and conclude the rest of the file was fine.
@@ -406,12 +411,13 @@ impl LspManager {
             .unwrap_or(false)
     }
 
-    /// Take the verdicts the servers have given on the files we are waiting on, and report the problems among them. Every
-    /// file this settles leaves the pending set, whether or not it produced a line to show: "no problems" is a verdict, and
-    /// a file that keeps waiting for one it has already had is what makes the set grow without bound.
-    fn take_answered_diagnostics(&mut self) -> Option<DiagnosticsSummary> {
+    /// Take the verdicts the servers have given on the files we are waiting on. Every file this settles leaves the pending set,
+    /// whether or not it produced a line to show: "no problems" is a verdict, and a file that keeps waiting for one it has
+    /// already had is what makes the set grow without bound. The caller formats; returning the items keeps one drain able to
+    /// fold several batches into a single summary under the per-summary caps.
+    fn take_answered_items(&mut self) -> Vec<(String, Vec<Diagnostic>)> {
         let now = Instant::now();
-        let mut collected = CollectedDiagnostics::default();
+        let mut answered = Vec::new();
 
         // In server-name order, so what the reader sees does not depend on how
         // a hash map happened to lay itself out.
@@ -435,25 +441,12 @@ impl LspManager {
             }
 
             for uri in pending.take_answered(&server_name, &client.diagnostics, now) {
-                collected.append_file(&uri, client.diagnostics.items(&uri));
+                let items = client.diagnostics.items(&uri);
+                answered.push((uri, items));
             }
         }
 
-        if collected.lines.is_empty() {
-            return None;
-        }
-        if let Some(note) = collected.trimmed_note() {
-            collected.lines.push(note);
-        }
-
-        Some(DiagnosticsSummary {
-            text: format!(
-                "<lsp-diagnostics>\n{}\n</lsp-diagnostics>",
-                collected.lines.join("\n")
-            ),
-            file_count: collected.file_count,
-            diagnostic_count: collected.diagnostic_count,
-        })
+        answered
     }
 
     /// Auto-open file if needed, return cloned socket for lock-free dispatch.
@@ -605,32 +598,61 @@ pub async fn drain_lsp_diagnostics(
     // one final time before we conclude there was nothing: a report can land between the wait's
     // last poll and our re-taking the lock, and it would otherwise sit unread.
     let mut out_of_time = false;
+    // Verdicts collected so far. A file leaves the pending set as it is taken, so folding
+    // successive takes into one `CollectedDiagnostics` cannot double-count it.
+    let mut collected = CollectedDiagnostics::default();
+    // Armed once every pending file has answered and something was found: the
+    // quiet window that lets pushes landing a few milliseconds apart merge into
+    // one summary instead of an early partial one.
+    let mut quiet_until: Option<tokio::time::Instant> = None;
 
     loop {
         // A refresh can land at any point, including during the wait below.
         lsp.reopen_refreshed_questions();
 
-        if !lsp.has_pending_diagnostics() {
-            return None;
-        }
-
-        // The answer may already be in; on the first pass that saves the wait
+        // The answers may already be in; on the first pass that saves the wait
         // entirely, and on later passes it is what the wait was for.
-        if let Some(summary) = lsp.take_answered_diagnostics() {
-            return Some(summary);
+        for (uri, items) in lsp.take_answered_items() {
+            collected.append_file(&uri, items);
         }
 
-        // Nothing to report, and either the budget is gone or every server
-        // still owing us a verdict has stopped talking. Both mean stop.
-        if out_of_time || !lsp.worth_blocking_for_diagnostics() {
-            tracing::debug!(
-                pending_file_count = lsp.pending_file_count(),
-                timeout_ms = timeout.as_millis() as u64,
-                timed_out = out_of_time,
-                "no LSP diagnostics for pending files"
-            );
+        if lsp.has_pending_diagnostics() {
+            // Files we asked about are still owed answers: keep the whole batch
+            // waiting rather than reporting the first file's problems alone.
+            quiet_until = None;
+        } else if !collected.is_empty() {
+            // Everything answered and something was found. Hold the summary
+            // open briefly: a second push (or server) is often right behind
+            // the first, and one merged injection beats two overlapping ones.
+            let now = tokio::time::Instant::now();
+            match quiet_until {
+                None => quiet_until = Some(now + super::DIAGNOSTICS_QUIET_WINDOW),
+                Some(until) if now >= until => return Some(summary_from(collected)),
+                Some(_) => {}
+            }
+        } else {
             return None;
         }
+
+        // Nothing (more) to report, and either the budget is gone or every server
+        // still owing us a verdict has stopped talking. Both mean stop; anything
+        // already collected still goes out rather than being dropped.
+        if out_of_time || !lsp.worth_blocking_for_diagnostics() {
+            if collected.is_empty() {
+                tracing::debug!(
+                    pending_file_count = lsp.pending_file_count(),
+                    timeout_ms = timeout.as_millis() as u64,
+                    timed_out = out_of_time,
+                    "no LSP diagnostics for pending files"
+                );
+                return None;
+            }
+            return Some(summary_from(collected));
+        }
+
+        // Wait until the overall deadline, or while holding a quiet window
+        // until the window closes, whichever comes first.
+        let wait_until = quiet_until.map_or(deadline, |quiet| quiet.min(deadline));
 
         // Register the waiter before dropping the lock so a notify_one() that
         // lands in between is not lost.
@@ -641,10 +663,24 @@ pub async fn drain_lsp_diagnostics(
         drop(lsp);
 
         // Every document shares this notification, so being woken is not proof that *our* files
-        // were answered — a publish for some other file wakes us just the same. Go back and look,
+        // were answered: a publish for some other file wakes us just the same. Go back and look,
         // and if it was not for us, keep waiting until it is or the budget runs out.
-        out_of_time = tokio::time::timeout_at(deadline, notified).await.is_err();
+        out_of_time = tokio::time::timeout_at(wait_until, notified).await.is_err();
         lsp = lsp_manager.lock().await;
+    }
+}
+
+/// Format the collected verdicts as the summary a reminder injects.
+fn summary_from(mut collected: CollectedDiagnostics) -> DiagnosticsSummary {
+    if let Some(note) = collected.trimmed_note() {
+        collected.lines.push(note);
+    }
+    DiagnosticsSummary {
+        text: format!("<lsp-diagnostics>\n{}\n</lsp-diagnostics>",
+                collected.lines.join("\n")
+            ),
+        file_count: collected.file_count,
+        diagnostic_count: collected.diagnostic_count,
     }
 }
 

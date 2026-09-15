@@ -81,6 +81,8 @@
 - `src/leader/transport.rs:256`：`String + &String` 写法与当前 toolchain 不兼容
 - `src/session/acp_session_tests/tool_layer_images_bridge_tests.rs:15`：base64 crate API 漂移
 - `tests/common/mod.rs` 等：引用快照中不存在的 `reset_startup_settings_for_tests` 等函数
+- `xai-grok-tools` `src/computer/local/terminal.rs:4884`：`parse_login_env_capture` 缺失，
+  阻塞 tools 的 lib test 编译（故 CI 对 tools 只 check 不跑测试）
 
 这些阻塞了 shell 内联单测（含 `${session_id}` 模板测试）的运行；chat-state（362）、
 status-line（17）、extra-ca（15+）单测全部通过。
@@ -106,10 +108,102 @@ base_url = "https://opencode.ai/zen/go/v1"
 extra_headers = { "x-opencode-session" = "${session_id}" }
 ```
 
-## 待办（二期）
+## 二期补丁（已完成）
 
-- 排队时间：`acp_session_impl/prompt_queue.rs` 的 `pending_inputs` 入队时打时间戳、
-  提升为 running 时计算 wait（本轮未做，状态行 `perf` 已预留展示位）
-- 内置状态行的 ✓/✗/TTFT/TPS 渲染（payload 已备齐，先走自定义 command 脚本）
-- `/stats` 会话/天/周聚合（T3 独立 bin 优先）、LSP 诊断合并去抖、排队卡视觉区分
-- 工具输出压缩：见 `tool-output-compression-plan.md`
+### xai-grok-status-line（状态行 item 扩展，全部 additive）
+- `src/config.rs`：`StatusLineItem` 新增 `ApiCalls` / `Perf` 变体（kebab-case：`api-calls`、`perf`）；
+  两者 `varies_mid_turn() == true`（回合内计数与 TPS 会变，行需 tick 刷新）
+- `src/context.rs`：`StatusLineApiCalls` 补 `Copy`（compose 消费用）
+
+### xai-grok-pager（内置状态行渲染 + stats 子命令）
+- `src/views/status_line/segments.rs`：`compose_builtin` 渲染两个新段——
+  `✓ n`（有失败追加 `✗ m` 且整段 Warn 色调）、`ttft {ms}ms · {tps:.1} tok/s`（缺哪段省哪段）；
+  字形走 `xai_grok_pager_render::glyphs::{check_mark, ballot_x}`（旧控制台回退）
+- `src/views/status_line/segments_tests.rs`：两个新段的单测
+- `docs/user-guide/25-status-line.md`：Set up 表补 `api-calls` / `perf` 行（doc-sync 测试要求）
+- 新 `src/stats_cmd/`（`grok stats`，T3 独立 CLI，只读）：`--json`、`--days N`、`--limit N`、
+  `--model <text>`（模型 id 大小写不敏感子串过滤，过滤后无匹配模型的会话整行消失）；
+  遍历 `<grok-home>/sessions/**/usage.json`（≤4 层），按会话 / 本地日（`%Y-%m-%d`）/
+  ISO 周（`%G-W%V`）聚合 turns（`ended_at` RFC3339）；三视图都带按模型拆分
+  （JSON `models` 数组 + 人类输出 `By model` 表，最忙模型优先）；
+  成本求和遇缺报 `+` 尾标；项目名经 `xai_grok_config::decode_cwd_from_dirname` 还原
+- `src/app/cli.rs` + `src/lib.rs` + pager-bin `src/main.rs`：`Command::Stats` 接线
+  （两处命令分类块 + 分发臂）
+
+### xai-grok-pager（欢迎屏品牌定制：熊猫头 logo + 彩蛋副标题）
+- `assets/logo/logo07.txt`（full tier，23x7）/ `logo05.txt`（compact tier，5 行）：
+  Grok 字标换成熊猫头盲文点阵；`.gitattributes` 强制 `assets/logo/*.txt` LF
+  （`include_str!` 原样嵌入，CRLF 会把 `\r` 带进二进制渲染成杂字形）
+- `src/views/welcome/hero_box.rs`：`HERO_SUBTITLE` 改为
+  `"Share code & cola with Panda — thanks for trying Grok Build! (/feedback)"`
+- `src/app/mod.rs`：退出尾部（终端恢复后、`Ok(false)` 前）追加 `FAREWELL`
+  常量打印（stderr）——hero 副标题会被 changelog/公告挤掉，退出告别语必打印，
+  彩蛋稳定展示；`quit_for_update` / 模式 relaunch 路径先于打印 return，不会污染
+- `tools/gen_panda_logo.py`：像素→盲文转换脚本（2x4 点/格，U+2800 空白格），
+  生成两档 art 并保证 LF，留作他人定制参考
+- `docs/user-guide/28-welcome-branding.md`：新增内置引导文档（`src/docs.rs`
+  `USER_GUIDE` 注册），面向 AI agent 的 logo/副标题定制配方——启动时会解包到
+  `<grok_home>/docs/user-guide/`，别人的 AI 可读到并自动复刻同类定制
+- `docs/user-guide/29-local-enhancements.md`：新增内置引导文档，把本地增强
+  （`[network]` 出口代理、`[shell]` 后端、状态行 `api-calls`/`perf`、
+  `${session_id}` 会话亲和头、DeepSeek/GLM `reasoning_content` 思考回传）
+  写成"作用 + 何时主动配置 + 示例"的 AI 引导表，含信号→配置对照表；
+  供 AI 解包后读到并主动帮用户配置
+
+### xai-grok-tools（LSP 诊断合并去抖）
+- `src/implementations/lsp/mod.rs`：新 `DIAGNOSTICS_QUIET_WINDOW`（150ms）
+- `src/implementations/lsp/manager.rs`：`take_answered_diagnostics` → `take_answered_items`
+  （返回 per-file items，格式化收口到新 `summary_from`）；drain 循环改为把多批裁决
+  累积进一个 `CollectedDiagnostics`——pending 未清前继续等整批，全答完后持 150ms
+  静默窗合并迟到的推送；超时/静默放弃时已收集的照样发（原来丢弃）
+- `src/reminders/lsp_diagnostics.rs`：注入级去抖——`DrainDebounce{last_inject}` 存
+  `SharedResources`，注入后 750ms 内的编辑跳过 drain（下一轮 drain 一次报完整批），
+  消除连续快速编辑的重复注入与重复阻塞
+- 测试：`a_drain_merges_staggered_pushes_into_one_summary`（错峰 200ms 双推送合并）、
+  `edits_inside_the_debounce_window_share_one_drain`（FakeBackend 计数）
+
+## 发布
+
+- `.github/workflows/release.yml`：推 `v*` tag 触发，构建 `xai-grok-pager`（grok CLI）
+  release 二进制，仅 linux-amd64（tar.gz）与 windows-amd64（zip），附 sha256。
+## 待办（下一期）
+
+- 工具输出压缩：见 `tool-output-compression-plan.md`（原二期项，移入下一期）
+- 排队时间戳 / wait 计算（`acp_session_impl/prompt_queue.rs`）：已从计划删除
+- 排队卡视觉区分：已废弃
+- T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤、
+  TUI 内 `/stats` 斜杠命令复用 stats_cmd 聚合核心
+
+## 待办（三期候选：扩展 API 缺口，opencode/pi 生态实证）
+
+> 通用前置：每项实现前先核查上游是否已有相仿/冲突机制，有则不做；
+> 全部做成可配置启用/停用，默认不改变上游行为。
+
+- `BeforeModelCall` 消息变换 hook：每次 LLM 调用前改写消息列表（出去脱敏/回来还原，
+  双向），session 记录永不修改——裁剪/脱敏/压缩类扩展的头号依赖面
+  （DCP 4.2k★、vibeguard 均建立在此 hook 上）
+- `PreCompact`/`PostCompact` hook：压缩前持久化扩展状态、压缩后重注入——
+  任务列表/记忆类扩展的生死线（rpiv-todo 月下载 14.8 万的核心卖点）
+- MCP 懒加载：两段式工具发现（单个代理工具 list→call，工具定义按需注入），可配置
+  启用/停用——pi-mcp-adapter 月下载 94 万证明的需求；grok `/context` 已展示 MCP
+  announcements 的 token 成本。核查点：上游 `search_tool` BM25 延迟加载已覆盖内置
+  工具 schema，若可扩展到 MCP 工具面则复用、不另起炉灶
+- 模型请求前压缩（仿 headroom）已在「待办（下一期）」：它是 `BeforeModelCall`
+  hook 的首个内置消费者，排期时与该 hook 一起评估
+- 通知开箱化：`Notification` hook 事件已有（idle/permission/task_complete），
+  补桌面通知 + 声音 + 终端聚焦抑制的内置实现（opencode 社区同期 3 个实现合计 1200+★）
+
+## 上游已有能力对照（社区呼声 → 勿重复实现）
+
+| 社区呼声（高 reaction/高星） | 上游 grok 现状 |
+|---|---|
+| `/context` 上下文分解 | 已有（细分到 tool defs / skills / MCP 成本） |
+| `/goal` 持久目标 + token 预算 | 已有（`--budget` + 对抗验证） |
+| `/btw` 侧问浮层 | 已有（`/aside`，含 minimal 面板） |
+| 结构化提问工具 | 已有（内置 `ask_user_question`） |
+| LSP 诊断回喂 | 已有（repo 级 server + 插件 LSP + `lsp` 工具；本地已做合并去抖增强） |
+| subagent 编排 | 已有（personas + `send_subagent_message` + monitor/kill_task） |
+| worktree 隔离 | 已有（内置） |
+| 权限矩阵 / sandbox / headless / memory / hooks | 均有（hooks 含 `updatedInput` 改参、`updatedToolOutput` 替换、record 与 model 分离） |
+| 交互式后台进程 | 已有（background tasks + ptyctl） |
+| 通知 | 事件已有，缺开箱实现（已列三期） |

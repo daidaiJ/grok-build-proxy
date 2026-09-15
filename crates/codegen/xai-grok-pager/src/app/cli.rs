@@ -52,6 +52,8 @@ pub enum Command {
     Sessions(crate::sessions_cmd::SessionsArgs),
     /// Print persisted token and cost usage for a session
     Usage(crate::usage_cmd::UsageArgs),
+    /// Aggregate token and cost usage across sessions, days, and weeks
+    Stats(crate::stats_cmd::StatsArgs),
     /// Fetch and install managed configuration
     Setup {
         /// Print the fetched configuration as JSON instead of installing it; writes nothing to ~/.grok.
