@@ -129,6 +129,7 @@ fn perf_segment_formats_whatever_the_snapshot_carries() {
     ctx.perf.as_mut().unwrap().ttft_ms = None;
     assert_eq!(segment(&ctx).as_deref(), Some("42.3 tok/s"));
 
+    ctx.perf.as_mut().unwrap().ttft_ms = Some(380);
     ctx.perf.as_mut().unwrap().tps = None;
     assert_eq!(segment(&ctx).as_deref(), Some("380ms ttft"));
 

@@ -45,6 +45,15 @@ fn record(session_id: &str, project: &str, turns: Vec<TurnUsage>) -> SessionReco
     }
 }
 
+/// A fixed wall-clock time today, so fixtures never straddle midnight
+/// (a run started just after midnight put `now - 30h` on yesterday).
+fn local_today(now: DateTime<Local>, hour: u32, minute: u32) -> DateTime<Local> {
+    let naive = now.date_naive().and_hms_opt(hour, minute, 0).unwrap();
+    Local
+        .from_local_datetime(&naive)
+        .single()
+        .unwrap_or(now)
+}
 fn day_key(at: DateTime<Local>) -> String {
     at.format("%Y-%m-%d").to_string()
 }
@@ -56,9 +65,10 @@ fn week_key(at: DateTime<Local>) -> String {
 #[test]
 fn sessions_days_and_weeks_bucket_the_same_turns() {
     let now = now();
-    // Two turns inside one local day, a third in the same ISO week, a fourth outside it.
-    let early = now - ChronoDuration::hours(30);
-    let late = now - ChronoDuration::hours(2);
+    // Two turns inside one local day (anchored at today 09:00/14:00, never
+    // straddling midnight), a fourth outside the ISO week.
+    let early = local_today(now, 9, 0);
+    let late = local_today(now, 14, 0);
     let last_week = now - ChronoDuration::days(10);
     let records = vec![
         record(
