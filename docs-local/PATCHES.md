@@ -174,11 +174,13 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 - T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤、
   TUI 内 `/stats` 斜杠命令复用 stats_cmd 聚合核心
 
-## 待办（三期候选：hooks 面扩展 + 输出风格）
+## 待办（三期候选：hooks 面扩展 + 极简 primary agent）
 
 > 通用前置：每项实现前先核查上游是否已有相仿/冲突机制，有则不做；
 > 全部做成可配置启用/停用，默认不改变上游行为。
 > 2026-09-15 核查：MCP 懒加载上游已内置且强制默认（见对照表），不再列入。
+> 三期范围：极简 primary agent + 三个 hook（BeforeModelCall / PreCompact /
+> PostCompact）+ 通知开箱。
 
 ### P0
 
@@ -188,16 +190,22 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
   `acp_session_impl/sampler_turn.rs` 请求组装边界（reconstruct 之后、采样调用之前，
   fork 的 `${session_id}` 模板展开已在同一 seam）；事件注册走 `hook_dispatch.rs`。
   它是「待办（下一期）」工具输出压缩的前置消费者，排期时一起评估
-- 输出风格（qwen code 同款，极简/详细可配）：内置 `Concise`（答案先行、零旁白、
-  正确性信息不删）+ `Explanatory`（`✳ Insight` 教学块）起步，`Proactive`/`Learning`
-  二批。自定义风格 = `~/.grok/output-styles/*.md` 与 `.grok/output-styles/*.md`
-  （frontmatter `name`/`description`/`keep-coding-instructions`；项目 > 用户 > 内置
-  按名遮蔽，复用 skills/personas 的发现优先级模式）。切换面 = `/output-style`
-  选择器 + config 键 + 启动 flag；注入 = system prompt 追加 `# Output Style: <name>`
-  节（`xai-grok-agent/src/agent.rs` 组装处）+ 可选每回合 reminder（复用
-  `xai-grok-tools/src/reminders/` 通道）。v1 只做 additive 注入，不做 qwen 的
-  `keep-coding-instructions` 基础提示节裁剪（要动上游 prompt 分节结构，侵入面大，
-  二批再评估）；headless 场景 Learning 类交互型风格自动停用（qwen 同规则）
+- 极简模式 primary agent（复用现成载体，不新增输出风格子系统）：上游已内置
+  concise 变体——`BuiltinAgentName::GrokBuildConcise`（`xai-grok-agent/src/config.rs`
+  `grok_build_concise()`：`COMPACT_SYSTEM_PROMPT` + 精简工具描述集
+  `grok_build_concise_toolset` + `agents_md:false`），`--agent-profile
+  grok-build-concise` / `agent.name` / `/config-agents` 均可选为主会话 agent，
+  但其提示词只有两句话、零输出风格规则。fork 改造 = 给 concise 载体追加 LOCAL
+  极简规则节：改 `xai-grok-agent/src/agent.rs` `system_prompt()` 的 concise 分支
+  （`COMPACT_SYSTEM_PROMPT` 后拼接 `LOCAL_CONCISE_RULES` 常量），会话中切换路径
+  `acp_session_impl/model_switch.rs` 同步拼接。规则融合三源：
+  qwen Concise（答案先行、零旁白零复盘零寒暄、用户要解释时给全文、正确性>极简、
+  冲突时本节胜出）+ caveman（去冠词/填充语/客套话/对冲、短同义词、箭头表因果、
+  片段句可用、技术词精确、代码块与报错原文不动、安全警告/不可逆操作临时恢复
+  完整表达）+ i-have-adhd 46k★（首行即下一步行动、多步编号且步数最少、每回合
+  重述进度状态、结尾至多一个两分钟内可做的 next action、错误平铺直叙
+  cause+fix、展示列表≤5 条且分析完整性不受限、完成的事说清"现在能用什么"）。
+  二批候选：Learning 类交互风格、qwen 式 `keep-coding-instructions` 基础提示分节
 
 ### P1
 
@@ -223,4 +231,4 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 | 通知 | 事件已有，缺开箱实现（已列三期 P1） |
 | MCP 懒加载（pi-mcp-adapter 月下载 94 万） | 已有且强制默认：请求 tools 数组只含内置工具（`sampler_turn.rs` `prepare_tool_definitions_inner` → `tool_definitions_builtins_only`，注释 "tool search is always enabled"），MCP 工具走 `search_tool`（BM25 索引）→ `use_tool` 两段式；announcement 是变更时增量 `<system-reminder>`（指纹持久化 `announcement_state.json`，`MCP_REMINDER_MODE`=delta/full），不做全量 schema 常驻 |
 | opencode primary 自定义 agent（Tab 切换 build/plan） | 已有：agent 定义 `.grok/agents/*.md` / `~/.grok/agents/`（作用域含主会话：model/tools/prompt body/skills），`/config-agents` 设默认 + 会话中切换激活，启动侧 `--agent-profile` / `GROK_AGENT` / `agent.name`；personas 是 subagent 专属行为叠加层 |
-| 输出风格极简/详细（qwen `/output-style`，内置 Concise/Explanatory） | 无对应机制（AGENTS.md / agent 定义能改提示但无轻量切换面、无内置风格）→ 已列三期 P0 |
+| 输出风格极简/详细（qwen `/output-style` 多风格选择器） | 不照搬（用户决策：只做极简一种）。极简主 agent 上游已有载体：内置 `grok-build-concise`（`--agent-profile`/`agent.name`/`/config-agents` 可选，`COMPACT_SYSTEM_PROMPT` + 精简工具集），但提示词无风格规则 → fork 注入三源融合规则节，已列三期 P0 |
