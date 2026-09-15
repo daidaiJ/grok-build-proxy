@@ -593,6 +593,8 @@ pub enum HookPayload {
         message_count: usize,
         /// Serialised outbound message list (`request.items`), payload-cap truncated.
         messages: serde_json::Value,
+        #[serde(rename = "messagesTruncated")]
+        messages_truncated: bool,
     },
 }
 

@@ -19,6 +19,27 @@ pub(super) fn closes_cancel_rewind_window(update: &XaiSessionUpdate) -> bool {
 fn strip_osc_controls(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).take(200).collect()
 }
+
+#[cfg(test)]
+mod builtin_notification_tests {
+    use super::strip_osc_controls;
+
+    #[test]
+    fn osc_text_strips_escapes_and_control_chars_but_keeps_prose() {
+        assert_eq!(
+            strip_osc_controls("\u{1b}]0;evil\u{7}run npm install"),
+            "]0;evilrun npm install"
+        );
+        assert_eq!(strip_osc_controls("plain text"), "plain text");
+        assert_eq!(strip_osc_controls(""), "");
+    }
+
+    #[test]
+    fn osc_text_is_capped_so_a_hostile_body_cannot_flood_the_title_bar() {
+        let flooded = "x".repeat(500);
+        assert_eq!(strip_osc_controls(&flooded).chars().count(), 200);
+    }
+}
 fn scrub_inbound_session_summary(
     notification: &mut crate::extensions::notification::SessionNotification,
 ) {

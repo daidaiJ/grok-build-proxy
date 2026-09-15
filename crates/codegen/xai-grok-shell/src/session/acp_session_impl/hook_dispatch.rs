@@ -535,7 +535,7 @@ impl SessionActor {
                 return false;
             }
         };
-        let (messages, _messages_truncated) =
+        let (messages, messages_truncated) =
             xai_grok_hooks::event::truncate_payload(messages);
         let envelope = self.fire_hook(
             xai_grok_hooks::event::HookEventName::BeforeModelCall,
@@ -544,6 +544,7 @@ impl SessionActor {
                 model: request.model.clone().unwrap_or_default(),
                 message_count: request.items.len(),
                 messages,
+                messages_truncated,
             },
         );
         let ctx = self.hook_run_ctx();

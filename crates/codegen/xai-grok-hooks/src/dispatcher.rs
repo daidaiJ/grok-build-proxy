@@ -477,8 +477,7 @@ pub async fn dispatch_post_compact_context(
                         hook_name = %spec.name,
                         "post_compact hook returned a stop decision; ignored (PostCompact never blocks)"
                     );
-                }
-                if let Some(text) = outcome.additional_context {
+                } else if let Some(text) = outcome.additional_context {
                     additional_context.push(PostCompactContext {
                         hook_name: spec.name.clone(),
                         text,
@@ -1989,6 +1988,154 @@ mod tests {
             .expect("force-stop captured");
         assert_eq!(prevent.hook_name, "s1");
         assert_eq!(prevent.reason, "stop now");
+    }
+
+    // =====================================================================
+    // LOCAL: BeforeModelCall / PostCompact dispatch (phase-3)
+    // =====================================================================
+
+    fn before_model_call_envelope() -> HookEventEnvelope {
+        HookEventEnvelope {
+            hook_event_name: HookEventName::BeforeModelCall,
+            session_id: "test-session".into(),
+            cwd: "/tmp".into(),
+            workspace_root: "/tmp".into(),
+            timestamp: "2025-01-01T00:00:00Z".into(),
+            transcript_path: None,
+            client_identifier: None,
+            prompt_id: None,
+            permission_mode: Some("default".into()),
+            payload: HookPayload::BeforeModelCall {
+                model: "grok-4".into(),
+                message_count: 2,
+                messages: serde_json::json!([{ "role": "user", "content": "hi" }]),
+                messages_truncated: false,
+            },
+        }
+    }
+
+    fn before_model_call_spec(name: &str, script: &str) -> HookSpec {
+        let mut spec = make_command_spec(name, None, true, script);
+        spec.event = HookEventName::BeforeModelCall;
+        spec
+    }
+
+    #[tokio::test]
+    async fn before_model_call_rewrite_replaces_outbound_messages() {
+        let hook = before_model_call_spec(
+            "redactor",
+            "echo '{\"decision\":\"allow\",\"hookSpecificOutput\":{\"updatedMessages\":[{\"role\":\"user\",\"content\":\"redacted\"}]}}'",
+        );
+        let registry = registry_from_specs(vec![hook]);
+        let result =
+            dispatch_before_model_call(&registry, &before_model_call_envelope(), &run_ctx()).await;
+        assert_eq!(result.decision, HookDecision::Allow);
+        let rewrite = result.updated_messages.expect("rewrite carried");
+        assert_eq!(rewrite.hook_name, "redactor");
+        assert_eq!(rewrite.messages.len(), 1);
+        assert_eq!(rewrite.messages[0]["content"], "redacted");
+    }
+
+    #[tokio::test]
+    async fn before_model_call_deny_suppresses_only_the_rewrite() {
+        let deny = before_model_call_spec(
+            "gate",
+            "echo '{\"decision\":\"deny\",\"reason\":\"no calls today\"}'",
+        );
+        let registry = registry_from_specs(vec![deny]);
+        let result =
+            dispatch_before_model_call(&registry, &before_model_call_envelope(), &run_ctx()).await;
+        match result.decision {
+            HookDecision::Deny {
+                ref reason,
+                ref hook_name,
+            } => {
+                assert_eq!(reason, "no calls today");
+                assert_eq!(hook_name, "gate");
+            }
+            ref other => panic!("expected Deny, got {other:?}"),
+        }
+        assert!(
+            result.updated_messages.is_none(),
+            "a deny must not carry a rewrite"
+        );
+    }
+
+    #[tokio::test]
+    async fn before_model_call_broken_hook_fails_open() {
+        let broken = before_model_call_spec("broken", "exit 1");
+        let registry = registry_from_specs(vec![broken]);
+        let result =
+            dispatch_before_model_call(&registry, &before_model_call_envelope(), &run_ctx()).await;
+        assert_eq!(result.decision, HookDecision::Allow);
+        assert!(result.updated_messages.is_none());
+        assert!(
+            matches!(result.results[0], HookRunResult::Failed { .. }),
+            "the broken dispatch is recorded for the caller's breaker"
+        );
+    }
+
+    #[tokio::test]
+    async fn before_model_call_non_array_messages_is_dropped() {
+        let hook = before_model_call_spec(
+            "bad",
+            "echo '{\"hookSpecificOutput\":{\"updatedMessages\":\"nope\"}}'",
+        );
+        let registry = registry_from_specs(vec![hook]);
+        let result =
+            dispatch_before_model_call(&registry, &before_model_call_envelope(), &run_ctx()).await;
+        assert_eq!(result.decision, HookDecision::Allow);
+        assert!(result.updated_messages.is_none());
+    }
+
+    fn post_compact_envelope() -> HookEventEnvelope {
+        HookEventEnvelope {
+            hook_event_name: HookEventName::PostCompact,
+            session_id: "test-session".into(),
+            cwd: "/tmp".into(),
+            workspace_root: "/tmp".into(),
+            timestamp: "2025-01-01T00:00:00Z".into(),
+            transcript_path: None,
+            client_identifier: None,
+            prompt_id: None,
+            permission_mode: Some("default".into()),
+            payload: HookPayload::PostCompact {
+                source: "manual".into(),
+            },
+        }
+    }
+
+    fn post_compact_spec(name: &str, script: &str) -> HookSpec {
+        let mut spec = make_command_spec(name, None, true, script);
+        spec.event = HookEventName::PostCompact;
+        spec
+    }
+
+    #[tokio::test]
+    async fn post_compact_collects_context_and_ignores_stop_decisions() {
+        let restorer = post_compact_spec(
+            "restorer",
+            "echo '{\"hookSpecificOutput\":{\"additionalContext\":\"restore the todo list\"}}'",
+        );
+        let stopper = post_compact_spec(
+            "stopper",
+            "echo '{\"continue\":false,\"stopReason\":\"nope\",\"hookSpecificOutput\":{\"additionalContext\":\"dropped\"}}'",
+        );
+        let broken = post_compact_spec("broken", "exit 3");
+        let registry = registry_from_specs(vec![restorer, stopper, broken]);
+        let result =
+            dispatch_post_compact_context(&registry, &post_compact_envelope(), &run_ctx()).await;
+        let texts: Vec<&str> = result
+            .additional_context
+            .iter()
+            .map(|context| context.text.as_str())
+            .collect();
+        assert_eq!(
+            texts,
+            ["restore the todo list"],
+            "a stop decision and a broken hook contribute nothing"
+        );
+        assert!(matches!(result.results[0], HookRunResult::Success { .. }));
     }
 
     #[tokio::test]
