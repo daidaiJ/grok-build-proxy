@@ -785,7 +785,9 @@ fn resolve_agent_definition_acp_profile_wins_for_explicit_grok_build_family() {
         "description": "Custom devbox profile",
     }))
     .expect("agent definition must parse");
-    for family_variant in ["grok-build", "grok-build-plan", "grok-build-concise"] {
+    // LOCAL: grok-build-concise left the overridable set — it is a strict
+    // harness now (bespoke minimal-mode prompt), like codex.
+    for family_variant in ["grok-build", "grok-build-plan"] {
         let def = MvpAgent::resolve_agent_definition(
             tmp.path(),
             None,
@@ -798,6 +800,19 @@ fn resolve_agent_definition_acp_profile_wins_for_explicit_grok_build_family() {
             "ACP profile must win for grok-build family variant `{family_variant}`"
         );
     }
+    // LOCAL: the strict minimal-mode agent keeps its built-in definition —
+    // a client agentProfile must not silently drop the concise prompt.
+    let def = MvpAgent::resolve_agent_definition(
+        tmp.path(),
+        None,
+        &config::AgentSelectionConfig::default(),
+        Some(acp_profile.clone()),
+        Some("grok-build-concise"),
+    );
+    assert_eq!(
+        def.name, "grok-build-concise",
+        "strict harness must not be overridden by an ACP profile"
+    );
     if let Some(v) = prev {
         unsafe { std::env::set_var("GROK_AGENT", v) }
     }
@@ -1046,10 +1061,6 @@ fn harnesses_are_compatible_for_stock_family_pairs() {
     assert!(harnesses_are_compatible("grok-build-plan", "grok-build"));
     assert!(harnesses_are_compatible("grok-build", "grok-build"));
     assert!(harnesses_are_compatible(
-        "grok-build-concise",
-        "grok-build-plan"
-    ));
-    assert!(harnesses_are_compatible(
         "remote-sidebar",
         "grok-build-plan"
     ));
@@ -1058,6 +1069,20 @@ fn harnesses_are_compatible_for_stock_family_pairs() {
 fn harnesses_are_compatible_rejects_strict_mismatches() {
     assert!(harnesses_are_compatible("codex", "codex"));
     assert!(!harnesses_are_compatible("grok-build-plan", "codex"));
+    // LOCAL: grok-build-concise is strict (bespoke minimal-mode prompt), so it
+    // is only compatible with itself and needs a harness rebuild to reach.
+    assert!(harnesses_are_compatible(
+        "grok-build-concise",
+        "grok-build-concise"
+    ));
+    assert!(!harnesses_are_compatible(
+        "grok-build-concise",
+        "grok-build-plan"
+    ));
+    assert!(!harnesses_are_compatible(
+        "grok-build-plan",
+        "grok-build-concise"
+    ));
 }
 #[test]
 fn explicit_agent_type_wins_over_session_default() {
