@@ -24,7 +24,7 @@ env:
   RUSTC_WRAPPER: sccache
   # sccache cannot cache incremental compilations; CI builds are one-shot
   # and gain nothing from the manifest's incremental = true anyway.
-  CARGO_PROFILE_DEV_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_INCREMENTAL: "false"
 
 jobs:
   linux:

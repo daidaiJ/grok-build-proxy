@@ -32,8 +32,9 @@ env:
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: sccache
   # Env profile overrides win over the manifest's [profile.release]
-  # incremental = true (which exists for local dev rebuilds).
-  CARGO_PROFILE_RELEASE_INCREMENTAL: "0"
+  # incremental = true (which exists for local dev rebuilds). Note cargo
+  # only accepts "true"/"false" for boolean profile env vars.
+  CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
 
 jobs:
   linux:
