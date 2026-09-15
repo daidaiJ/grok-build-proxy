@@ -17,6 +17,14 @@ env:
   # Some session-lifecycle tests recurse deeply enough to overflow the
   # libtest thread's default stack on Linux CI.
   RUST_MIN_STACK: 16777216
+  # Share the content-addressed compile cache with release.yml: tag builds
+  # restore default-branch caches, so these main-branch runs keep sccache
+  # warm between releases.
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: sccache
+  # sccache cannot cache incremental compilations; CI builds are one-shot
+  # and gain nothing from the manifest's incremental = true anyway.
+  CARGO_PROFILE_DEV_INCREMENTAL: "0"
 
 jobs:
   linux:
@@ -26,6 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Mozilla-Actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
       - name: Install protoc
         # Pinned to the version verified locally; apt's protobuf-compiler fails
@@ -62,6 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Mozilla-Actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
       - name: Install protoc
         run: choco install protoc -y

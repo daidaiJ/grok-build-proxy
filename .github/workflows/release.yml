@@ -3,17 +3,37 @@
 # desktop targets this fork ships: linux-amd64 and windows-amd64. Cut a
 # release by pushing a `v*` tag; the assets land on the GitHub release the
 # tag names. Protoc matches the pinned version build.yml verifies.
+#
+# Compile cache: sccache with the GitHub Actions backend. rust-cache's
+# target/ cache here only ever held debug artifacts from build.yml (the two
+# workflows share job names, so restore hit but helped nothing), which made
+# every tag rebuild the full release dependency tree (~50 min on Windows).
+# sccache is content-addressed and shared with build.yml's main-branch runs,
+# so a tag build only recompiles crates that actually changed. This requires
+# incremental to stay off in CI (env override below): sccache refuses to
+# cache incremental compilations, and a one-shot CI build gains nothing
+# from it.
+#
+# workflow_dispatch runs the identical build on a branch ref (packaging and
+# upload are guarded to tag refs) — used to warm the sccache cache before
+# cutting a tag and to benchmark without releasing.
 name: release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 env:
   CARGO_TERM_COLOR: always
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: sccache
+  # Env profile overrides win over the manifest's [profile.release]
+  # incremental = true (which exists for local dev rebuilds).
+  CARGO_PROFILE_RELEASE_INCREMENTAL: "0"
 
 jobs:
   linux:
@@ -22,7 +42,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Mozilla-Actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
+        with:
+          # sccache owns compiled-artifact caching; storing target/ here would
+          # only burn repo cache quota on files restore never needed.
+          cache-targets: false
       - name: Install protoc
         run: |
           curl -fsSL -o /tmp/protoc.zip \
@@ -32,12 +57,16 @@ jobs:
           echo "$HOME/.local/protoc/bin" >> "$GITHUB_PATH"
       - name: Build release binary
         run: cargo build --release -p xai-grok-pager-bin
+      - name: sccache stats
+        run: sccache --show-stats
       - name: Package
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           cd target/release
           tar czf "grok-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" xai-grok-pager
           sha256sum "grok-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" > "grok-${GITHUB_REF_NAME}-x86_64-linux.tar.gz.sha256"
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             target/release/grok-${{ github.ref_name }}-x86_64-linux.tar.gz
@@ -49,12 +78,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Mozilla-Actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
       - name: Install protoc
         run: choco install protoc -y
       - name: Build release binary
         run: cargo build --release -p xai-grok-pager-bin
+      - name: sccache stats
+        run: sccache --show-stats
       - name: Package
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
           Compress-Archive -Path target/release/xai-grok-pager.exe `
@@ -63,6 +98,7 @@ jobs:
           "$hash  grok-${{ github.ref_name }}-x86_64-windows.zip" |
             Set-Content "target/release/grok-${{ github.ref_name }}-x86_64-windows.zip.sha256"
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             target/release/grok-${{ github.ref_name }}-x86_64-windows.zip
