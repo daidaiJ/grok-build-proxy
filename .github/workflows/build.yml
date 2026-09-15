@@ -21,6 +21,8 @@ env:
 jobs:
   linux:
     runs-on: ubuntu-24.04
+    # A deadlocked test must fail the job, not park it for the 6-hour GitHub default.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -50,6 +52,7 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
