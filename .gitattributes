@@ -1,0 +1,3 @@
+# Braille logo art is embedded verbatim via include_str!: CRLF would leak
+# into the binary on Windows checkouts and render as stray carriage returns.
+crates/codegen/xai-grok-pager/assets/logo/*.txt text eol=lf
