@@ -219,6 +219,13 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
   聚焦抑制为启发式——用户最近 N 秒有输入则跳过；挂在 `dispatch_notification_hook`
   入口，与 hooks 完全独立
 
+**行为变化（rebase 用）**：grok-build-concise 现为 strict harness（定制提示 +
+精选工具集）——客户端 `_meta.agentProfile` 不能覆盖它（与 codex 同策略）；
+`harnesses_are_compatible` 视其仅与自身兼容，切换到它需重建 harness（重建路径
+`model_switch.rs` 会写入 compact+规则提示，语义一致）。相关上游测试已按此更新：
+mvp_agent/tests.rs（兼容矩阵 + ACP profile 解析）、xai-grok-agent config.rs
+（`expected_strict_harness` / 按名分类）。
+
 **实现锚点（rebase 用）**：`xai-grok-hooks`（event.rs 事件/GateKind::ModelCall/payload、
 runner/mod.rs `resolve_rewrites`+`gate_outcome(gate)`、dispatcher.rs
 `MessageRewrite`/`dispatch_before_model_call`/`dispatch_post_compact_context`、
