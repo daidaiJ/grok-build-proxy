@@ -173,7 +173,8 @@ fn default_timeout_ms(event: crate::event::HookEventName) -> u64 {
     match event.traits().gate {
         GateKind::Stop | GateKind::PostTool => DEFAULT_VERIFICATION_GATE_TIMEOUT_MS,
         GateKind::Prompt => DEFAULT_PROMPT_GATE_TIMEOUT_MS,
-        GateKind::Observe | GateKind::Tool => DEFAULT_TIMEOUT_MS,
+        // LOCAL: ModelCall matches the other blocking gates' default.
+        GateKind::Observe | GateKind::Tool | GateKind::ModelCall => DEFAULT_TIMEOUT_MS,
     }
 }
 
@@ -993,7 +994,8 @@ mod tests {
                 match spec.event.traits().gate {
                     GateKind::Stop | GateKind::PostTool => DEFAULT_VERIFICATION_GATE_TIMEOUT_MS,
                     GateKind::Prompt => DEFAULT_PROMPT_GATE_TIMEOUT_MS,
-                    GateKind::Observe | GateKind::Tool => DEFAULT_TIMEOUT_MS,
+                    // LOCAL: ModelCall matches the other blocking gates' default.
+                    GateKind::Observe | GateKind::Tool | GateKind::ModelCall => DEFAULT_TIMEOUT_MS,
                 }
             };
             assert_eq!(spec.timeout_ms, expected, "event {}", spec.event);

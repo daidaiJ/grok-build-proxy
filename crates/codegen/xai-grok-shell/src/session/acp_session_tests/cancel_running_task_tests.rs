@@ -128,6 +128,10 @@ async fn persist_ack_waits_for_disk_flush_before_success() {
                 transient_retry_enabled: true,
                 transient_retries_prompt_total: std::cell::Cell::new(0),
                 transient_episode_start: std::cell::Cell::new(None),
+        // LOCAL: phase-3 notifications + BeforeModelCall fail-open ledger.
+        notification_settings: Default::default(),
+        before_model_call_failures: std::cell::Cell::new(0),
+        before_model_call_disabled: std::cell::Cell::new(false),
                 status_wake: Default::default(),
                 session_info,
                 auth_method_id: test_auth_method_id("test-auth"),
@@ -742,6 +746,10 @@ async fn first_turn_memory_injection_disabled_does_not_persist_to_chat_history()
                 transient_retry_enabled: true,
                 transient_retries_prompt_total: std::cell::Cell::new(0),
                 transient_episode_start: std::cell::Cell::new(None),
+        // LOCAL: phase-3 notifications + BeforeModelCall fail-open ledger.
+        notification_settings: Default::default(),
+        before_model_call_failures: std::cell::Cell::new(0),
+        before_model_call_disabled: std::cell::Cell::new(false),
                 status_wake: Default::default(),
                 session_info: session_info.clone(),
                 auth_method_id: test_auth_method_id("test-auth"),
@@ -1077,6 +1085,10 @@ async fn cancel_running_task_teardown_clears_running_and_pending_work() {
                 transient_retry_enabled: true,
                 transient_retries_prompt_total: std::cell::Cell::new(0),
                 transient_episode_start: std::cell::Cell::new(None),
+        // LOCAL: phase-3 notifications + BeforeModelCall fail-open ledger.
+        notification_settings: Default::default(),
+        before_model_call_failures: std::cell::Cell::new(0),
+        before_model_call_disabled: std::cell::Cell::new(false),
                 status_wake: Default::default(),
                 session_info: SessionInfo {
                     id: acp::SessionId::new("test-cancel"),
@@ -2659,6 +2671,10 @@ async fn cancel_propagates_to_sampler_handle_so_no_further_emission() {
                 transient_retry_enabled: true,
                 transient_retries_prompt_total: std::cell::Cell::new(0),
                 transient_episode_start: std::cell::Cell::new(None),
+        // LOCAL: phase-3 notifications + BeforeModelCall fail-open ledger.
+        notification_settings: Default::default(),
+        before_model_call_failures: std::cell::Cell::new(0),
+        before_model_call_disabled: std::cell::Cell::new(false),
                 status_wake: Default::default(),
                 session_info: SessionInfo {
                     id: acp::SessionId::new("test-cancel-sampler"),

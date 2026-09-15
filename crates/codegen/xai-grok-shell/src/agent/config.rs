@@ -159,6 +159,32 @@ pub struct ShellBackendConfig {
     pub backend: Option<String>,
 }
 
+/// LOCAL: `[notifications]` — out-of-box notifications on Notification hook
+/// events (permission_prompt / idle_prompt / task_complete). Everything is
+/// opt-in: with the section absent (the default) behavior is exactly upstream.
+/// Desktop notification rides terminal OSC 9 + OSC 777 escape sequences (zero
+/// dependencies; supported by Windows Terminal, iTerm2, kitty, WezTerm, rxvt),
+/// sound is a terminal BEL.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NotificationsConfig {
+    /// Emit terminal desktop notifications (OSC 9 / OSC 777).
+    pub desktop: bool,
+    /// Emit a terminal bell (BEL) alongside the notification.
+    pub sound: bool,
+    /// Minimum seconds between two emitted notifications (dedup window).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub min_interval_secs: u64,
+    /// Heuristic focus suppression: skip notifications within this many
+    /// seconds of the user's last input (a quiet user is assumed away).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub suppress_after_user_input_secs: u64,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct EndpointsConfig {
@@ -1363,6 +1389,9 @@ pub struct Config {
     /// LOCAL: `[shell]` Windows shell backend; resolved into the shell cascade at config load.
     #[serde(default, skip_serializing)]
     pub shell: ShellBackendConfig,
+    /// LOCAL: `[notifications]` out-of-box desktop/sound notification opt-ins.
+    #[serde(default, skip_serializing)]
+    pub notification_settings: NotificationsConfig,
     /// When running in relay/headless mode, this should be set to Writeback.
     /// Defaults to reading from GROK_STORAGE_MODE env var.
     #[serde(skip)]
@@ -1638,6 +1667,7 @@ impl Default for Config {
             features: Features::default(),
             network: NetworkConfig::default(),
             shell: ShellBackendConfig::default(),
+            notification_settings: NotificationsConfig::default(),
             goal: GoalConfig::default(),
             workflows: WorkflowsConfig::default(),
             doom_loop_recovery: crate::util::config::DoomLoopRecoverySettings::default(),

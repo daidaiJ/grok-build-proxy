@@ -982,6 +982,12 @@ pub(crate) struct SessionActor {
     /// Controls whether MCP server reminders inject only changes (Delta) or the full server list (Full).
     /// Read from `MCP_REMINDER_MODE` env var.
     pub(crate) mcp_reminder_mode: McpReminderMode,
+    // LOCAL: [notifications] snapshot taken at spawn (phase-3 out-of-box notifications).
+    pub(crate) notification_settings: crate::agent::config::NotificationsConfig,
+    // LOCAL: BeforeModelCall fail-open ledger — consecutive broken hook dispatches,
+    // and the session-level breaker that disables the transform after repeats.
+    pub(crate) before_model_call_failures: std::cell::Cell<u32>,
+    pub(crate) before_model_call_disabled: std::cell::Cell<bool>,
     /// Set when the MCP server set changes and a reminder needs injection.
     /// Cleared by `maybe_inject_mcp_reminder` after injecting.
     pub(crate) mcp_reminder_dirty: Arc<std::sync::atomic::AtomicBool>,

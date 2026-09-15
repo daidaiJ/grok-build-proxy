@@ -94,6 +94,8 @@ pub enum HookEvent {
     // Compaction
     PreCompact,
     PostCompact,
+    // LOCAL: outbound message-list transform (fail-open; see docs-local/PATCHES.md)
+    BeforeModelCall,
     /// An event added after this client was built: it keeps one unrecognized name from blanking
     /// the whole list. Lossy on re-serialize, so only deserialize through this type.
     #[serde(other)]
@@ -127,6 +129,7 @@ impl HookEvent {
             | Self::SubagentStop
             | Self::PreCompact
             | Self::PostCompact
+            | Self::BeforeModelCall
             | Self::Unknown => false,
         }
     }
@@ -150,6 +153,7 @@ impl std::fmt::Display for HookEvent {
             Self::SubagentStop => write!(f, "Subagent Stop"),
             Self::PreCompact => write!(f, "Pre-Compact"),
             Self::PostCompact => write!(f, "Post-Compact"),
+            Self::BeforeModelCall => write!(f, "Before Model Call"),
             Self::Unknown => write!(f, "Unknown"),
         }
     }

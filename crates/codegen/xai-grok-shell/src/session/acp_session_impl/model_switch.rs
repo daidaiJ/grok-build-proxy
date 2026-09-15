@@ -97,9 +97,13 @@ impl SessionActor {
             for item in conversation.iter_mut() {
                 if let ConversationItem::System(sys) = item {
                     if use_concise {
-                        sys.content = std::sync::Arc::<str>::from(
+                        // LOCAL: keep the mid-session concise switch consistent with the
+                        // startup definition — compact base plus the minimal-style rules.
+                        sys.content = std::sync::Arc::<str>::from(format!(
+                            "{}\n\n{}",
                             xai_grok_agent::prompt::template::COMPACT_SYSTEM_PROMPT,
-                        );
+                            xai_grok_agent::prompt::template::LOCAL_CONCISE_RULES,
+                        ));
                     } else {
                         sys.content =
                             std::sync::Arc::<str>::from(self.agent.borrow().system_prompt());

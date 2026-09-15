@@ -172,6 +172,14 @@ hook_events! {
         aliases: ["PostCompact", "post_compact", "postCompact"],
         traits: (Observe, Tested, true),
     },
+    // LOCAL: outbound message-list transform, fired after request assembly and
+    // before every sampling call. Fail-open by contract: hook trouble must
+    // never block or corrupt the model request (docs-local/PATCHES.md).
+    BeforeModelCall {
+        display: "before_model_call",
+        aliases: ["BeforeModelCall", "before_model_call", "beforeModelCall"],
+        traits: (ModelCall, Tested, false),
+    },
     SessionEnd {
         display: "session_end",
         aliases: ["SessionEnd", "session_end", "sessionEnd"],
@@ -189,6 +197,9 @@ pub enum GateKind {
     /// The block reason is user-facing, never model context.
     /// Exit 2 blocks regardless of JSON, and the default timeout is 30s.
     Prompt,
+    // LOCAL: message-list rewrite gate (`hookSpecificOutput.updatedMessages`).
+    // A deny only suppresses the rewrite, never the request itself.
+    ModelCall,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -575,6 +586,14 @@ pub enum HookPayload {
     PostCompact {
         source: String,
     },
+    // LOCAL
+    BeforeModelCall {
+        model: String,
+        #[serde(rename = "messageCount")]
+        message_count: usize,
+        /// Serialised outbound message list (`request.items`), payload-cap truncated.
+        messages: serde_json::Value,
+    },
 }
 
 impl HookPayload {
@@ -606,7 +625,9 @@ impl HookPayload {
             Self::SessionEnd { reason, .. } => reason,
             Self::StopFailure { error, .. } => return Some(error.as_ref()),
             Self::StopCancelled { reason, .. } => return Some(reason.as_ref()),
-            Self::Stop { .. } | Self::UserPromptSubmit { .. } => return None,
+            Self::Stop { .. } | Self::UserPromptSubmit { .. } | Self::BeforeModelCall { .. } => {
+                return None;
+            }
         };
         Some(value.as_str()).filter(|v| !v.is_empty())
     }

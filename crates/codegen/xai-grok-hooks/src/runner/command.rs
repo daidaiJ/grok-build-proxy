@@ -27,7 +27,8 @@ use crate::result::StopHookOutcome;
 use super::{
     GateHookJson, GateKind, GateOutcome, HookHealth, HookRunnerResult, PostToolUseHookJson,
     PostToolUseParse, PromptHookJson, RunContext, StopHookJson, extract_system_message,
-    gate_outcome, post_tool_use_json_to_outcome, prompt_json_to_block, stop_json_to_outcome,
+    gate_outcome, gate_outcome_for_gate, post_tool_use_json_to_outcome,
+    prompt_json_to_block, stop_json_to_outcome,
 };
 
 const CAPTURE_HEADROOM_OVER_REPLACEMENT: usize = 16;
@@ -338,6 +339,10 @@ pub async fn run_command_hook(
                 GateKind::Tool => {
                     parse_blocking_result(&stdout, &stderr, exit_code, &spec.name, elapsed)
                 }
+                // LOCAL: ModelCall shares the blocking-gate parse (deny + rewrite fields).
+                GateKind::ModelCall => parse_blocking_result_for_gate(
+                    &stdout, &stderr, exit_code, &spec.name, elapsed, mode,
+                ),
                 GateKind::Stop => {
                     parse_stop_result(&stdout, &stderr, exit_code, &spec.name, elapsed)
                 }
@@ -640,12 +645,31 @@ fn failed_with_exit_code(exit_code: i32, stderr: &str) -> HookRunnerResult {
     ))
 }
 
+/// Tool-gate semantics: legacy entry point kept for the pre-ModelCall test surface.
 fn parse_blocking_result(
     stdout: &str,
     stderr: &str,
     exit_code: i32,
     hook_name: &str,
     elapsed: Duration,
+) -> (HookRunnerResult, Duration) {
+    parse_blocking_result_for_gate(
+        stdout,
+        stderr,
+        exit_code,
+        hook_name,
+        elapsed,
+        crate::event::GateKind::Tool,
+    )
+}
+
+fn parse_blocking_result_for_gate(
+    stdout: &str,
+    stderr: &str,
+    exit_code: i32,
+    hook_name: &str,
+    elapsed: Duration,
+    mode: crate::event::GateKind,
 ) -> (HookRunnerResult, Duration) {
     let gate_document = if !stdout.trim().is_empty() {
         serde_json::from_str::<GateHookJson>(stdout.trim())
@@ -657,7 +681,8 @@ fn parse_blocking_result(
 
     if let Some(json) = gate_document {
         let health = HookHealth::from_success(exit_code == 0);
-        match gate_outcome(json, hook_name, stderr_first_line(stderr), health) {
+        // LOCAL: the gate drives `updatedMessages` extraction (ModelCall only).
+        match gate_outcome_for_gate(mode, json, hook_name, stderr_first_line(stderr), health) {
             GateOutcome::Deny(reason) => {
                 if exit_code != GATE_EXIT_CODE && exit_code != 0 {
                     tracing::warn!(
@@ -688,11 +713,13 @@ fn parse_blocking_result(
             }
             GateOutcome::Allow {
                 updated_input,
+                updated_messages,
                 additional_context,
             } => {
                 return (
                     HookRunnerResult::Allow {
                         updated_input,
+                        updated_messages,
                         additional_context,
                     },
                     elapsed,
@@ -701,12 +728,14 @@ fn parse_blocking_result(
             GateOutcome::Ask {
                 reason,
                 updated_input,
+                updated_messages,
                 additional_context,
             } => {
                 return (
                     HookRunnerResult::Ask {
                         reason,
                         updated_input,
+                        updated_messages,
                         additional_context,
                     },
                     elapsed,
@@ -739,6 +768,7 @@ fn parse_blocking_result(
         0 => (
             HookRunnerResult::Allow {
                 updated_input: None,
+                updated_messages: None,
                 additional_context: None,
             },
             elapsed,

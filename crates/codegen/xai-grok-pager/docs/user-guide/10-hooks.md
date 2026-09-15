@@ -101,7 +101,8 @@ Events fire at three cadences: once per session (`SessionStart`, `SessionEnd`), 
 | `SubagentStart` | A subagent starts. | No |
 | `SubagentStop` | A subagent's turn ends (fires once, in the subagent, with stop decision control). | Yes: can block the stop |
 | `PreCompact` | Conversation compaction is about to run. | No |
-| `PostCompact` | Conversation compaction completes. | No |
+| `PostCompact` | Conversation compaction completes. LOCAL: may answer with `hookSpecificOutput.additionalContext` — collected texts are re-injected as one system item right after the reset (extension state restore). A stop decision is ignored; the event never blocks. |
+| `BeforeModelCall` | LOCAL: a sampling request has been assembled and is about to be sent. Payload carries the outbound `messages` (payload-cap truncated). May rewrite the list via `hookSpecificOutput.updatedMessages` for this call only — session records keep the originals. Fail-open by contract: a deny suppresses only the rewrite, broken hooks degrade to no-ops, and repeated failures disable the transform for the rest of the session. | Deny suppresses the rewrite only |
 | `SessionEnd` | The session ends. Carries `subagentType` for a child session, so a host can tell a child's teardown from its own. | No |
 
 `SubagentEnd` is accepted as an alias for `SubagentStop`. `PreToolUse` can block a tool call, `UserPromptSubmit` can block a prompt (see below), and `Stop`/`SubagentStop` can block the agent from stopping (see [Stop Decision Control](#stop-decision-control)). `PostToolUse` runs too late to block anything, but its stdout is read: it can feed the model feedback and replace the tool output the model sees (see [PostToolUse Output](#posttooluse-output)). Every other event is passive.

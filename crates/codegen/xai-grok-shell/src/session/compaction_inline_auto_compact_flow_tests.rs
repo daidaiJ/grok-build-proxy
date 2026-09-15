@@ -85,6 +85,10 @@ async fn create_test_actor(
         transient_retry_enabled: true,
         transient_retries_prompt_total: std::cell::Cell::new(0),
         transient_episode_start: std::cell::Cell::new(None),
+        // LOCAL: phase-3 notifications + BeforeModelCall fail-open ledger.
+        notification_settings: Default::default(),
+        before_model_call_failures: std::cell::Cell::new(0),
+        before_model_call_disabled: std::cell::Cell::new(false),
         status_wake: Default::default(),
         unattributed_background_usage: std::sync::atomic::AtomicBool::new(false),
         session_info: SessionInfo {

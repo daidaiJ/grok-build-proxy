@@ -102,3 +102,51 @@ context_window = 200000
 ```
 
 Check the provider's current docs for the exact model id and context window before writing these blocks. Pair these models with the `api-calls` and `perf` status-line items — gateway failures and throughput regressions are the two things most likely to need diagnosis on third-party endpoints.
+
+## Minimal mode (concise agent)
+
+**What it does:** the built-in `grok-build-concise` agent becomes a true minimal
+mode. Its system prompt is the lean compact base plus a merged output-style rule
+section (answer first, no narration, compressed prose that never drops facts,
+numbered multi-step work, cause-and-fix errors, five-item presentation cap,
+full detail when the user asks for it).
+
+**When to configure it:** long sessions where scrollback and token spend are
+dominated by narration, or headless/daemon runs where only outcomes matter.
+
+Select it at startup with `--agent-profile grok-build-concise`, set
+`agent.name = "grok-build-concise"` in config, or switch mid-session from the
+`/agents` modal. Nothing changes for any other agent.
+
+## Notifications
+
+**What it does:** out-of-box desktop notification and bell on user-attention
+events (permission prompt, task complete, idle), without writing any hook.
+
+```toml
+[notifications]
+desktop = true                        # terminal OSC 9 + OSC 777 desktop notify
+sound = true                          # terminal bell
+min-interval-secs = 30                # dedup window between notifications
+suppress-after-user-input-secs = 20   # skip while the user is clearly active
+```
+
+**When to configure it:** long-running or background sessions where you want
+the terminal (Windows Terminal, iTerm2, kitty, WezTerm) to surface permission
+requests and completions while you work elsewhere. All keys are opt-in; absent
+section means upstream behavior.
+
+## Extension hooks (BeforeModelCall / PostCompact)
+
+**What they do:** `BeforeModelCall` fires after a sampling request is assembled
+and lets a hook rewrite the outbound message list via
+`hookSpecificOutput.updatedMessages` (redact, trim, compress). Session records
+keep the originals, and the seam is fail-open: a deny suppresses only the
+rewrite, broken hooks degrade to no-ops, and repeated failures disable the
+transform for the rest of the session. `PostCompact` hooks may return
+`hookSpecificOutput.additionalContext`, which is re-injected after compaction —
+the state-restore channel for task-list and memory style extensions.
+
+**When to configure them:** when a third-party extension ships hooks for these
+events (redaction, output compression, state restore), register them like any
+other hook — no extra configuration is needed to make them take effect.

@@ -71,6 +71,7 @@ fn hook_spec_to_info_with(
         HookEventName::SubagentStop | HookEventName::SubagentEnd => HookEvent::SubagentStop,
         HookEventName::PreCompact => HookEvent::PreCompact,
         HookEventName::PostCompact => HookEvent::PostCompact,
+        HookEventName::BeforeModelCall => HookEvent::BeforeModelCall,
     };
 
     let handler_type = if spec.url.is_some() {

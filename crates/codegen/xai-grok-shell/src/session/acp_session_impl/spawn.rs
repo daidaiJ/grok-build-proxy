@@ -1918,6 +1918,10 @@ pub(crate) async fn spawn_session_actor(
                 .unwrap_or_default(),
         ),
         mcp_reminder_mode: McpReminderMode::from_env(),
+        // LOCAL: phase-3 notifications + BeforeModelCall fail-open ledger.
+        notification_settings: effective_config.notification_settings.clone(),
+        before_model_call_failures: std::cell::Cell::new(0),
+        before_model_call_disabled: std::cell::Cell::new(false),
         mcp_reminder_dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         mcp_connecting_reminder_injected: std::cell::Cell::new(false),
         mcp_refresh_gate: Arc::new(tokio::sync::Mutex::new(())),

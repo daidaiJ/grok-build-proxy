@@ -414,6 +414,8 @@ mod tests {
             HookEventName::Stop,
             HookEventName::SubagentStop,
             HookEventName::UserPromptSubmit,
+            // LOCAL
+            HookEventName::BeforeModelCall,
         ]
         .into_iter()
         .collect();

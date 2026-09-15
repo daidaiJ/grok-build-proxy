@@ -2505,6 +2505,15 @@ impl SessionActor {
         self.maybe_compact_on_model_switch().await?;
         self.chat_state_handle
             .record_turn_start(chrono::Utc::now().timestamp_millis());
+        // LOCAL: user-activity timestamp for notification focus suppression.
+        {
+            use std::sync::atomic::Ordering;
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            types::LAST_USER_INPUT_MS.store(now_ms, Ordering::Relaxed);
+        }
         {
             let span = tracing::Span::current();
             if let Some(agent) = self.active_agent_type.lock().clone() {
@@ -2873,6 +2882,9 @@ impl SessionActor {
                     "transient_retry_attempts": transient_retry_attempts,
                 })),
             );
+            // LOCAL: BeforeModelCall — fail-open message-list transform for this
+            // call only; session records keep the original items.
+            let before_model_call_rewrote = self.apply_before_model_call_hooks(&mut request).await;
             let model_timer = std::time::Instant::now();
             let model_sampler_outcome = self
                 .run_turn_via_sampler(
@@ -2894,6 +2906,13 @@ impl SessionActor {
                     (r, latency)
                 }
                 Err(error) => {
+                    if before_model_call_rewrote {
+                        // LOCAL: fail-open — attribute the failure to the rewrite and
+                        // disable the transform for the rest of this session.
+                        self.trip_before_model_call_breaker(
+                            "sampling failed on a rewritten request",
+                        );
+                    }
                     if salvage.awaiting_continuation()
                         && crate::sampling::error::is_max_tokens_turn_error(&error)
                     {

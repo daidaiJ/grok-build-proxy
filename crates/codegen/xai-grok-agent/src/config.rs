@@ -1433,6 +1433,14 @@ impl AgentDefinition {
         Self {
             tool_config: grok_build_concise_toolset(),
             agents_md: false,
+            // LOCAL: minimal-mode primary agent — the lean compact base plus the
+            // merged concise output-style rules, so startup and the mid-session
+            // concise switch (model_switch.rs) produce the same prompt.
+            system_prompt: TemplateOverride::Custom(format!(
+                "{}\n\n{}",
+                crate::prompt::template::COMPACT_SYSTEM_PROMPT,
+                crate::prompt::template::LOCAL_CONCISE_RULES,
+            )),
             ..Self::base(
                 BuiltinAgentName::GrokBuildConcise,
                 "Grok Build agent with concise output format.",
@@ -1812,8 +1820,9 @@ mod tests {
     fn expected_strict_harness(name: BuiltinAgentName) -> bool {
         match name {
             BuiltinAgentName::Codex | BuiltinAgentName::GrokBuildOrchestrator => true,
+            // LOCAL: GrokBuildConcise is strict — its bespoke compact+rules prompt
+            // (minimal mode) must not be overridden by a client agentProfile.
             BuiltinAgentName::GrokBuild
-            | BuiltinAgentName::GrokBuildConcise
             | BuiltinAgentName::GrokBuildPlan
             | BuiltinAgentName::GrokBuildPlanNoSubagents
             | BuiltinAgentName::GrokBuildAskUser
@@ -1822,6 +1831,7 @@ mod tests {
             | BuiltinAgentName::Plan
             | BuiltinAgentName::Opencode
             | BuiltinAgentName::BrowserUse => false,
+            BuiltinAgentName::GrokBuildConcise => true,
         }
     }
     /// Invariant: structural `is_strict_harness()` must match the hand-classified expectation for every built-in variant.
@@ -1841,7 +1851,8 @@ mod tests {
     }
     #[test]
     fn is_strict_harness_agent_type_classifies_by_name() {
-        for strict in ["codex", "grok-build-orchestrator"] {
+        // LOCAL: grok-build-concise joined the strict set (bespoke minimal-mode prompt).
+        for strict in ["codex", "grok-build-orchestrator", "grok-build-concise"] {
             assert!(
                 is_strict_harness_agent_type(strict),
                 "{strict} should be strict"
@@ -1850,7 +1861,6 @@ mod tests {
         for non_strict in [
             "grok-build",
             "grok-build-plan",
-            "grok-build-concise",
             "grok-build-ask-user",
             "opencode",
             "browser-use",

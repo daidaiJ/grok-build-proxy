@@ -60,6 +60,12 @@ pub struct InputRewrite {
     pub input: serde_json::Map<String, serde_json::Value>,
 }
 
+// LOCAL: last-wins message-list rewrite from a `before_model_call` hook.
+pub struct MessageRewrite {
+    pub hook_name: String,
+    pub messages: Vec<serde_json::Value>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct AdditionalContext {
     pub hook_name: String,
@@ -84,6 +90,8 @@ struct SequentialGateOutcome {
     pending_ask: Option<PendingAsk>,
     deferring_hook: Option<String>,
     updated_input: Option<InputRewrite>,
+    // LOCAL: `before_model_call` only; None for every other gate.
+    updated_messages: Option<MessageRewrite>,
     additional_context: Vec<AdditionalContext>,
     results: Vec<HookRunResult>,
 }
@@ -104,6 +112,7 @@ async fn dispatch_sequential_gate(
             pending_ask: None,
             deferring_hook: None,
             updated_input: None,
+            updated_messages: None,
             additional_context: Vec::new(),
             results: Vec::new(),
         };
@@ -115,6 +124,7 @@ async fn dispatch_sequential_gate(
     let match_value = envelope.payload.match_value().map(str::to_string);
     let mut run_results = Vec::new();
     let mut updated_input: Option<InputRewrite> = None;
+    let mut updated_messages: Option<MessageRewrite> = None;
     let mut additional_context: Vec<AdditionalContext> = Vec::new();
     let mut pending_ask: Option<PendingAsk> = None;
     let mut deferring_hook: Option<String> = None;
@@ -163,23 +173,32 @@ async fn dispatch_sequential_gate(
                     pending_ask: None,
                     deferring_hook: None,
                     updated_input: None,
+                    updated_messages: None,
                     additional_context: Vec::new(),
                     results: run_results,
                 };
             }
             HookRunnerResult::Allow {
                 updated_input: hook_updated_input,
+                updated_messages: hook_updated_messages,
                 additional_context: hook_additional_context,
             } => {
                 tracing::info!(
                     hook_name = %spec.name,
                     elapsed_ms = elapsed.as_millis() as u64,
                     updated_input = hook_updated_input.is_some(),
+                    updated_messages = hook_updated_messages.is_some(),
                     additional_context = hook_additional_context.is_some(),
                     "hook allowed"
                 );
                 if let Some(rewrite) = hook_updated_input {
                     record_rewrite(&mut updated_input, &spec.name, rewrite);
+                }
+                if let Some(messages) = hook_updated_messages {
+                    updated_messages = Some(MessageRewrite {
+                        hook_name: spec.name.clone(),
+                        messages,
+                    });
                 }
                 if let Some(text) = hook_additional_context {
                     record_additional_context(&mut additional_context, &spec.name, text);
@@ -194,17 +213,25 @@ async fn dispatch_sequential_gate(
             HookRunnerResult::Ask {
                 reason,
                 updated_input: hook_updated_input,
+                updated_messages: hook_updated_messages,
                 additional_context: hook_additional_context,
             } => {
                 tracing::info!(
                     hook_name = %spec.name,
                     elapsed_ms = elapsed.as_millis() as u64,
                     updated_input = hook_updated_input.is_some(),
+                    updated_messages = hook_updated_messages.is_some(),
                     additional_context = hook_additional_context.is_some(),
                     "hook asked"
                 );
                 if let Some(rewrite) = hook_updated_input {
                     record_rewrite(&mut updated_input, &spec.name, rewrite);
+                }
+                if let Some(messages) = hook_updated_messages {
+                    updated_messages = Some(MessageRewrite {
+                        hook_name: spec.name.clone(),
+                        messages,
+                    });
                 }
                 if let Some(text) = hook_additional_context {
                     record_additional_context(&mut additional_context, &spec.name, text);
@@ -270,6 +297,7 @@ async fn dispatch_sequential_gate(
         pending_ask,
         deferring_hook,
         updated_input,
+        updated_messages,
         additional_context,
         results: run_results,
     }
@@ -347,6 +375,200 @@ pub async fn dispatch_pre_tool_use(
         updated_input: outcome.updated_input,
         additional_context: outcome.additional_context,
         results: outcome.results,
+    }
+}
+
+// LOCAL: fail-open result contract for `before_model_call`. A deny surfaces in
+// `decision` but the caller proceeds untransformed — this event must never
+// gate the model request itself.
+pub struct BeforeModelCallResult {
+    pub decision: HookDecision,
+    pub updated_messages: Option<MessageRewrite>,
+    pub results: Vec<HookRunResult>,
+}
+
+/// LOCAL: dispatch `BeforeModelCall` hooks sequentially. Hooks may rewrite the
+/// outbound message list via `hookSpecificOutput.updatedMessages` (last wins).
+/// A deny suppresses only the rewrite; per-hook failures degrade to no-ops and
+/// the caller owns the session-level circuit breaker.
+pub async fn dispatch_before_model_call(
+    registry: &HookRegistry,
+    envelope: &HookEventEnvelope,
+    ctx: &RunContext<'_>,
+) -> BeforeModelCallResult {
+    let outcome = dispatch_sequential_gate(
+        registry,
+        HookEventName::BeforeModelCall,
+        GateKind::ModelCall,
+        "before_model_call",
+        envelope,
+        ctx,
+    )
+    .await;
+    let decision = match outcome.block {
+        Some(block) => HookDecision::Deny {
+            hook_name: block.hook_name,
+            reason: block.reason,
+        },
+        None => HookDecision::Allow,
+    };
+    BeforeModelCallResult {
+        decision,
+        updated_messages: outcome.updated_messages,
+        results: outcome.results,
+    }
+}
+
+// LOCAL: one collected `additionalContext` from a `post_compact` hook.
+pub struct PostCompactContext {
+    pub hook_name: String,
+    pub text: String,
+}
+
+pub struct PostCompactContextResult {
+    pub additional_context: Vec<PostCompactContext>,
+    pub results: Vec<HookRunResult>,
+}
+
+/// LOCAL: collect `hookSpecificOutput.additionalContext` from `post_compact`
+/// hooks so the host can re-inject it after compaction (rpiv-todo-style state
+/// restore). Runs observe-style: a broken hook contributes nothing, and a
+/// stop-style `continue:false` is ignored — PostCompact never blocks.
+pub async fn dispatch_post_compact_context(
+    registry: &HookRegistry,
+    envelope: &HookEventEnvelope,
+    ctx: &RunContext<'_>,
+) -> PostCompactContextResult {
+    let event = HookEventName::PostCompact;
+    let hooks = registry.hooks_for_canonical(event);
+    if hooks.is_empty() {
+        return PostCompactContextResult {
+            additional_context: Vec::new(),
+            results: Vec::new(),
+        };
+    }
+
+    let span = dispatch_span(event, hooks.len());
+    let _enter = span.enter();
+
+    let match_value = envelope.payload.match_value().map(str::to_string);
+    let mut results = Vec::with_capacity(hooks.len());
+    let mut additional_context = Vec::new();
+
+    for spec in hooks {
+        if !eligible_or_record_skip(spec, match_value.as_deref(), &mut results, ctx.disabled()) {
+            continue;
+        }
+
+        let _hook_span = tracing::info_span!(
+            "hook.run",
+            hook_name = %spec.name,
+            hook_event = %event,
+        )
+        .entered();
+
+        let (result, elapsed, http_info, system_message) =
+            runner::run_hook(spec, envelope, ctx, GateKind::Stop).await;
+
+        match result {
+            HookRunnerResult::Stop(outcome) => {
+                if outcome.block_reason.is_some() || outcome.force_stop.is_some() {
+                    tracing::warn!(
+                        hook_name = %spec.name,
+                        "post_compact hook returned a stop decision; ignored (PostCompact never blocks)"
+                    );
+                }
+                if let Some(text) = outcome.additional_context {
+                    additional_context.push(PostCompactContext {
+                        hook_name: spec.name.clone(),
+                        text,
+                    });
+                }
+                results.push(HookRunResult::Success {
+                    hook_name: spec.name.clone(),
+                    elapsed,
+                    http_info,
+                    system_message,
+                });
+            }
+            HookRunnerResult::Allow {
+                updated_messages: None,
+                additional_context: Some(text),
+                ..
+            }
+            | HookRunnerResult::Ask {
+                updated_messages: None,
+                additional_context: Some(text),
+                ..
+            } => {
+                additional_context.push(PostCompactContext {
+                    hook_name: spec.name.clone(),
+                    text,
+                });
+                results.push(HookRunResult::Success {
+                    hook_name: spec.name.clone(),
+                    elapsed,
+                    http_info,
+                    system_message,
+                });
+            }
+            other => {
+                record_non_stop_outcome(&mut results, spec, other, elapsed, http_info, system_message);
+            }
+        }
+    }
+
+    record_dispatch_counts(&span, &results);
+    PostCompactContextResult {
+        additional_context,
+        results,
+    }
+}
+
+/// LOCAL: map a non-stop runner outcome to a run result for the observe-style loop.
+fn record_non_stop_outcome(
+    results: &mut Vec<HookRunResult>,
+    spec: &crate::config::HookSpec,
+    outcome: runner::HookRunnerResult,
+    elapsed: std::time::Duration,
+    http_info: Option<crate::result::HttpInfo>,
+    system_message: Option<String>,
+) {
+    match outcome {
+        runner::HookRunnerResult::Success
+        | runner::HookRunnerResult::Allow { .. }
+        | runner::HookRunnerResult::Ask { .. }
+        | runner::HookRunnerResult::Stop(_)
+        | runner::HookRunnerResult::PostToolUse { .. } => {
+            results.push(HookRunResult::Success {
+                hook_name: spec.name.clone(),
+                elapsed,
+                http_info,
+                system_message,
+            })
+        }
+        runner::HookRunnerResult::Defer => results.push(HookRunResult::Success {
+            hook_name: spec.name.clone(),
+            elapsed,
+            http_info,
+            system_message,
+        }),
+        runner::HookRunnerResult::Deny { reason, .. } | runner::HookRunnerResult::Block { reason, .. } => {
+            results.push(HookRunResult::Blocked {
+                hook_name: spec.name.clone(),
+                detail: format!("post_compact: {reason}"),
+                elapsed,
+                http_info,
+                system_message,
+            });
+        }
+        runner::HookRunnerResult::Failed(error) => results.push(HookRunResult::Failed {
+            hook_name: spec.name.clone(),
+            error,
+            elapsed,
+            http_info,
+            system_message,
+        }),
     }
 }
 
@@ -1984,6 +2206,8 @@ mod tests {
     #[test]
     fn hub_hook_kind_maps_all_hub_forwarded_events() {
         assert_eq!(hub_hook_kind(HookEventName::PreToolUse), None);
+        // LOCAL: BeforeModelCall stays hub-local like PreToolUse (heavy payload).
+        assert_eq!(hub_hook_kind(HookEventName::BeforeModelCall), None);
 
         let cases: &[(HookEventName, &str)] = &[
             (HookEventName::SessionStart, "hook.session_start"),
@@ -2023,11 +2247,13 @@ mod tests {
                 | HookEventName::SubagentStop
                 | HookEventName::SubagentEnd
                 | HookEventName::PreCompact
-                | HookEventName::PostCompact => 16,
+                | HookEventName::PostCompact
+                | HookEventName::BeforeModelCall => 17,
             }
         };
+        // LOCAL: +2 counts the two hub-local gate events (PreToolUse, BeforeModelCall).
         assert_eq!(
-            cases.len() + 1,
+            cases.len() + 2,
             total_variants(HookEventName::SessionStart),
             "update hub_hook_kind test when new HookEventName variants are added"
         );

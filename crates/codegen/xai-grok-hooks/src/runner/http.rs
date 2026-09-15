@@ -279,6 +279,10 @@ pub async fn run_http_hook(
 
     let result = match mode {
         GateKind::Tool => parse_http_blocking_result(&response_text, status, &spec.name),
+        // LOCAL: ModelCall shares the blocking-gate parse (deny + rewrite fields).
+        GateKind::ModelCall => {
+            parse_http_blocking_result_for_gate(&response_text, status, &spec.name, mode)
+        }
         GateKind::Stop => parse_http_stop_result(&response_text, status, &spec.name),
         GateKind::PostTool => parse_http_post_tool_use_result(&response_text, status, &spec.name),
         GateKind::Prompt => parse_http_prompt_result(&response_text, status, &spec.name),
@@ -383,15 +387,31 @@ fn parse_http_prompt_result(
     }
 }
 
+/// Tool-gate semantics: legacy entry point kept for the pre-ModelCall test surface.
 fn parse_http_blocking_result(
     response_text: &str,
     status: reqwest::StatusCode,
     hook_name: &str,
 ) -> HookRunnerResult {
+    parse_http_blocking_result_for_gate(
+        response_text,
+        status,
+        hook_name,
+        GateKind::Tool,
+    )
+}
+
+fn parse_http_blocking_result_for_gate(
+    response_text: &str,
+    status: reqwest::StatusCode,
+    hook_name: &str,
+    mode: GateKind,
+) -> HookRunnerResult {
     if response_text.trim().is_empty() {
         if status.is_success() {
             return HookRunnerResult::Allow {
                 updated_input: None,
+                updated_messages: None,
                 additional_context: None,
             };
         }
@@ -401,7 +421,8 @@ fn parse_http_blocking_result(
     match serde_json::from_str::<super::GateHookJson>(response_text) {
         Ok(json) if json.is_gate_document() => {
             let health = HookHealth::from_success(status.is_success());
-            match super::gate_outcome(json, hook_name, /* fallback_reason */ None, health) {
+            // LOCAL: the gate drives `updatedMessages` extraction (ModelCall only).
+            match super::gate_outcome_for_gate(mode, json, hook_name, /* fallback_reason */ None, health) {
                 GateOutcome::Deny(reason) => HookRunnerResult::Deny {
                     reason,
                     hook_name: hook_name.to_string(),
@@ -409,18 +430,22 @@ fn parse_http_blocking_result(
                 GateOutcome::Ask {
                     reason,
                     updated_input,
+                    updated_messages,
                     additional_context,
                 } => HookRunnerResult::Ask {
                     reason,
                     updated_input,
+                    updated_messages,
                     additional_context,
                 },
                 GateOutcome::Defer => HookRunnerResult::Defer,
                 GateOutcome::Allow {
                     updated_input,
+                    updated_messages,
                     additional_context,
                 } => HookRunnerResult::Allow {
                     updated_input,
+                    updated_messages,
                     additional_context,
                 },
                 GateOutcome::Failed(err) => {
@@ -430,6 +455,7 @@ fn parse_http_blocking_result(
         }
         Ok(_) if status.is_success() => HookRunnerResult::Allow {
             updated_input: None,
+            updated_messages: None,
             additional_context: None,
         },
         Err(e) if status.is_success() => {
@@ -440,6 +466,7 @@ fn parse_http_blocking_result(
             );
             HookRunnerResult::Allow {
                 updated_input: None,
+                updated_messages: None,
                 additional_context: None,
             }
         }

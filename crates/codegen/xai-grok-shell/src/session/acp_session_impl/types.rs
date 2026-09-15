@@ -2,6 +2,14 @@
 
 use super::*;
 
+// LOCAL: unix-millis of the user's last input, for the notification
+// focus-suppression heuristic (a quiet user is assumed away).
+pub(crate) static LAST_USER_INPUT_MS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+// LOCAL: unix-millis of the last emitted builtin notification (dedup window).
+pub(crate) static LAST_NOTIFICATION_EMITTED_MS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 /// Controls how MCP server system-reminders are injected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum McpReminderMode {

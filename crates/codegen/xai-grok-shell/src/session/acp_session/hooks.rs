@@ -30,7 +30,10 @@ fn default_client_gate_timeout(gate: xai_grok_hooks::event::GateKind) -> Duratio
     use xai_grok_hooks::event::GateKind;
     match gate {
         GateKind::Stop | GateKind::PostTool => CLIENT_VERIFICATION_GATE_TIMEOUT,
-        GateKind::Observe | GateKind::Tool | GateKind::Prompt => CLIENT_HOOK_TIMEOUT,
+        // LOCAL: ModelCall matches the other blocking gates' client timeout.
+        GateKind::Observe | GateKind::Tool | GateKind::Prompt | GateKind::ModelCall => {
+            CLIENT_HOOK_TIMEOUT
+        }
     }
 }
 

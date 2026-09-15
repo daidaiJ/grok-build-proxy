@@ -1848,14 +1848,25 @@ impl SessionActor {
         self.rearm_failed_server_announcements().await;
         self.plan_mode.lock().reset_after_compaction();
         self.persist_plan_mode_state();
-        self.dispatch_hook(
-            xai_grok_hooks::event::HookEventName::PostCompact,
-            xai_grok_hooks::event::HookPayload::PostCompact {
-                source: compact_source.into(),
-            },
-            None,
-        )
-        .await;
+        // LOCAL: PostCompact hooks fire once here; they may answer with
+        // hookSpecificOutput.additionalContext, collected and re-injected as one
+        // system item right after the reset (rpiv-todo-style extension state
+        // restore). Observe-style: broken hooks degrade to no-op, stop decisions
+        // are ignored (PostCompact never blocks).
+        let post_compact_context = self
+            .dispatch_post_compact_collect_context(compact_source)
+            .await;
+        if !post_compact_context.is_empty() {
+            let joined = post_compact_context.join("\n\n");
+            let reminder = xai_grok_tools::reminders::wrap_reminder(&format!(
+                "Post-compaction context restored by hooks:\n\n{joined}"
+            ));
+            self.chat_state_handle
+                .push_user_message_and_ack(xai_grok_sampling_types::ConversationItem::system(
+                    reminder,
+                ))
+                .await;
+        }
         let tokens_after = self.chat_state_handle.get_total_tokens().await;
         {
             let span = tracing::Span::current();

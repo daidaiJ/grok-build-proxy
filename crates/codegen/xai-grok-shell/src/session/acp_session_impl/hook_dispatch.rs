@@ -506,7 +506,163 @@ impl SessionActor {
             });
         }
     }
+
+    // =====================================================================
+    // LOCAL: phase-3 extension hooks (docs-local/PATCHES.md)
+    // =====================================================================
+
+    /// LOCAL: fail-open `BeforeModelCall` dispatch. May rewrite
+    /// `request.items` for this call only — chat-state and session records
+    /// keep the original items, so nothing downstream needs reverting.
+    /// Returns true when the request was rewritten.
+    pub(super) async fn apply_before_model_call_hooks(
+        &self,
+        request: &mut xai_grok_sampling_types::ConversationRequest,
+    ) -> bool {
+        if self.before_model_call_disabled.get() {
+            return false;
+        }
+        if !self.may_have_hooks_for(xai_grok_hooks::event::HookEventName::BeforeModelCall) {
+            return false;
+        }
+        let Some(registry) = self.hook_registry.borrow().clone() else {
+            return false;
+        };
+        let messages = match serde_json::to_value(&request.items) {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!(%error, "before_model_call: serialising items failed; skipping transform");
+                return false;
+            }
+        };
+        let (messages, _messages_truncated) =
+            xai_grok_hooks::event::truncate_payload(messages);
+        let envelope = self.fire_hook(
+            xai_grok_hooks::event::HookEventName::BeforeModelCall,
+            None,
+            xai_grok_hooks::event::HookPayload::BeforeModelCall {
+                model: request.model.clone().unwrap_or_default(),
+                message_count: request.items.len(),
+                messages,
+            },
+        );
+        let ctx = self.hook_run_ctx();
+        let batch = self.announce_hook_run(&registry, &envelope, &ctx);
+        let outcome =
+            xai_grok_hooks::dispatcher::dispatch_before_model_call(&registry, &envelope, &ctx)
+                .await;
+        self.send_hook_execution(&batch, &outcome.results).await;
+        self.emit_hook_executed_telemetry(&batch.event_name, batch.tool_name.as_deref(), &outcome.results)
+            .await;
+
+        // Fail-open ledger: broken hook dispatches accumulate, a fully healthy
+        // dispatch resets the count; too many in a row trips the session breaker.
+        let broken = outcome
+            .results
+            .iter()
+            .filter(|r| {
+                matches!(
+                    r,
+                    xai_grok_hooks::result::HookRunResult::Failed { .. }
+                        | xai_grok_hooks::result::HookRunResult::Blocked { .. }
+                )
+            })
+            .count();
+        if broken > 0 {
+            let failures = self.before_model_call_failures.get().saturating_add(broken as u32);
+            self.before_model_call_failures.set(failures);
+            if failures >= BEFORE_MODEL_CALL_BREAKER_LIMIT {
+                self.trip_before_model_call_breaker("hook dispatches kept failing");
+            }
+        } else if !outcome.results.is_empty() {
+            self.before_model_call_failures.set(0);
+        }
+
+        // A deny suppresses only the rewrite; the request itself always proceeds.
+        if let Some(rewrite) = outcome.updated_messages {
+            match serde_json::from_value::<Vec<xai_grok_sampling_types::ConversationItem>>(
+                serde_json::Value::Array(rewrite.messages),
+            ) {
+                Ok(items) if !items.is_empty() => {
+                    request.items = items;
+                    return true;
+                }
+                Ok(_) => tracing::warn!(
+                    hook = %rewrite.hook_name,
+                    "before_model_call: hook returned an empty message list; ignored"
+                ),
+                Err(error) => {
+                    tracing::warn!(
+                        hook = %rewrite.hook_name,
+                        %error,
+                        "before_model_call: rewritten messages failed to decode; ignored"
+                    );
+                    self.before_model_call_failures
+                        .set(self.before_model_call_failures.get().saturating_add(1));
+                    if self.before_model_call_failures.get() >= BEFORE_MODEL_CALL_BREAKER_LIMIT {
+                        self.trip_before_model_call_breaker("rewritten messages failed to decode");
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// LOCAL: trip the session-level BeforeModelCall breaker. Fail-open by
+    /// design: only the transform is disabled, requests continue untouched.
+    pub(super) fn trip_before_model_call_breaker(&self, reason: &str) {
+        if self.before_model_call_disabled.get() {
+            return;
+        }
+        self.before_model_call_disabled.set(true);
+        tracing::warn!(reason, "before_model_call disabled for this session (fail-open)");
+        xai_grok_telemetry::unified_log::warn(
+            "shell.hooks.before_model_call_disabled",
+            Some(self.session_info.id.0.as_ref()),
+            Some(serde_json::json!({ "reason": reason })),
+        );
+    }
+
+    /// LOCAL: fire PostCompact hooks and collect `hookSpecificOutput.additionalContext`
+    /// texts for re-injection after compaction. Observe-style: broken hooks
+    /// contribute nothing, stop decisions are ignored (PostCompact never blocks).
+    pub(super) async fn dispatch_post_compact_collect_context(&self, source: &str) -> Vec<String> {
+        if !self.may_have_hooks_for(xai_grok_hooks::event::HookEventName::PostCompact) {
+            return Vec::new();
+        }
+        let Some(registry) = self.hook_registry.borrow().clone() else {
+            return Vec::new();
+        };
+        let envelope = self.fire_hook(
+            xai_grok_hooks::event::HookEventName::PostCompact,
+            None,
+            xai_grok_hooks::event::HookPayload::PostCompact {
+                source: source.to_string(),
+            },
+        );
+        let ctx = self.hook_run_ctx();
+        let batch = self.announce_hook_run(&registry, &envelope, &ctx);
+        let outcome = xai_grok_hooks::dispatcher::dispatch_post_compact_context(
+            &registry,
+            &envelope,
+            &ctx,
+        )
+        .await;
+        self.send_hook_execution(&batch, &outcome.results).await;
+        self.emit_hook_executed_telemetry(&batch.event_name, batch.tool_name.as_deref(), &outcome.results)
+            .await;
+        outcome
+            .additional_context
+            .into_iter()
+            .map(|context| context.text)
+            .collect()
+    }
 }
+
+/// LOCAL: consecutive broken `before_model_call` dispatches that trip the
+/// session-level breaker. Tuned so one flaky hook invocation never disables
+/// the seam, but a consistently broken hook degrades within a few calls.
+pub(super) const BEFORE_MODEL_CALL_BREAKER_LIMIT: u32 = 3;
 
 #[cfg(test)]
 mod notification_hook_filter_tests {

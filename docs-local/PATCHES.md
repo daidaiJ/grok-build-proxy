@@ -174,15 +174,16 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 - T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤、
   TUI 内 `/stats` 斜杠命令复用 stats_cmd 聚合核心
 
-## 待办（三期候选：hooks 面扩展 + 极简 primary agent）
+## 三期补丁（已完成，2026-09-15）
 
-> 通用前置：每项实现前先核查上游是否已有相仿/冲突机制，有则不做；
-> 全部做成可配置启用/停用，默认不改变上游行为。
-> 2026-09-15 核查：MCP 懒加载上游已内置且强制默认（见对照表），不再列入。
-> 三期范围：极简 primary agent + 三个 hook（BeforeModelCall / PreCompact /
-> PostCompact）+ 通知开箱。
+> 通用前置（延续）：实现前核查上游是否已有相仿/冲突机制，有则不做；
+> 全部可配置启用/停用，默认不改变上游行为。
+> 2026-09-15 核查：MCP 懒加载上游已内置且强制默认（见对照表），不做。
+> 范围：极简 primary agent + BeforeModelCall hook + PostCompact 重注入 + 通知开箱。
+> 说明：PreCompact/PostCompact 事件上游本就存在（compaction.rs 触发，Observe 型），
+> 三期补的是 PostCompact 的 additionalContext 重注入通道。
 
-### P0
+### 已落地
 
 - `BeforeModelCall` 消息变换 hook：每次 LLM 请求组装完成后、发送前改写消息列表
   （出去脱敏/回来还原，双向），session 记录永不修改——裁剪/脱敏/压缩类扩展的
@@ -207,13 +208,27 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
   cause+fix、展示列表≤5 条且分析完整性不受限、完成的事说清"现在能用什么"）。
   二批候选：Learning 类交互风格、qwen 式 `keep-coding-instructions` 基础提示分节
 
-### P1
+- `PostCompact` 重注入（已落地）：上游事件本就存在（Observe 型，payload 仅
+  `{source}`）；三期补 `additionalContext` 响应通道——收集文本在压缩重置后以
+  单条 system item 重注入（`dispatch_post_compact_context` +
+  `dispatch_post_compact_collect_context`），任务列表/记忆类扩展的
+  状态恢复通道（rpiv-todo 月下载 14.8 万的核心卖点）
+- 通知开箱化（已落地）：`[notifications]` 配置节（`desktop`/`sound`/
+  `min-interval-secs`/`suppress-after-user-input-secs`，全部 opt-in 默认关）；
+  发射走终端 OSC 9 + OSC 777 + BEL（零依赖，Windows Terminal/iTerm2/kitty/WezTerm）；
+  聚焦抑制为启发式——用户最近 N 秒有输入则跳过；挂在 `dispatch_notification_hook`
+  入口，与 hooks 完全独立
 
-- `PreCompact`/`PostCompact` hook：压缩前持久化扩展状态、压缩后重注入——
-  任务列表/记忆类扩展的生死线（rpiv-todo 月下载 14.8 万的核心卖点）。参照点：
-  `persist_announcement_state` 已有"compaction 后重持久化"路径，新事件挂同一处
-- 通知开箱化：`Notification` hook 事件已有（idle/permission/task_complete），
-  补桌面通知 + 声音 + 终端聚焦抑制的内置实现（opencode 社区同期 3 个实现合计 1200+★）
+**实现锚点（rebase 用）**：`xai-grok-hooks`（event.rs 事件/GateKind::ModelCall/payload、
+runner/mod.rs `resolve_rewrites`+`gate_outcome(gate)`、dispatcher.rs
+`MessageRewrite`/`dispatch_before_model_call`/`dispatch_post_compact_context`、
+config.rs ModelCall 超时）；`xai-grok-agent`（template.rs `LOCAL_CONCISE_RULES`、
+config.rs `grok_build_concise()` Custom 模板）；`xai-hooks-plugins-types`
+（HookEvent::BeforeModelCall）；`xai-grok-shell`（turn.rs 采样前 seam + 失败归因、
+hook_dispatch.rs `apply_before_model_call_hooks`/`trip_before_model_call_breaker`
+(阈值 3)/`dispatch_post_compact_collect_context`、model_switch.rs 规则拼接、
+updates.rs `emit_builtin_notification`、types.rs 活动时间戳静态、agent/config.rs
+`NotificationsConfig`、compaction.rs PostCompact 重注入）。
 
 ## 上游已有能力对照（社区呼声 → 勿重复实现）
 

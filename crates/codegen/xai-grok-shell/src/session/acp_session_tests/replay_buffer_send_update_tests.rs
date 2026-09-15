@@ -82,6 +82,10 @@ pub(super) async fn make_replay_send_update_fixture() -> ReplaySendUpdateFixture
         transient_retry_enabled: true,
         transient_retries_prompt_total: std::cell::Cell::new(0),
         transient_episode_start: std::cell::Cell::new(None),
+        // LOCAL: phase-3 notifications + BeforeModelCall fail-open ledger.
+        notification_settings: Default::default(),
+        before_model_call_failures: std::cell::Cell::new(0),
+        before_model_call_disabled: std::cell::Cell::new(false),
         status_wake: Default::default(),
         session_info: SessionInfo {
             id: acp::SessionId::new("test-session"),

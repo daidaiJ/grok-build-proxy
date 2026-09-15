@@ -31,11 +31,15 @@ impl RunContext<'_> {
 pub enum HookRunnerResult {
     Allow {
         updated_input: Option<serde_json::Map<String, serde_json::Value>>,
+        // LOCAL: `before_model_call` message rewrite; always None on other gates.
+        updated_messages: Option<Vec<serde_json::Value>>,
         additional_context: Option<String>,
     },
     Ask {
         reason: Option<String>,
         updated_input: Option<serde_json::Map<String, serde_json::Value>>,
+        // LOCAL: see Allow.
+        updated_messages: Option<Vec<serde_json::Value>>,
         additional_context: Option<String>,
     },
     Defer,
@@ -78,13 +82,14 @@ pub(crate) struct GateHookSpecificOutputJson {
     permission_decision_reason: Option<String>,
     #[serde(default)]
     updated_input: Option<serde_json::Value>,
+    // LOCAL: message-list rewrite, consumed by the `before_model_call` gate only.
+    #[serde(default)]
+    updated_messages: Option<serde_json::Value>,
     #[serde(default)]
     additional_context: Option<serde_json::Value>,
     #[serde(flatten)]
     rest: serde_json::Map<String, serde_json::Value>,
 }
-
-struct NonObjectRewrite;
 
 impl GateHookJson {
     fn is_gate_document(&self) -> bool {
@@ -94,6 +99,7 @@ impl GateHookJson {
                 matches!(
                     key.as_str(),
                     "updatedInput"
+                        | "updatedMessages"
                         | "permissionDecision"
                         | "permissionDecisionReason"
                         | "continue"
@@ -131,19 +137,6 @@ impl GateHookJson {
             .or(non_empty(self.reason.as_deref()))
             .map(str::to_string);
         GateDecision { token, reason }
-    }
-
-    fn take_updated_input(
-        self,
-    ) -> Result<Option<serde_json::Map<String, serde_json::Value>>, NonObjectRewrite> {
-        match self
-            .hook_specific_output
-            .and_then(|output| output.updated_input)
-        {
-            None => Ok(None),
-            Some(serde_json::Value::Object(input)) => Ok(Some(input)),
-            Some(_) => Err(NonObjectRewrite),
-        }
     }
 
     fn ignored_parts(&self, decision: &DecisionToken) -> Vec<String> {
@@ -261,11 +254,15 @@ struct GateDecision {
 pub(crate) enum GateOutcome {
     Allow {
         updated_input: Option<serde_json::Map<String, serde_json::Value>>,
+        // LOCAL: `before_model_call` message rewrite; always None on other gates.
+        updated_messages: Option<Vec<serde_json::Value>>,
         additional_context: Option<String>,
     },
     Ask {
         reason: Option<String>,
         updated_input: Option<serde_json::Map<String, serde_json::Value>>,
+        // LOCAL: see Allow.
+        updated_messages: Option<Vec<serde_json::Value>>,
         additional_context: Option<String>,
     },
     Defer,
@@ -285,7 +282,19 @@ impl HookHealth {
     }
 }
 
+/// Tool-gate semantics: legacy entry point kept for the pre-ModelCall test surface.
 pub(crate) fn gate_outcome(
+    json: GateHookJson,
+    hook_name: &str,
+    fallback_reason: Option<&str>,
+    health: HookHealth,
+) -> GateOutcome {
+    gate_outcome_for_gate(GateKind::Tool, json, hook_name, fallback_reason, health)
+}
+
+/// LOCAL: gate-aware parse — `updatedMessages` is only extracted on ModelCall.
+pub(crate) fn gate_outcome_for_gate(
+    gate: GateKind,
     json: GateHookJson,
     hook_name: &str,
     fallback_reason: Option<&str>,
@@ -294,7 +303,13 @@ pub(crate) fn gate_outcome(
     let GateDecision { token, reason } = json.resolve_decision();
     let mut ignored = json.ignored_parts(&token);
     let additional_context = json.additional_context();
-    let updated_input = resolve_rewrite(json, hook_name, health, &mut ignored);
+    let (updated_input, updated_messages) =
+        resolve_rewrites(json, hook_name, health, gate, &mut ignored);
+    // LOCAL: for the ModelCall gate the key was consumed above, so the flatten-rest
+    // ignored pass would wrongly list it; for every other gate the warning stands.
+    if gate == GateKind::ModelCall {
+        ignored.retain(|part| !part.starts_with("hookSpecificOutput.updatedMessages"));
+    }
 
     if !ignored.is_empty() {
         tracing::warn!(
@@ -318,6 +333,7 @@ pub(crate) fn gate_outcome(
         DecisionToken::Ask => GateOutcome::Ask {
             reason: reason.as_deref().map(clip_reason),
             updated_input,
+            updated_messages,
             additional_context: drop_if_broken(
                 additional_context,
                 hook_name,
@@ -328,6 +344,7 @@ pub(crate) fn gate_outcome(
         DecisionToken::Defer => GateOutcome::Defer,
         DecisionToken::Allow => GateOutcome::Allow {
             updated_input,
+            updated_messages,
             additional_context: drop_if_broken(
                 additional_context,
                 hook_name,
@@ -338,20 +355,45 @@ pub(crate) fn gate_outcome(
     }
 }
 
-fn resolve_rewrite(
+// LOCAL: shared extraction of `updatedInput` (tool-gate) and `updatedMessages`
+// (ModelCall gate). Non-array / non-object rewrites are warned and dropped;
+// a failed hook's rewrites are dropped outright (fail-open).
+fn resolve_rewrites(
     json: GateHookJson,
     hook_name: &str,
     health: HookHealth,
+    gate: GateKind,
     ignored: &mut Vec<String>,
-) -> Option<serde_json::Map<String, serde_json::Value>> {
-    let updated_input = match json.take_updated_input() {
-        Ok(updated_input) => updated_input,
-        Err(NonObjectRewrite) => {
+) -> (
+    Option<serde_json::Map<String, serde_json::Value>>,
+    Option<Vec<serde_json::Value>>,
+) {
+    let hso = json.hook_specific_output;
+    let updated_input = match hso.as_ref().and_then(|output| output.updated_input.clone()) {
+        Some(serde_json::Value::Object(input)) => {
+            drop_if_broken(Some(input), hook_name, "updatedInput", health)
+        }
+        Some(_) => {
             ignored.push("hookSpecificOutput.updatedInput (not an object)".to_string());
             None
         }
+        None => None,
     };
-    drop_if_broken(updated_input, hook_name, "updatedInput", health)
+    let updated_messages = if gate == GateKind::ModelCall {
+        match hso.and_then(|output| output.updated_messages) {
+            Some(serde_json::Value::Array(items)) => {
+                drop_if_broken(Some(items), hook_name, "updatedMessages", health)
+            }
+            Some(_) => {
+                ignored.push("hookSpecificOutput.updatedMessages (not an array)".to_string());
+                None
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+    (updated_input, updated_messages)
 }
 
 fn drop_if_broken<T>(
@@ -641,7 +683,8 @@ mod tests {
 
         let document: GateHookJson = serde_json::from_str(json).expect("valid gate JSON");
         let mut ignored = Vec::new();
-        let rewrite = resolve_rewrite(document, "h", HookHealth::Healthy, &mut ignored);
+        let (rewrite, _) =
+            resolve_rewrites(document, "h", HookHealth::Healthy, GateKind::Tool, &mut ignored);
         assert!(
             rewrite.is_none(),
             "a non-object updatedInput must drop the rewrite"

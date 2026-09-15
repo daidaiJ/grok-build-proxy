@@ -41,11 +41,11 @@ jobs:
         run: >-
           cargo check -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
           -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-shell -p xai-grok-pager
-          -p xai-grok-tools
+          -p xai-grok-tools -p xai-grok-hooks -p xai-grok-agent
       - name: Test touched crates
         run: >-
           cargo test -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
-          -p xai-grok-extra-ca -p xai-proto-build
+          -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-hooks -p xai-grok-agent
       # Name-filtered runs: the pager's full suite is not exercised by this
       # fork; these cover the phase-2 additions (stats aggregation, the
       # built-in status-line segments incl. the guide doc-sync).
@@ -70,6 +70,7 @@ jobs:
       - name: Check touched crates
         run: >-
           cargo check -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
-          -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-shell
+          -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-shell -p xai-grok-hooks
+          -p xai-grok-agent
       - name: Test portable crates
         run: cargo test -p xai-chat-state -p xai-grok-status-line -p xai-grok-extra-ca

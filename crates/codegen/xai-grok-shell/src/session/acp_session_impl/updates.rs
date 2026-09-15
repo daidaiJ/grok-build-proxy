@@ -13,6 +13,12 @@ pub(super) fn closes_cancel_rewind_window(update: &XaiSessionUpdate) -> bool {
             | XaiSessionUpdate::BackgroundTasks { .. }
     )
 }
+
+/// LOCAL: strip control characters (incl. ESC) from text placed inside an OSC
+/// notification sequence so a hostile payload cannot forge terminal escapes.
+fn strip_osc_controls(text: &str) -> String {
+    text.chars().filter(|c| !c.is_control()).take(200).collect()
+}
 fn scrub_inbound_session_summary(
     notification: &mut crate::extensions::notification::SessionNotification,
 ) {
@@ -931,6 +937,8 @@ impl SessionActor {
         title: Option<String>,
         level: Option<String>,
     ) {
+        // LOCAL: out-of-box terminal notification; independent of any registered hooks.
+        self.emit_builtin_notification(notification_type, message.as_deref(), title.as_deref());
         let envelope = self.fire_hook(
             xai_grok_hooks::event::HookEventName::Notification,
             None,
@@ -953,6 +961,75 @@ impl SessionActor {
             &ctx,
         )
         .await;
+    }
+
+    /// LOCAL: phase-3 out-of-box notification emitter. Opt-in via `[notifications]`
+    /// in config.toml (`desktop`, `sound`); nothing is emitted by default.
+    /// Desktop rides terminal OSC 777 + OSC 9 escapes (Windows Terminal, iTerm2,
+    /// kitty, WezTerm, rxvt; unknown terminals ignore unknown OSC), sound is BEL.
+    /// Heuristic focus suppression: skipped within
+    /// `suppress-after-user-input-secs` of the user's last input, and deduped
+    /// by `min-interval-secs`.
+    fn emit_builtin_notification(
+        &self,
+        notification_type: &str,
+        message: Option<&str>,
+        title: Option<&str>,
+    ) {
+        use std::io::Write;
+        use std::sync::atomic::Ordering;
+
+        let cfg = &self.notification_settings;
+        if !cfg.desktop && !cfg.sound {
+            return;
+        }
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        if cfg.suppress_after_user_input_secs > 0 {
+            let last_input = super::types::LAST_USER_INPUT_MS.load(Ordering::Relaxed);
+            if last_input > 0
+                && now_ms.saturating_sub(last_input)
+                    < cfg.suppress_after_user_input_secs.saturating_mul(1000)
+            {
+                return;
+            }
+        }
+        if cfg.min_interval_secs > 0 {
+            let last_emitted = super::types::LAST_NOTIFICATION_EMITTED_MS.load(Ordering::Relaxed);
+            if last_emitted > 0
+                && now_ms.saturating_sub(last_emitted)
+                    < cfg.min_interval_secs.saturating_mul(1000)
+            {
+                return;
+            }
+            super::types::LAST_NOTIFICATION_EMITTED_MS.store(now_ms, Ordering::Relaxed);
+        }
+        let body = message
+            .map(strip_osc_controls)
+            .filter(|text| !text.is_empty())
+            .unwrap_or_else(|| match notification_type {
+                "permission_prompt" => "Grok needs your approval".to_string(),
+                "task_complete" => "Task complete".to_string(),
+                "idle_prompt" => "Grok is idle".to_string(),
+                other => format!("Grok: {other}"),
+            });
+        let heading = title
+            .map(strip_osc_controls)
+            .filter(|text| !text.is_empty())
+            .unwrap_or_else(|| "Grok".to_string());
+        let mut sequence = String::new();
+        if cfg.desktop {
+            sequence.push_str(&format!("\x1b]777;notify;{heading};{body}\x07"));
+            sequence.push_str(&format!("\x1b]9;{body}\x07"));
+        }
+        if cfg.sound {
+            sequence.push('\x07');
+        }
+        if !sequence.is_empty() {
+            let _ = std::io::stderr().write_all(sequence.as_bytes());
+        }
     }
     pub(super) async fn dispatch_permission_prompt_notification(&self, message: &str) {
         self.dispatch_notification_hook(
