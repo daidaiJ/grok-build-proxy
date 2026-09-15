@@ -22,6 +22,8 @@ This renders, for example, `grok-shell-status-line │ Grok 4.5 │ 12% ctx`. It
 | `cost` | Session cost, hidden below $0.005 so it never shows a misleading `$0.00` |
 | `turn-timer` | Elapsed time of the running turn, from one second in |
 | `session-name` | Session name, when set |
+| `api-calls` | Model calls this session made, `✓ 12` — amber with `✗ 3` appended once calls have failed |
+| `perf` | Last turn's latency and throughput, `380ms ttft · 42.3 tok/s`, from the first completed call on |
 
 ### Command
 

@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use xai_grok_pager_render::glyphs::{ballot_x, check_mark};
 use xai_grok_status_line::{StatusLineContext, StatusLineItem};
 
 use super::fit_columns;
@@ -114,6 +115,29 @@ pub fn compose_builtin(
             StatusLineItem::SessionName => {
                 let name = ctx.session_name.as_deref().filter(|s| !s.is_empty())?;
                 Some(StatusSegment::dim(fit_columns(name, SESSION_NAME_COLS)))
+            }
+            // LOCAL: endpoint health, `✓ n`, turning amber and gaining `✗ n` on failures.
+            StatusLineItem::ApiCalls => {
+                let calls = ctx.api_calls?;
+                let text = if calls.failed > 0 {
+                    format!("{} {} {} {}", check_mark(), calls.succeeded, ballot_x(), calls.failed)
+                } else {
+                    format!("{} {}", check_mark(), calls.succeeded)
+                };
+                let tone = (calls.failed > 0).then_some(SegmentTone::Warn);
+                Some(StatusSegment::toned(text, tone.unwrap_or(SegmentTone::Dim)))
+            }
+            // LOCAL: last turn's latency/throughput, `380ms ttft · 42.3 tok/s`.
+            StatusLineItem::Perf => {
+                let perf = ctx.perf.as_ref()?;
+                let mut parts: Vec<String> = Vec::with_capacity(2);
+                if let Some(ttft_ms) = perf.ttft_ms {
+                    parts.push(format!("{ttft_ms}ms ttft"));
+                }
+                if let Some(tps) = perf.tps {
+                    parts.push(format!("{tps:.1} tok/s"));
+                }
+                (!parts.is_empty()).then(|| StatusSegment::dim(parts.join(" · ")))
             }
         })
         .collect()

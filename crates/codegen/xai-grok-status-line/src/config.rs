@@ -329,6 +329,10 @@ pub enum StatusLineItem {
     Cost,
     TurnTimer,
     SessionName,
+    /// LOCAL: endpoint-health counters, `✓ n` with `✗ n` appended on failures.
+    ApiCalls,
+    /// LOCAL: last turn's TTFT / TPS snapshot.
+    Perf,
 }
 
 impl StatusLineItem {
@@ -336,7 +340,7 @@ impl StatusLineItem {
 
     pub const fn varies_mid_turn(self) -> bool {
         match self {
-            Self::TurnTimer => true,
+            Self::TurnTimer | Self::ApiCalls | Self::Perf => true,
             Self::Cwd | Self::Model | Self::Context | Self::Cost | Self::SessionName => false,
         }
     }

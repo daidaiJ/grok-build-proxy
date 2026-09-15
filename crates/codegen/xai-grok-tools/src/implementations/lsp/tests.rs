@@ -774,6 +774,45 @@ async fn e2e_real_typescript_language_server() {
     client.shutdown().await;
 }
 
+/// A two-file edit whose verdicts land about 200ms apart: the drain waits for
+/// the whole batch and reports it as one summary, not the first file's alone.
+#[tokio::test(flavor = "current_thread")]
+async fn a_drain_merges_staggered_pushes_into_one_summary() {
+    let (_dir, script_path) = write_staggered_push_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mut mgr = single_server_manager(&script_path, &workspace).await;
+
+    let fast_file = workspace.path().join("fast.ts");
+    let slow_file = workspace.path().join("slow_second.ts");
+    for file in [&fast_file, &slow_file] {
+        let content = "const x = 1;
+";
+        std::fs::write(file, content).unwrap();
+        mgr.notify_file_changed(file, content);
+    }
+
+    let mgr = tokio::sync::Mutex::new(mgr);
+    let started = std::time::Instant::now();
+    let summary = drain_lsp_diagnostics(&mgr, std::time::Duration::from_secs(4))
+        .await
+        .expect("both pushes should land within the drain budget");
+    let elapsed = started.elapsed();
+
+    assert_eq!(summary.file_count, 2, "one summary, both files: {}", summary.text);
+    assert!(
+        summary.text.contains("a problem in fast.ts")
+            && summary.text.contains("a problem in slow_second.ts"),
+        "the merged summary names both files: {}",
+        summary.text
+    );
+    assert!(
+        elapsed >= std::time::Duration::from_millis(200),
+        "the summary waited for the second push, took {elapsed:?}"
+    );
+    assert!(!mgr.lock().await.has_pending_diagnostics());
+    mgr.lock().await.shutdown().await;
+}
+
 /// Simulates the host session diagnostics flow:
 /// edit -> notify_file_changed -> drain_lsp_diagnostics -> inject as user message.
 #[tokio::test(flavor = "current_thread")]

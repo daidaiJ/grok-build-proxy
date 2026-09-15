@@ -81,6 +81,8 @@
 - `src/leader/transport.rs:256`：`String + &String` 写法与当前 toolchain 不兼容
 - `src/session/acp_session_tests/tool_layer_images_bridge_tests.rs:15`：base64 crate API 漂移
 - `tests/common/mod.rs` 等：引用快照中不存在的 `reset_startup_settings_for_tests` 等函数
+- `xai-grok-tools` `src/computer/local/terminal.rs:4884`：`parse_login_env_capture` 缺失，
+  阻塞 tools 的 lib test 编译（故 CI 对 tools 只 check 不跑测试）
 
 这些阻塞了 shell 内联单测（含 `${session_id}` 模板测试）的运行；chat-state（362）、
 status-line（17）、extra-ca（15+）单测全部通过。
@@ -106,10 +108,48 @@ base_url = "https://opencode.ai/zen/go/v1"
 extra_headers = { "x-opencode-session" = "${session_id}" }
 ```
 
-## 待办（二期）
+## 二期补丁（已完成）
 
-- 排队时间：`acp_session_impl/prompt_queue.rs` 的 `pending_inputs` 入队时打时间戳、
-  提升为 running 时计算 wait（本轮未做，状态行 `perf` 已预留展示位）
-- 内置状态行的 ✓/✗/TTFT/TPS 渲染（payload 已备齐，先走自定义 command 脚本）
-- `/stats` 会话/天/周聚合（T3 独立 bin 优先）、LSP 诊断合并去抖、排队卡视觉区分
-- 工具输出压缩：见 `tool-output-compression-plan.md`
+### xai-grok-status-line（状态行 item 扩展，全部 additive）
+- `src/config.rs`：`StatusLineItem` 新增 `ApiCalls` / `Perf` 变体（kebab-case：`api-calls`、`perf`）；
+  两者 `varies_mid_turn() == true`（回合内计数与 TPS 会变，行需 tick 刷新）
+- `src/context.rs`：`StatusLineApiCalls` 补 `Copy`（compose 消费用）
+
+### xai-grok-pager（内置状态行渲染 + stats 子命令）
+- `src/views/status_line/segments.rs`：`compose_builtin` 渲染两个新段——
+  `✓ n`（有失败追加 `✗ m` 且整段 Warn 色调）、`ttft {ms}ms · {tps:.1} tok/s`（缺哪段省哪段）；
+  字形走 `xai_grok_pager_render::glyphs::{check_mark, ballot_x}`（旧控制台回退）
+- `src/views/status_line/segments_tests.rs`：两个新段的单测
+- `docs/user-guide/25-status-line.md`：Set up 表补 `api-calls` / `perf` 行（doc-sync 测试要求）
+- 新 `src/stats_cmd/`（`grok stats`，T3 独立 CLI，只读）：`--json`、`--days N`、`--limit N`、
+  `--model <text>`（模型 id 大小写不敏感子串过滤，过滤后无匹配模型的会话整行消失）；
+  遍历 `<grok-home>/sessions/**/usage.json`（≤4 层），按会话 / 本地日（`%Y-%m-%d`）/
+  ISO 周（`%G-W%V`）聚合 turns（`ended_at` RFC3339）；三视图都带按模型拆分
+  （JSON `models` 数组 + 人类输出 `By model` 表，最忙模型优先）；
+  成本求和遇缺报 `+` 尾标；项目名经 `xai_grok_config::decode_cwd_from_dirname` 还原
+- `src/app/cli.rs` + `src/lib.rs` + pager-bin `src/main.rs`：`Command::Stats` 接线
+  （两处命令分类块 + 分发臂）
+
+### xai-grok-tools（LSP 诊断合并去抖）
+- `src/implementations/lsp/mod.rs`：新 `DIAGNOSTICS_QUIET_WINDOW`（150ms）
+- `src/implementations/lsp/manager.rs`：`take_answered_diagnostics` → `take_answered_items`
+  （返回 per-file items，格式化收口到新 `summary_from`）；drain 循环改为把多批裁决
+  累积进一个 `CollectedDiagnostics`——pending 未清前继续等整批，全答完后持 150ms
+  静默窗合并迟到的推送；超时/静默放弃时已收集的照样发（原来丢弃）
+- `src/reminders/lsp_diagnostics.rs`：注入级去抖——`DrainDebounce{last_inject}` 存
+  `SharedResources`，注入后 750ms 内的编辑跳过 drain（下一轮 drain 一次报完整批），
+  消除连续快速编辑的重复注入与重复阻塞
+- 测试：`a_drain_merges_staggered_pushes_into_one_summary`（错峰 200ms 双推送合并）、
+  `edits_inside_the_debounce_window_share_one_drain`（FakeBackend 计数）
+
+## 发布
+
+- `.github/workflows/release.yml`：推 `v*` tag 触发，构建 `xai-grok-pager`（grok CLI）
+  release 二进制，仅 linux-amd64（tar.gz）与 windows-amd64（zip），附 sha256。
+## 待办（下一期）
+
+- 工具输出压缩：见 `tool-output-compression-plan.md`（原二期项，移入下一期）
+- 排队时间戳 / wait 计算（`acp_session_impl/prompt_queue.rs`）：已从计划删除
+- 排队卡视觉区分：已废弃
+- T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤、
+  TUI 内 `/stats` 斜杠命令复用 stats_cmd 聚合核心

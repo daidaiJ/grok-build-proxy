@@ -88,3 +88,51 @@ fn context_segment_warns_near_compaction() {
     ctx.context_window.used_percentage = Some(70);
     assert_eq!(tone(&ctx), SegmentTone::Warn);
 }
+
+fn api_calls(succeeded: u64, failed: u64) -> StatusLineContext {
+    let mut ctx = context();
+    ctx.api_calls = Some(xai_grok_status_line::StatusLineApiCalls { succeeded, failed });
+    ctx
+}
+
+#[test]
+fn api_calls_segment_counts_failures_and_warns() {
+    let segment = |ctx: &StatusLineContext| &compose_builtin(ctx, None, &[StatusLineItem::ApiCalls])[0];
+
+    let clean = segment(&api_calls(12, 0));
+    assert_eq!(clean.text(), "✓ 12");
+    assert_eq!(clean.tone, SegmentTone::Dim);
+
+    let failing = segment(&api_calls(12, 3));
+    assert_eq!(failing.text(), "✓ 12 ✗ 3");
+    assert_eq!(failing.tone, SegmentTone::Warn);
+
+    assert!(compose_builtin(&context(), None, &[StatusLineItem::ApiCalls]).is_empty());
+}
+
+#[test]
+fn perf_segment_formats_whatever_the_snapshot_carries() {
+    let segment = |ctx: &StatusLineContext| {
+        compose_builtin(ctx, None, &[StatusLineItem::Perf])
+            .first()
+            .map(|s| s.text.clone())
+    };
+
+    let mut ctx = context();
+    ctx.perf = Some(xai_grok_status_line::StatusLineTurnPerf {
+        ttft_ms: Some(380),
+        tps: Some(42.3),
+        output_tokens: Some(915),
+    });
+    assert_eq!(segment(&ctx).as_deref(), Some("380ms ttft · 42.3 tok/s"));
+
+    ctx.perf.as_mut().unwrap().ttft_ms = None;
+    assert_eq!(segment(&ctx).as_deref(), Some("42.3 tok/s"));
+
+    ctx.perf.as_mut().unwrap().tps = None;
+    assert_eq!(segment(&ctx).as_deref(), Some("380ms ttft"));
+
+    ctx.perf = Some(xai_grok_status_line::StatusLineTurnPerf::default());
+    assert!(segment(&ctx).is_none());
+    assert!(compose_builtin(&context(), None, &[StatusLineItem::Perf]).is_empty());
+}
