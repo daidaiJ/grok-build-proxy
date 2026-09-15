@@ -174,22 +174,36 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 - T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤、
   TUI 内 `/stats` 斜杠命令复用 stats_cmd 聚合核心
 
-## 待办（三期候选：扩展 API 缺口，opencode/pi 生态实证）
+## 待办（三期候选：hooks 面扩展 + 输出风格）
 
 > 通用前置：每项实现前先核查上游是否已有相仿/冲突机制，有则不做；
 > 全部做成可配置启用/停用，默认不改变上游行为。
+> 2026-09-15 核查：MCP 懒加载上游已内置且强制默认（见对照表），不再列入。
 
-- `BeforeModelCall` 消息变换 hook：每次 LLM 调用前改写消息列表（出去脱敏/回来还原，
-  双向），session 记录永不修改——裁剪/脱敏/压缩类扩展的头号依赖面
-  （DCP 4.2k★、vibeguard 均建立在此 hook 上）
+### P0
+
+- `BeforeModelCall` 消息变换 hook：每次 LLM 请求组装完成后、发送前改写消息列表
+  （出去脱敏/回来还原，双向），session 记录永不修改——裁剪/脱敏/压缩类扩展的
+  头号依赖面（DCP 4.2k★、vibeguard 均建立在此 hook 上）。接入锚点：
+  `acp_session_impl/sampler_turn.rs` 请求组装边界（reconstruct 之后、采样调用之前，
+  fork 的 `${session_id}` 模板展开已在同一 seam）；事件注册走 `hook_dispatch.rs`。
+  它是「待办（下一期）」工具输出压缩的前置消费者，排期时一起评估
+- 输出风格（qwen code 同款，极简/详细可配）：内置 `Concise`（答案先行、零旁白、
+  正确性信息不删）+ `Explanatory`（`✳ Insight` 教学块）起步，`Proactive`/`Learning`
+  二批。自定义风格 = `~/.grok/output-styles/*.md` 与 `.grok/output-styles/*.md`
+  （frontmatter `name`/`description`/`keep-coding-instructions`；项目 > 用户 > 内置
+  按名遮蔽，复用 skills/personas 的发现优先级模式）。切换面 = `/output-style`
+  选择器 + config 键 + 启动 flag；注入 = system prompt 追加 `# Output Style: <name>`
+  节（`xai-grok-agent/src/agent.rs` 组装处）+ 可选每回合 reminder（复用
+  `xai-grok-tools/src/reminders/` 通道）。v1 只做 additive 注入，不做 qwen 的
+  `keep-coding-instructions` 基础提示节裁剪（要动上游 prompt 分节结构，侵入面大，
+  二批再评估）；headless 场景 Learning 类交互型风格自动停用（qwen 同规则）
+
+### P1
+
 - `PreCompact`/`PostCompact` hook：压缩前持久化扩展状态、压缩后重注入——
-  任务列表/记忆类扩展的生死线（rpiv-todo 月下载 14.8 万的核心卖点）
-- MCP 懒加载：两段式工具发现（单个代理工具 list→call，工具定义按需注入），可配置
-  启用/停用——pi-mcp-adapter 月下载 94 万证明的需求；grok `/context` 已展示 MCP
-  announcements 的 token 成本。核查点：上游 `search_tool` BM25 延迟加载已覆盖内置
-  工具 schema，若可扩展到 MCP 工具面则复用、不另起炉灶
-- 模型请求前压缩（仿 headroom）已在「待办（下一期）」：它是 `BeforeModelCall`
-  hook 的首个内置消费者，排期时与该 hook 一起评估
+  任务列表/记忆类扩展的生死线（rpiv-todo 月下载 14.8 万的核心卖点）。参照点：
+  `persist_announcement_state` 已有"compaction 后重持久化"路径，新事件挂同一处
 - 通知开箱化：`Notification` hook 事件已有（idle/permission/task_complete），
   补桌面通知 + 声音 + 终端聚焦抑制的内置实现（opencode 社区同期 3 个实现合计 1200+★）
 
@@ -206,4 +220,7 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 | worktree 隔离 | 已有（内置） |
 | 权限矩阵 / sandbox / headless / memory / hooks | 均有（hooks 含 `updatedInput` 改参、`updatedToolOutput` 替换、record 与 model 分离） |
 | 交互式后台进程 | 已有（background tasks + ptyctl） |
-| 通知 | 事件已有，缺开箱实现（已列三期） |
+| 通知 | 事件已有，缺开箱实现（已列三期 P1） |
+| MCP 懒加载（pi-mcp-adapter 月下载 94 万） | 已有且强制默认：请求 tools 数组只含内置工具（`sampler_turn.rs` `prepare_tool_definitions_inner` → `tool_definitions_builtins_only`，注释 "tool search is always enabled"），MCP 工具走 `search_tool`（BM25 索引）→ `use_tool` 两段式；announcement 是变更时增量 `<system-reminder>`（指纹持久化 `announcement_state.json`，`MCP_REMINDER_MODE`=delta/full），不做全量 schema 常驻 |
+| opencode primary 自定义 agent（Tab 切换 build/plan） | 已有：agent 定义 `.grok/agents/*.md` / `~/.grok/agents/`（作用域含主会话：model/tools/prompt body/skills），`/config-agents` 设默认 + 会话中切换激活，启动侧 `--agent-profile` / `GROK_AGENT` / `agent.name`；personas 是 subagent 专属行为叠加层 |
+| 输出风格极简/详细（qwen `/output-style`，内置 Concise/Explanatory） | 无对应机制（AGENTS.md / agent 定义能改提示但无轻量切换面、无内置风格）→ 已列三期 P0 |
