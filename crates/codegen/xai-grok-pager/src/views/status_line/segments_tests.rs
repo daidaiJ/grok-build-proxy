@@ -97,7 +97,7 @@ fn api_calls(succeeded: u64, failed: u64) -> StatusLineContext {
 
 #[test]
 fn api_calls_segment_counts_failures_and_warns() {
-    let segment = |ctx: &StatusLineContext| &compose_builtin(ctx, None, &[StatusLineItem::ApiCalls])[0];
+    let segment = |ctx: &StatusLineContext| compose_builtin(ctx, None, &[StatusLineItem::ApiCalls])[0].clone();
 
     let clean = segment(&api_calls(12, 0));
     assert_eq!(clean.text(), "✓ 12");
