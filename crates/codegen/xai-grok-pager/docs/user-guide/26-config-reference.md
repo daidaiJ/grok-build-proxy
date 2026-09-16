@@ -229,6 +229,7 @@ User-level configuration lives in `$GROK_HOME/config.toml` (default `~/.grok/con
 | `features.terminal_theme` | `boolean` | `pin` | `user` | Reveal the terminal-native `terminal` color theme during its rollout. Default false. Also `GROK_TERMINAL_THEME`. |
 | `features.title_refresh` | `boolean` | `pin` | `user` | Early-session auto-title refresh. Pin this in requirements to beat GROK_TITLE_REFRESH. |
 | `features.turn_summary` | `boolean` | `pin` | `user` | Enable or disable `turn_summary`. Default true. Also `GROK_TURN_SUMMARY`. |
+| `features.turn_transient_retry` | `boolean` | `pin` | `user` | LOCAL: kill switch for transient-error turn retries (network blips / 5xx mid-turn; headless runs never retry). Default on. Precedence: requirements > `GROK_TURN_TRANSIENT_RETRY` > config > remote. |
 | `features.two_pass_compaction` | `boolean` | `pin` | `user` | Enable or disable `two_pass_compaction`. Default true. Also `GROK_TWO_PASS_COMPACTION`. |
 | `features.video_gen` | `boolean` | `pin` | `user` | Enable video tools / `/imagine-video`. |
 | `features.voice_mode` | `boolean` | `pin` | `user` | Enable or disable `voice_mode`. Default true. Also `GROK_VOICE_MODE`. |
@@ -422,6 +423,9 @@ User-level configuration lives in `$GROK_HOME/config.toml` (default `~/.grok/con
 | `models.temperature` | `number` | `yes` | `user` | Global sampling temperature default when a model leaves it unset. |
 | `models.top_p` | `number` | `yes` | `user` | Global top_p default when a model leaves it unset. |
 | `models.web_search` | `string` | `pin` | `user` | Model used by the client `web_search` tool. Also `GROK_WEB_SEARCH_MODEL`. |
+
+<!-- LOCAL: hidden-vs-disabled model semantics are otherwise only implied by the table rows above -->
+**Hidden vs disabled.** A *hidden* model — per-model `hidden = true` or a `models.hidden_models` entry — never appears in the model picker, but it stays fully usable: `-m <id>`, `models.default`, and mid-session switching all still address it. Only `models.disabled_models` removes a model from the catalog entirely. The catalog also ships built-in plumbing models (the `web_search` and image-description samplers, subagent models, and the fork-secondary model) that are hidden by design: they are invoked by their feature, not meant to be picked as a chat model.
 
 ### `path_not_found_hints`
 

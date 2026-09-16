@@ -172,6 +172,18 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
   - Configuration 开头与 CLI Management breaking-changes 句各补一句警告 + `#tool-naming` 交叉引用
 - 背景：上游镜像（xai-org/grok-build）关了 issue 区，此 bug 无人报过；文档先行，代码放宽待上游
 
+### xai-grok-pager（agents 弹窗展示全部内置变体 + 隐藏模型/杀开关文档）
+- `src/views/agents_modal.rs`：删 `user_visible_builtins()` 策展隐藏名单，`build_agent_list`
+  改为遍历全部 `BuiltinAgentName::iter()`。背景：`[agent].name` / `GROK_AGENT` 可选任意
+  内置变体（含 `grok-build-concise`），但弹窗只展示 5 个——`/agents` 里按 `s` 会把选中
+  的 `grok-build` 写回 `[agent].name`，静默覆写用户配置且无 UI 可见（实际踩坑事故）。
+  回归测试 `build_agent_list_lists_every_builtin_variant` 防新变体再被藏
+- `docs/user-guide/26-config-reference.md`：
+  - features 表补 `turn_transient_retry` 行（上游漏文档的回合瞬时重试杀开关）
+  - models 表后补 "Hidden vs disabled" 散文段：hidden 模型 `-m` 可用、只有
+    `disabled_models` 才移出目录、内置 plumbing 模型（web_search/image_description/
+    子代理/次要模型）按设计隐藏
+
 ## 发布
 
 - `.github/workflows/release.yml`：推 `v*` tag 触发，构建 `xai-grok-pager`（grok CLI）
