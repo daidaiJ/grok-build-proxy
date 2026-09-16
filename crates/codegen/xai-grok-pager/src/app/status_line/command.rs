@@ -203,17 +203,22 @@ async fn pump(
     Ok((status, buf))
 }
 
-/// Whether the kernel refused to execute the file at all, which is what an executable script with no `#!` gets.
-/// Windows has no such answer.
-fn is_shell_script(error: &std::io::Error) -> bool {
+/// Whether a failed direct spawn should be retried as a shell command line.
+/// Unix: `ENOEXEC` is an executable script with no `#!`.
+/// Windows: a line such as `python C:/Users/…/statusline.py` is not a path (`ERROR_INVALID_NAME` /
+/// 123), and a `.py` path is not a PE image (`ERROR_BAD_EXE_FORMAT` / 193).
+fn should_retry_under_shell(error: &std::io::Error) -> bool {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        return true;
+    }
     #[cfg(unix)]
     {
         error.raw_os_error() == Some(libc::ENOEXEC)
     }
     #[cfg(not(unix))]
     {
-        let _ = error;
-        false
+        matches!(error.raw_os_error(), Some(123 | 193))
+            || error.kind() == std::io::ErrorKind::InvalidFilename
     }
 }
 
@@ -281,7 +286,7 @@ async fn run_command(
         Ok(child) => child,
         // A shell line rather than a path, or a file `sh` may still read
         // Every other failure is returned: a permission error under `sh` reports a bogus `exit 126`
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound && !is_shell_script(&error) => {
+        Err(error) if !should_retry_under_shell(&error) => {
             return Err(RunError::Spawn(error));
         }
         Err(_) => {
@@ -345,3 +350,7 @@ async fn run_command(
 #[cfg(all(test, unix))]
 #[path = "command_tests.rs"]
 mod tests;
+
+#[cfg(all(test, windows))]
+#[path = "command_windows_tests.rs"]
+mod windows_tests;
