@@ -86,7 +86,17 @@ jobs:
         with:
           cache-targets: false
       - name: Install protoc
-        run: choco install protoc -y
+        # Direct download instead of choco: the community feed served a 504
+        # once and choco still exited 0, failing the build much later with
+        # "protoc not found". Mirrors the linux job's pinned download.
+        shell: pwsh
+        run: |
+          curl -fsSL --retry 3 -o "$env:RUNNER_TEMP/protoc.zip" `
+            https://github.com/protocolbuffers/protobuf/releases/download/v31.1/protoc-31.1-win64.zip
+          New-Item -ItemType Directory -Force "$HOME/.local/protoc" | Out-Null
+          Expand-Archive -Force "$env:RUNNER_TEMP/protoc.zip" "$HOME/.local/protoc"
+          "$HOME/.local/protoc/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          & "$HOME/.local/protoc/bin/protoc.exe" --version
       - name: Build release binary
         run: cargo build --release -p xai-grok-pager-bin
       - name: sccache stats

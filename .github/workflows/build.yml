@@ -74,7 +74,17 @@ jobs:
       - uses: Mozilla-Actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
       - name: Install protoc
-        run: choco install protoc -y
+        # Direct download instead of choco: the community feed served a 504
+        # once and choco still exited 0, failing the job later with
+        # "protoc not found". Mirrors the release workflow's pinned download.
+        shell: pwsh
+        run: |
+          curl -fsSL --retry 3 -o "$env:RUNNER_TEMP/protoc.zip" `
+            https://github.com/protocolbuffers/protobuf/releases/download/v31.1/protoc-31.1-win64.zip
+          New-Item -ItemType Directory -Force "$HOME/.local/protoc" | Out-Null
+          Expand-Archive -Force "$env:RUNNER_TEMP/protoc.zip" "$HOME/.local/protoc"
+          "$HOME/.local/protoc/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          & "$HOME/.local/protoc/bin/protoc.exe" --version
       # Compile-only: several test suites are env-dependent (file locks, PATH
       # lookups) and are exercised on the Linux job instead.
       - name: Check touched crates
