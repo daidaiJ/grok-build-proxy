@@ -4,6 +4,10 @@
 # test suites for the crates this fork actually touches, on both Linux and
 # Windows. `bin/protoc` is a DotSlash stub that cannot run on CI; the
 # xai-proto-build helper falls back to a PATH protoc, which each job installs.
+#
+# Cache: Swatinem/rust-cache with shared-key `build`, isolated from release.yml.
+# rust-cache stores ~/.cargo + target/ as one blob per OS. sccache's GHA
+# backend is not used (it fragments the 10 GB repo quota).
 name: build
 
 on:
@@ -12,19 +16,21 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+  RUSTUP_MAX_RETRIES: "10"
   # Some session-lifecycle tests recurse deeply enough to overflow the
   # libtest thread's default stack on Linux CI.
   RUST_MIN_STACK: 16777216
-  # Share the content-addressed compile cache with release.yml: tag builds
-  # restore default-branch caches, so these main-branch runs keep sccache
-  # warm between releases.
-  SCCACHE_GHA_ENABLED: "true"
-  RUSTC_WRAPPER: sccache
-  # sccache cannot cache incremental compilations; CI builds are one-shot
-  # and gain nothing from the manifest's incremental = true anyway.
-  CARGO_PROFILE_DEV_INCREMENTAL: "false"
 
 jobs:
   linux:
@@ -33,64 +39,41 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Mozilla-Actions/sccache-action@v0.0.11
-      - uses: Swatinem/rust-cache@v2
-      - name: Install protoc
-        # Pinned to the version verified locally; apt's protobuf-compiler fails
-        # the xai-proto-build debug_redact tests (version-sensitive protoc run).
-        run: |
-          curl -fsSL -o /tmp/protoc.zip \
-            https://github.com/protocolbuffers/protobuf/releases/download/v31.1/protoc-31.1-linux-x86_64.zip
-          mkdir -p "$HOME/.local/protoc"
-          unzip -o /tmp/protoc.zip -d "$HOME/.local/protoc"
-          echo "$HOME/.local/protoc/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/protoc/bin/protoc" --version
-      - name: Check touched crates
-        run: >-
-          cargo check -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
-          -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-shell -p xai-grok-pager
-          -p xai-grok-tools -p xai-grok-hooks -p xai-grok-agent
+      - uses: ./.github/actions/ci-setup
+        with:
+          cache-scope: build
+      # cargo test already type-checks the crates it covers. Only check the
+      # crate this fork touches but does not test on CI.
+      - name: Check untested crates
+        run: cargo check --locked -p xai-grok-tools
       - name: Test touched crates
         run: >-
-          cargo test -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
+          cargo test --locked -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
           -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-hooks -p xai-grok-agent
       # Name-filtered runs: the pager's full suite is not exercised by this
       # fork; these cover the phase-2 additions (stats aggregation, the
       # built-in status-line segments incl. the guide doc-sync).
       - name: Test pager additions
-        run: cargo test -p xai-grok-pager -- stats_cmd status_line
+        run: cargo test --locked -p xai-grok-pager -- stats_cmd status_line
       - name: Test shell (in-process harness)
-        run: cargo test -p xai-grok-shell --features test-support
+        timeout-minutes: 20
+        run: cargo test --locked -p xai-grok-shell --features test-support
       - name: Build CLI binary
-        run: cargo build -p xai-grok-pager-bin
+        run: cargo build --locked -p xai-grok-pager-bin
 
   windows:
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Mozilla-Actions/sccache-action@v0.0.11
-      - uses: Swatinem/rust-cache@v2
-      - name: Install protoc
-        # Direct download instead of choco: the community feed served a 504
-        # once and choco still exited 0, failing the job later with
-        # "protoc not found". Mirrors the release workflow's pinned download.
-        shell: pwsh
-        run: |
-          curl -fsSL --retry 3 -o "$env:RUNNER_TEMP/protoc.zip" `
-            https://github.com/protocolbuffers/protobuf/releases/download/v31.1/protoc-31.1-win64.zip
-          New-Item -ItemType Directory -Force "$HOME/.local/protoc" | Out-Null
-          Expand-Archive -Force "$env:RUNNER_TEMP/protoc.zip" "$HOME/.local/protoc"
-          "$HOME/.local/protoc/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-          & "$HOME/.local/protoc/bin/protoc.exe" --version
+      - uses: ./.github/actions/ci-setup
+        with:
+          cache-scope: build
       # Compile-only: several test suites are env-dependent (file locks, PATH
       # lookups) and are exercised on the Linux job instead.
-      - name: Check touched crates
+      - name: Check untested crates
         run: >-
-          cargo check -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
-          -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-shell -p xai-grok-hooks
-          -p xai-grok-agent
+          cargo check --locked -p xai-grok-config -p xai-proto-build -p xai-grok-shell
+          -p xai-grok-hooks -p xai-grok-agent
       - name: Test portable crates
-        run: cargo test -p xai-chat-state -p xai-grok-status-line -p xai-grok-extra-ca
+        run: cargo test --locked -p xai-chat-state -p xai-grok-status-line -p xai-grok-extra-ca
