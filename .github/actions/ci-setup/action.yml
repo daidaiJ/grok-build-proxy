@@ -24,6 +24,21 @@ inputs:
       colder release blobs. Registry-only is enough for cargo fetch.
     required: false
     default: "true"
+  cache-workspace-crates:
+    description: >
+      Keep workspace crate artifacts in the rust-cache blob. Useless without
+      restoring git mtimes after checkout (cargo fingerprints by mtime).
+      Release.yml does both; build.yml does not (it does not cache target/).
+    required: false
+    default: "false"
+  rust-targets:
+    description: Extra rustup targets for dtolnay/rust-toolchain (comma-separated).
+    required: false
+    default: ""
+  rust-components:
+    description: Extra rustup components (comma-separated).
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -41,12 +56,15 @@ runs:
         # Keep in sync with rust-toolchain.toml. Pinning here avoids installing
         # latest stable only for rustup to fetch the pinned toolchain again.
         toolchain: "1.94.0"
+        targets: ${{ inputs.rust-targets }}
+        components: ${{ inputs.rust-components }}
 
     - uses: Swatinem/rust-cache@v2
       with:
         prefix-key: v1-rust
         shared-key: ${{ inputs.cache-scope }}
         cache-targets: ${{ inputs.cache-targets }}
+        cache-workspace-crates: ${{ inputs.cache-workspace-crates }}
         # false: a failed compile must not occupy the exact key. Cancelled
         # jobs still run this action's post (v1.0.28 poisoned release that
         # way); release.yml therefore also sets cancel-in-progress: false.

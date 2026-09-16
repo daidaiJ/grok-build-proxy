@@ -4,16 +4,23 @@
 # release by pushing a `v*` tag; the assets land on the GitHub release the
 # tag names. Protoc matches the pinned version build.yml verifies.
 #
-# Compile cache: Swatinem/rust-cache with shared-key `release`, isolated from
-# build.yml's debug target/. The two workflows used to share job names
-# (`linux`/`windows`), so rust-cache restored debug artifacts into release
-# jobs and every tag rebuilt the full dependency tree (~50 min on Windows).
-# sccache's GHA backend was tried next and wrote 5k+ cache fragments that
-# exhausted the 10 GB quota at 0% hit on Windows release. One rust-cache
-# blob per OS is the pattern helix/clap/starship/tauri/polars use.
+# Compile cache: Swatinem/rust-cache with shared-key `release` (linux native)
+# / `release-xwin` (windows-msvc cross). Isolated from build.yml's debug
+# target/. The two workflows used to share job names (`linux`/`windows`), so
+# rust-cache restored debug artifacts into release jobs and every tag rebuilt
+# the full dependency tree (~50 min on windows-latest). sccache's GHA backend
+# was tried next and wrote 5k+ cache fragments that exhausted the 10 GB quota
+# at 0% hit on Windows release.
 #
-# Windows: Defender real-time scanning off (rust-lang CI does this) and
-# rust-lld instead of link.exe (v1.0.27 spent ~12 min in the final MSVC link).
+# Windows artifacts are cross-compiled on ubuntu-24.04 with cargo-xwin
+# (clang-cl + the MSVC SDK). Native windows-latest compiled 991 crates in
+# ~47 min (v1.0.29, cache miss) and still spent ~13 min in the final link
+# even with rust-lld. Linux hosted the same tree in ~27 min; cross-compile
+# keeps that CPU and drops the Windows runner.
+#
+# Workspace crates are kept in the rust-cache blob. That only helps if git
+# mtimes survive checkout (cargo fingerprints by mtime, not content).
+# fetch-depth: 0 + git-restore-mtime is the helix / rust-cache#37 pattern.
 #
 # workflow_dispatch runs the identical build on a branch ref (packaging and
 # upload are guarded to tag refs) — used to warm the release cache before
@@ -50,9 +57,14 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: chetan/git-restore-mtime-action@v2
       - uses: ./.github/actions/ci-setup
         with:
           cache-scope: release
+          cache-targets: "true"
+          cache-workspace-crates: "true"
       - name: Build release binary
         run: |
           # xai-grok-version falls back to its Cargo.toml version unless
@@ -77,50 +89,51 @@ jobs:
             target/release/grok-${{ github.ref_name }}-x86_64-linux.tar.gz.sha256
 
   windows:
-    runs-on: windows-latest
+    # Cross-compile windows-msvc on Linux. See the file header for why.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      # CI-only linker swap (see the rust-lld PATH step): CI links with
-      # rust-lld while local dev builds stay on MSVC link.exe until lld is
-      # validated for local use too.
-      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
+      XWIN_CACHE_DIR: ${{ github.workspace }}/.xwin-cache
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: chetan/git-restore-mtime-action@v2
+      - name: Install clang / lld / ninja / zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install --quiet -y clang lld ninja-build zip
       - uses: ./.github/actions/ci-setup
         with:
-          cache-scope: release
-      - name: Put rust-lld on PATH
-        # lld-link links the final binary several times faster than link.exe;
-        # v1.0.27 spent ~12 minutes in that final link alone. Fails loudly if
-        # the toolchain layout ever moves rust-lld.
-        shell: pwsh
-        run: |
-          $lldDir = Join-Path (rustc --print sysroot) "lib\rustlib\x86_64-pc-windows-msvc\bin"
-          if (-not (Test-Path (Join-Path $lldDir "rust-lld.exe"))) {
-            throw "rust-lld.exe not found under $lldDir"
-          }
-          Add-Content -Path $env:GITHUB_PATH -Value $lldDir
+          cache-scope: release-xwin
+          cache-targets: "true"
+          cache-workspace-crates: "true"
+          rust-targets: x86_64-pc-windows-msvc
+          rust-components: llvm-tools
+      - name: Cache MSVC SDK (xwin)
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.XWIN_CACHE_DIR }}
+          key: xwin-sdk-17-${{ runner.os }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-xwin
       - name: Build release binary
-        shell: bash
         run: |
-          # Same tag stamping as the linux job: without GROK_VERSION the
-          # binary falls back to the stale Cargo.toml version.
           if [[ "$GITHUB_REF_NAME" == v* ]]; then
             export GROK_VERSION="${GITHUB_REF_NAME#v}"
           fi
-          cargo build --locked --release -p xai-grok-pager-bin
+          cargo xwin build --locked --release -p xai-grok-pager-bin \
+            --target x86_64-pc-windows-msvc
       - name: Package
         if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
         run: |
-          Compress-Archive -Path target/release/xai-grok-pager.exe `
-            -DestinationPath "target/release/grok-${{ github.ref_name }}-x86_64-windows.zip"
-          $hash = (Get-FileHash "target/release/grok-${{ github.ref_name }}-x86_64-windows.zip" -Algorithm SHA256).Hash.ToLower()
-          "$hash  grok-${{ github.ref_name }}-x86_64-windows.zip" |
-            Set-Content "target/release/grok-${{ github.ref_name }}-x86_64-windows.zip.sha256"
+          cd target/x86_64-pc-windows-msvc/release
+          zip "grok-${GITHUB_REF_NAME}-x86_64-windows.zip" xai-grok-pager.exe
+          sha256sum "grok-${GITHUB_REF_NAME}-x86_64-windows.zip" > "grok-${GITHUB_REF_NAME}-x86_64-windows.zip.sha256"
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            target/release/grok-${{ github.ref_name }}-x86_64-windows.zip
-            target/release/grok-${{ github.ref_name }}-x86_64-windows.zip.sha256
+            target/x86_64-pc-windows-msvc/release/grok-${{ github.ref_name }}-x86_64-windows.zip
+            target/x86_64-pc-windows-msvc/release/grok-${{ github.ref_name }}-x86_64-windows.zip.sha256

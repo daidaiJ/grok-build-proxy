@@ -131,6 +131,17 @@ Windows release 仍用 `rust-lld`（`CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER`
 
 第一次跑会冷。冷跑存盘之后，同 lockfile 的下一次 tag 只重编改过的 crate。Windows 不应再接近 50 分钟。
 
+## v1.0.29：修好投毒之后仍然是冷编译（2026-09-16 晚）
+
+`97314a9` 之后的 tag `v1.0.29`（run `35130156625`）日志写的是 **No cache found**。Windows `cargo build --release` **991 crate / 46m 51s**，Linux 27m 21s。post 才把 `v1-rust-release-*` 各存了一份（Windows 1.13 GiB，Linux 1.16 GiB）。所以这次慢不是 rust-cache 失效，是投毒修复后的第一次完整存盘。
+
+同一份日志还说明两件即使命中依赖缓存也快不了多少的事：
+
+1. rust-cache 默认 `cache-workspace-crates: false`。checkout 把源码 mtime 设成 now，cargo 按 mtime 判定 workspace 脏了。96 个 workspace crate 每次都重编；Windows 上从 `xai-grok-pager` 开始编到 `Finished` 还有约 13 分钟（最终链接）。
+2. `windows-latest` 编同一棵树比 `ubuntu-24.04` 慢将近一倍。依赖缓存救不了链接器。
+
+所以下一轮不再在 Windows runner 上 native 编：Ubuntu 上 `cargo xwin` 交叉出 `x86_64-pc-windows-msvc`，release 打开 `cache-workspace-crates`，checkout `fetch-depth: 0` 之后 `git-restore-mtime`。native Windows 那份 1.13 GiB blob 交叉跑通后再删。
+
 ## 打 tag 前
 
 ```bash
@@ -144,7 +155,7 @@ gh run watch
 
 - `session::workflow::manager::tests::cancel_drops_queued_spawns_before_coordinator` 在 Linux CI 上死锁过一次。现在只靠 20 分钟 step timeout 止损，测试本身没改。
 - `gh cache delete --all` 在 `db865e4` 推上去之后开始清 5000+ 条 `sccache/` 碎片。新工作流用 `v1-rust-*` key，不会去 restore 那些碎片；配额要等删除跑完才真正腾出来。
-- Helix 那种 `git-restore-mtime` / `cache-workspace-crates` 没上。rust-cache 默认**不**缓存 workspace crate：README 写「generally not effective」（[Cache Details][swatinem-readme]，讨论见 [#37][swatinem-37]）。checkout 把源码 mtime 设成 now，cargo 当源码变了会重编 workspace。贵的是 crates.io 依赖，那些会留下来。
+- Helix 那种 `git-restore-mtime` / `cache-workspace-crates` 已在 release.yml 上。rust-cache 默认仍不缓存 workspace crate：README 写「generally not effective」（[Cache Details][swatinem-readme]，讨论见 [#37][swatinem-37]），因为 checkout 把 mtime 设成 now。release 用 `chetan/git-restore-mtime-action@v2` 把 mtime 拉回最后一次提交时刻，workspace 产物才能复用。build.yml 不缓存 `target/`，所以没做。
 
 ## 依据与出处
 
