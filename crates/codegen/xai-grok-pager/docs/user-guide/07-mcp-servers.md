@@ -16,7 +16,7 @@ See the [MCP specification](https://modelcontextprotocol.io) for protocol detail
 
 ## Configuration
 
-MCP servers are configured in `~/.grok/config.toml` under `[mcp_servers.<name>]` sections.
+MCP servers are configured in `~/.grok/config.toml` under `[mcp_servers.<name>]` sections. Pick names that start with a letter or underscore — a name starting with a digit will connect, but all of its tools are silently dropped (see [Tool Naming](#tool-naming)).
 
 To distribute MCP servers to a team, or to restrict which servers users may run (`allowedMcpServers` / `deniedMcpServers` in `requirements.toml` / `managed_config.toml`, with Claude `managed-settings.json` advisory for foreign-defined servers), see [Distribute across an organization](09-plugins.md#distribute-across-an-organization) in the Plugins guide.
 
@@ -142,7 +142,7 @@ By default `grok mcp add` writes to `~/.grok/config.toml` (`--scope user`). Use 
 - **Enable only:** if the cwd-nearest project definition has sticky `enabled = false`, that single key is cleared (comments preserved); disable never rewrites project configs.
 - **Not full `/mcps` parity:** gateway connectors (`managed_gateway:…`, stored under `disabled_mcp_tools.__managed_gateway_connectors`) stay Space-only in the TUI. Idempotent; unknown names exit 1.
 
-Breaking changes from earlier releases: `--env` now takes one `KEY=value` per flag (use `-e A=1 -e B=2`, not `--env A=1 B=2`), and server names may only contain letters, numbers, hyphens, and underscores.
+Breaking changes from earlier releases: `--env` now takes one `KEY=value` per flag (use `-e A=1 -e B=2`, not `--env A=1 B=2`), and server names may only contain letters, numbers, hyphens, and underscores. Note that a name starting with a digit is still accepted here but its tools will be dropped at registration — see [Tool Naming](#tool-naming).
 
 ---
 
@@ -187,6 +187,21 @@ MCP tools are namespaced with the server name to avoid collisions:
 
 - Server `filesystem` with tool `read_file` becomes `filesystem__read_file`
 - Server `github` with tool `create_issue` becomes `github__create_issue`
+
+### Server Name Format Requirements
+
+<!-- LOCAL: upstream has no format rules here; local addition documents the validate_tool_name gate (xai-grok-mcp/src/servers.rs) -->
+
+Each tool's public name is the combined `<server>__<tool>` string, and it must be a valid tool name across every LLM provider Grok talks to. Grok enforces the strictest common denominator — **the combined name must start with a letter or underscore, contain only letters, digits, `_`, and `-`, and be at most 64 characters**.
+
+Since the server name is the prefix, this constrains how you name the *server*:
+
+- **The server name must not start with a digit.** `7zip`, `1password`, and `3cx` are all invalid; `zip7`, `pass1`, and `_7zip` are fine. Digits are welcome anywhere except the first character.
+- Don't put `__` inside the server name — the first `__` is the server/tool separator, and a second one makes the combined name ambiguous.
+- Keep the server name short enough that `<server>__<tool>` stays under 64 characters.
+- Hand-edited TOML accepts any key, but names containing `.`, spaces, or other characters outside letters/digits/`_`/`-` fail the same check.
+
+A violation is easy to miss: `grok mcp add` accepts a leading digit (it only checks the character set, not the first character), the server connects and passes `grok mcp doctor` — but **every tool it exposes is silently dropped at registration**. The tools never reach the model, `search_tool` can't find them, and each one logs `Skipping MCP tool with invalid name` (or `Skipping MCP tool with invalid or ambiguous qualified name` for the `__` case) at error level. The fix is to rename the server in `config.toml` so the combined name passes, then restart the session (or press `r` in the `/mcps` modal).
 
 ---
 
@@ -364,6 +379,12 @@ For stdio servers, Grok captures the process's standard error to `~/.grok/logs/m
 ```bash
 tail -f ~/.grok/logs/mcp/filesystem.stderr.log
 ```
+
+### Server Connects but Its Tools Are Missing
+
+<!-- LOCAL: troubleshooting entry for the silent tool-drop on invalid server names -->
+
+If `grok mcp doctor` passes and the server shows as connected in `/mcps`, but none of its tools reach the model, the server name almost certainly breaks the rules in [Tool Naming](#tool-naming) — a name starting with a digit (`7zip`) is the usual culprit. Grep the logs for `Skipping MCP tool with invalid name` to confirm, rename the server to start with a letter or underscore, and refresh.
 
 ### Blocked by organization policy
 

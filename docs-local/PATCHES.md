@@ -162,6 +162,16 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 - 测试：`a_drain_merges_staggered_pushes_into_one_summary`（错峰 200ms 双推送合并）、
   `edits_inside_the_debounce_window_share_one_drain`（FakeBackend 计数）
 
+### xai-grok-pager（MCP 命名格式文档强化）
+- `docs/user-guide/07-mcp-servers.md`（上游文件，4 处插入，均有 `<!-- LOCAL: -->` 或台账记录）：
+  - Tool Naming 新增 "Server Name Format Requirements" 小节：`<server>__<tool>` 全名须匹配
+    `^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$`（`xai-grok-mcp/src/servers.rs` `validate_tool_name`）——
+    server 名数字开头（`7zip`）会静默丢光工具，只留 `Skipping MCP tool with invalid name` 日志；
+    `grok mcp add` 只查字符集不查首字符，是坑的隐蔽点
+  - Troubleshooting 新增 "Server Connects but Its Tools Are Missing" 症状条目
+  - Configuration 开头与 CLI Management breaking-changes 句各补一句警告 + `#tool-naming` 交叉引用
+- 背景：上游镜像（xai-org/grok-build）关了 issue 区，此 bug 无人报过；文档先行，代码放宽待上游
+
 ## 发布
 
 - `.github/workflows/release.yml`：推 `v*` tag 触发，构建 `xai-grok-pager`（grok CLI）
