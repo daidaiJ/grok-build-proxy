@@ -265,18 +265,6 @@ pub struct AgentsModalState {
     /// Indices of expanded personas (showing description + capability tags).
     pub persona_expanded: std::collections::HashSet<usize>,
 }
-/// Built-in agent names that should be shown to the user.
-/// Skips the internal variants:
-/// GrokBuildConcise, GrokBuildPlan, GrokBuildPlanNoSubagents, GrokBuildAskUser, Codex, Opencode, CursorExtended, GrokBuildOrchestrator.
-fn user_visible_builtins() -> &'static [BuiltinAgentName] {
-    &[
-        BuiltinAgentName::GrokBuild,
-        BuiltinAgentName::GeneralPurpose,
-        BuiltinAgentName::Explore,
-        BuiltinAgentName::Plan,
-        BuiltinAgentName::BrowserUse,
-    ]
-}
 impl AgentsModalState {
     /// Create a new agents modal, discovering agents from `cwd` and
     /// populating personas from `bundle`.
@@ -375,15 +363,19 @@ impl AgentsModalState {
         }
     }
 }
-/// Build the full agent list: user-visible built-ins first, then file-based agents from discovery (with dedup).
+/// Build the full agent list: built-ins first, then file-based agents from discovery (with dedup).
 /// Plugin-provided agents come last under qualified `plugin:agent` names.
 pub fn build_agent_list(
     cwd: &Path,
     toggle: &HashMap<String, bool>,
     plugins: Option<&xai_grok_agent::plugins::PluginRegistry>,
 ) -> Vec<AgentListEntry> {
+    // LOCAL: list every `BuiltinAgentName` variant, not a curated visible subset.
+    // `[agent].name` and `GROK_AGENT` accept any variant, so hiding one here makes
+    // an activatable default invisible and unselectable in this modal.
+    use strum::IntoEnumIterator;
     let mut entries = Vec::new();
-    for &builtin in user_visible_builtins() {
+    for builtin in BuiltinAgentName::iter() {
         let def = builtin.definition();
         let name = def.name.clone();
         let enabled = toggle.get(&name).copied().unwrap_or(true);
@@ -3434,5 +3426,25 @@ mod tests {
             .find(|e| e.name == "my-plugin:reviewer")
             .expect("disabled plugin agent stays visible in the list");
         assert!(!entry.enabled);
+    }
+    #[test]
+    fn build_agent_list_lists_every_builtin_variant() {
+        // LOCAL regression: `[agent].name` / `GROK_AGENT` resolve any variant, so the
+        // modal must list them all — no built-in may be activatable yet invisible.
+        use strum::IntoEnumIterator;
+        let cwd = tempfile::tempdir().unwrap();
+        let entries = build_agent_list(cwd.path(), &HashMap::new(), None);
+        for builtin in BuiltinAgentName::iter() {
+            let name = builtin.definition().name;
+            let entry = entries
+                .iter()
+                .find(|e| e.name == name)
+                .unwrap_or_else(|| panic!("builtin `{name}` must be listed in the agents modal"));
+            assert!(entry.is_builtin, "`{name}` entry lost its builtin scope");
+        }
+        assert!(
+            entries.iter().any(|e| e.name == "grok-build-concise"),
+            "grok-build-concise is a supported `[agent].name` value and must stay visible"
+        );
     }
 }
