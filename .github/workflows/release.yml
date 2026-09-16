@@ -35,6 +35,8 @@ env:
   # incremental = true (which exists for local dev rebuilds). Note cargo
   # only accepts "true"/"false" for boolean profile env vars.
   CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+  # Surface sccache server errors (e.g. ghac upload failures) in the stats step.
+  SCCACHE_ERROR_LOG: sccache-error.log
 
 jobs:
   linux:
@@ -59,7 +61,7 @@ jobs:
       - name: Build release binary
         run: cargo build --release -p xai-grok-pager-bin
       - name: sccache stats
-        run: sccache --show-stats
+        run: sccache --show-stats && tail -30 sccache-error.log || true
       - name: Package
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -88,7 +90,9 @@ jobs:
       - name: Build release binary
         run: cargo build --release -p xai-grok-pager-bin
       - name: sccache stats
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          if (Test-Path sccache-error.log) { Get-Content sccache-error.log -Tail 30 }
       - name: Package
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
