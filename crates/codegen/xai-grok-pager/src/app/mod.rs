@@ -1217,7 +1217,7 @@ pub async fn run(
     }
 }
 /// LOCAL: the goodbye line printed on every graceful quit (see the quit tail in [`run`]).
-const FAREWELL: &str = "🐼 Share code & cola with Panda — thanks for trying Grok Build! (/feedback)";
+const FAREWELL: &str = "🐼 Code together, cola together — thanks for pairing with Panda! (/feedback)";
 /// Plain-quit "Resume this session with…" lines (after terminal restore).
 /// Best-effort: closed-pane EIO/BrokenPipe must not panic (`panic = "abort"`).
 /// TODO: extend beyond --minimal by rebuilding resume argv from launch flags (see screen_mode_relaunch)
@@ -2555,7 +2555,7 @@ mod tests {
     }
     #[test]
     fn farewell_line_carries_the_easter_egg() {
-        assert!(FAREWELL.contains("Share code & cola with Panda"));
+        assert!(FAREWELL.contains("Code together, cola together"));
         assert!(FAREWELL.contains("/feedback"));
     }
     #[test]

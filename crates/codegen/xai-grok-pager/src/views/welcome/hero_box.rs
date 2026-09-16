@@ -27,7 +27,7 @@ const LOGO_H_PAD: u16 = 3;
 const UPGRADE_CTA_ROWS: u16 = 2;
 
 const HERO_SUBTITLE: &str =
-    "Share code & cola with Panda — thanks for trying Grok Build! (/feedback)";
+    "Code together, cola together — thanks for pairing with Panda! (/feedback)";
 
 use super::logo::LogoTier;
 use super::{PROMPT_HEIGHT, VERSION_GAP};
