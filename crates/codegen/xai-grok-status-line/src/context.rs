@@ -175,7 +175,7 @@ pub struct StatusLineContextWindow {
     pub auto_compact_threshold_percent: Option<u8>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StatusLineSessionUsage {
     /// This count is disjoint from the cache buckets, so the three sum without overlap.

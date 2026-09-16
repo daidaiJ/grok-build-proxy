@@ -137,3 +137,62 @@ fn perf_segment_formats_whatever_the_snapshot_carries() {
     assert!(segment(&ctx).is_none());
     assert!(compose_builtin(&context(), None, &[StatusLineItem::Perf]).is_empty());
 }
+
+fn session_usage(
+    input: u64,
+    cache_read: u64,
+    cache_creation: u64,
+    output: u64,
+    reasoning: u64,
+) -> xai_grok_status_line::StatusLineSessionUsage {
+    xai_grok_status_line::StatusLineSessionUsage {
+        input_tokens: input,
+        cache_read_input_tokens: cache_read,
+        cache_creation_input_tokens: cache_creation,
+        output_tokens: output,
+        reasoning_tokens: reasoning,
+    }
+}
+
+#[test]
+fn token_segments_mirror_the_bundled_status_line_script() {
+    let mut ctx = context();
+    ctx.context_window.session_input_tokens = Some(47_000);
+    ctx.context_window.session_output_tokens = Some(3_200);
+    ctx.context_window.session_usage = Some(session_usage(1_200, 45_000, 800, 3_200, 900));
+
+    let text = |ctx: &StatusLineContext, item| {
+        compose_builtin(ctx, None, &[item])[0].text.clone()
+    };
+    assert_eq!(text(&ctx, StatusLineItem::Tokens), "in 47k out 3.2k");
+    assert_eq!(text(&ctx, StatusLineItem::Cache), "cache 95.7%");
+    assert_eq!(text(&ctx, StatusLineItem::Think), "think 28.1%");
+
+    // Without the window totals, `in` falls back to the disjoint usage sum.
+    ctx.context_window.session_input_tokens = None;
+    assert_eq!(text(&ctx, StatusLineItem::Tokens), "in 47k out 3.2k");
+
+    // A scale past one mega gets the M suffix.
+    ctx.context_window.session_usage = Some(session_usage(0, 1_260_000, 0, 0, 0));
+    ctx.context_window.session_input_tokens = Some(1_260_000);
+    assert_eq!(text(&ctx, StatusLineItem::Tokens), "in 1.3M out 0");
+}
+
+#[test]
+fn a_fresh_session_shows_only_the_fields_it_has_data_for() {
+    // The default item set over the fixture's bare context: only the model is
+    // known before the first turn lands, so it is the only segment drawn.
+    let default_config = xai_grok_status_line::StatusLineConfig::default();
+    let items = match default_config.resolve() {
+        Some(xai_grok_status_line::ResolvedStatusLine::Builtin { items }) => items,
+        other => panic!("the default section draws a builtin row: {other:?}"),
+    };
+    assert_eq!(
+        compose_builtin(&context(), None, items)
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>()
+            .join(SEGMENT_SEPARATOR),
+        "Grok Build"
+    );
+}

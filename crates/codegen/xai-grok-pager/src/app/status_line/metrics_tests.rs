@@ -17,8 +17,9 @@ fn session_reports_its_config_once() {
     metrics.report_config(&command_row());
 
     assert_eq!(metrics.kind.get().copied(), Some("unset"));
-    // The flag that gates health reporting cannot move on the second call either
-    assert!(!metrics.draws_a_row.load(Ordering::Relaxed));
+    // The flag that gates health reporting cannot move on the second call either.
+    // LOCAL: an unset section draws the fork's default builtin row.
+    assert!(metrics.draws_a_row.load(Ordering::Relaxed));
 }
 
 #[test]
@@ -57,9 +58,13 @@ fn only_a_builtin_row_reports_the_items_it_drew() {
 #[test]
 fn row_the_client_cannot_draw_reports_adoption_but_not_health() {
     let metrics = StatusLineMetrics::new();
-    metrics.report_config(&StatusLineConfig::default());
+    // An explicit `disabled` is the row nobody asked for; an unset section
+    // draws the fork default and reports health like any other row.
+    metrics.report_config(
+        &StatusLineConfigFixture::from_kind(StatusLineType::Disabled).into_config(),
+    );
     metrics.note_content();
 
-    assert_eq!(metrics.kind.get().copied(), Some("unset"));
+    assert_eq!(metrics.kind.get().copied(), Some("disabled"));
     assert!(metrics.health_event().is_none());
 }

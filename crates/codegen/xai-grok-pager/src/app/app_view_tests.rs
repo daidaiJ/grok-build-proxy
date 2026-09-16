@@ -86,7 +86,7 @@ fn app_draw_drains_deferred_release_after_flush() {
 }
 pub(crate) fn test_app() -> AppView {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    AppView {
+    let mut app = AppView {
         pending_startup: None,
         active_view: ActiveView::Welcome,
         auth_return_view: None,
@@ -324,7 +324,17 @@ pub(crate) fn test_app() -> AppView {
         voice_auth: None,
         voice_cmd_tx: None,
         voice_state: VoiceState::Idle,
-    }
+    };
+    // LOCAL: the fork default row ships on, so a bare `UiConfig::default()`
+    // now reserves a row. These fixtures pin the row off: the layout, tick,
+    // and completion cases below assume a frame with no status line in it.
+    // Status-line behavior itself is covered by the `status_line*` suites.
+    app.current_ui.status_line =
+        xai_grok_status_line::test_support::StatusLineConfigFixture::from_kind(
+            xai_grok_status_line::StatusLineType::Disabled,
+        )
+        .into_config();
+    app
 }
 pub(crate) fn test_app_with_agent() -> AppView {
     let mut app = test_app();

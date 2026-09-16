@@ -135,7 +135,8 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
   Grok 字标换成熊猫头盲文点阵；`.gitattributes` 强制 `assets/logo/*.txt` LF
   （`include_str!` 原样嵌入，CRLF 会把 `\r` 带进二进制渲染成杂字形）
 - `src/views/welcome/hero_box.rs`：`HERO_SUBTITLE` 改为
-  `"Share code & cola with Panda — thanks for trying Grok Build! (/feedback)"`
+  `"Code together, cola together — thanks for pairing with Panda! (/feedback)"`
+  （初版措辞 "Share code & cola" 读起来像替别人备份代码，已按意图改为结对共写）
 - `src/app/mod.rs`：退出尾部（终端恢复后、`Ok(false)` 前）追加 `FAREWELL`
   常量打印（stderr）——hero 副标题会被 changelog/公告挤掉，退出告别语必打印，
   彩蛋稳定展示；`quit_for_update` / 模式 relaunch 路径先于打印 return，不会污染
@@ -149,6 +150,24 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
   `${session_id}` 会话亲和头、DeepSeek/GLM `reasoning_content` 思考回传）
   写成"作用 + 何时主动配置 + 示例"的 AI 引导表，含信号→配置对照表；
   供 AI 解包后读到并主动帮用户配置
+
+### 状态行原生默认（脚本退役：`tokens` / `cache` / `think` item + 默认开启）
+- `xai-grok-status-line/src/config.rs`：`StatusLineItem` 新增 `Tokens` / `Cache` /
+  `Think`（kebab-case：`tokens`、`cache`、`think`，`varies_mid_turn` 均 true）；
+  `StatusLineType` 的 `#[default]` 从 `Disabled` 翻到 `Builtin`——缺省 section 即出行；
+  `DEFAULT_ITEMS` 换成本地指标集 `[api-calls, tokens, cache, think, perf, model]`
+  （对齐原 `~/.grok/statusline.py` 的 req/in-out/cache/think/ttft-tps/model 段序）
+- `xai-grok-status-line/src/context.rs`：`StatusLineSessionUsage` 补 `Copy, Eq`
+- `xai-grok-pager/src/views/status_line/segments.rs`：三个新段——
+  `in 47k out 3.2k`（窗口总量缺省回退 usage 三桶和，k/M 一位小数去尾零）、
+  `cache 95.7%`（cache_read / 会话输入总量）、`think 28.1%`（reasoning / 会话输出）；
+  拿不到值整段隐藏（新会话只画 model，不画占位符）
+- 消费方语义翻转后的测试同步：`config_tests.rs`（orphan/off 断言改显式 Disabled、
+  无 type 载荷改"画默认行 + 仍报孤儿键"）、`metrics_tests.rs`（unset 记 true、
+  不可画行改 Disabled）、dispatch `status_line.rs`（同）；新增
+  `token_segments_mirror...` / `a_fresh_session_shows_only...` 单测；
+  `docs/user-guide/25-status-line.md` Set up 表与默认值同步（doc-sync 测试强制）
+- 用户脚本 `~/.grok/statusline.py` 退役可选：保留即覆盖默认（command 优先）
 
 ### xai-grok-tools（LSP 诊断合并去抖）
 - `src/implementations/lsp/mod.rs`：新 `DIAGNOSTICS_QUIET_WINDOW`（150ms）

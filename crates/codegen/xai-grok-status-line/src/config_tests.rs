@@ -101,10 +101,11 @@ fn unknown_key_is_named_rather_than_silently_dropped() {
     );
 
     let alone = ui_toml("[status_line]\ncolour = \"red\"\n").status_line;
-    assert!(
-        !alone.reserves_a_row(),
-        "an unknown key cannot switch on a row nobody asked for"
-    );
+    assert_eq!(alone.unknown_keys, ["colour"]);
+    // LOCAL: the fork default row draws whether or not the section exists, so
+    // a stray key cannot switch anything — it only names itself as a warning.
+    assert!(alone.reserves_a_row());
+    assert!(alone.problem_to_paint().is_none());
 }
 
 #[test]
@@ -176,7 +177,6 @@ fn mode_without_its_payload_draws_the_problem_instead() {
         StatusLineConfigFixture::from_kind(StatusLineType::Builtin)
             .with_items(Vec::new())
             .into_config(),
-        ui(r#"{"command": "~/status_line.sh"}"#).status_line,
     ] {
         assert!(orphan.resolve().is_none(), "{orphan:?}");
         assert!(orphan.problem().is_some(), "{orphan:?}");
@@ -188,8 +188,21 @@ fn mode_without_its_payload_draws_the_problem_instead() {
         .into_config();
     assert!(ok.reserves_a_row() && ok.problem().is_none());
 
-    let off = StatusLineConfig::default();
+    let off = StatusLineConfigFixture::from_kind(StatusLineType::Disabled).into_config();
     assert!(!off.reserves_a_row() && off.problem().is_none());
+}
+
+#[test]
+fn a_payload_without_a_type_draws_the_default_row_and_reports_the_orphan_key() {
+    let untyped = ui(r#"{"command": "~/status_line.sh"}"#).status_line;
+    assert!(
+        untyped.resolve().is_some(),
+        "the fork default row draws even when the payload names no type"
+    );
+    assert!(
+        untyped.problem().is_some(),
+        "the ignored command is still reported, it never reaches the row"
+    );
 }
 
 #[test]

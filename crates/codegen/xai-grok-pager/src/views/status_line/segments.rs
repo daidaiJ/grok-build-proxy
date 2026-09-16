@@ -18,6 +18,22 @@ const SESSION_NAME_COLS: usize = 40;
 
 const MIN_DISPLAYED_COST_USD: f64 = 0.005;
 
+/// Token counts in the compact `47k` / `1.2M` form the bundled status-line
+/// script uses: one decimal, then trailing `0.` stripped.
+fn fmt_tokens(n: u64) -> String {
+    let (divisor, suffix) = if n >= 1_000_000 {
+        (1_000_000.0, "M")
+    } else if n >= 1000 {
+        (1000.0, "k")
+    } else {
+        return n.to_string();
+    };
+    let scaled = format!("{:.1}", n as f64 / divisor);
+    let scaled = scaled.strip_suffix('0').unwrap_or(&scaled);
+    let scaled = scaled.strip_suffix('.').unwrap_or(scaled);
+    format!("{scaled}{suffix}")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SegmentTone {
     Dim,
@@ -126,6 +142,48 @@ pub fn compose_builtin(
                 };
                 let tone = (calls.failed > 0).then_some(SegmentTone::Warn);
                 Some(StatusSegment::toned(text, tone.unwrap_or(SegmentTone::Dim)))
+            }
+            // LOCAL: cumulative session tokens, `in 47k out 3.2k`.
+            StatusLineItem::Tokens => {
+                let window = &ctx.context_window;
+                let usage = window.session_usage;
+                let total_in = window.session_input_tokens.or_else(|| {
+                    usage.map(|u| {
+                        u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens
+                    })
+                })?;
+                let out = usage
+                    .map(|u| u.output_tokens)
+                    .or(window.session_output_tokens)?;
+                Some(StatusSegment::dim(format!(
+                    "in {} out {}",
+                    fmt_tokens(total_in),
+                    fmt_tokens(out)
+                )))
+            }
+            // LOCAL: cache-read share of the session's input tokens, `cache 95.7%`.
+            StatusLineItem::Cache => {
+                let window = &ctx.context_window;
+                let usage = window.session_usage?;
+                let total_in = window.session_input_tokens.unwrap_or(
+                    usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens,
+                );
+                (total_in > 0).then(|| {
+                    StatusSegment::dim(format!(
+                        "cache {:.1}%",
+                        100.0 * usage.cache_read_input_tokens as f64 / total_in as f64
+                    ))
+                })
+            }
+            // LOCAL: reasoning share of the session's output tokens, `think 28.1%`.
+            StatusLineItem::Think => {
+                let usage = ctx.context_window.session_usage?;
+                (usage.output_tokens > 0).then(|| {
+                    StatusSegment::dim(format!(
+                        "think {:.1}%",
+                        100.0 * usage.reasoning_tokens as f64 / usage.output_tokens as f64
+                    ))
+                })
             }
             // LOCAL: last turn's latency/throughput, `380ms ttft · 42.3 tok/s`.
             StatusLineItem::Perf => {

@@ -142,10 +142,16 @@ impl<'de> Deserialize<'de> for StatusLineConfig {
 }
 
 impl StatusLineConfig {
+    /// LOCAL: the fork's out-of-box row — the endpoint-health / session-token /
+    /// cache / think / latency / model set, mirroring the bundled status-line
+    /// script. Configurable per session through `items`.
     const DEFAULT_ITEMS: &'static [StatusLineItem] = &[
-        StatusLineItem::Cwd,
+        StatusLineItem::ApiCalls,
+        StatusLineItem::Tokens,
+        StatusLineItem::Cache,
+        StatusLineItem::Think,
+        StatusLineItem::Perf,
         StatusLineItem::Model,
-        StatusLineItem::Context,
     ];
 
     pub const MIN_REFRESH_INTERVAL_SECS: u64 = 1;
@@ -286,9 +292,10 @@ impl StatusLineConfig {
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase", ascii_case_insensitive)]
 pub enum StatusLineType {
+    /// LOCAL: the row ships on; an explicit `type = "disabled"` turns it off.
+    #[default]
     Builtin,
     Command,
-    #[default]
     #[strum(
         to_string = "disabled",
         serialize = "off",
@@ -331,6 +338,12 @@ pub enum StatusLineItem {
     SessionName,
     /// LOCAL: endpoint-health counters, `✓ n` with `✗ n` appended on failures.
     ApiCalls,
+    /// LOCAL: cumulative session tokens, `in 47k out 3.2k`.
+    Tokens,
+    /// LOCAL: cache-read share of the session's input tokens, `cache 95.7%`.
+    Cache,
+    /// LOCAL: reasoning share of the session's output tokens, `think 28.1%`.
+    Think,
     /// LOCAL: last turn's TTFT / TPS snapshot.
     Perf,
 }
@@ -341,6 +354,7 @@ impl StatusLineItem {
     pub const fn varies_mid_turn(self) -> bool {
         match self {
             Self::TurnTimer | Self::ApiCalls | Self::Perf => true,
+            Self::Tokens | Self::Cache | Self::Think => true,
             Self::Cwd | Self::Model | Self::Context | Self::Cost | Self::SessionName => false,
         }
     }

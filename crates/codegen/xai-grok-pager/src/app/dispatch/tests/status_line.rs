@@ -196,7 +196,11 @@ fn builtin_status_line_waits_for_the_agent_snapshot() {
         "a row with nothing to draw must let the loop park"
     );
 
-    app.agents.get_mut(&AgentId(0)).unwrap().status_context = Some(test_context("/tmp/project"));
+    let mut snapshot = test_context("/tmp/project");
+    // The default item set hides every segment its data has not arrived for,
+    // so the snapshot carries a model — the one field a fresh session has.
+    snapshot.model.display_name = Some("Grok Build".into());
+    app.agents.get_mut(&AgentId(0)).unwrap().status_context = Some(snapshot);
     app.refresh_status_line_now_at(now);
     assert!(app.status_line.display().is_some(), "the snapshot paints");
 }
@@ -485,7 +489,10 @@ fn cycling_agents_cannot_re_run_a_script_faster_than_the_floor() {
 fn row_nobody_asked_for_arms_nothing_that_outlives_the_turn() {
     let now = Instant::now();
     let mut app = test_app_with_agent();
-    app.current_ui.status_line = StatusLineConfig::default();
+    // An explicit `disabled`, not the unset section: unset draws the fork's
+    // default builtin row.
+    app.current_ui.status_line =
+        StatusLineConfigFixture::from_kind(StatusLineType::Disabled).into_config();
 
     app.refresh_status_line_for(AgentId(0));
 

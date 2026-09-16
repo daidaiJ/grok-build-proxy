@@ -1,6 +1,6 @@
 # Status Line
 
-An optional row at the bottom of the pager — above the shortcuts bar in the full screen, under the prompt's info row in minimal mode — and disabled by default. It shows live session context, such as the model, context-window usage, cost, directory, and git worktree, or the output of any script you configure. Opt in with `[ui.status_line]` in `~/.grok/config.toml`.
+A row at the bottom of the pager — above the shortcuts bar in the full screen, under the prompt's info row in minimal mode. LOCAL default: it ships on, showing session health, tokens, cache and think ratios, last turn's latency, and the model; each segment hides until its data exists. It shows live session context, such as the model, context-window usage, cost, directory, and git worktree, or the output of any script you configure. Reshape it with `[ui.status_line]` in `~/.grok/config.toml`; `type = "disabled"` turns it off.
 
 ## Set up
 
@@ -9,10 +9,10 @@ An optional row at the bottom of the pager — above the shortcuts bar in the fu
 ```toml
 [ui.status_line]
 type = "builtin"
-items = ["cwd", "model", "context"]   # default when omitted
+items = ["api-calls", "tokens", "cache", "think", "perf", "model"]   # default when omitted
 ```
 
-This renders, for example, `grok-shell-status-line │ Grok 4.5 │ 12% ctx`. Items appear in the order you list them, and long ones are elided with `…`: the directory and session name at 40 columns, the model at 30.
+Items appear in the order you list them, and long ones are elided with `…`: the directory and session name at 40 columns, the model at 30. A segment whose data does not exist yet is skipped rather than drawn with a placeholder, so a fresh session shows just the model.
 
 | Item | Shows |
 | --- | --- |
@@ -23,6 +23,9 @@ This renders, for example, `grok-shell-status-line │ Grok 4.5 │ 12% ctx`. It
 | `turn-timer` | Elapsed time of the running turn, from one second in |
 | `session-name` | Session name, when set |
 | `api-calls` | Model calls this session made, `✓ 12` — amber with `✗ 3` appended once calls have failed |
+| `tokens` | Cumulative session tokens, `in 47k out 3.2k`, window totals falling back to the disjoint usage sum |
+| `cache` | Cache-read share of the session's input tokens, `cache 95.7%` |
+| `think` | Reasoning share of the session's output tokens, `think 28.1%` |
 | `perf` | Last turn's latency and throughput, `380ms ttft · 42.3 tok/s`, from the first completed call on |
 
 ### Command
@@ -39,14 +42,14 @@ Field names and nesting follow the common status line convention, so a ported sc
 
 ### Disabled
 
-`type = "disabled"`, the default, shows nothing; `off`, `none`, and `hidden` are accepted as spellings of `disabled`.
+`type = "disabled"` shows nothing; `off`, `none`, and `hidden` are accepted as spellings of `disabled`. Omitting the section entirely draws the default builtin row.
 
 ### Options
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `type` | string | `disabled` | `builtin`, `command`, or `disabled`. |
-| `items` | array | `["cwd", "model", "context"]` | Built-in segments, in order. |
+| `type` | string | `builtin` | `builtin`, `command`, or `disabled`. |
+| `items` | array | `["api-calls", "tokens", "cache", "think", "perf", "model"]` | Built-in segments, in order. |
 | `command` | string | none | Script for `type = "command"`. |
 | `padding` | integer | `0` | Horizontal spacing, in characters per side, capped at 16. A padding wide enough to leave no columns reserves the row but paints nothing in it. |
 | `refresh_interval` | integer | unset | `command` rows only, in seconds, 1 to 86,400. Re-runs the script this often even when nothing changed, so an idle session can still surface a change — an incident page, a CI status. Unset keeps the row event-driven. The run it schedules carries `"trigger": "refresh_interval"`, and its failures keep the last output rather than painting an error (see [Refresh runs](#refresh-runs)). A script that calls a network should prefer a longer interval and read a cache on `state` runs. |

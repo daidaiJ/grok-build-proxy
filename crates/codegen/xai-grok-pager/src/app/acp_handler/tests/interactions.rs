@@ -859,10 +859,13 @@
     #[test]
     fn a_status_snapshot_does_not_repaint_a_client_with_no_status_line() {
         let mut app = make_app_with_agent("sess-1");
-        assert!(
-            !app.current_ui.status_line.reserves_a_row(),
-            "disabled is the default"
-        );
+        // LOCAL: the unset section draws the fork default row, so "no row"
+        // here is an explicit `disabled`.
+        app.current_ui.status_line =
+            xai_grok_status_line::test_support::StatusLineConfigFixture::from_kind(
+                xai_grok_status_line::StatusLineType::Disabled,
+            )
+            .into_config();
 
         assert!(!notify_status(&mut app, "/tmp"), "no row, no repaint");
         assert!(
