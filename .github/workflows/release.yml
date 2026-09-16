@@ -75,6 +75,13 @@ jobs:
           echo "$HOME/.local/protoc/bin" >> "$GITHUB_PATH"
       - name: Build release binary
         run: |
+          # xai-grok-version falls back to its Cargo.toml version unless
+          # GROK_VERSION is injected at compile time, so stamp it from the tag
+          # (v1.0.27 -> 1.0.27) or every release reports the stale lockstep
+          # value. Branch builds (workflow_dispatch) keep the fallback.
+          if [[ "$GITHUB_REF_NAME" == v* ]]; then
+            export GROK_VERSION="${GITHUB_REF_NAME#v}"
+          fi
           cargo build --release -p xai-grok-pager-bin 2>&1 | tee cargo-build.log
           exit "${PIPESTATUS[0]}"
       - name: sccache stats
@@ -153,6 +160,11 @@ jobs:
       - name: Build release binary
         shell: bash
         run: |
+          # Same tag stamping as the linux job: without GROK_VERSION the
+          # binary falls back to the stale Cargo.toml version.
+          if [[ "$GITHUB_REF_NAME" == v* ]]; then
+            export GROK_VERSION="${GITHUB_REF_NAME#v}"
+          fi
           cargo build --release -p xai-grok-pager-bin 2>&1 | tee cargo-build.log
           exit "${PIPESTATUS[0]}"
       - name: sccache stats
