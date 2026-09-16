@@ -490,6 +490,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "imagine-video",
     "import-claude",
     "jump",
+    "lang", // LOCAL: pager 界面语言切换命令占位，防技能同名遮蔽
     "login",
     "logout",
     "log",

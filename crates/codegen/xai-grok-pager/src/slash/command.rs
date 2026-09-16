@@ -373,11 +373,12 @@ macro_rules! slash_meta {
         })?
 
         $(fn description(&self) -> &str {
-            $description
+            // LOCAL: 经 i18n::tr 按当前语言取文案
+            crate::slash::i18n::tr($description)
         })?
 
         $(fn usage(&self) -> &str {
-            $usage
+            crate::slash::i18n::tr($usage)
         })?
 
         $(fn takes_args(&self) -> bool {
@@ -405,7 +406,7 @@ macro_rules! slash_meta {
         })?
 
         $(fn arg_placeholder(&self) -> Option<&str> {
-            Some($arg_placeholder)
+            Some(crate::slash::i18n::tr($arg_placeholder))
         })?
 
         $(fn required_tools(&self) -> &[&str] {

@@ -14,14 +14,15 @@ pub(crate) const EFFORT_LEVELS: &[ReasoningEffort] = &[
 ];
 
 pub(crate) fn effort_description(level: ReasoningEffort) -> &'static str {
+    // LOCAL: 经 i18n::tr 按当前语言取文案
     match level {
-        ReasoningEffort::None => "No reasoning",
-        ReasoningEffort::Minimal => "Minimal reasoning",
-        ReasoningEffort::Low => "Faster, lighter reasoning",
-        ReasoningEffort::Medium => "Balanced reasoning",
-        ReasoningEffort::High => "Heavy reasoning",
-        ReasoningEffort::Xhigh => "Extended reasoning",
-        ReasoningEffort::Max => "Maximum reasoning",
+        ReasoningEffort::None => crate::slash::i18n::tr("No reasoning"),
+        ReasoningEffort::Minimal => crate::slash::i18n::tr("Minimal reasoning"),
+        ReasoningEffort::Low => crate::slash::i18n::tr("Faster, lighter reasoning"),
+        ReasoningEffort::Medium => crate::slash::i18n::tr("Balanced reasoning"),
+        ReasoningEffort::High => crate::slash::i18n::tr("Heavy reasoning"),
+        ReasoningEffort::Xhigh => crate::slash::i18n::tr("Extended reasoning"),
+        ReasoningEffort::Max => crate::slash::i18n::tr("Maximum reasoning"),
     }
 }
 

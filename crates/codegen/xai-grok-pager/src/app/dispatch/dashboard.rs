@@ -1384,6 +1384,8 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
 
     // Build the execution context from app-wide state. The dashboard is session-less, so `session_id` is `None`.
     // Session-less opt-ins (`/model`, `/plan`) and pager-global commands still run and may toast if a dispatcher needs an agent
+    // LOCAL: 记录执行前语言，/lang 切换后需重建 triggers
+    let lang_before = crate::slash::i18n::current_lang();
     let result = {
         let Some(invocation) = parse_invocation(trimmed.as_str()) else {
             return vec![];
@@ -1489,6 +1491,17 @@ pub(super) fn dispatch_dashboard_dispatch_slash(app: &mut AppView, text: String)
         };
         command.run(&mut ctx, invocation.args)
     };
+
+    // LOCAL: 命令切换了界面语言（/lang）时，重建仪表盘注册表 triggers 使菜单描述立即换语言
+    if crate::slash::i18n::current_lang() != lang_before {
+        if let Some(dashboard) = app.dashboard.as_mut() {
+            dashboard
+                .dispatch
+                .slash_controller
+                .registry_mut()
+                .refresh_trigger_text();
+        }
+    }
 
     match result {
         CommandResult::Handled => {

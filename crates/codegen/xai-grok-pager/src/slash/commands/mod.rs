@@ -31,6 +31,8 @@ pub mod imagine;
 pub mod imagine_video;
 pub mod import_claude;
 pub mod jump;
+// LOCAL: TUI 界面语言切换
+pub mod lang;
 pub mod login;
 pub mod logout;
 pub mod loop_cmd;
@@ -137,6 +139,8 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(cd::CdCommand),
         Arc::new(imagine::ImagineCommand),
         Arc::new(imagine_video::ImagineVideoCommand),
+        // LOCAL: TUI 界面语言切换，默认中文
+        Arc::new(lang::LangCommand),
         // Docs, account and one-off maintenance.
         Arc::new(docs::DocsCommand),
         Arc::new(release_notes::ReleaseNotesCommand),

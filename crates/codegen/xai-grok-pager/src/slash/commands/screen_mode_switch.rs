@@ -41,9 +41,11 @@ impl SlashCommand for ScreenModeSwitchCommand {
 
     fn description(&self) -> &str {
         if self.to_minimal {
-            "Switch this session to minimal (scrollback-native) mode, back with /fullscreen"
+            crate::slash::i18n::tr(
+                "Switch this session to minimal (scrollback-native) mode, back with /fullscreen",
+            )
         } else {
-            "Switch this session to fullscreen mode, back with /minimal"
+            crate::slash::i18n::tr("Switch this session to fullscreen mode, back with /minimal")
         }
     }
 

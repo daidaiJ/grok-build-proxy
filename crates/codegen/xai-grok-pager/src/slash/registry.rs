@@ -486,6 +486,11 @@ impl CommandRegistry {
         }
     }
 
+    /// LOCAL: 界面语言切换后重建 triggers，使缓存的描述/用法文本换语言。
+    pub fn refresh_trigger_text(&mut self) {
+        self.rebuild_triggers();
+    }
+
     /// Regenerate trigger list and key-to-index map from the current commands.
     /// Called after any mutation (construction, ACP sync).
     /// Panics if two builtin commands share an alias (programmer error).

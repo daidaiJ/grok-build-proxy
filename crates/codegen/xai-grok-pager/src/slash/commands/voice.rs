@@ -30,9 +30,9 @@ impl SlashCommand for VoiceCommand {
         // Without key releases hold-to-talk is impossible, so the label says "Toggle"
         // With them the mode is configurable (toggle or hold via `voice_capture_mode`), so the label leaves the behavior unspecified
         if crate::app::kitty_releases_reported() {
-            "Dictation (Ctrl+Space/F8; Esc/Enter to stop)"
+            crate::slash::i18n::tr("Dictation (Ctrl+Space/F8; Esc/Enter to stop)")
         } else {
-            "Toggle dictation (Ctrl+Space/F8; Esc/Enter to stop)"
+            crate::slash::i18n::tr("Toggle dictation (Ctrl+Space/F8; Esc/Enter to stop)")
         }
     }
 

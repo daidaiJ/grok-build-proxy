@@ -584,6 +584,8 @@ pub(super) fn dispatch_send_prompt_submission(
         use crate::slash::parse_invocation;
 
         // Build execution context.
+        // LOCAL: 记录执行前语言，/lang 切换后需重建 triggers 让描述文本换语言
+        let lang_before = crate::slash::i18n::current_lang();
         let exec_result = {
             let mut ctx = CommandExecCtx {
                 models: &agent.session.models,
@@ -672,6 +674,15 @@ pub(super) fn dispatch_send_prompt_submission(
                 CommandResult::PassThrough(text.clone())
             }
         };
+
+        // LOCAL: 命令切换了界面语言（/lang）时，重建注册表 triggers 使菜单描述立即换语言
+        if crate::slash::i18n::current_lang() != lang_before {
+            agent
+                .prompt
+                .slash_controller
+                .registry_mut()
+                .refresh_trigger_text();
+        }
 
         // Map CommandResult to pager behavior. (MRU persistence is queued off-thread inside `record_command_use` above.)
         match exec_result {

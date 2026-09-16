@@ -208,6 +208,8 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 
 - `.github/workflows/release.yml`：推 `v*` tag 触发，构建 `xai-grok-pager`（grok CLI）
   release 二进制，仅 linux-amd64（tar.gz）与 windows-amd64（zip），附 sha256。
+- CI 缓存事故与最终方案（job 名撞车 → sccache GHA 碎片撑爆 10 GB → 改回隔离的 rust-cache）：
+  见 `ci-cache-incident.md`。
 ## 待办（下一期）
 
 - 工具输出压缩：见 `tool-output-compression-plan.md`（原二期项，移入下一期）
@@ -296,3 +298,27 @@ updates.rs `emit_builtin_notification`、types.rs 活动时间戳静态、agent/
 | MCP 懒加载（pi-mcp-adapter 月下载 94 万） | 已有且强制默认：请求 tools 数组只含内置工具（`sampler_turn.rs` `prepare_tool_definitions_inner` → `tool_definitions_builtins_only`，注释 "tool search is always enabled"），MCP 工具走 `search_tool`（BM25 索引）→ `use_tool` 两段式；announcement 是变更时增量 `<system-reminder>`（指纹持久化 `announcement_state.json`，`MCP_REMINDER_MODE`=delta/full），不做全量 schema 常驻 |
 | opencode primary 自定义 agent（Tab 切换 build/plan） | 已有：agent 定义 `.grok/agents/*.md` / `~/.grok/agents/`（作用域含主会话：model/tools/prompt body/skills），`/config-agents` 设默认 + 会话中切换激活，启动侧 `--agent-profile` / `GROK_AGENT` / `agent.name`；personas 是 subagent 专属行为叠加层 |
 | 输出风格极简/详细（qwen `/output-style` 多风格选择器） | 不照搬（用户决策：只做极简一种）。极简主 agent 上游已有载体：内置 `grok-build-concise`（`--agent-profile`/`agent.name`/`/config-agents` 可选，`COMPACT_SYSTEM_PROMPT` + 精简工具集），但提示词无风格规则 → fork 注入三源融合规则节，已列三期 P0 |
+
+## 四期补丁（TUI 界面文案双语）
+
+### xai-grok-pager（斜杠命令描述/用法中英切换，默认中文）
+- `src/slash/i18n.rs`（新文件）：`Lang`（Zh 默认 / En）+ 进程级 `AtomicU8` 全局状态
+  （首读时 `GROK_LANG=en` 可改默认）+ `tr()`（英文原文 → 中文译文查表，无译文/英文模式
+  原样透传）+ `translations()` 静态翻译表（约 90 组：全部内置命令 description/usage/
+  arg_placeholder、effort 等级描述、voice/minimal/fullscreen 手写文案）+ `test_sync`
+  测试串行锁
+- `src/slash/command.rs`：`slash_meta!` 宏的 `description` / `usage` / `arg_placeholder`
+  三个生成位包一层 `i18n::tr()`（LOCAL 注释处）；其余字段不动
+- `src/slash/commands/voice.rs`、`screen_mode_switch.rs`：手写 `description()` 两处字面量
+  过 `tr()`；`effort_levels.rs` `effort_description()` 各分支过 `tr()`
+- `src/slash/commands/lang.rs`（新命令 `/lang`）：无参数在中英间切换，`zh|en|中文|english`
+  显式指定，未知参数报错；切换后返回确认消息。已注册进 `commands/mod.rs` `builtin_commands()`
+- `src/slash/registry.rs`：新增 `pub refresh_trigger_text()`（转发私有 `rebuild_triggers()`）
+- `src/app/dispatch/prompt.rs` + `dashboard.rs`：两处命令分发点在执行前记录语言、执行后
+  若语言变化则对各自 slash_controller 的 registry 调 `refresh_trigger_text()`，
+  使斜杠菜单/命令面板/ghost 补全的描述文本立即换语言
+- 边界：ACP/技能等运行时文案不翻译（表外透传）；语言不持久化到 config.toml，
+  会话内有效，`GROK_LANG=en` 可固定英文
+- 测试语义：`cfg!(test)` 构建下 tr() 默认英文（上游既有测试按英文文案断言），
+  生产默认中文；`xai-grok-shell` `slash_commands.rs` `PAGER_COMMAND_KEYS` 追加
+  `"lang"` 占位（防技能同名遮蔽，测试 `pager_builtin_triggers_are_reserved_in_shell` 强制）

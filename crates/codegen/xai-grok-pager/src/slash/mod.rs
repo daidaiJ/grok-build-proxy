@@ -11,6 +11,8 @@
 pub mod acp_command;
 pub mod command;
 pub mod commands;
+// LOCAL: TUI 界面文案中英双语，默认中文
+pub mod i18n;
 pub mod matcher;
 pub mod mode_support;
 pub mod mru;
