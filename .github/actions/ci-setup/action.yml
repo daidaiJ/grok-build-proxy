@@ -16,6 +16,14 @@ inputs:
   cache-scope:
     description: rust-cache shared-key (build vs release). Isolates debug/release target dirs.
     required: true
+  cache-targets:
+    description: >
+      Cache target/ as well as ~/.cargo. Release must (the Windows --release
+      tree is ~50 min cold). Build should not: debug target/ is ~3.5 GB, is
+      accessed on every main/PR run, and GitHub's 10 GB LRU then evicts the
+      colder release blobs. Registry-only is enough for cargo fetch.
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -38,8 +46,11 @@ runs:
       with:
         prefix-key: v1-rust
         shared-key: ${{ inputs.cache-scope }}
-        cache-targets: true
-        cache-on-failure: true
+        cache-targets: ${{ inputs.cache-targets }}
+        # false: a failed compile must not occupy the exact key. Cancelled
+        # jobs still run this action's post (v1.0.28 poisoned release that
+        # way); release.yml therefore also sets cancel-in-progress: false.
+        cache-on-failure: false
         save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
 
     - name: Install protoc (Linux)

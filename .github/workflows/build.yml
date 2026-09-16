@@ -6,8 +6,10 @@
 # xai-proto-build helper falls back to a PATH protoc, which each job installs.
 #
 # Cache: Swatinem/rust-cache with shared-key `build`, isolated from release.yml.
-# rust-cache stores ~/.cargo + target/ as one blob per OS. sccache's GHA
-# backend is not used (it fragments the 10 GB repo quota).
+# Only ~/.cargo (cache-targets: false). Debug target/ is ~3.5 GB, is touched
+# on every main/PR run, and GitHub's 10 GB LRU evicts the colder release
+# blobs first — which is why a "fitting" four-blob budget still lost the
+# Windows --release cache. sccache's GHA backend is not used.
 name: build
 
 on:
@@ -18,7 +20,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded PR runs. Do not cancel main: rust-cache post still
+  # saves after a cancel and a partial blob poisons the exact key.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -42,6 +46,7 @@ jobs:
       - uses: ./.github/actions/ci-setup
         with:
           cache-scope: build
+          cache-targets: "false"
       # cargo test already type-checks the crates it covers. Only check the
       # crate this fork touches but does not test on CI.
       - name: Check untested crates
@@ -69,6 +74,7 @@ jobs:
       - uses: ./.github/actions/ci-setup
         with:
           cache-scope: build
+          cache-targets: "false"
       # Compile-only: several test suites are env-dependent (file locks, PATH
       # lookups) and are exercised on the Linux job instead.
       - name: Check untested crates

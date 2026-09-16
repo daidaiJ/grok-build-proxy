@@ -18,6 +18,11 @@
 # workflow_dispatch runs the identical build on a branch ref (packaging and
 # upload are guarded to tag refs) — used to warm the release cache before
 # cutting a tag.
+#
+# Do not cancel-in-progress. rust-cache saves on post even after a cancel,
+# under the exact key; a 3-minute cancelled compile (v1.0.28) wrote a 454 MB
+# blob, the successful run treated it as a full hit, skipped save, and
+# Windows rebuilt from scratch for 50 minutes. Keep the in-flight job.
 name: release
 
 on:
@@ -27,7 +32,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
