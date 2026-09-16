@@ -155,8 +155,9 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 - `xai-grok-status-line/src/config.rs`：`StatusLineItem` 新增 `Tokens` / `Cache` /
   `Think`（kebab-case：`tokens`、`cache`、`think`，`varies_mid_turn` 均 true）；
   `StatusLineType` 的 `#[default]` 从 `Disabled` 翻到 `Builtin`——缺省 section 即出行；
-  `DEFAULT_ITEMS` 换成本地指标集 `[api-calls, tokens, cache, think, perf, model]`
-  （对齐原 `~/.grok/statusline.py` 的 req/in-out/cache/think/ttft-tps/model 段序）
+  `DEFAULT_ITEMS` 换成本地指标集 `[model, api-calls, tokens, cache, think, perf]`
+  （对齐原 `~/.grok/statusline.py` 的指标集合；model 永远可得，放最左做行首锚点，
+  避免开局行首是空段跳过的视觉抖动）
 - `xai-grok-status-line/src/context.rs`：`StatusLineSessionUsage` 补 `Copy, Eq`
 - `xai-grok-pager/src/views/status_line/segments.rs`：三个新段——
   `in 47k out 3.2k`（窗口总量缺省回退 usage 三桶和，k/M 一位小数去尾零）、

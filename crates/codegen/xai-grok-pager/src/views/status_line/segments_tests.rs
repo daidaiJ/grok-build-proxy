@@ -196,3 +196,48 @@ fn a_fresh_session_shows_only_the_fields_it_has_data_for() {
         "Grok Build"
     );
 }
+
+#[test]
+fn the_default_row_keeps_the_model_anchored_to_the_left_edge() {
+    let default_config = xai_grok_status_line::StatusLineConfig::default();
+    let items = match default_config.resolve() {
+        Some(xai_grok_status_line::ResolvedStatusLine::Builtin { items }) => items,
+        other => panic!("the default section draws a builtin row: {other:?}"),
+    };
+
+    // Turn end: every metric exists, and the model still leads the row.
+    let mut ctx = context();
+    ctx.api_calls = Some(xai_grok_status_line::StatusLineApiCalls {
+        succeeded: 3,
+        failed: 0,
+    });
+    ctx.context_window.session_input_tokens = Some(47_000);
+    ctx.context_window.session_output_tokens = Some(3_200);
+    ctx.context_window.session_usage = Some(session_usage(1_200, 45_000, 800, 3_200, 900));
+    ctx.perf = Some(xai_grok_status_line::StatusLineTurnPerf {
+        ttft_ms: Some(750),
+        tps: Some(55.2),
+        output_tokens: None,
+    });
+
+    // Built through the same glyph helpers: which mark the console gets is an
+    // environment decision, the segment ORDER is what this test pins.
+    let expected = [
+        "Grok Build".to_string(),
+        format!("{} 3", check_mark()),
+        "in 47k out 3.2k".to_string(),
+        "cache 95.7%".to_string(),
+        "think 28.1%".to_string(),
+        "750ms ttft · 55.2 tok/s".to_string(),
+    ]
+    .join(SEGMENT_SEPARATOR);
+
+    assert_eq!(
+        compose_builtin(&ctx, None, items)
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>()
+            .join(SEGMENT_SEPARATOR),
+        expected
+    );
+}

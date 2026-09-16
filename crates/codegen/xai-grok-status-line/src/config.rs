@@ -144,14 +144,15 @@ impl<'de> Deserialize<'de> for StatusLineConfig {
 impl StatusLineConfig {
     /// LOCAL: the fork's out-of-box row — the endpoint-health / session-token /
     /// cache / think / latency / model set, mirroring the bundled status-line
-    /// script. Configurable per session through `items`.
+    /// script. Model leads: it is the one segment present from the first
+    /// frame, so the row never starts blank. Configurable through `items`.
     const DEFAULT_ITEMS: &'static [StatusLineItem] = &[
+        StatusLineItem::Model,
         StatusLineItem::ApiCalls,
         StatusLineItem::Tokens,
         StatusLineItem::Cache,
         StatusLineItem::Think,
         StatusLineItem::Perf,
-        StatusLineItem::Model,
     ];
 
     pub const MIN_REFRESH_INTERVAL_SECS: u64 = 1;

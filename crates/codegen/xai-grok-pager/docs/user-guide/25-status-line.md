@@ -9,7 +9,7 @@ A row at the bottom of the pager — above the shortcuts bar in the full screen,
 ```toml
 [ui.status_line]
 type = "builtin"
-items = ["api-calls", "tokens", "cache", "think", "perf", "model"]   # default when omitted
+items = ["model", "api-calls", "tokens", "cache", "think", "perf"]   # default when omitted
 ```
 
 Items appear in the order you list them, and long ones are elided with `…`: the directory and session name at 40 columns, the model at 30. A segment whose data does not exist yet is skipped rather than drawn with a placeholder, so a fresh session shows just the model.
@@ -49,7 +49,7 @@ Field names and nesting follow the common status line convention, so a ported sc
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `type` | string | `builtin` | `builtin`, `command`, or `disabled`. |
-| `items` | array | `["api-calls", "tokens", "cache", "think", "perf", "model"]` | Built-in segments, in order. |
+| `items` | array | `["model", "api-calls", "tokens", "cache", "think", "perf"]` | Built-in segments, in order. |
 | `command` | string | none | Script for `type = "command"`. |
 | `padding` | integer | `0` | Horizontal spacing, in characters per side, capped at 16. A padding wide enough to leave no columns reserves the row but paints nothing in it. |
 | `refresh_interval` | integer | unset | `command` rows only, in seconds, 1 to 86,400. Re-runs the script this often even when nothing changed, so an idle session can still surface a change — an incident page, a CI status. Unset keeps the row event-driven. The run it schedules carries `"trigger": "refresh_interval"`, and its failures keep the last output rather than painting an error (see [Refresh runs](#refresh-runs)). A script that calls a network should prefer a longer interval and read a cache on `state` runs. |
