@@ -17,6 +17,12 @@
 # workflow_dispatch runs the identical build on a branch ref (packaging and
 # upload are guarded to tag refs) — used to warm the sccache cache before
 # cutting a tag and to benchmark without releasing.
+#
+# Windows hardening: Defender real-time scanning off, rust-lld linker, and a
+# strict sccache stats check. On v1.0.27 the windows job compiled 991 crates
+# while sccache's server only saw 4 requests and still reported "100% hits"
+# (its stats reset mid-build); the stats step now fails the job when the
+# cache silently bypasses most of the build.
 name: release
 
 on:
@@ -37,6 +43,9 @@ env:
   CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
   # Surface sccache server errors (e.g. ghac upload failures) in the stats step.
   SCCACHE_ERROR_LOG: sccache-error.log
+  # Request-level server logging lands in SCCACHE_ERROR_LOG; the stats step's
+  # request-count assert reads it when a build goes out without cache hits.
+  SCCACHE_SERVER_LOG: debug
 
 jobs:
   linux:
@@ -44,7 +53,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          # Keep in sync with rust-toolchain.toml. Pinning here avoids
+          # installing latest stable only for rustup to fetch the pinned
+          # toolchain again inside the build step, and keeps sccache keys
+          # stable across runs.
+          toolchain: "1.94.0"
       - uses: Mozilla-Actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
         with:
@@ -59,9 +74,20 @@ jobs:
           unzip -o /tmp/protoc.zip -d "$HOME/.local/protoc"
           echo "$HOME/.local/protoc/bin" >> "$GITHUB_PATH"
       - name: Build release binary
-        run: cargo build --release -p xai-grok-pager-bin
+        run: |
+          cargo build --release -p xai-grok-pager-bin 2>&1 | tee cargo-build.log
+          exit "${PIPESTATUS[0]}"
       - name: sccache stats
-        run: sccache --show-stats && tail -30 sccache-error.log || true
+        run: |
+          sccache --show-stats | tee sccache-stats.log
+          if [ -f sccache-error.log ]; then tail -30 sccache-error.log; fi
+          requests=$(awk '/^Compile requests +[0-9]/ {print $3}' sccache-stats.log)
+          compiled=$(grep -c Compiling cargo-build.log)
+          echo "sccache requests=${requests:-0}, cargo compiled=${compiled:-0}"
+          if [ "${requests:-0}" -lt $(( ${compiled:-0} * 9 / 10 )) ]; then
+            echo "::error::sccache served ${requests:-0} of ${compiled:-0} rustc invocations - the compile cache silently bypassed most of this build. Check the server log above; once the backend recovers, re-run so the release is not shipped cold."
+            exit 1
+          fi
       - name: Package
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -78,9 +104,36 @@ jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      # CI-only linker swap (see the rust-lld PATH step): CI links with
+      # rust-lld while local dev builds stay on MSVC link.exe until lld is
+      # validated for local use too.
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Disable Defender real-time scanning
+        # windows-latest ships with real-time protection ON; Defender audits
+        # every object-file write and rustc spawn, worth ~1.3-2x on a build
+        # this size (rust-lang's own CI does the same). The runner is an
+        # ephemeral single-use VM, so the exposure window is one job. Skip
+        # silently if policy blocks it rather than failing the release.
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          # Keep in sync with rust-toolchain.toml (see the linux job).
+          toolchain: "1.94.0"
+      - name: Put rust-lld on PATH
+        # lld-link links the final binary several times faster than link.exe;
+        # v1.0.27 spent ~12 minutes in that final link alone. Fails loudly if
+        # the toolchain layout ever moves rust-lld.
+        shell: pwsh
+        run: |
+          $lldDir = Join-Path (rustc --print sysroot) "lib\rustlib\x86_64-pc-windows-msvc\bin"
+          if (-not (Test-Path (Join-Path $lldDir "rust-lld.exe"))) {
+            throw "rust-lld.exe not found under $lldDir"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $lldDir
       - uses: Mozilla-Actions/sccache-action@v0.0.11
       - uses: Swatinem/rust-cache@v2
         with:
@@ -98,11 +151,22 @@ jobs:
           "$HOME/.local/protoc/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
           & "$HOME/.local/protoc/bin/protoc.exe" --version
       - name: Build release binary
-        run: cargo build --release -p xai-grok-pager-bin
-      - name: sccache stats
+        shell: bash
         run: |
-          sccache --show-stats
-          if (Test-Path sccache-error.log) { Get-Content sccache-error.log -Tail 30 }
+          cargo build --release -p xai-grok-pager-bin 2>&1 | tee cargo-build.log
+          exit "${PIPESTATUS[0]}"
+      - name: sccache stats
+        shell: bash
+        run: |
+          sccache --show-stats | tee sccache-stats.log
+          if [ -f sccache-error.log ]; then tail -30 sccache-error.log; fi
+          requests=$(awk '/^Compile requests +[0-9]/ {print $3}' sccache-stats.log)
+          compiled=$(grep -c Compiling cargo-build.log)
+          echo "sccache requests=${requests:-0}, cargo compiled=${compiled:-0}"
+          if [ "${requests:-0}" -lt $(( ${compiled:-0} * 9 / 10 )) ]; then
+            echo "::error::sccache served ${requests:-0} of ${compiled:-0} rustc invocations - the compile cache silently bypassed most of this build. Check the server log above; once the backend recovers, re-run so the release is not shipped cold."
+            exit 1
+          fi
       - name: Package
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
