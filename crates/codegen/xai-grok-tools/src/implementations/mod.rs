@@ -7,6 +7,7 @@ pub mod grok_build_hashline;
 pub mod lsp;
 pub mod memory;
 pub mod opencode;
+pub mod output_compression;
 pub mod read_file;
 pub mod search_tool;
 pub mod skills;

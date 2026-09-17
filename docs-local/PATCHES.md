@@ -212,11 +212,11 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
   见 `ci-cache-incident.md`。
 ## 待办（下一期）
 
-- 工具输出压缩：见 `tool-output-compression-plan.md`（原二期项，移入下一期）
+- 工具输出压缩：一期已落地（简化 headroom 策略，见 `tool-output-compression-plan.md`）；only-cc-lite git 依赖与 embedding 检索仍不做
 - 排队时间戳 / wait 计算（`acp_session_impl/prompt_queue.rs`）：已从计划删除
 - 排队卡视觉区分：已废弃
-- T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤、
-  TUI 内 `/stats` 斜杠命令复用 stats_cmd 聚合核心
+- T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤
+- `/stats` 斜杠命令已落地（压缩正向/负向收益 + CCR I/O 延迟；`grok stats` 同步展示）
 
 ## 三期补丁（已完成，2026-09-15）
 
@@ -355,3 +355,30 @@ updates.rs `emit_builtin_notification`、types.rs 活动时间戳静态、agent/
 - `xai-grok-pager-bin/src/main.rs`：leader 每小时 converge 的 auto_update 检查同步
   改为 `!= Some(true)` 拦截
 - 恢复自动更新：config.toml 写 `[cli] auto_update = true`
+
+## 六期补丁（实验性工具输出压缩）
+
+> 默认关；`[tool_output_compression] enabled = true` 才改行为。未引入
+> `only-cc-lite` git 依赖，策略按 headroom 简化：json / logs / search / diff /
+> generic head+tail。`exit_code`/`stderr` 与 bash `exit: N` 头无损。
+> 会话启动时把配置钉进 SharedResources；已写入对话的 tool_result 永不回写，
+> 提示缓存前缀在整段会话内字节稳定。改配置只影响下一个新会话。
+
+### xai-grok-tools
+- 新模块 `implementations/output_compression/`：检测、压缩、CCR 文件库、
+  `expand_output` 工具、进程级 ledger
+- `registry/types.rs` `finalize_output`：prompt 文本压缩（提醒之前）
+- `ToolRegistryBuilder::new` 注册 `expand_output`（dispatch）；广告面由
+  AgentBuilder 在 CCR 开启时注入
+
+### xai-grok-shell
+- `Config.tool_output_compression`（serde default，struct 尾部）
+- `resolve_runtime_fields` 调用 `set_runtime`
+
+### xai-grok-agent
+- `builder.rs`：CCR 开启时把 `expand_output` 注入 toolset
+
+### xai-grok-pager
+- `/stats` 斜杠命令 + `grok stats` 段：正向 saved tokens/%，负向 expanded +
+  retrieve 回灌 tokens，CCR 额外 I/O ops/ms
+- `docs/user-guide/29-local-enhancements.md` 配置说明

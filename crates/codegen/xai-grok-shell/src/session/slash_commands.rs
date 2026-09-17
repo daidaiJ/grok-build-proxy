@@ -526,6 +526,7 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "sessions",
     "settings",
     "share",
+    "stats", // LOCAL: pager /stats 压缩收益与 I/O 开销
     "show-plan",
     "skills",
     "summarize",

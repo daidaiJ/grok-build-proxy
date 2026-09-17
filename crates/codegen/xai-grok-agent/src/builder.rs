@@ -677,6 +677,15 @@ impl AgentBuilder {
             }
             ensure_plan_mode_tools(&mut tool_config);
         }
+        // LOCAL: advertise expand_output only when compression + CCR is on.
+        if xai_grok_tools::implementations::output_compression::ccr_is_enabled() {
+            let expand = xai_grok_tools::registry::types::ToolConfig::from(
+                &xai_grok_tools::implementations::output_compression::ExpandOutputTool,
+            );
+            if !tool_config.tools.iter().any(|t| t.id == expand.id) {
+                tool_config.tools.push(expand);
+            }
+        }
         let active_agent_message = xai_grok_tools::registry::types::ToolConfig::for_tool::<
             xai_grok_tools::implementations::grok_build::SendSubagentMessageTool,
         >();

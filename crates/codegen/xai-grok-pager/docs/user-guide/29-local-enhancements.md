@@ -11,6 +11,7 @@ This build of Grok carries a set of local enhancements on top of upstream: an eg
 | User wants call counters or throughput on the status row | `api-calls` / `perf` items (see [Status line extras](#status-line-extras)) |
 | Requests to OpenCode Go drop context across turns | `${session_id}` header (see [Session-affinity headers](#session-affinity-headers)) |
 | User configures DeepSeek, GLM, or another OpenAI-compatible reasoning model | [DeepSeek/GLM thinking](#deepseekglm-thinking) |
+| Long tool output (build logs, grep, diffs) inflates context or trips auto-compact | `[tool_output_compression]` (see [Tool-output compression](#tool-output-compression)) |
 
 ---
 
@@ -150,3 +151,31 @@ the state-restore channel for task-list and memory style extensions.
 **When to configure them:** when a third-party extension ships hooks for these
 events (redaction, output compression, state restore), register them like any
 other hook — no extra configuration is needed to make them take effect.
+
+## Tool-output compression
+
+**What it does.** Experimental, **off unless you set `enabled = true`**. Compresses bash and MCP tool *results* (not tool schemas) in-process with headroom-style detectors: JSON arrays, build/test logs, grep hits, and git diffs. Below `min_input_tokens` nothing is rewritten. `exit_code` / `stderr` (and the bash `exit: N` header) stay verbatim. When CCR is on, the original is stored under `<<ccr:HASH>>` and the model can pull it back with `expand_output`.
+
+**Session lifetime.** The on/off switch is snapshotted when a session starts. Changing `config.toml` does **not** rewrite the current conversation or flip compression mid-session — start a new session (`/new`) after toggling. Already-persisted tool results are never recompressed, so the prompt-cache prefix stays byte-stable for the whole session.
+
+Observe the ledger with `/stats` or `grok stats`:
+
+- **positive** — tokens actually removed from the prompt
+- **negative** — compressions that did not shrink the prompt, plus tokens later brought back by `expand_output`
+- **extra I/O** — CCR disk write/read ops, total milliseconds, and average latency
+
+```toml
+[tool_output_compression]
+enabled = true                       # required; default is false
+scope = ["bash", "mcp"]
+strategies = "auto"                  # or ["json", "logs", "search", "diff"]
+min_input_tokens = 500
+keep_tail_lines = 20
+protect = ["exit_code", "stderr"]
+
+[tool_output_compression.ccr]
+enabled = true
+ttl_secs = 3600
+```
+
+**When to configure it:** long sessions whose context is dominated by cargo/npm/pytest logs, huge JSON tool payloads, or grep dumps. Leave it off (the default) if you have not opted in.

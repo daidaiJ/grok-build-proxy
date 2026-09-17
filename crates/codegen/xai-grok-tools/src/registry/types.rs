@@ -656,6 +656,8 @@ impl ToolRegistryBuilder {
         b.register::<opencode::OpenCodeSkillTool>();
         b.register::<crate::implementations::memory::search_tool::MemorySearchImpl>();
         b.register::<crate::implementations::memory::get_tool::MemoryGetImpl>();
+        // LOCAL: retrieve originals stored by experimental tool-output compression.
+        b.register::<crate::implementations::output_compression::ExpandOutputTool>();
         b.register::<crate::implementations::search_tool::SearchTool>();
         b.register_with_params::<
                 crate::implementations::use_tool::UseTool,
@@ -1031,6 +1033,14 @@ impl ToolRegistryBuilder {
         });
         if has_concise_tools {
             resources.insert(crate::types::resources::SystemRemindersEnabled(false));
+        }
+        // LOCAL: pin compression policy for this session. Later config reloads
+        // do not mutate this snapshot.
+        let compression = crate::implementations::output_compression::current_runtime_for_session();
+        if compression.enabled {
+            resources.insert(
+                crate::implementations::output_compression::SessionCompressionPolicy(compression),
+            );
         }
         resources.register_state::<crate::reminders::task_completion::ReportedTaskCompletions>();
         resources.register_state::<crate::implementations::grok_build::todo::TodoState>();
@@ -1673,6 +1683,19 @@ impl FinalizedToolset {
             Vec::new()
         };
         let prompt_text = output.to_prompt_format();
+        // LOCAL: experimental tool-output compression. Uses the session snapshot
+        // taken at toolset finalize — never rewrites already-persisted
+        // conversation items (prompt-cache prefix stays byte-stable).
+        let session_policy = {
+            let res = self.resources.lock().await;
+            res.get::<crate::implementations::output_compression::SessionCompressionPolicy>()
+                .cloned()
+        };
+        let prompt_text = crate::implementations::output_compression::maybe_compress_prompt(
+            &output,
+            prompt_text,
+            session_policy.as_ref(),
+        );
         let prompt_text = crate::reminders::format_with_reminders(
             prompt_text,
             reminders,

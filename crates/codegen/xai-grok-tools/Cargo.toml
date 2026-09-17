@@ -30,6 +30,7 @@ async-lsp = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
+blake3 = { workspace = true }
 xai-grok-image = { workspace = true }
 ignore = { workspace = true }
 infer = { workspace = true }

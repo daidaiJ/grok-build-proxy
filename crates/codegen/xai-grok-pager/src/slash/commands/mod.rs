@@ -54,6 +54,7 @@ pub mod rewind;
 pub mod screen_mode_switch;
 pub mod scroll_debug;
 pub mod session_info;
+pub mod stats;
 pub mod settings_cmd;
 pub mod share;
 pub mod tasks;
@@ -113,6 +114,8 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(copy::CopyCommand),
         Arc::new(find::FindCommand),
         Arc::new(usage::UsageCommand),
+        // LOCAL: experimental tool-output compression + usage ledger
+        Arc::new(stats::StatsCommand),
         Arc::new(tasks::TasksCommand),
         // Extending the agent.
         Arc::new(plugin::SkillsCommand),

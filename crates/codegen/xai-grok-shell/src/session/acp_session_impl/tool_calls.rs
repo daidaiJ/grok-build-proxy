@@ -2312,6 +2312,12 @@ impl SessionActor {
                 vec![],
                 vec![],
             ),
+            ToolInput::ExpandOutput(eo) => (
+                format!("Expand output {}", eo.hash),
+                acp::ToolKind::Read,
+                vec![],
+                vec![],
+            ),
             ToolInput::HashlineEdit(he) => (
                 format!("Edit `{}`", he.file_path),
                 acp::ToolKind::Edit,

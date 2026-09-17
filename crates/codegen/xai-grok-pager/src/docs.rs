@@ -192,7 +192,7 @@ pub static USER_GUIDE: &[Doc] = &[
     Doc {
         filename: "29-local-enhancements.md",
         title: "Local Enhancements",
-        description: "Fork extras: egress proxy, shell backend, status-line api-calls/perf, session-affinity headers, DeepSeek/GLM thinking",
+        description: "Fork extras: egress proxy, shell backend, status-line api-calls/perf, session-affinity headers, DeepSeek/GLM thinking, tool-output compression",
         content: include_str!("../docs/user-guide/29-local-enhancements.md"),
     },
 ];

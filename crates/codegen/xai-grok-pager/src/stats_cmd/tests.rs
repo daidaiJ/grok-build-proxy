@@ -87,7 +87,7 @@ fn sessions_days_and_weeks_bucket_the_same_turns() {
         ),
     ];
 
-    let report = aggregate(&records, None, None, now);
+    let report = aggregate(&records, None, None, now, None);
 
     assert_eq!(report.sessions.len(), 2);
     // Newest activity first.
@@ -152,14 +152,14 @@ fn days_window_drops_older_and_unparsable_turns() {
         ],
     )];
 
-    let windowed = aggregate(&records, Some(7), None, now);
+    let windowed = aggregate(&records, Some(7), None, now, None);
     assert_eq!(windowed.sessions.len(), 1, "a session with turns left stays");
     assert_eq!(windowed.sessions[0].totals.turns, 1);
     assert_eq!(windowed.sessions[0].totals.input_tokens, 10);
     assert!(windowed.days.iter().all(|row| row.totals.input_tokens == 10));
 
     // No window: the unparsable stamp counts, the stale one too.
-    let all = aggregate(&records, None, None, now);
+    let all = aggregate(&records, None, None, now, None);
     assert_eq!(all.sessions[0].totals.turns, 3);
     assert_eq!(all.sessions[0].totals.input_tokens, 999 + 10 + 888);
 }
@@ -173,8 +173,8 @@ fn a_session_with_no_surviving_turns_is_dropped() {
         "/work/gamma",
         vec![turn(1, &rfc3339(stale), summary(1, 1, 1, None))],
     )];
-    assert!(aggregate(&records, Some(7), None, now).sessions.is_empty());
-    assert_eq!(aggregate(&records, None, None, now).sessions.len(), 1);
+    assert!(aggregate(&records, Some(7), None, now, None).sessions.is_empty());
+    assert_eq!(aggregate(&records, None, None, now, None).sessions.len(), 1);
 }
 
 fn model_entry(input: u64, output: u64, calls: u64, ticks: Option<i64>) -> UsageSummary {
@@ -225,7 +225,7 @@ fn every_view_splits_by_model_id() {
         )],
     )];
 
-    let report = aggregate(&records, None, None, now);
+    let report = aggregate(&records, None, None, now, None);
 
     let session = &report.sessions[0];
     assert_eq!(session.models.len(), 2);
@@ -271,7 +271,7 @@ fn model_filter_narrows_every_view() {
         ),
     ];
 
-    let report = aggregate(&records, None, Some("grok"), now);
+    let report = aggregate(&records, None, Some("grok"), now, None);
 
     assert_eq!(
         report.sessions.len(),
@@ -287,7 +287,7 @@ fn model_filter_narrows_every_view() {
     assert_eq!(report.models.len(), 1);
 
     // The filter is a case-insensitive substring.
-    let wide = aggregate(&records, None, Some("GLM"), now);
+    let wide = aggregate(&records, None, Some("GLM"), now, None);
     assert_eq!(wide.models.len(), 1);
     assert_eq!(wide.models[0].model_id, "glm-5");
     assert_eq!(wide.sessions.len(), 2);
@@ -306,7 +306,7 @@ fn a_session_without_per_model_splits_falls_back_to_the_recorded_primary() {
         file,
     }];
 
-    let report = aggregate(&records, None, None, now);
+    let report = aggregate(&records, None, None, now, None);
     assert!(report.sessions[0].models.is_empty());
     assert_eq!(
         report.sessions[0].primary_model.as_deref(),
@@ -316,7 +316,7 @@ fn a_session_without_per_model_splits_falls_back_to_the_recorded_primary() {
 
 #[test]
 fn no_records_is_an_empty_report_not_an_error() {
-    let report = aggregate(&[], None, None, now());
+    let report = aggregate(&[], None, None, now(), None);
     assert!(report.sessions.is_empty());
     assert!(report.days.is_empty());
     assert!(report.weeks.is_empty());
@@ -331,7 +331,7 @@ fn session_totals_never_report_cost_when_no_turn_did() {
         "/work/delta",
         vec![turn(1, &rfc3339(at), summary(1, 1, 1, None))],
     )];
-    let report = aggregate(&records, None, None, now);
+    let report = aggregate(&records, None, None, now, None);
     assert_eq!(report.sessions[0].totals.cost_usd, None);
     assert!(report.sessions[0].totals.cost_partial);
 }

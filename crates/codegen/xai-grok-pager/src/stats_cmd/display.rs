@@ -4,6 +4,9 @@ use std::borrow::Cow;
 use std::io::Write;
 
 use super::{BucketRow, SessionRow, StatsReport, Totals};
+use xai_grok_tools::implementations::output_compression::{
+    format_stats_report, is_enabled as compression_enabled, stats_for_display,
+};
 
 /// Session ids show as their first 8 columns; `sessions` names the rest.
 const ID_COLS: usize = 8;
@@ -21,6 +24,20 @@ pub(super) fn print_report(report: &StatsReport, limit: usize, out: &mut impl Wr
     print_buckets("By day", &report.days, out);
     print_buckets("By week (ISO)", &report.weeks, out);
     print_models(&report.models, out);
+    print_compression(report, out);
+}
+
+fn print_compression(report: &StatsReport, out: &mut impl Write) {
+    let Some(json) = report.tool_output_compression.as_ref() else {
+        return;
+    };
+    let stats = stats_for_display(None);
+    let _ = writeln!(
+        out,
+        "{}",
+        format_stats_report(&stats, json.enabled || compression_enabled())
+    );
+    let _ = writeln!(out);
 }
 
 fn print_sessions(report: &StatsReport, limit: usize, out: &mut impl Write) {
