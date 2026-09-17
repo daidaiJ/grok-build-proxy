@@ -1392,6 +1392,11 @@ pub struct Config {
     /// LOCAL: `[notifications]` out-of-box desktop/sound notification opt-ins.
     #[serde(default, skip_serializing)]
     pub notification_settings: NotificationsConfig,
+    /// LOCAL: `[tool_output_compression]` experimental in-process tool-result
+    /// compression. Default off; explicit `enabled = true` required.
+    #[serde(default, skip_serializing)]
+    pub tool_output_compression:
+        xai_grok_tools::implementations::output_compression::ToolOutputCompressionConfig,
     /// When running in relay/headless mode, this should be set to Writeback.
     /// Defaults to reading from GROK_STORAGE_MODE env var.
     #[serde(skip)]
@@ -1668,6 +1673,7 @@ impl Default for Config {
             network: NetworkConfig::default(),
             shell: ShellBackendConfig::default(),
             notification_settings: NotificationsConfig::default(),
+            tool_output_compression: Default::default(),
             goal: GoalConfig::default(),
             workflows: WorkflowsConfig::default(),
             doom_loop_recovery: crate::util::config::DoomLoopRecoverySettings::default(),
@@ -2225,6 +2231,10 @@ impl Config {
         // (pwsh | powershell | bash | cmd); wins over the GROK_SHELL env var.
         #[cfg(windows)]
         xai_grok_config::shell::set_windows_shell_override(self.shell.backend.clone());
+        // LOCAL: experimental tool-output compression. Default off.
+        xai_grok_tools::implementations::output_compression::set_runtime(
+            &self.tool_output_compression,
+        );
         self.cli_subagents = ctx.cli_subagents;
         self.web_search_model_override = ctx.cli_web_search_model.map(|s| s.to_owned());
         self.session_summary_model_override = ctx.cli_session_summary_model.map(|s| s.to_owned());
@@ -2340,6 +2350,7 @@ impl Config {
             Ok(parsed_config) => {
                 self.memory = parsed_config.memory;
                 self.compaction = parsed_config.compaction;
+                self.tool_output_compression = parsed_config.tool_output_compression;
             }
             Err(error) => {
                 tracing::warn!(%error, "config parse failed during runtime re-resolution");

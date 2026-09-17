@@ -10,12 +10,7 @@ fn rfc3339(at: DateTime<Local>) -> String {
     at.fixed_offset().to_rfc3339()
 }
 
-fn summary(
-    input: u64,
-    output: u64,
-    model_calls: u64,
-    cost_usd_ticks: Option<i64>,
-) -> UsageSummary {
+fn summary(input: u64, output: u64, model_calls: u64, cost_usd_ticks: Option<i64>) -> UsageSummary {
     UsageSummary {
         input_tokens: input,
         output_tokens: output,
@@ -50,10 +45,7 @@ fn record(session_id: &str, project: &str, turns: Vec<TurnUsage>) -> SessionReco
 /// (a run started just after midnight put `now - 30h` on yesterday).
 fn local_today(now: DateTime<Local>, hour: u32, minute: u32) -> DateTime<Local> {
     let naive = now.date_naive().and_hms_opt(hour, minute, 0).unwrap();
-    Local
-        .from_local_datetime(&naive)
-        .single()
-        .unwrap_or(now)
+    Local.from_local_datetime(&naive).single().unwrap_or(now)
 }
 fn day_key(at: DateTime<Local>) -> String {
     at.format("%Y-%m-%d").to_string()
@@ -83,11 +75,15 @@ fn sessions_days_and_weeks_bucket_the_same_turns() {
         record(
             "sess-2",
             "/work/beta",
-            vec![turn(1, &rfc3339(last_week), summary(10, 1, 1, Some(1_000_000_000)))],
+            vec![turn(
+                1,
+                &rfc3339(last_week),
+                summary(10, 1, 1, Some(1_000_000_000)),
+            )],
         ),
     ];
 
-    let report = aggregate(&records, None, None, now);
+    let report = aggregate(&records, None, None, now, None);
 
     assert_eq!(report.sessions.len(), 2);
     // Newest activity first.
@@ -119,7 +115,8 @@ fn sessions_days_and_weeks_bucket_the_same_turns() {
         .expect("sess-1's week bucket");
     assert_eq!(week.totals.turns, 2);
     assert_ne!(
-        week_key(last_week), early_week,
+        week_key(last_week),
+        early_week,
         "the fixtures must span two ISO weeks for this split to mean anything"
     );
     let last_week_row = report
@@ -152,14 +149,23 @@ fn days_window_drops_older_and_unparsable_turns() {
         ],
     )];
 
-    let windowed = aggregate(&records, Some(7), None, now);
-    assert_eq!(windowed.sessions.len(), 1, "a session with turns left stays");
+    let windowed = aggregate(&records, Some(7), None, now, None);
+    assert_eq!(
+        windowed.sessions.len(),
+        1,
+        "a session with turns left stays"
+    );
     assert_eq!(windowed.sessions[0].totals.turns, 1);
     assert_eq!(windowed.sessions[0].totals.input_tokens, 10);
-    assert!(windowed.days.iter().all(|row| row.totals.input_tokens == 10));
+    assert!(
+        windowed
+            .days
+            .iter()
+            .all(|row| row.totals.input_tokens == 10)
+    );
 
     // No window: the unparsable stamp counts, the stale one too.
-    let all = aggregate(&records, None, None, now);
+    let all = aggregate(&records, None, None, now, None);
     assert_eq!(all.sessions[0].totals.turns, 3);
     assert_eq!(all.sessions[0].totals.input_tokens, 999 + 10 + 888);
 }
@@ -173,8 +179,12 @@ fn a_session_with_no_surviving_turns_is_dropped() {
         "/work/gamma",
         vec![turn(1, &rfc3339(stale), summary(1, 1, 1, None))],
     )];
-    assert!(aggregate(&records, Some(7), None, now).sessions.is_empty());
-    assert_eq!(aggregate(&records, None, None, now).sessions.len(), 1);
+    assert!(
+        aggregate(&records, Some(7), None, now, None)
+            .sessions
+            .is_empty()
+    );
+    assert_eq!(aggregate(&records, None, None, now, None).sessions.len(), 1);
 }
 
 fn model_entry(input: u64, output: u64, calls: u64, ticks: Option<i64>) -> UsageSummary {
@@ -225,7 +235,7 @@ fn every_view_splits_by_model_id() {
         )],
     )];
 
-    let report = aggregate(&records, None, None, now);
+    let report = aggregate(&records, None, None, now, None);
 
     let session = &report.sessions[0];
     assert_eq!(session.models.len(), 2);
@@ -237,7 +247,10 @@ fn every_view_splits_by_model_id() {
     let day = &report.days[0];
     assert_eq!(day.models.len(), 2);
     assert_eq!(day.models[0].model_id, "grok-build");
-    assert_eq!(day.totals.input_tokens, 120, "bucket totals cover both models");
+    assert_eq!(
+        day.totals.input_tokens, 120,
+        "bucket totals cover both models"
+    );
 
     assert_eq!(report.models.len(), 2);
     assert_eq!(report.models[0].totals.model_calls, 3);
@@ -271,7 +284,7 @@ fn model_filter_narrows_every_view() {
         ),
     ];
 
-    let report = aggregate(&records, None, Some("grok"), now);
+    let report = aggregate(&records, None, Some("grok"), now, None);
 
     assert_eq!(
         report.sessions.len(),
@@ -279,7 +292,10 @@ fn model_filter_narrows_every_view() {
         "a session with no matching model drops out entirely"
     );
     let session = &report.sessions[0];
-    assert_eq!(session.totals.input_tokens, 100, "only the matching model's tokens");
+    assert_eq!(
+        session.totals.input_tokens, 100,
+        "only the matching model's tokens"
+    );
     assert_eq!(session.models.len(), 1);
     assert_eq!(session.primary_model.as_deref(), Some("grok-build"));
     assert_eq!(report.days[0].totals.input_tokens, 100);
@@ -287,7 +303,7 @@ fn model_filter_narrows_every_view() {
     assert_eq!(report.models.len(), 1);
 
     // The filter is a case-insensitive substring.
-    let wide = aggregate(&records, None, Some("GLM"), now);
+    let wide = aggregate(&records, None, Some("GLM"), now, None);
     assert_eq!(wide.models.len(), 1);
     assert_eq!(wide.models[0].model_id, "glm-5");
     assert_eq!(wide.sessions.len(), 2);
@@ -306,7 +322,7 @@ fn a_session_without_per_model_splits_falls_back_to_the_recorded_primary() {
         file,
     }];
 
-    let report = aggregate(&records, None, None, now);
+    let report = aggregate(&records, None, None, now, None);
     assert!(report.sessions[0].models.is_empty());
     assert_eq!(
         report.sessions[0].primary_model.as_deref(),
@@ -316,7 +332,7 @@ fn a_session_without_per_model_splits_falls_back_to_the_recorded_primary() {
 
 #[test]
 fn no_records_is_an_empty_report_not_an_error() {
-    let report = aggregate(&[], None, None, now());
+    let report = aggregate(&[], None, None, now(), None);
     assert!(report.sessions.is_empty());
     assert!(report.days.is_empty());
     assert!(report.weeks.is_empty());
@@ -331,7 +347,50 @@ fn session_totals_never_report_cost_when_no_turn_did() {
         "/work/delta",
         vec![turn(1, &rfc3339(at), summary(1, 1, 1, None))],
     )];
-    let report = aggregate(&records, None, None, now);
+    let report = aggregate(&records, None, None, now, None);
     assert_eq!(report.sessions[0].totals.cost_usd, None);
     assert!(report.sessions[0].totals.cost_partial);
+}
+
+#[test]
+fn compression_section_prints_when_usage_tables_are_empty() {
+    let report = StatsReport {
+        schema_version: 1,
+        generated_at: "t".into(),
+        sessions: vec![],
+        days: vec![],
+        weeks: vec![],
+        models: vec![],
+        tool_output_compression: Some(super::CompressionStatsJson {
+            enabled: true,
+            compressed_calls: 2,
+            skipped_calls: 0,
+            no_win_calls: 0,
+            retrieve_calls: 0,
+            original_tokens: 400,
+            saved_tokens: 100,
+            expanded_tokens: 0,
+            retrieved_tokens: 0,
+            net_tokens: 100,
+            saved_ratio: 0.25,
+            net_ratio: 0.25,
+            io_write_ops: 2,
+            io_read_ops: 0,
+            io_write_ms: 1.5,
+            io_read_ms: 0.0,
+            io_write_avg_ms: 0.75,
+            io_read_avg_ms: 0.0,
+            io_total_ms: 1.5,
+            io_write_bytes: 80,
+            io_read_bytes: 0,
+        }),
+    };
+    let mut out = Vec::new();
+    super::display::print_report(&report, 0, &mut out);
+    let text = String::from_utf8(out).unwrap();
+    assert!(
+        text.contains("positive: saved 100"),
+        "text printer must use the report ledger, got: {text}"
+    );
+    assert!(!text.contains("No usage recorded."));
 }

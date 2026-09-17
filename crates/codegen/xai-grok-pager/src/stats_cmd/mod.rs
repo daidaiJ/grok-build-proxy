@@ -11,6 +11,9 @@ use chrono::{DateTime, Duration as ChronoDuration, FixedOffset, Local};
 use serde::Serialize;
 use xai_grok_config::decode_cwd_from_dirname;
 use xai_grok_shell::session::usage_file::{SessionUsageFile, UsageSummary};
+use xai_grok_tools::implementations::output_compression::{
+    ToolOutputCompressionStats, is_enabled as compression_enabled, stats_for_display,
+};
 
 /// Bumped when a `--json` field changes meaning or is removed; additions are free.
 const SCHEMA_VERSION: u32 = 1;
@@ -46,7 +49,13 @@ pub fn run(args: StatsArgs) -> Result<()> {
     let grok_home = xai_fast_worktree::resolve_grok_home()?;
     let sessions = collect_sessions(&grok_home)
         .with_context(|| format!("cannot read sessions under {}", grok_home.display()))?;
-    let report = aggregate(&sessions, args.days, args.model.as_deref(), Local::now());
+    let report = aggregate(
+        &sessions,
+        args.days,
+        args.model.as_deref(),
+        Local::now(),
+        Some(grok_home.as_path()),
+    );
     let mut out = std::io::stdout().lock();
     if args.json {
         writeln!(out, "{}", serde_json::to_string_pretty(&report)?)?;
@@ -235,6 +244,83 @@ pub struct StatsReport {
     pub weeks: Vec<BucketRow>,
     /// The whole window, split by model; busiest first.
     pub models: Vec<ModelRow>,
+    /// LOCAL: experimental tool-output compression ledger. Omitted when empty.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_output_compression: Option<CompressionStatsJson>,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressionStatsJson {
+    pub enabled: bool,
+    pub compressed_calls: u64,
+    pub skipped_calls: u64,
+    pub no_win_calls: u64,
+    pub retrieve_calls: u64,
+    pub original_tokens: u64,
+    pub saved_tokens: u64,
+    pub expanded_tokens: u64,
+    pub retrieved_tokens: u64,
+    pub net_tokens: i64,
+    pub saved_ratio: f64,
+    pub net_ratio: f64,
+    pub io_write_ops: u64,
+    pub io_read_ops: u64,
+    pub io_write_ms: f64,
+    pub io_read_ms: f64,
+    pub io_write_avg_ms: f64,
+    pub io_read_avg_ms: f64,
+    pub io_total_ms: f64,
+    pub io_write_bytes: u64,
+    pub io_read_bytes: u64,
+}
+
+impl CompressionStatsJson {
+    fn from_stats(stats: &ToolOutputCompressionStats, enabled: bool) -> Self {
+        Self {
+            enabled,
+            compressed_calls: stats.compressed_calls,
+            skipped_calls: stats.skipped_calls,
+            no_win_calls: stats.no_win_calls,
+            retrieve_calls: stats.retrieve_calls,
+            original_tokens: stats.original_tokens,
+            saved_tokens: stats.saved_tokens,
+            expanded_tokens: stats.expanded_tokens,
+            retrieved_tokens: stats.retrieved_tokens,
+            net_tokens: stats.net_tokens(),
+            saved_ratio: stats.saved_ratio(),
+            net_ratio: stats.net_ratio(),
+            io_write_ops: stats.io_write_ops,
+            io_read_ops: stats.io_read_ops,
+            io_write_ms: stats.io_write_ns as f64 / 1_000_000.0,
+            io_read_ms: stats.io_read_ns as f64 / 1_000_000.0,
+            io_write_avg_ms: stats.io_write_avg_ms(),
+            io_read_avg_ms: stats.io_read_avg_ms(),
+            io_total_ms: stats.io_total_ms(),
+            io_write_bytes: stats.io_write_bytes,
+            io_read_bytes: stats.io_read_bytes,
+        }
+    }
+
+    pub(crate) fn as_stats(&self) -> ToolOutputCompressionStats {
+        ToolOutputCompressionStats {
+            compressed_calls: self.compressed_calls,
+            skipped_calls: self.skipped_calls,
+            no_win_calls: self.no_win_calls,
+            retrieve_calls: self.retrieve_calls,
+            original_tokens: self.original_tokens,
+            saved_tokens: self.saved_tokens,
+            expanded_tokens: self.expanded_tokens,
+            retrieved_tokens: self.retrieved_tokens,
+            io_write_ops: self.io_write_ops,
+            io_read_ops: self.io_read_ops,
+            io_write_ns: (self.io_write_ms * 1_000_000.0) as u64,
+            io_read_ns: (self.io_read_ms * 1_000_000.0) as u64,
+            io_write_bytes: self.io_write_bytes,
+            io_read_bytes: self.io_read_bytes,
+            updated_at_unix: None,
+        }
+    }
 }
 
 /// Folds every recorded turn into the three views. Pure so tests can pin the
@@ -244,6 +330,7 @@ pub(crate) fn aggregate(
     days: Option<u32>,
     model: Option<&str>,
     now: DateTime<Local>,
+    grok_home: Option<&Path>,
 ) -> StatsReport {
     let cutoff = days
         .map(|d| now - ChronoDuration::days(i64::from(d)))
@@ -319,13 +406,33 @@ pub(crate) fn aggregate(
     }
     sessions.sort_by(|a, b| b.last_activity.cmp(&a.last_activity));
 
+    let compression = stats_for_display(grok_home);
+    let tool_output_compression = if compression.compressed_calls == 0
+        && compression.skipped_calls == 0
+        && compression.retrieve_calls == 0
+        && compression.original_tokens == 0
+    {
+        None
+    } else {
+        Some(CompressionStatsJson::from_stats(
+            &compression,
+            compression_enabled(),
+        ))
+    };
     StatsReport {
         schema_version: SCHEMA_VERSION,
         generated_at: now.to_rfc3339(),
         sessions,
-        days: day_buckets.into_iter().map(|(key, acc)| acc.finish(key)).collect(),
-        weeks: week_buckets.into_iter().map(|(key, acc)| acc.finish(key)).collect(),
+        days: day_buckets
+            .into_iter()
+            .map(|(key, acc)| acc.finish(key))
+            .collect(),
+        weeks: week_buckets
+            .into_iter()
+            .map(|(key, acc)| acc.finish(key))
+            .collect(),
         models: model_rows(every_model),
+        tool_output_compression,
     }
 }
 
@@ -374,7 +481,8 @@ fn model_rows(models: BTreeMap<String, Totals>) -> Vec<ModelRow> {
         .map(|(model_id, totals)| ModelRow { model_id, totals })
         .collect();
     rows.sort_by(|a, b| {
-        (b.totals.model_calls, b.totals.total_tokens).cmp(&(a.totals.model_calls, a.totals.total_tokens))
+        (b.totals.model_calls, b.totals.total_tokens)
+            .cmp(&(a.totals.model_calls, a.totals.total_tokens))
     });
     rows
 }

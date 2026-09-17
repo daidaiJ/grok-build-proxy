@@ -257,7 +257,8 @@ impl From<&xai_grok_tools::types::ToolInput> for AccessKind {
             | ToolInput::TaskOutput(_)
             | ToolInput::WaitTasks(_)
             | ToolInput::KillTask(_)
-            | ToolInput::Skill(_) => AccessKind::Read(None),
+            | ToolInput::Skill(_)
+            | ToolInput::ExpandOutput(_) => AccessKind::Read(None),
             ToolInput::Task(t) => AccessKind::Edit(format!("task:{}", t.subagent_type)),
             ToolInput::SendSubagentMessage(message) => AccessKind::AgentMessage {
                 subagent_id: message.subagent_id.clone(),

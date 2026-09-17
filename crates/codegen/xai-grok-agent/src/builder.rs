@@ -677,6 +677,14 @@ impl AgentBuilder {
             }
             ensure_plan_mode_tools(&mut tool_config);
         }
+        if xai_grok_tools::implementations::output_compression::ccr_is_enabled() {
+            let expand = xai_grok_tools::registry::types::ToolConfig::from(
+                &xai_grok_tools::implementations::output_compression::ExpandOutputTool,
+            );
+            if !tool_config.tools.iter().any(|t| t.id == expand.id) {
+                tool_config.tools.push(expand);
+            }
+        }
         let active_agent_message = xai_grok_tools::registry::types::ToolConfig::for_tool::<
             xai_grok_tools::implementations::grok_build::SendSubagentMessageTool,
         >();
@@ -903,6 +911,8 @@ impl AgentBuilder {
                         || tc.kind.is_some_and(|k| allow_kinds.contains(&k))
                         || (has_agent_entry && task_deps.contains(&short_tool_name(&tc.id)))
                         || matches!(tc.kind, Some(ToolKind::SearchTool | ToolKind::UseTool))
+                        || (xai_grok_tools::implementations::output_compression::ccr_is_enabled()
+                            && tc.id.ends_with(":expand_output"))
                 });
                 tracing::debug!(agent = %definition.name, allowed = ?definition.tools, "tools allowlist applied");
             } else {
