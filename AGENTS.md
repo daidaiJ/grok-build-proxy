@@ -21,7 +21,7 @@
    "屏蔽噪声（cfg 门控/播种全局）"处理，真产品 bug 才修。目录身份用 creation_time（mtime
    随子项增删变化），但注意 ~15 秒内同名重建的隧道化会让 creation_time 也骗人。
 5. **临时目录不走 C 盘**：所有 cargo/测试命令带 `TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp'` 前缀
-   （目录已存在）。仓库里 `C：Users…` 命名的垃圾文件即 C 盘 TEMP 的路径拼接事故，见到直接删。
+   （目录已存在）。
 6. **上游同步会覆盖同步文件**：`Synced from monorepo` 提交会冲掉同步文件里的本地改动；
    对同步文件打的 LOCAL 补丁（cfg 门控等）要在 docs-local/PATCHES.md 有据可查，便于同步后重放。
 7. **最便宜的决定性实验先行**：归因"是我的改动还是既有问题"用 A/B——`git stash push -- <file>`
