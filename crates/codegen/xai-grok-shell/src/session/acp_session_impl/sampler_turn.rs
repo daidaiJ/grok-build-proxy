@@ -2197,6 +2197,9 @@ impl SessionActor {
             );
             self.signals_handle()
                 .record_token_usage(u.completion_tokens, u.reasoning_tokens);
+            // LOCAL: tokens/cache/think/perf all read this call's numbers; wake the
+            // row now rather than waiting for the turn-end snapshot.
+            self.emit_status_snapshot_detached();
         } else if self.tool_context.task_output_token_budget.is_some() {
             self.tool_context.fail_task_output_usage_closed();
             self.chat_state_handle

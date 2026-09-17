@@ -144,6 +144,13 @@ impl SessionActor {
             .await
             .ok()
             .map(|ledger| PromptUsage::from(&ledger));
+        // LOCAL: a ledger with no completed call yet is all zeros, and `Some(0)`
+        // would paint `in 0 out 0` for a session that has not spent anything —
+        // hide the token window until the first call instead.
+        let window_totals = usage
+            .as_ref()
+            .map(|u| &u.totals)
+            .filter(|t| t.model_calls > 0);
         let totals = usage.as_ref().map(|u| &u.totals);
 
         let cwd = self.tool_context.cwd.as_path().to_path_buf();
@@ -211,7 +218,7 @@ impl SessionActor {
             context_window: build_context_window(
                 context_window_size,
                 used_tokens,
-                totals,
+                window_totals,
                 self.compaction.threshold_percent.get(),
             ),
             effort,
