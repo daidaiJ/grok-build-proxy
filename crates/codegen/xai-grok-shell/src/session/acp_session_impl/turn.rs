@@ -2974,6 +2974,10 @@ impl SessionActor {
                         transient_retry_attempts,
                     ));
                     transient_retry_attempts += 1;
+                    // LOCAL: session-cumulative count for the status-line row;
+                    // the loop counters reset per prompt/step, this one never does.
+                    self.session_transient_retries
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let prompt_total = self.transient_retries_prompt_total.get() + 1;
                     self.transient_retries_prompt_total.set(prompt_total);
                     if self.transient_episode_start.get().is_none() {

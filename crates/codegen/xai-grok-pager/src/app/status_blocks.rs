@@ -285,6 +285,7 @@ mod tests {
             reasoning_tokens: 0,
             model_calls: 1,
             failed_model_calls: 0,
+            cache_miss_calls: 0,
             api_duration_ms: 1_000,
             cost_usd_ticks: ticks,
             cost_is_partial: false,

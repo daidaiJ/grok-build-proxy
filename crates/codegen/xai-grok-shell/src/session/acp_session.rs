@@ -860,6 +860,10 @@ pub(crate) struct SessionActor {
     /// LOCAL: API duration of the most recent completed model call, ms (0 = none yet).
     /// Status-line TPS denominator; stored on the actor to keep chat-state's wire untouched.
     pub(crate) last_turn_api_duration_ms: std::sync::atomic::AtomicU64,
+    /// LOCAL: cumulative transient retry resubmissions for the session, for the
+    /// status-line endpoint-health row. Lives on the actor because the turn
+    /// loop's own counters reset per prompt/step.
+    pub(crate) session_transient_retries: std::sync::atomic::AtomicU64,
     /// Shared models manager for etag-triggered refresh from response headers.
     pub(crate) models_manager: crate::agent::remote_config::ModelsManager,
     /// The system prompt's `Workspace Path` is set at build time via `AgentBuilder::with_prompt_working_directory()`.

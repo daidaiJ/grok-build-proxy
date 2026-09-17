@@ -1856,6 +1856,7 @@ pub(crate) async fn spawn_session_actor(
         git_head_enabled: fs_watch_caps.git_head,
         status_line_enabled: client_caps.status_line.clone(),
         last_turn_api_duration_ms: std::sync::atomic::AtomicU64::new(0),
+        session_transient_retries: std::sync::atomic::AtomicU64::new(0),
         models_manager,
         display_cwd: {
             let lock = std::sync::OnceLock::new();

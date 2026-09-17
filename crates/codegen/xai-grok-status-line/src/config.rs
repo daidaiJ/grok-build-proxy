@@ -149,8 +149,10 @@ impl StatusLineConfig {
     const DEFAULT_ITEMS: &'static [StatusLineItem] = &[
         StatusLineItem::Model,
         StatusLineItem::ApiCalls,
+        StatusLineItem::ApiRetries,
         StatusLineItem::Tokens,
         StatusLineItem::Cache,
+        StatusLineItem::CacheMisses,
         StatusLineItem::Think,
         StatusLineItem::Perf,
     ];
@@ -339,6 +341,10 @@ pub enum StatusLineItem {
     SessionName,
     /// LOCAL: endpoint-health counters, `✓ n` with `✗ n` appended on failures.
     ApiCalls,
+    /// LOCAL: transient retry resubmissions this session, `↻ n`; hidden while zero.
+    ApiRetries,
+    /// LOCAL: uncached model calls beyond the session's first, `miss n`; hidden while zero.
+    CacheMisses,
     /// LOCAL: cumulative session tokens, `in 47k out 3.2k`.
     Tokens,
     /// LOCAL: cache-read share of the session's input tokens, `cache 95.7%`.
@@ -354,7 +360,8 @@ impl StatusLineItem {
 
     pub const fn varies_mid_turn(self) -> bool {
         match self {
-            Self::TurnTimer | Self::ApiCalls | Self::Perf => true,
+            Self::TurnTimer | Self::ApiCalls | Self::ApiRetries | Self::CacheMisses
+            | Self::Perf => true,
             Self::Tokens | Self::Cache | Self::Think => true,
             Self::Cwd | Self::Model | Self::Context | Self::Cost | Self::SessionName => false,
         }

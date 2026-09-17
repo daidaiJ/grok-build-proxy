@@ -91,7 +91,11 @@ fn context_segment_warns_near_compaction() {
 
 fn api_calls(succeeded: u64, failed: u64) -> StatusLineContext {
     let mut ctx = context();
-    ctx.api_calls = Some(xai_grok_status_line::StatusLineApiCalls { succeeded, failed });
+    ctx.api_calls = Some(xai_grok_status_line::StatusLineApiCalls {
+        succeeded,
+        failed,
+        ..Default::default()
+    });
     ctx
 }
 
@@ -108,6 +112,32 @@ fn api_calls_segment_counts_failures_and_warns() {
     assert_eq!(failing.tone, SegmentTone::Warn);
 
     assert!(compose_builtin(&context(), None, &[StatusLineItem::ApiCalls]).is_empty());
+}
+
+#[test]
+fn api_retries_segment_shows_only_once_nonzero() {
+    let mut ctx = api_calls(12, 0);
+    assert!(compose_builtin(&ctx, None, &[StatusLineItem::ApiRetries]).is_empty());
+    if let Some(calls) = ctx.api_calls.as_mut() {
+        calls.retries = 3;
+    }
+    let segment = compose_builtin(&ctx, None, &[StatusLineItem::ApiRetries]);
+    assert_eq!(segment[0].text(), "↻ 3");
+    assert_eq!(segment[0].tone, SegmentTone::Dim);
+    assert!(compose_builtin(&context(), None, &[StatusLineItem::ApiRetries]).is_empty());
+}
+
+#[test]
+fn cache_misses_segment_shows_only_once_nonzero() {
+    let mut ctx = api_calls(12, 0);
+    assert!(compose_builtin(&ctx, None, &[StatusLineItem::CacheMisses]).is_empty());
+    if let Some(calls) = ctx.api_calls.as_mut() {
+        calls.cache_misses = 2;
+    }
+    let segment = compose_builtin(&ctx, None, &[StatusLineItem::CacheMisses]);
+    assert_eq!(segment[0].text(), "miss 2");
+    assert_eq!(segment[0].tone, SegmentTone::Dim);
+    assert!(compose_builtin(&context(), None, &[StatusLineItem::CacheMisses]).is_empty());
 }
 
 #[test]
@@ -210,6 +240,7 @@ fn the_default_row_keeps_the_model_anchored_to_the_left_edge() {
     ctx.api_calls = Some(xai_grok_status_line::StatusLineApiCalls {
         succeeded: 3,
         failed: 0,
+        ..Default::default()
     });
     ctx.context_window.session_input_tokens = Some(47_000);
     ctx.context_window.session_output_tokens = Some(3_200);

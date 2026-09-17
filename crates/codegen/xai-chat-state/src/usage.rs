@@ -38,6 +38,10 @@ pub struct UsageTotals {
     pub model_calls: u64,
     /// LOCAL: terminal model-call failures (retries exhausted or non-retryable), for status-line endpoint-health display.
     pub failed_model_calls: u64,
+    /// LOCAL: calls whose response reported zero cache-read tokens, i.e. the
+    /// prompt prefix was not served from the provider cache. Status-line
+    /// display subtracts the session's first call, which can never hit.
+    pub cache_miss_calls: u64,
     pub api_duration_ms: u64,
     /// USD ticks (1e10 per USD). Absent when no call reported cost.
     pub cost_usd_ticks: Option<i64>,
@@ -59,6 +63,7 @@ impl UsageTotals {
             reasoning_tokens: u64::from(usage.reasoning_tokens),
             model_calls: 1,
             failed_model_calls: 0,
+            cache_miss_calls: u64::from(usage.cached_prompt_tokens == 0),
             api_duration_ms: api_duration_ms.unwrap_or(0),
             cost_usd_ticks,
             cost_missing_calls: u64::from(cost_usd_ticks.is_none()),
@@ -82,6 +87,7 @@ impl UsageTotals {
             reasoning_tokens,
             model_calls,
             failed_model_calls,
+            cache_miss_calls,
             api_duration_ms,
             cost_usd_ticks,
             cost_missing_calls,
@@ -95,6 +101,7 @@ impl UsageTotals {
         self.reasoning_tokens = self.reasoning_tokens.saturating_add(*reasoning_tokens);
         self.model_calls = self.model_calls.saturating_add(*model_calls);
         self.failed_model_calls = self.failed_model_calls.saturating_add(*failed_model_calls);
+        self.cache_miss_calls = self.cache_miss_calls.saturating_add(*cache_miss_calls);
         self.api_duration_ms = self.api_duration_ms.saturating_add(*api_duration_ms);
         self.cost_missing_calls = self.cost_missing_calls.saturating_add(*cost_missing_calls);
         self.cost_usd_ticks = merge_cost_ticks(self.cost_usd_ticks, *cost_usd_ticks);
@@ -213,5 +220,20 @@ mod tests {
 
         ledger.record_subagent(&[], true);
         assert!(ledger.incomplete);
+    }
+
+    #[test]
+    fn cache_miss_counts_uncached_calls_only() {
+        let mut ledger = UsageLedger::default();
+        let mut miss = tu(100, 10);
+        miss.cached_prompt_tokens = 0;
+        let mut hit = tu(100, 10);
+        hit.cached_prompt_tokens = 90;
+        ledger.record_main_loop_call("m", &miss, None, None);
+        ledger.record_main_loop_call("m", &hit, None, None);
+        ledger.record_main_loop_call("m", &miss, None, None);
+        ledger.record_main_loop_failure("m");
+        assert_eq!(ledger.totals.model_calls, 3);
+        assert_eq!(ledger.totals.cache_miss_calls, 2);
     }
 }

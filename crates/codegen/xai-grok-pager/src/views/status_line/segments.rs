@@ -143,6 +143,16 @@ pub fn compose_builtin(
                 let tone = (calls.failed > 0).then_some(SegmentTone::Warn);
                 Some(StatusSegment::toned(text, tone.unwrap_or(SegmentTone::Dim)))
             }
+            // LOCAL: transient retry resubmissions, `↻ 3`; hidden while zero.
+            StatusLineItem::ApiRetries => {
+                let calls = ctx.api_calls?;
+                (calls.retries > 0).then(|| StatusSegment::dim(format!("↻ {}", calls.retries)))
+            }
+            // LOCAL: uncached calls beyond the session's first, `miss 2`; hidden while zero.
+            StatusLineItem::CacheMisses => {
+                let calls = ctx.api_calls?;
+                (calls.cache_misses > 0).then(|| StatusSegment::dim(format!("miss {}", calls.cache_misses)))
+            }
             // LOCAL: cumulative session tokens, `in 47k out 3.2k`.
             StatusLineItem::Tokens => {
                 let window = &ctx.context_window;

@@ -69,6 +69,8 @@ fn every_field_survives_a_round_trip_through_the_shared_fixture() {
         api_calls: Some(StatusLineApiCalls {
             succeeded: 42,
             failed: 3,
+            retries: 5,
+            cache_misses: 2,
         }),
         perf: Some(StatusLineTurnPerf {
             ttft_ms: Some(850),

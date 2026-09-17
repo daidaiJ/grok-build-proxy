@@ -187,7 +187,7 @@ pub struct StatusLineSessionUsage {
     pub reasoning_tokens: u64,
 }
 
-/// LOCAL: cumulative model-call outcomes for the session — the endpoint-health
+/// LOCAL: cumulative session model-call counters — the endpoint-health
 /// signal for gateway adapters (GLM/DeepSeek/OpenCode Go) whose failures show up
 /// as rate limits, 5xx, and timeouts rather than billing anomalies.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -195,6 +195,12 @@ pub struct StatusLineSessionUsage {
 pub struct StatusLineApiCalls {
     pub succeeded: u64,
     pub failed: u64,
+    /// LOCAL: transient retry resubmissions (transport errors, retryable 5xx,
+    /// stream stalls) accumulated over the session.
+    pub retries: u64,
+    /// LOCAL: uncached model calls beyond the session's first — the first
+    /// call has no cached prefix to hit, so it does not count as a miss.
+    pub cache_misses: u64,
 }
 
 /// LOCAL: last completed turn's latency/throughput snapshot.

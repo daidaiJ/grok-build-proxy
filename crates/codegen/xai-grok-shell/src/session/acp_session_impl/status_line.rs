@@ -225,10 +225,16 @@ impl SessionActor {
             worktree,
             turn: live_turn(turn_start_ms, prompt_id.as_deref()),
             // LOCAL: endpoint-health counters; present once anything was attempted.
+            // `cache_misses` drops the session's first call: with no prior
+            // request there is no cached prefix, so it cannot count as a miss.
             api_calls: totals.filter(|t| t.model_calls > 0 || t.failed_model_calls > 0).map(
                 |t| StatusLineApiCalls {
                     succeeded: t.model_calls,
                     failed: t.failed_model_calls,
+                    retries: self
+                        .session_transient_retries
+                        .load(std::sync::atomic::Ordering::Relaxed),
+                    cache_misses: t.cache_miss_calls.saturating_sub(1),
                 },
             ),
             perf: self.build_turn_perf().await,

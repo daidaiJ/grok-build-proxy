@@ -174,6 +174,7 @@ impl PromptUsage {
             cache_creation_tokens, // subset of input_tokens on the wire
             reasoning_tokens: _,   // subset of output_tokens
             failed_model_calls: _, // LOCAL: a failed call billed nothing; token-emptiness is a token question
+            cache_miss_calls: _,   // LOCAL: a miss is a cache fact, not a billed-token fact
             model_calls,
             api_duration_ms: _, // timing, not tokens
             cost_usd_ticks: _,  // cost without usage cannot occur
@@ -229,6 +230,11 @@ pub struct PromptUsageModel {
     /// Endpoint-health signal for the status line; additive on the ACP wire.
     #[serde(default)]
     pub failed_model_calls: u64,
+    /// LOCAL: calls that reported zero cache-read tokens (prompt prefix not
+    /// served from the provider cache). Status-line display subtracts the
+    /// session's first call, which can never hit; additive on the ACP wire.
+    #[serde(default)]
+    pub cache_miss_calls: u64,
 }
 
 /// One model call's token usage: the four Messages API `message.usage` fields plus `reasoning_tokens`.
@@ -260,6 +266,7 @@ impl From<&xai_chat_state::UsageTotals> for PromptUsageModel {
             reasoning_tokens,
             model_calls,
             failed_model_calls,
+            cache_miss_calls,
             api_duration_ms,
             cost_usd_ticks,
             cost_missing_calls,
@@ -273,6 +280,7 @@ impl From<&xai_chat_state::UsageTotals> for PromptUsageModel {
             reasoning_tokens,
             model_calls,
             failed_model_calls,
+            cache_miss_calls,
             api_duration_ms,
             cost_usd_ticks,
             cost_is_partial: t.cost_is_partial(),
@@ -332,6 +340,7 @@ pub(crate) fn project_result_usage(result: &mut serde_json::Value, usage: &Promp
         model_calls: _,     // totals-level; headless carries num_turns instead
         api_duration_ms: _, // dropped: not part of the frozen headless shape
         failed_model_calls: _, // LOCAL: dropped from the frozen headless shape (status-line only)
+        cache_miss_calls: _, // LOCAL: dropped from the frozen headless shape (status-line only)
         cost_usd_ticks,
         cost_is_partial,
         cost_missing_calls: _, // internal partiality count; the flag suffices
@@ -372,6 +381,7 @@ pub(crate) fn project_result_usage(result: &mut serde_json::Value, usage: &Promp
                 model_calls,
                 api_duration_ms: _, // dropped: reduced per-model schema
                 failed_model_calls: _, // LOCAL: dropped: reduced per-model schema
+                cache_miss_calls: _,   // LOCAL: dropped: reduced per-model schema
                 cost_usd_ticks,
                 cost_is_partial,
                 cost_missing_calls: _,

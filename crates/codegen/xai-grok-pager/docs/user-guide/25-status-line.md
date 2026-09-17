@@ -9,7 +9,7 @@ A row at the bottom of the pager — above the shortcuts bar in the full screen,
 ```toml
 [ui.status_line]
 type = "builtin"
-items = ["model", "api-calls", "tokens", "cache", "think", "perf"]   # default when omitted
+items = ["model", "api-calls", "api-retries", "tokens", "cache", "cache-misses", "think", "perf"]   # default when omitted
 ```
 
 Items appear in the order you list them, and long ones are elided with `…`: the directory and session name at 40 columns, the model at 30. A segment whose data does not exist yet is skipped rather than drawn with a placeholder, so a fresh session shows just the model.
@@ -23,8 +23,10 @@ Items appear in the order you list them, and long ones are elided with `…`: th
 | `turn-timer` | Elapsed time of the running turn, from one second in |
 | `session-name` | Session name, when set |
 | `api-calls` | Model calls this session made, `✓ 12` — amber with `✗ 3` appended once calls have failed |
+| `api-retries` | Transient retry resubmissions this session (connection problems, retryable server errors, stalled streams), `↻ 3` — hidden while zero |
 | `tokens` | Cumulative session tokens, `in 47k out 3.2k`, window totals falling back to the disjoint usage sum |
 | `cache` | Cache-read share of the session's input tokens, `cache 95.7%` |
+| `cache-misses` | Model calls the provider served without its cache, `miss 2` — the session's first call never counts (it has no cached prefix to hit); hidden while zero. A gateway that does not report cache tokens counts every call as a miss |
 | `think` | Reasoning share of the session's output tokens, `think 28.1%` |
 | `perf` | Last turn's latency and throughput, `380ms ttft · 42.3 tok/s`, from the first completed call on |
 
@@ -49,7 +51,7 @@ Field names and nesting follow the common status line convention, so a ported sc
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `type` | string | `builtin` | `builtin`, `command`, or `disabled`. |
-| `items` | array | `["model", "api-calls", "tokens", "cache", "think", "perf"]` | Built-in segments, in order. |
+| `items` | array | `["model", "api-calls", "api-retries", "tokens", "cache", "cache-misses", "think", "perf"]` | Built-in segments, in order. |
 | `command` | string | none | Script for `type = "command"`. |
 | `padding` | integer | `0` | Horizontal spacing, in characters per side, capped at 16. A padding wide enough to leave no columns reserves the row but paints nothing in it. |
 | `refresh_interval` | integer | unset | `command` rows only, in seconds, 1 to 86,400. Re-runs the script this often even when nothing changed, so an idle session can still surface a change — an incident page, a CI status. Unset keeps the row event-driven. The run it schedules carries `"trigger": "refresh_interval"`, and its failures keep the last output rather than painting an error (see [Refresh runs](#refresh-runs)). A script that calls a network should prefer a longer interval and read a cache on `state` runs. |
@@ -110,6 +112,8 @@ Nothing outside the table below is sent. A ported script that reads counts of li
 | `context_window.session_usage.{input_tokens,output_tokens,cache_creation_input_tokens,cache_read_input_tokens}` | `input_tokens`, `cache_creation_input_tokens` and `cache_read_input_tokens`, which sum back to `session_input_tokens`, plus `output_tokens`. Cumulative for the session, not one turn's. Absent before the first call |
 | `context_window.session_usage.reasoning_tokens` | LOCAL: thinking/reasoning tokens the model reported, cumulative for the session. Absent before the first call |
 | `api_calls.{succeeded,failed}` | LOCAL: cumulative model-call outcomes — the endpoint-health signal when a gateway adapter (GLM, DeepSeek, OpenCode Go) starts failing. Present once anything was attempted |
+| `api_calls.retries` | LOCAL: transient retry resubmissions accumulated over the session |
+| `api_calls.cache_misses` | LOCAL: uncached model calls beyond the session's first, which can never hit the cache and so does not count |
 | `perf.{ttft_ms,tps,output_tokens}` | LOCAL: last turn's time-to-first-token (session average), output tokens per second over the streaming window, and that turn's output tokens. Fields are omitted individually when their data does not exist |
 | `context_window.auto_compact_threshold_percent` | Where the session auto-compacts. Omitted when the agent reported none |
 | `effort.level` | Reasoning effort, when the model supports it |
