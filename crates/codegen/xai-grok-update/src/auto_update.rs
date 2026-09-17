@@ -574,8 +574,11 @@ pub async fn check_update_background(update_config: &UpdateConfig) -> Background
         return BackgroundUpdateCheck::none();
     }
 
+    // LOCAL: fork 默认关闭自动更新——官方渠道的更新会覆盖本地 fork 构建
+    // （2026-09-17 实证：安装器自动升级把 fork 1.0.29 覆盖成官方 1.0.34）。
+    // 显式 `[cli] auto_update = true` 可重新打开。
     let current_config = config::load_config().await;
-    if current_config.cli.auto_update == Some(false) {
+    if current_config.cli.auto_update != Some(true) {
         return BackgroundUpdateCheck::none();
     }
 
@@ -662,23 +665,14 @@ pub async fn run_update_if_available(
 
     let current_config = config::load_config().await;
 
-    if current_config.cli.auto_update == Some(false) {
+    // LOCAL: fork 默认关闭自动更新（防官方渠道覆盖 fork 构建）；显式 true 才启用。
+    // 用户手动执行的 `grok update`（UserCommand）不受此门限制。
+    if trigger != CliUpdateTrigger::UserCommand
+        && current_config.cli.auto_update != Some(true)
+    {
         return Ok(false);
     }
-
-    // Resolve effective auto_update: None defaults to true (first-run).
-    let auto_update = current_config.cli.auto_update.unwrap_or(true);
-
-    if current_config.cli.auto_update.is_none()
-        && let Err(e) = config::update_config(|st| {
-            if st.cli.auto_update.is_none() {
-                st.cli.auto_update = Some(true);
-            }
-        })
-        .await
-    {
-        tracing::warn!("Failed to save auto-update setting: {}", e);
-    }
+    let auto_update = current_config.cli.auto_update.unwrap_or(false);
 
     let current_version = get_installed_grok_version();
     let policy = config::VersionPolicy::resolve();

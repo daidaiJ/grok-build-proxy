@@ -1587,7 +1587,8 @@ async fn run_agent_command(
                         let uc = update_config_for_leader.clone();
                         Box::pin(async move {
                             let current_config = xai_grok_shell::util::config::load_config().await;
-                            if current_config.cli.auto_update == Some(false) {
+                            // LOCAL: fork 默认关闭自动更新，显式 `[cli] auto_update = true` 才启用
+                            if current_config.cli.auto_update != Some(true) {
                                 return false;
                             }
                             match auto_update::ensure_latest_on_disk(&uc).await {
