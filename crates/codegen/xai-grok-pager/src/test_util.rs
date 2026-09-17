@@ -249,12 +249,19 @@ pub fn collapsed_path_display(path: &Path) -> String {
     let home = std::env::var("HOME")
         .ok()
         .map(|h| std::path::PathBuf::from(h.trim_end_matches(['/', '\\'])));
-    match home {
+    let joined = match home {
         Some(h) => path
             .strip_prefix(&h)
             .map(|rest| format!("~/{}", rest.display()))
             .unwrap_or_else(|_| path.display().to_string()),
         None => path.display().to_string(),
+    };
+    // LOCAL: 与 git_info::collapse_home 的分隔符规范一致——Windows 下 libgit2 产出的
+    // 路径用 `/`，std 构造的路径用 `\`，统一成正斜杠后两者才可比较。
+    if std::path::MAIN_SEPARATOR == '\\' {
+        joined.replace('\\', "/")
+    } else {
+        joined
     }
 }
 pub fn init_git_repo_on_branch(path: &Path, branch: &str) {

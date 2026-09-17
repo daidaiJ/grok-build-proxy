@@ -295,7 +295,15 @@ fn collapse_home_path(path: &Path, home: Option<&Path>) -> String {
             if rest.as_os_str().is_empty() {
                 "~".to_string()
             } else {
-                format!("~/{}", rest.display())
+                // LOCAL: Windows 下 `rest.display()` 产出 `\` 分隔符，折叠后 `~/A\B` 混用分隔符；
+                // 统一成正斜杠。仅在平台分隔符确为 `\` 时替换，避免破坏 Unix 上的字面反斜杠文件名。
+                let rest_str = rest.display().to_string();
+                let rest_str = if std::path::MAIN_SEPARATOR == '\\' {
+                    rest_str.replace('\\', "/")
+                } else {
+                    rest_str
+                };
+                format!("~/{rest_str}")
             }
         })
         .unwrap_or_else(|_| path.display().to_string())
