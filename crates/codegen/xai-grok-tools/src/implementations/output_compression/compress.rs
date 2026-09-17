@@ -662,4 +662,435 @@ mod tests {
          glue into its own module, and updated the docs. Everything "
             .repeat(30)
     }
+
+    // ===================================================================
+    // Mechanism ablation (round-robin): candidate loss-reduction
+    // mechanisms prototyped test-local, scored on tokens saved AND
+    // structural retention (must-keep needles). Run with:
+    //   cargo test -p xai-grok-tools mech_ablation -- --ignored --nocapture
+    // ===================================================================
+
+    /// M1: exact-dup JSON crusher — dedup items by canonical hash, keep
+    /// unique ones in full, replace repeats with a count marker.
+    fn m1_dedup_json(body: &str) -> String {
+        let Ok(Value::Array(items)) = serde_json::from_str::<Value>(body.trim()) else {
+            return body.to_string();
+        };
+        if items.len() <= 6 {
+            return body.to_string();
+        }
+        let mut order: Vec<String> = Vec::new();
+        let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for item in &items {
+            let key = canonical_key(item);
+            *counts.entry(key.clone()).or_insert(0) += 1;
+            if counts[&key] == 1 {
+                order.push(key);
+            }
+        }
+        let mut out = format!(
+            "JSON array: {} items, {} unique. Fields: {}\n",
+            items.len(),
+            order.len(),
+            item_fields(&items)
+        );
+        for key in &order {
+            let n = counts[key];
+            let item = items.iter().find(|i| canonical_key(i) == *key).unwrap();
+            if n > 1 {
+                out.push_str(&format!("{item} // x{n}\n"));
+            } else {
+                out.push_str(&format!("{item}\n"));
+            }
+        }
+        out
+    }
+
+    fn canonical_key(item: &Value) -> String {
+        // normalize numeric ids so near-dup rows collapse only on exact shape
+        serde_json::to_string(item).unwrap_or_default()
+    }
+
+    fn item_fields(items: &[Value]) -> String {
+        items
+            .iter()
+            .find_map(|v| v.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>().join(", ")))
+            .unwrap_or_else(|| "(mixed)".into())
+    }
+
+    /// M2: adaptive-k — unique-bigram saturation curve (simplified
+    /// adaptive_sizer) decides how many array items to keep; anchors
+    /// (first 2 / last 2) always kept, middle filled by dedup order.
+    fn m2_adaptive_k(body: &str) -> String {
+        let Ok(Value::Array(items)) = serde_json::from_str::<Value>(body.trim()) else {
+            return body.to_string();
+        };
+        if items.len() <= 8 {
+            return body.to_string();
+        }
+        let strs: Vec<String> = items.iter().map(|i| i.to_string()).collect();
+        let refs: Vec<&str> = strs.iter().map(|s| s.as_str()).collect();
+        let k = adaptive_keep(&refs);
+        let mut kept: Vec<usize> = Vec::new();
+        let anchor_head = 2.min(items.len());
+        let anchor_tail = 2.min(items.len().saturating_sub(anchor_head));
+        for i in 0..anchor_head {
+            kept.push(i);
+        }
+        let mut seen: std::collections::HashSet<u64> = std::collections::HashSet::new();
+        for (i, s) in strs.iter().enumerate() {
+            if kept.len() >= k {
+                break;
+            }
+            if kept.contains(&i) {
+                continue;
+            }
+            let h = fnv64(s);
+            if seen.insert(h) {
+                kept.push(i);
+            }
+        }
+        for i in (items.len() - anchor_tail)..items.len() {
+            if !kept.contains(&i) {
+                kept.push(i);
+            }
+        }
+        kept.sort_unstable();
+        kept.dedup();
+        let mut out = format!(
+            "JSON array: {} items, adaptive-kept {} (knee of unique-bigram curve). Fields: {}\n",
+            items.len(),
+            kept.len(),
+            item_fields(&items)
+        );
+        for i in kept {
+            out.push_str(&format!("  {}\n", strs[i]));
+        }
+        out
+    }
+
+    /// simplified adaptive_sizer: unique-bigram coverage curve + knee.
+    fn adaptive_keep(items: &[&str]) -> usize {
+        let n = items.len();
+        if n <= 8 {
+            return n;
+        }
+        let mut curve: Vec<usize> = Vec::with_capacity(n);
+        let mut uniq: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+        for item in items {
+            let words: Vec<&str> = item.split_whitespace().collect();
+            for w in words.windows(2) {
+                uniq.insert((w[0].to_string(), w[1].to_string()));
+            }
+            curve.push(uniq.len());
+        }
+        // Kneedle-style knee: max distance from the diagonal.
+        let (y0, y1) = (curve[0] as f64, *curve.last().unwrap() as f64);
+        let mut knee = n;
+        let mut best_d = 0.0f64;
+        for (i, y) in curve.iter().enumerate() {
+            let t = i as f64 / (n - 1).max(1) as f64;
+            let line_y = y0 + (y1 - y0) * t;
+            let d = (line_y - *y as f64).abs();
+            if d > best_d {
+                best_d = d;
+                knee = i + 1;
+            }
+        }
+        if best_d / (y1 - y0).max(1.0) < 0.05 {
+            return n; // no saturation: keep all
+        }
+        (knee + 2).clamp(5, n)
+    }
+
+    fn fnv64(s: &str) -> u64 {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for b in s.as_bytes() {
+            h ^= *b as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        h
+    }
+
+    /// M3: tiered-ranking logs — score every line (headroom tiered
+    /// importance), keep by rank under a token budget, not fixed quotas.
+    fn m3_tiered_logs(body: &str) -> String {
+        let lines: Vec<&str> = body.lines().collect();
+        if lines.len() < 30 {
+            return body.to_string();
+        }
+        let scored: Vec<(usize, f32)> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, l)| (i, line_priority(l, i, lines.len())))
+            .collect();
+        let budget = (lines.len() as f32 * 0.35).max(12.0) as usize;
+        let mut ranked = scored.clone();
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap().then(a.0.cmp(&b.0)));
+        let mut keep = vec![false; lines.len()];
+        let mut kept = 0usize;
+        for (i, p) in ranked {
+            if kept >= budget {
+                break;
+            }
+            if p <= 0.3 {
+                break; // only filler remains
+            }
+            if !keep[i] {
+                keep[i] = true;
+                kept += 1;
+            }
+        }
+        render_kept(&lines, &keep)
+    }
+
+    fn line_priority(line: &str, idx: usize, total: usize) -> f32 {
+        if idx < 2 || idx + 2 >= total {
+            return 0.85; // anchors
+        }
+        if has_word(line, "FATAL") || has_word(line, "CRITICAL") {
+            return 0.99;
+        }
+        if has_word(line, "ERROR") || has_word(line, "error") || line.contains("error[E") {
+            return 0.95;
+        }
+        if line.contains("Traceback")
+            || line.trim_start().starts_with("at ")
+            || line.trim_start().starts_with("--> ")
+            || line.trim_start().starts_with("File ")
+            || line.trim_start().starts_with("panic")
+            || line.trim_start().starts_with("assert")
+        {
+            return 0.9;
+        }
+        if line.contains("test result:")
+            || line.contains("FAILED")
+            || line.starts_with("===")
+            || line.starts_with("---")
+            || line.starts_with("TOTAL")
+        {
+            return 0.8;
+        }
+        if has_word(line, "WARN") || has_word(line, "WARNING") {
+            return 0.7;
+        }
+        if has_word(line, "INFO") || has_word(line, "DEBUG") || has_word(line, "Compiling") {
+            return 0.2;
+        }
+        0.3
+    }
+
+    /// M4: log template-collapse — normalize digits to `#`, collapse
+    /// runs of >=3 identical templates into one line with `xN`.
+    fn m4_template_collapse(body: &str) -> String {
+        let lines: Vec<&str> = body.lines().collect();
+        if lines.len() < 30 {
+            return body.to_string();
+        }
+        let mut out: Vec<String> = Vec::new();
+        let mut i = 0usize;
+        while i < lines.len() {
+            let tpl = templ(lines[i]);
+            let is_noise = template_priority(&tpl) < 0.5;
+            if !is_noise {
+                out.push(lines[i].to_string());
+                i += 1;
+                continue;
+            }
+            let mut run = 1usize;
+            while i + run < lines.len() && templ(lines[i + run]) == tpl {
+                run += 1;
+            }
+            if run >= 3 {
+                out.push(format!("{} [x{}]", lines[i].trim(), run));
+            } else {
+                for k in 0..run {
+                    out.push(lines[i + k].to_string());
+                }
+            }
+            i += run;
+        }
+        if out.len() == lines.len() {
+            return body.to_string();
+        }
+        let omitted = lines.len() - out.len();
+        let mut s = out.join("\n");
+        s.push_str(&format!("\n[{omitted} repeated lines collapsed]"));
+        s
+    }
+
+    fn templ(line: &str) -> String {
+        let mut t = String::with_capacity(line.len());
+        let mut prev_digit = false;
+        for ch in line.chars() {
+            if ch.is_ascii_digit() {
+                if !prev_digit {
+                    t.push('#');
+                }
+                prev_digit = true;
+            } else {
+                prev_digit = false;
+                t.push(ch);
+            }
+        }
+        t
+    }
+
+    fn template_priority(tpl: &str) -> f32 {
+        if has_word(tpl, "ERROR") || has_word(tpl, "FATAL") || tpl.contains("error[E") {
+            0.95
+        } else if has_word(tpl, "WARN") || has_word(tpl, "WARNING") {
+            0.7
+        } else {
+            0.2
+        }
+    }
+
+    fn render_kept(lines: &[&str], keep: &[bool]) -> String {
+        let selected: Vec<&str> = lines
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| keep[*i])
+            .map(|(_, l)| *l)
+            .collect();
+        let omitted = lines.len() - selected.len();
+        if omitted == 0 {
+            return lines.join("\n");
+        }
+        let mut s = selected.join("\n");
+        s.push_str(&format!("\n[{omitted} lines omitted]"));
+        s
+    }
+
+    #[test]
+    #[ignore]
+    fn mech_ablation_report() {
+        let dir = tempfile::tempdir().unwrap();
+        let rt = enabled_rt(dir.path());
+
+        // samples with must-keep needles: (label, text, retention needles)
+        let dup_item = serde_json::json!({"path": "src/common.rs", "size": 1024, "lines": 40});
+        let mut json_dup: Vec<Value> = Vec::new();
+        for i in 0..80 {
+            if i % 10 == 9 {
+                json_dup.push(serde_json::json!({"path": format!("src/unique{i}.rs"), "size": 500 + i, "lines": i}));
+            } else {
+                json_dup.push(dup_item.clone());
+            }
+        }
+        let json_dup = serde_json::to_string_pretty(&json_dup).unwrap();
+        let json_unique = sample_json_array();
+        let logs_fatal = {
+            let mut s = String::from("exit: 1\n");
+            for i in 0..100 {
+                s.push_str(&format!("INFO heartbeat worker {} ok\n", i % 7));
+                if i == 50 {
+                    s.push_str("FATAL db connection lost\n  at pool.rs:88\n  --> query timed out\n");
+                    s.push_str("WARN retrying with backoff\n");
+                }
+            }
+            s
+        };
+        let logs_repeated = {
+            let mut s = String::from("exit: 0\n");
+            for i in 0..60 {
+                s.push_str(&format!("DEBUG cache hit key={} shard={}\n", i, i % 4));
+                if i == 30 {
+                    s.push_str("WARN eviction pressure on shard 3\n");
+                }
+            }
+            s
+        };
+        let diff = sample_diff();
+        let search = sample_search();
+
+        let samples: Vec<(&str, String, Vec<&str>)> = vec![
+            (
+                "json_dup80",
+                json_dup,
+                vec!["src/common.rs", "x7", "unique9.rs", "80 items"],
+            ),
+            (
+                "json_unique80",
+                json_unique,
+                vec!["module0", "module79", "mtime"],
+            ),
+            (
+                "logs_fatal_mid",
+                logs_fatal,
+                vec!["FATAL db connection lost", "pool.rs:88", "backoff", "exit: 1"],
+            ),
+            (
+                "logs_repeated",
+                logs_repeated,
+                vec!["eviction pressure", "exit: 0"],
+            ),
+            (
+                "diff_big",
+                diff,
+                vec!["diff --git a/src/f0.rs", "+added line 3 in f0 hunk0", "+++"],
+            ),
+            (
+                "search_big",
+                search,
+                vec!["mod.rs:10:", "mod.rs:69:"],
+            ),
+        ];
+
+        // mechanism roster, applied by content kind
+        println!(
+            "\n{:<16} {:<22} {:>7} {:>7} {:>7}  misses",
+            "sample", "mechanism", "orig", "new", "saved%"
+        );
+        for (name, text, needles) in &samples {
+            let orig = estimate_tokens(text) as u64;
+            let is_json = name.starts_with("json");
+            let prods: Vec<(&str, Box<dyn Fn(&str) -> String + '_>)> = if is_json {
+                vec![
+                    ("baseline (current)", Box::new(|t| compress_text(t, &rt))),
+                    ("M1 dedup", Box::new(m1_dedup_json)),
+                    ("M2 adaptive-k", Box::new(m2_adaptive_k)),
+                    (
+                        "M1+M2 dedup+adaptive",
+                        Box::new(|t| m2_adaptive_k(&m1_dedup_json(t))),
+                    ),
+                ]
+            } else if name.starts_with("logs") {
+                vec![
+                    ("baseline (current)", Box::new(|t| compress_text(t, &rt))),
+                    ("M3 tiered-rank", Box::new(m3_tiered_logs)),
+                    ("M4 template-collapse", Box::new(m4_template_collapse)),
+                    ("M3+M4 collapse+rank", Box::new(|t| m3_tiered_logs(&m4_template_collapse(t)))),
+                ]
+            } else {
+                vec![
+                    ("baseline (current)", Box::new(|t| compress_text(t, &rt))),
+                ]
+            };
+            for (mname, f) in &prods {
+                let out = f(text);
+                let new = estimate_tokens(&out) as u64;
+                let saved = 100.0 * orig.saturating_sub(new) as f64 / orig as f64;
+                let misses: Vec<&str> = needles
+                    .iter()
+                    .filter(|n| !out.contains(**n))
+                    .copied()
+                    .collect();
+                println!(
+                    "{:<16} {:<22} {:>7} {:>7} {:>6.1}%  {}",
+                    name,
+                    mname,
+                    orig,
+                    new,
+                    saved,
+                    if misses.is_empty() {
+                        "retain-all".to_string()
+                    } else {
+                        format!("LOST: {}", misses.join(", "))
+                    }
+                );
+            }
+            println!();
+        }
+    }
 }
