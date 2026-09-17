@@ -78,15 +78,18 @@ jobs:
       - name: Package
         if: startsWith(github.ref, 'refs/tags/')
         run: |
+          # LOCAL: binary ships as `grok2` so it never collides with the official
+          # `grok` install (~/.grok/bin/grok) or needs a manual rename.
           cd target/release
-          tar czf "grok-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" xai-grok-pager
-          sha256sum "grok-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" > "grok-${GITHUB_REF_NAME}-x86_64-linux.tar.gz.sha256"
+          mv xai-grok-pager grok2
+          tar czf "grok2-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" grok2
+          sha256sum "grok2-${GITHUB_REF_NAME}-x86_64-linux.tar.gz" > "grok2-${GITHUB_REF_NAME}-x86_64-linux.tar.gz.sha256"
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            target/release/grok-${{ github.ref_name }}-x86_64-linux.tar.gz
-            target/release/grok-${{ github.ref_name }}-x86_64-linux.tar.gz.sha256
+            target/release/grok2-${{ github.ref_name }}-x86_64-linux.tar.gz
+            target/release/grok2-${{ github.ref_name }}-x86_64-linux.tar.gz.sha256
 
   windows:
     # Cross-compile windows-msvc on Linux. See the file header for why.
@@ -128,12 +131,14 @@ jobs:
       - name: Package
         if: startsWith(github.ref, 'refs/tags/')
         run: |
+          # LOCAL: same `grok2` binary name as the linux job.
           cd target/x86_64-pc-windows-msvc/release
-          zip "grok-${GITHUB_REF_NAME}-x86_64-windows.zip" xai-grok-pager.exe
-          sha256sum "grok-${GITHUB_REF_NAME}-x86_64-windows.zip" > "grok-${GITHUB_REF_NAME}-x86_64-windows.zip.sha256"
+          mv xai-grok-pager.exe grok2.exe
+          zip "grok2-${GITHUB_REF_NAME}-x86_64-windows.zip" grok2.exe
+          sha256sum "grok2-${GITHUB_REF_NAME}-x86_64-windows.zip" > "grok2-${GITHUB_REF_NAME}-x86_64-windows.zip.sha256"
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            target/x86_64-pc-windows-msvc/release/grok-${{ github.ref_name }}-x86_64-windows.zip
-            target/x86_64-pc-windows-msvc/release/grok-${{ github.ref_name }}-x86_64-windows.zip.sha256
+            target/x86_64-pc-windows-msvc/release/grok2-${{ github.ref_name }}-x86_64-windows.zip
+            target/x86_64-pc-windows-msvc/release/grok2-${{ github.ref_name }}-x86_64-windows.zip.sha256

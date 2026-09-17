@@ -322,3 +322,36 @@ updates.rs `emit_builtin_notification`、types.rs 活动时间戳静态、agent/
 - 测试语义：`cfg!(test)` 构建下 tr() 默认英文（上游既有测试按英文文案断言），
   生产默认中文；`xai-grok-shell` `slash_commands.rs` `PAGER_COMMAND_KEYS` 追加
   `"lang"` 占位（防技能同名遮蔽，测试 `pager_builtin_triggers_are_reserved_in_shell` 强制）
+
+## 五期补丁（2026-09-17：状态行数据修复 + i18n 覆盖扩展 + 自动更新默认关）
+
+### xai-grok-shell（状态行 in 0 out 0 修复）
+- `src/session/acp_session_impl/status_line.rs`：空账本（`model_calls == 0`）投影出的
+  `UsageTotals` 全零，`session_input_tokens = Some(0)` 使 tokens 段从会话一开始就画出
+  `in 0 out 0`（与"数据存在才绘制"的设计相悖）。修复：`build_status_context` 里给
+  `build_context_window` 传 `window_totals = totals.filter(|t| t.model_calls > 0)`，
+  无调用时 token 窗口整体缺席，行只画 model；`api_calls`/`cost` 仍用原始 totals
+  （前者自带 `model_calls > 0 || failed > 0` 过滤）
+- `src/session/acp_session_impl/sampler_turn.rs`：`record_response_token_usage` 记账后
+  追加 `emit_status_snapshot_detached()`（LOCAL），每次模型响应立即刷新状态行，
+  不再只等 turn-end 快照
+
+### xai-grok-pager（i18n 覆盖扩展：快捷键栏 + shell ACP 命令）
+- `src/slash/i18n.rs`：新增 `tr_str(&str) -> String`（动态字符串查表；英文模式/表外
+  原样返回）；翻译表追加：快捷键提示栏全部标签（send/cancel/copy plan 等约 75 组，
+  渲染时查表）+ "press again to" 前缀 + shell 内置命令描述/占位符（/memory /flush
+  /dream /context /hooks-* /session-info /deep-research /goal /plugins 等约 30 组）
+- `src/views/shortcuts_bar.rs`：bar 渲染处标签与 "press again to {label}" 前缀经
+  `tr_str`/`tr` 查表，宽度按译文计
+- `src/slash/acp_command.rs`：`AcpSlashCommand::from` 构造时对 ACP 下发的
+  description / arg_hint 过 `tr_str`（覆盖 shell 端命令在斜杠菜单里的中文显示）
+
+### xai-grok-update + xai-grok-pager-bin（自动更新默认关闭）
+- 背景：官方安装器自动升级会把 fork 构建覆盖为官方二进制（2026-09-17 实证：本地
+  fork 1.0.29 被覆盖为官方 1.0.34）
+- `src/auto_update.rs`：`check_update_background` / `run_update_if_available` 的
+  auto_update 门从 `== Some(false)` 拦截改为 `!= Some(true)` 拦截（None 默认关）；
+  删除首写 `Some(true)` 的持久化；`UserCommand` 触发（手动 `grok update`）不受门限
+- `xai-grok-pager-bin/src/main.rs`：leader 每小时 converge 的 auto_update 检查同步
+  改为 `!= Some(true)` 拦截
+- 恢复自动更新：config.toml 写 `[cli] auto_update = true`
