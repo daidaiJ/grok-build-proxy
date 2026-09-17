@@ -369,7 +369,7 @@ fn compress_generic(body: &str, rt: &ToolOutputCompressionRuntime) -> String {
 mod tests {
     use super::*;
     use crate::implementations::output_compression::runtime::{
-        CompressionStrategiesSpec, reset_for_tests, test_lock,
+        CompressionStrategiesSpec, reset_for_tests, snapshot_stats, test_lock,
     };
     use crate::types::output::BashOutput;
 
@@ -517,5 +517,149 @@ mod tests {
         assert!(out.contains("20 items"));
         assert!(out.contains("\"id\":0"));
         assert!(out.contains("\"id\":19"));
+    }
+
+    // Ignored by default: prints a yield report across sample outputs and
+    // configs, for the keep-or-trim evaluation. Run with:
+    //   cargo test -p xai-grok-tools sample_yield -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn sample_yield_report() {
+        let _guard = test_lock();
+        let dir = tempfile::tempdir().unwrap();
+        let samples: Vec<(&str, String)> = vec![
+            ("build-log", sample_build_log()),
+            ("json-array", sample_json_array()),
+            ("search", sample_search()),
+            ("diff", sample_diff()),
+            ("generic-prose", sample_prose()),
+            ("short-ok", "exit: 0\n".to_string() + &"ok\n".repeat(10)),
+        ];
+        let configs: Vec<(&str, ToolOutputCompressionRuntime)> = vec![
+            ("auto+ccr tail4", enabled_rt(dir.path())),
+            (
+                "auto nocc tail4",
+                ToolOutputCompressionRuntime {
+                    ccr_enabled: false,
+                    ..enabled_rt(dir.path())
+                },
+            ),
+            (
+                "logs+json only",
+                ToolOutputCompressionRuntime {
+                    strategies: CompressionStrategiesSpec::List(vec![
+                        "logs".into(),
+                        "json".into(),
+                    ]),
+                    ..enabled_rt(dir.path())
+                },
+            ),
+            (
+                "auto+ccr tail20",
+                ToolOutputCompressionRuntime {
+                    keep_tail_lines: 20,
+                    ..enabled_rt(dir.path())
+                },
+            ),
+            (
+                "min500 (default)",
+                ToolOutputCompressionRuntime {
+                    min_input_tokens: 500,
+                    ..enabled_rt(dir.path())
+                },
+            ),
+        ];
+
+        println!("\n{:<15} {:<18} {:>8} {:>8} {:>7}  note", "sample", "config", "orig", "new", "saved%");
+        for (name, text) in &samples {
+            let orig = estimate_tokens(text) as u64;
+            for (cname, rt) in &configs {
+                reset_for_tests(rt.clone());
+                let out = compress_text(text, rt);
+                let new = estimate_tokens(&out) as u64;
+                let saved = if orig > 0 {
+                    100.0 * (orig.saturating_sub(new)) as f64 / orig as f64
+                } else {
+                    0.0
+                };
+                let stats = snapshot_stats();
+                let note = if stats.compressed_calls > 0 {
+                    "win"
+                } else if stats.no_win_calls > 0 {
+                    "no-win"
+                } else {
+                    "skip"
+                };
+                println!(
+                    "{:<15} {:<18} {:>8} {:>8} {:>6.1}%  {note}",
+                    name, cname, orig, new, saved
+                );
+            }
+            println!();
+        }
+    }
+
+    fn sample_build_log() -> String {
+        let mut s = String::from("exit: 1\n");
+        for i in 0..120 {
+            s.push_str(&format!("   Compiling crate{i} v0.1.{i}\n"));
+            if i % 7 == 0 {
+                s.push_str(&format!("warning: unused variable `x{i}`\n"));
+            }
+        }
+        s.push_str("error[E0308]: mismatched types\n");
+        s.push_str("  --> src/main.rs:42:9\n   |\n42 |     let x: u8 = \"s\";\n   |\n");
+        s.push_str("error: could not compile `demo` due to 1 previous error\n");
+        s
+    }
+
+    fn sample_json_array() -> String {
+        let items: Vec<Value> = (0..80)
+            .map(|i| {
+                serde_json::json!({
+                    "path": format!("src/module{i}/file.rs"),
+                    "size": 1000 + i * 37,
+                    "lines": 40 + i,
+                    "mtime": format!("2026-09-1{}T0{}:00:00Z", i % 9, i % 9),
+                })
+            })
+            .collect();
+        serde_json::to_string_pretty(&items).unwrap()
+    }
+
+    fn sample_search() -> String {
+        let mut s = String::new();
+        for i in 0..60 {
+            s.push_str(&format!(
+                "crates/codegen/xai-grok-pager/src/app/mod.rs:{}:    handle_event(Event::Key(key_{i}));\n",
+                10 + i
+            ));
+        }
+        s
+    }
+
+    fn sample_diff() -> String {
+        let mut s = String::new();
+        for f in 0..5 {
+            s.push_str(&format!("diff --git a/src/f{f}.rs b/src/f{f}.rs\n"));
+            s.push_str(&format!("--- a/src/f{f}.rs\n+++ b/src/f{f}.rs\n"));
+            for h in 0..6 {
+                s.push_str(&format!("@@ -{},7 +{},8 @@\n", h * 10 + 1, h * 10 + 1));
+                for l in 0..8 {
+                    s.push_str(&format!(" ctx line {} in f{f} hunk{h} with some padding text\n", l));
+                    if l == 3 {
+                        s.push_str(&format!("+added line {l} in f{f} hunk{h}\n"));
+                    }
+                }
+            }
+        }
+        s
+    }
+
+    fn sample_prose() -> String {
+        "Here is a summary of the changes made in this session. \
+         The refactor touched the session lifecycle, moved the sampler \
+         glue into its own module, and updated the docs. Everything "
+            .repeat(30)
     }
 }
