@@ -179,3 +179,5 @@ ttl_secs = 3600
 ```
 
 **When to configure it:** long sessions whose context is dominated by cargo/npm/pytest logs, huge JSON tool payloads, or grep dumps. Leave it off (the default) if you have not opted in.
+
+**Roadmap.** The current transforms are quota-based (keep head/tail, drop the middle) and therefore lossy once past the protected fields. The planned revision stacks a lossless layer first — exact-duplicate collapsing (`x N` markers), repeated-line folding, and full grep hit retention, each reversible and self-checked against the original at runtime — and bounds the lossy fallback to a configurable fraction of the original size. Any truncation will always leave a `<<ccr:HASH>>` marker with a working `expand_output` retrieval path.

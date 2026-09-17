@@ -212,7 +212,9 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
   见 `ci-cache-incident.md`。
 ## 待办（下一期）
 
-- 工具输出压缩：一期已落地（简化 headroom 策略，见 `tool-output-compression-plan.md`）；only-cc-lite git 依赖与 embedding 检索仍不做
+- 工具输出压缩：一期已落地（简化 headroom 策略，见 `tool-output-compression-plan.md`）；
+  二期低损/无损组合已定稿（2026-09-17，见同文档「二期方向」节）；only-cc-lite git
+  依赖与 embedding 检索仍不做
 - 排队时间戳 / wait 计算（`acp_session_impl/prompt_queue.rs`）：已从计划删除
 - 排队卡视觉区分：已废弃
 - T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤
@@ -363,6 +365,30 @@ updates.rs `emit_builtin_notification`、types.rs 活动时间戳静态、agent/
 > generic head+tail。`exit_code`/`stderr` 与 bash `exit: N` 头无损。
 > 会话启动时把配置钉进 SharedResources；已写入对话的 tool_result 永不回写，
 > 提示缓存前缀在整段会话内字节稳定。改配置只影响下一个新会话。
+
+### 二期方向定稿（2026-09-17，摘要；全文见 `tool-output-compression-plan.md`「二期方向」）
+
+目标升级为**低损/无损**，组合为三级瀑布：无损层（重复行折叠 xN、JSON 精确去重、
+search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往返自校验失败退回
+原文）→ 低损层（日志重要性打分限预算、JSON 膝点 adaptive-k）→ 有损兜底
+（generic head/tail，新增 `max_lossy_ratio = 0.25` 上限，截断必写 CCR marker）。
+
+事实依据（本地消融 `mech_ablation_report` 测试 + 四家社区风评）：
+
+- 本地消融：重复型 JSON 一期基线省 92.7% 但**丢中间唯一项**，精确去重 91.3% 零丢失；
+  日志模板折叠省 93.1% vs 基线 78.8% 且关键行全保留；search 每文件 3 条上限
+  丢尾部命中（一期隐藏损失）；唯一型内容"低损=低省"是物理极限（全保留仅省 23-25%）。
+- headroom 丢信息投诉：#3545 search 行熔接 → 行号↔内容假配对；#3580 代码被 ML
+  通道删词；#3590 小结构化输出压残；#3625 截断未写 marker；#3544/#3560 有 marker
+  无 retrieve；#3587 1886 请求零次检索（marker 成本白付）。无损正解在它的
+  `lossless_compaction.py`（可逆 + 自校验）。
+- 实测经济账：重写历史 → cache bust 123 vs 14，净省 ≈0（brandonbarker.me 对照
+  实验）；headroom 自报 savings ~1.9x 高估（/stats 数字只当相对指标）；
+  tsheadroom 保守档实测仅 ~40%（vs 宣传 60-95%）。
+- DCP（模型主动压缩）不采用：摘要膨胀反烧 738k token（#573）、静默丢数据（#534）、
+  原地替换破 cache（#604）、保护白名单 Windows 路径分隔符从未匹配（#592）。
+- context-mode（事前沙箱）不采用：MCP 盲区 + FTS5 召回依赖模型写对脚本 +
+  evict 排序 bug；本 fork 该场景由 rtk hook 覆盖。
 
 ### xai-grok-tools
 - 新模块 `implementations/output_compression/`：检测、压缩、CCR 文件库、
