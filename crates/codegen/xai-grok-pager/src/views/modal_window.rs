@@ -282,6 +282,16 @@ pub fn render_modal_window(
     // Clear cells under the modal so content behind doesn't bleed through.
     Clear.render(modal_area, buf);
 
+    // LOCAL: 标题与标签页在渲染时经 i18n 查表（英文模式原样、未命中原样透传）。
+    // 翻译发生在测宽之前，标签栏/快捷键的换行布局按译文宽度计算。
+    let title = crate::slash::i18n::tr_str(config.title);
+    let tabs_i18n: Option<Vec<String>> = config
+        .tabs
+        .map(|ts| ts.iter().map(|t| crate::slash::i18n::tr_str(t)).collect());
+    let tabs_ref: Option<Vec<&str>> = tabs_i18n
+        .as_ref()
+        .map(|v| v.iter().map(String::as_str).collect());
+
     // The decorative ─ dashes around the title use the border color (gray_dim) so they blend with the border, while the title text itself stays bold
     let border_style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
     let title_style = Style::default()
@@ -292,14 +302,17 @@ pub fn render_modal_window(
     let inner = if is_embedded {
         // Borderless (minimal): no popup box, border, or close button; the modal must not look like a floating window
         // An optional bold title takes the first row; content fills the full width below it
-        if config.title.is_empty() {
+        if title.is_empty() {
             modal_area
         } else {
             // Background-free title (minimal renders every element transparent).
             let embedded_title_style = Style::default()
                 .fg(theme.text_primary)
                 .add_modifier(Modifier::BOLD);
-            let title = ratatui::text::Line::from(Span::styled(config.title, embedded_title_style));
+            let title = ratatui::text::Line::from(Span::styled(
+                title.as_str(),
+                embedded_title_style,
+            ));
             buf.set_line(
                 modal_area.x + sizing.h_pad,
                 modal_area.y,
@@ -320,10 +333,10 @@ pub fn render_modal_window(
             .borders(Borders::ALL)
             .style(Style::default().bg(theme.bg_base).fg(theme.text_primary))
             .border_style(border_style);
-        if !config.title.is_empty() {
+        if !title.is_empty() {
             let title = ratatui::text::Line::from(vec![
                 Span::styled("\u{2500} ", border_style),
-                Span::styled(config.title, title_style),
+                Span::styled(title.as_str(), title_style),
                 Span::styled(" \u{2500}", border_style),
             ]);
             block = block.title(title);
@@ -339,7 +352,7 @@ pub fn render_modal_window(
     // The tab bar wraps onto multiple rows when tabs don't fit on a single line
     let tab_bar_height;
     let tab_divider_height;
-    if let Some(tabs) = config.tabs {
+    if let Some(tabs) = tabs_ref.as_deref() {
         tab_bar_height = render_tab_bar(buf, inner, state, tabs, theme);
         tab_divider_height = 1;
         // Full-width divider below tab bar.
@@ -361,7 +374,7 @@ pub fn render_modal_window(
 
     // Compute content area (inside padding, above footer).
     // When tabs are present, the divider replaces vertical padding between tabs and content (so content starts right after the divider)
-    let effective_v_pad = if config.tabs.is_some() {
+    let effective_v_pad = if tabs_ref.is_some() {
         0
     } else {
         sizing.v_pad
@@ -593,7 +606,7 @@ pub(crate) fn shortcuts_rows_needed(shortcuts: &[Shortcut<'_>], width: u16) -> u
     let mut rows = 1u16;
     let mut cur_row_w: usize = 0;
     for shortcut in shortcuts {
-        let label_w = shortcut.label.width();
+        let label_w = shortcut_label_i18n(shortcut.label).width();
         let needed = if cur_row_w == 0 {
             label_w
         } else {
@@ -618,6 +631,23 @@ fn split_shortcut_label(label: &str) -> (&str, &str) {
     }
 }
 
+/// LOCAL: 快捷键标签在渲染/测宽时经 i18n 查表——键位（首个空格前的 token）保留英文，
+/// 仅翻译说明部分（如 "e/→ expand" → "e/→ 展开"）；英文模式或未命中时原样返回。
+/// [`shortcuts_rows_needed`] 与 [`render_modal_shortcuts`] 必须共用本函数，
+/// 否则换行行数预测与实际渲染宽度会不一致。
+fn shortcut_label_i18n(label: &str) -> std::borrow::Cow<'_, str> {
+    let (key, rest) = split_shortcut_label(label);
+    if rest.is_empty() {
+        return std::borrow::Cow::Borrowed(label);
+    }
+    let rest_tr = crate::slash::i18n::tr_str(rest);
+    if rest_tr == rest {
+        std::borrow::Cow::Borrowed(label)
+    } else {
+        std::borrow::Cow::Owned(format!("{key} {rest_tr}"))
+    }
+}
+
 /// Returns hit-test areas for all rendered shortcuts (both clickable and hint-only). When shortcuts
 /// don't fit on a single row, they wrap onto additional rows within the `area` height.
 pub fn render_modal_shortcuts(
@@ -639,7 +669,7 @@ pub fn render_modal_shortcuts(
     let mut rows: Vec<Vec<usize>> = vec![vec![]];
     let mut cur_row_w: usize = 0;
     for (idx, shortcut) in shortcuts.iter().enumerate() {
-        let label_w = shortcut.label.width();
+        let label_w = shortcut_label_i18n(shortcut.label).width();
         let needed = if rows.last().unwrap().is_empty() {
             label_w
         } else {
@@ -669,7 +699,7 @@ pub fn render_modal_shortcuts(
         // Compute this row's total width for centering.
         let row_total: usize = row_indices
             .iter()
-            .map(|&i| shortcuts[i].label.width())
+            .map(|&i| shortcut_label_i18n(shortcuts[i].label).width())
             .sum::<usize>()
             + sep_w * row_indices.len().saturating_sub(1);
         let start_x = if row_total > avail {
@@ -687,7 +717,8 @@ pub fn render_modal_shortcuts(
                 break;
             }
 
-            let display = &shortcut.label[..byte_offset_at_width(shortcut.label, remaining)];
+            let label_i18n = shortcut_label_i18n(shortcut.label);
+            let display = &label_i18n[..byte_offset_at_width(&label_i18n, remaining)];
             let visible_w = display.width() as u16;
             let is_hovered = hovered == Some(shortcut_idx);
 
@@ -1093,6 +1124,18 @@ pub(crate) fn fill_overlay_content(buf: &mut Buffer, area: Rect, theme: &Theme) 
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
+
+    /// LOCAL: 测试构建下 i18n 查表整体旁路（见 slash::i18n 模块注释），
+    /// 快捷键标签保持原样且借用（零拷贝路径）；翻译映射本身由 i18n 的纯表测试覆盖。
+    #[test]
+    fn shortcut_label_i18n_passthrough_in_tests() {
+        assert_eq!(shortcut_label_i18n("e/→ expand"), "e/→ expand");
+        assert_eq!(shortcut_label_i18n("Tab switch field"), "Tab switch field");
+        assert!(matches!(
+            shortcut_label_i18n("accept"),
+            std::borrow::Cow::Borrowed(_)
+        ));
+    }
 
     /// Wrapping by display width (not char count) keeps wide CJK/emoji lines inside the border.
     #[test]

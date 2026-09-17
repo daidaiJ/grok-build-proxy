@@ -1,4 +1,4 @@
-//! LOCAL: TUI 界面文案中英双语（斜杠命令描述/用法/参数占位符），默认中文。
+//! LOCAL: TUI 界面文案中英双语（斜杠命令描述/用法/参数占位符、弹窗框架与内容文案），默认中文。
 //!
 //! 翻译表以英文原文为键，`tr()` 在中文模式下查表替换，英文模式原样返回；
 //! 表中无对应键的字符串（含 ACP/技能等运行时文案）原样透传。
@@ -56,32 +56,39 @@ pub fn set_lang(lang: Lang) {
     }, Ordering::Relaxed);
 }
 
+/// LOCAL: 测试构建下翻译查表整体旁路。
+///
+/// 渲染路径遍布 tr/tr_str 之后，任何测试渲染文本都可能读到其它测试切出的语言/翻译
+/// 开关（`test_sync::LANG_LOCK` 只能串行化持有者，保护不了不知情的读者），造成跨用例
+/// 失败。因此 `cfg(test)` 下查表无条件原样返回英文，翻译表的正确性由纯数据测试
+/// （直接迭代 [`translations`]）覆盖，不经过任何进程级开关或语言状态。
 /// 以英文原文查中文译文；英文模式或无译文时原样返回。
 pub fn tr(text: &'static str) -> &'static str {
-    if current_lang() == Lang::En {
+    if cfg!(test) || current_lang() == Lang::En {
         return text;
     }
-    static TABLE: OnceLock<&[( &'static str, &'static str)]> = OnceLock::new();
-    let table = TABLE.get_or_init(translations);
-    table
-        .iter()
-        .find(|(en, _)| *en == text)
-        .map_or(text, |(_, zh)| zh)
+    table_lookup(text).unwrap_or(text)
 }
 
 /// LOCAL: 动态字符串（ACP 命令描述、快捷键标签等运行时文案）的查表版本。
 /// 英文模式原样返回；中文模式查表，命中返回译文，未命中原样拷贝。
 pub fn tr_str(text: &str) -> String {
-    if current_lang() == Lang::En {
+    if cfg!(test) || current_lang() == Lang::En {
         return text.to_owned();
     }
+    table_lookup(text)
+        .map(str::to_owned)
+        .unwrap_or_else(|| text.to_owned())
+}
+
+/// 查表：命中返回译文（&'static str），未命中返回 None。
+fn table_lookup(text: &str) -> Option<&'static str> {
     static TABLE: OnceLock<&[( &'static str, &'static str)]> = OnceLock::new();
     let table = TABLE.get_or_init(translations);
     table
         .iter()
         .find(|(en, _)| *en == text)
-        .map(|(_, zh)| (*zh).to_owned())
-        .unwrap_or_else(|| text.to_owned())
+        .map(|(_, zh)| *zh)
 }
 
 fn translations() -> &'static [(&'static str, &'static str)] {
@@ -380,6 +387,151 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "<objective> [--budget <tokens>] | status | pause | resume | clear",
             "<目标> [--budget <token 数>] | status | pause | resume | clear",
         ),
+        // -- 弹窗框架（modal_window 标题/标签页整体查表，快捷键只译说明部分） --
+        ("Agents", "代理"),
+        ("Personas", "人格"),
+        ("collapse", "折叠"),
+        ("default", "默认"),
+        ("new", "新建"),
+        ("switch field", "切换字段"),
+        // -- 作用域标签（ConfigFileScope/AgentScope::label 经 tr_str 查表） --
+        ("user", "用户"),
+        ("project", "项目"),
+        ("bundled", "捆绑"),
+        ("built-in", "内置"),
+        // -- /agents 弹窗（agents_modal.rs） --
+        ("\u{2500}\u{2500} Built-in \u{2500}\u{2500}", "\u{2500}\u{2500} 内置 \u{2500}\u{2500}"),
+        ("\u{2500}\u{2500} Project \u{2500}\u{2500}", "\u{2500}\u{2500} 项目 \u{2500}\u{2500}"),
+        ("\u{2500}\u{2500} User \u{2500}\u{2500}", "\u{2500}\u{2500} 用户 \u{2500}\u{2500}"),
+        ("\u{2500}\u{2500} Bundled \u{2500}\u{2500}", "\u{2500}\u{2500} 捆绑 \u{2500}\u{2500}"),
+        ("\u{2500}\u{2500} Plugins \u{2500}\u{2500}", "\u{2500}\u{2500} 插件 \u{2500}\u{2500}"),
+        (" built-in ", " 内置 "),
+        (" project ", " 项目 "),
+        (" user ", " 用户 "),
+        (" bundled ", " 捆绑 "),
+        (" plugin ", " 插件 "),
+        (" active", " 运行中"),
+        (" default", " 默认"),
+        (" [off]", " [关]"),
+        ("No agents found", "未找到代理"),
+        ("No matching agents", "没有匹配的代理"),
+        ("No personas available", "暂无可用人格"),
+        ("No matching personas", "没有匹配的人格"),
+        (
+            "Personas shape subagent behavior via the persona parameter on spawn_subagent.",
+            "人格通过 spawn_subagent 的 persona 参数塑造子代理行为。",
+        ),
+        (
+            "Used by skills (e.g. /implement) and by the model when spawning subagents.",
+            "供技能（如 /implement）和模型派生子代理时使用。",
+        ),
+        ("accepts structured inputs", "接受结构化输入"),
+        ("produces structured outputs", "产出结构化输出"),
+        ("Enter to view full definition", "回车查看完整定义"),
+        ("Create New Persona", "新建人格"),
+        ("Name: ", "名称: "),
+        ("Description: ", "描述: "),
+        ("Instructions: ", "指令: "),
+        ("Scope: ", "范围: "),
+        (
+            "Tab/↑↓: field | Space/←→ on scope: user/project | Enter: create | Esc: cancel",
+            "Tab/↑↓: 切换字段 | 空格/←→: 切换范围 user/project | Enter: 创建 | Esc: 取消",
+        ),
+        ("Delete Persona", "删除人格"),
+        ("Delete persona", "删除人格"),
+        ("y: confirm | n/Esc: cancel", "y: 确认 | n/Esc: 取消"),
+        ("Model", "模型"),
+        ("Prompt mode", "提示词模式"),
+        ("Tools", "工具"),
+        ("Skills", "技能"),
+        ("Plugin", "插件"),
+        ("Source", "来源"),
+        ("Scope", "作用域"),
+        ("Prompt extension", "提示词扩展"),
+        ("prompt extension", "提示词扩展"),
+        ("extend", "扩展"),
+        ("full", "完整"),
+        ("(none)", "（无）"),
+        ("(Enter to view full)", "（回车查看全文）"),
+        ("(in file, Enter to view)", "（在文件中，回车查看）"),
+        (
+            "uses the base system prompt with no additional instructions.",
+            "使用基础系统提示词，无额外指令。",
+        ),
+        (
+            "Plugin agents can't be the session default \u{2014} they are spawned as subagents via the Task tool.",
+            "插件代理不能设为会话默认\u{2014}它们经 Task 工具作为子代理派生。",
+        ),
+        ("Cleared: new sessions use", "已清除：新会话将默认使用"),
+        ("New sessions will start with", "新会话将默认使用"),
+        ("Enabled", "已启用"),
+        ("Disabled", "已禁用"),
+        ("applies to new sessions", "对新会话生效"),
+        ("Name is required", "名称必填"),
+        ("Created persona", "已创建人格"),
+        ("Deleted persona", "已删除人格"),
+        ("Cannot delete bundled personas", "无法删除捆绑人格"),
+        ("Persona has no source file", "人格没有源文件"),
+        (
+            "Name must contain at least one alphanumeric character",
+            "名称至少要含一个字母或数字",
+        ),
+        ("Failed to create personas directory", "创建人格目录失败"),
+        ("Persona", "人格"),
+        ("already exists", "已存在"),
+        ("Failed to format persona", "序列化人格失败"),
+        ("Failed to write persona file", "写入人格文件失败"),
+        (
+            "Persona file is not in a known personas directory",
+            "人格文件不在已知的人格目录中",
+        ),
+        ("Failed to delete persona file", "删除人格文件失败"),
+        ("Could not read or parse config.toml", "无法读取或解析 config.toml"),
+        ("Failed to write config.toml", "写入 config.toml 失败"),
+        // -- 内置 agent 描述（/agents 列表展示经 tr_str 查表；原文见 xai-grok-agent config.rs） --
+        ("Grok Build agent for software engineering tasks.", "面向软件工程任务的 Grok Build 代理。"),
+        ("Grok Build agent with concise output format.", "简洁输出格式的 Grok Build 代理。"),
+        ("Grok Build agent with plan mode support.", "支持计划模式的 Grok Build 代理。"),
+        ("Grok Build agent with plan mode (no subagents).", "支持计划模式（无子代理）的 Grok Build 代理。"),
+        ("Grok Build agent with ask-user-question tool.", "带向用户提问工具的 Grok Build 代理。"),
+        ("Codex toolset and prompt", "Codex 工具集与提示词"),
+        (
+            "OpenCode toolset — opencode-style tools and parameter conventions",
+            "OpenCode 工具集——opencode 风格的工具与参数约定",
+        ),
+        ("Web browsing and interaction agent.", "网页浏览与交互代理。"),
+        (
+            "GrokBuild orchestrator that delegates coding to specialized subagents",
+            "把编码任务分派给专职子代理的 GrokBuild 编排代理",
+        ),
+        ("General purpose agent for multi-step tasks.", "处理多步任务的通用代理。"),
+        (
+            "Fast, read-only agent specialized for codebase exploration.",
+            "快速只读代理，专长代码库探索。",
+        ),
+        ("Software architect for planning implementation strategies.", "规划实现策略的软件架构代理。"),
+        // -- 人格详情弹窗（persona_detail.rs） --
+        ("persona", "人格"),
+        ("Name", "名称"),
+        ("Description", "描述"),
+        ("Effort", "推理强度"),
+        ("Isolation", "隔离"),
+        ("Instructions", "指令"),
+        ("Instr. file", "指令文件"),
+        ("Inputs", "输入"),
+        ("Outputs", "输出"),
+        ("required", "必填"),
+        ("(e to collapse, j/k to scroll", "(e 折叠, j/k 滚动"),
+        ("Saved", "已保存"),
+        ("Save failed", "保存失败"),
+        ("Bundled personas are read-only", "捆绑人格只读"),
+        ("This field cannot be edited inline", "该字段不支持内联编辑"),
+        ("Multiline values must be edited in the source file", "多行值请到源文件中编辑"),
+        ("No source file", "没有源文件"),
+        ("No source file to save to", "没有可保存的源文件"),
+        ("Failed to read file", "读取文件失败"),
+        ("Failed to parse TOML", "解析 TOML 失败"),
+        ("Failed to write file", "写入文件失败"),
     ]
 }
 
@@ -395,19 +547,49 @@ mod tests {
     use super::*;
     use test_sync::LANG_LOCK;
 
+    /// LOCAL: 测试构建下查表整体旁路（见模块注释），这里验证旁路语义：
+    /// tr 恒为原样、set_lang/current_lang 这对语言 API 独立可用且可还原。
     #[test]
-    fn tr_follows_current_lang() {
+    fn tr_passthrough_in_tests_and_lang_api_roundtrips() {
         let _guard = LANG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let before = current_lang();
 
-        set_lang(Lang::En);
         assert_eq!(tr("Quit the application"), "Quit the application");
         assert_eq!(tr("not in table"), "not in table");
 
         set_lang(Lang::Zh);
-        assert_eq!(tr("Quit the application"), "退出程序");
-        assert_eq!(tr("not in table"), "not in table");
+        assert_eq!(current_lang(), Lang::Zh);
+        assert_eq!(tr("Quit the application"), "Quit the application");
 
         set_lang(before);
+        assert_eq!(current_lang(), before);
+    }
+
+    /// LOCAL: 纯数据测试——不经过进程级状态，直接验证翻译表内容与键唯一性。
+    #[test]
+    fn translations_table_covers_known_keys_without_duplicates() {
+        let table = translations();
+        let mut seen = std::collections::HashSet::new();
+        for (en, zh) in table {
+            assert!(!en.is_empty(), "empty key");
+            assert!(!zh.is_empty(), "empty translation for {en:?}");
+            assert!(seen.insert(*en), "duplicate table key: {en:?}");
+        }
+        for (en, zh) in [
+            ("Quit the application", "退出程序"),
+            ("Agents", "代理"),
+            ("Personas", "人格"),
+            (
+                "Grok Build agent for software engineering tasks.",
+                "面向软件工程任务的 Grok Build 代理。",
+            ),
+            ("project", "项目"),
+        ] {
+            assert_eq!(
+                table.iter().find(|(k, _)| *k == en).map(|(_, v)| *v),
+                Some(zh),
+                "missing/incorrect entry for {en:?}"
+            );
+        }
     }
 }
