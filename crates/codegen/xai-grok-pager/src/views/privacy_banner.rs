@@ -1,12 +1,14 @@
 //! Coding-data sharing upsell banner (the Figma "Data Sharing Upsell" design).
 //! Shared by the welcome tip slot and the agent-view banner slot; visibility is gated by `AppView::privacy_banner_should_show`.
 
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
+use unicode_width::UnicodeWidthStr;
 
 /// Shares its row with the buttons.
 const PRIVACY_BANNER_TITLE: &str = "Help improve Grok";
@@ -102,7 +104,7 @@ fn wrap_to(width: usize) -> Vec<std::borrow::Cow<'static, str>> {
         return vec![];
     }
     let opts = textwrap::Options::new(width).wrap_algorithm(textwrap::WrapAlgorithm::FirstFit);
-    textwrap::wrap(PRIVACY_BANNER_DESC, opts)
+    textwrap::wrap(tr(PRIVACY_BANNER_DESC), opts)
 }
 
 fn body_lines(area_width: u16) -> Vec<std::borrow::Cow<'static, str>> {
@@ -154,7 +156,7 @@ pub(crate) fn render(
     buf.set_stringn(
         area.x,
         area.y,
-        PRIVACY_BANNER_TITLE,
+        tr(PRIVACY_BANNER_TITLE),
         title_width(area.width) as usize,
         Style::default().fg(theme.text_primary),
     );
@@ -188,7 +190,13 @@ pub(crate) fn render(
         let mut x = area.x;
         let mut spans = Vec::with_capacity(variant.len());
         for (text, url) in variant {
-            let w = text.len() as u16;
+            // Translate one segment at a time so each link keeps its own hit
+            // rect; the rect must track the *rendered* text's display width
+            // (CJK-aware), not the English key's byte length. Translations are
+            // chosen so each variant's rendered width never exceeds the
+            // English `legal_width` the variant was selected with.
+            let shown = tr(*text);
+            let w = shown.width() as u16;
             let style = match url {
                 None => gray,
                 Some(url) => {
@@ -211,7 +219,7 @@ pub(crate) fn render(
                     Style::default().fg(fg).add_modifier(Modifier::UNDERLINED)
                 }
             };
-            spans.push(Span::styled(*text, style));
+            spans.push(Span::styled(shown, style));
             x += w;
         }
         Paragraph::new(Line::from(spans)).render(

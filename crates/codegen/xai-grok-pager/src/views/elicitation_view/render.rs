@@ -8,6 +8,7 @@ use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 use xai_grok_tools::mcp_elicitation::ElicitFieldKind;
 
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 
 use super::state::{
@@ -45,7 +46,7 @@ enum BodyRow {
 fn url_rows(rows: &mut Vec<BodyRow>, display: &UrlDisplay, content_w: usize, theme: &Theme) {
     if let Some(host) = &display.host {
         rows.push(BodyRow::Text(Line::from(vec![
-            Span::styled("Host: ", Style::default().fg(theme.gray)),
+            Span::styled(tr("Host: "), Style::default().fg(theme.gray)),
             Span::styled(
                 host.clone(),
                 Style::default()
@@ -55,7 +56,7 @@ fn url_rows(rows: &mut Vec<BodyRow>, display: &UrlDisplay, content_w: usize, the
         ])));
         if display.punycode_host {
             rows.push(BodyRow::Text(Line::from(vec![Span::styled(
-                "Punycode host: check it is the site you expect".to_string(),
+                tr("Punycode host: check it is the site you expect").to_string(),
                 Style::default().fg(theme.accent_error),
             )])));
         }
@@ -95,7 +96,7 @@ fn build_body_rows(
         ElicitationStage::UrlWaiting(waiting) => {
             url_rows(&mut rows, &waiting.display, content_w, theme);
             rows.push(BodyRow::Text(Line::from(vec![Span::styled(
-                "Waiting for the server to confirm…".to_string(),
+                tr("Waiting for the server to confirm…").to_string(),
                 Style::default().fg(theme.gray),
             )])));
         }
@@ -141,15 +142,15 @@ fn build_body_rows(
 fn actions(state: &ElicitationViewState) -> Vec<(ElicitHit, char, &'static str)> {
     match &state.stage {
         ElicitationStage::Form(_) => vec![
-            (ElicitHit::Accept, 'y', "Accept"),
-            (ElicitHit::Decline, 'd', "Decline"),
+            (ElicitHit::Accept, 'y', tr("Accept")),
+            (ElicitHit::Decline, 'd', tr("Decline")),
         ],
         ElicitationStage::UrlConsent(_) => vec![
-            (ElicitHit::Accept, 'y', "Open URL"),
-            (ElicitHit::Decline, 'd', "Decline"),
+            (ElicitHit::Accept, 'y', tr("Open URL")),
+            (ElicitHit::Decline, 'd', tr("Decline")),
         ],
         // The response is already sent: the only local action left is dismissing the waiting chrome ('o' reopens via the shortcut bar)
-        ElicitationStage::UrlWaiting(_) => vec![(ElicitHit::Accept, 'y', "Done")],
+        ElicitationStage::UrlWaiting(_) => vec![(ElicitHit::Accept, 'y', tr("Done"))],
     }
 }
 
@@ -274,7 +275,7 @@ pub fn render_elicitation_view(
 
     // The "↑ more" and "↓ more" markers paint into the separator rows the layout already has
     if scroll > 0 {
-        paint_more_marker(buf, content_x, above_body_y, content_width, "↑ more", theme);
+        paint_more_marker(buf, content_x, above_body_y, content_width, tr("↑ more"), theme);
     }
     if total > scroll + body_h {
         paint_more_marker(
@@ -282,7 +283,7 @@ pub fn render_elicitation_view(
             content_x,
             actions_y.saturating_sub(1),
             content_width,
-            "↓ more",
+            tr("↓ more"),
             theme,
         );
     }
@@ -469,7 +470,7 @@ pub(super) fn form_value_column(fields: &[FormFieldUi], content_w: usize) -> usi
     let max_left = fields
         .iter()
         .map(|f| {
-            let req = if f.spec.required { " (required)" } else { "" };
+            let req = if f.spec.required { tr(" (required)") } else { "" };
             2 + f.spec.title.width() + req.width()
         })
         .max()
@@ -490,7 +491,7 @@ fn multi_select_summary(field: &FormFieldUi) -> String {
         .filter_map(|(i, o)| field.option_selected(i).then_some(o.label.as_str()))
         .collect();
     if labels.is_empty() {
-        "(none selected)".into()
+        tr("(none selected)").into()
     } else {
         labels.join(", ")
     }
@@ -537,7 +538,7 @@ fn field_row(
         ) => index
             .and_then(|i| options.get(i))
             .map(|o| o.label.clone())
-            .unwrap_or_else(|| "(select)".into()),
+            .unwrap_or_else(|| tr("(select)").into()),
         (super::state::FieldValueUi::Multi { .. }, _) => multi_select_summary(field),
         (super::state::FieldValueUi::Text { draft }, _) => {
             let mut draft = draft.clone();
@@ -552,7 +553,7 @@ fn field_row(
 
     let prefix = format!("{shortcut} ");
     let req = if field.spec.required {
-        " (required)"
+        tr(" (required)")
     } else {
         ""
     };

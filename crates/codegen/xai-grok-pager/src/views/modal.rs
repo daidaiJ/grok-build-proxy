@@ -5,6 +5,7 @@
 //!
 //! `ModalConfirmation<R>` is a small dialog that blocks all input until the user presses one of the listed keys.
 use crate::docs::{DocEntry, default_howto_entries};
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::modal_window::ModalWindowState;
 use ratatui::buffer::Buffer;
@@ -47,12 +48,12 @@ impl EditConfirmResult {
     /// Dynamic label based on whether the agent is waiting to drain.
     pub fn label(&self, drain_blocked: bool) -> &'static str {
         match (self, drain_blocked) {
-            (Self::Save, false) => "save",
-            (Self::Save, true) => "save & send",
-            (Self::Discard, false) => "discard changes",
-            (Self::Discard, true) => "discard & send",
-            (Self::Delete, _) => "delete prompt",
-            (Self::Cancel, _) => "cancel",
+            (Self::Save, false) => tr("save"),
+            (Self::Save, true) => tr("save & send"),
+            (Self::Discard, false) => tr("discard changes"),
+            (Self::Discard, true) => tr("discard & send"),
+            (Self::Delete, _) => tr("delete prompt"),
+            (Self::Cancel, _) => tr("cancel"),
         }
     }
 }
@@ -91,8 +92,8 @@ impl ResetSettingsResult {
     /// Label for the y/n buttons rendered in the modal footer.
     pub fn label(self) -> &'static str {
         match self {
-            Self::Reset => "reset",
-            Self::Cancel => "cancel",
+            Self::Reset => tr("reset"),
+            Self::Cancel => tr("cancel"),
         }
     }
 }
@@ -132,10 +133,10 @@ impl CancelTurnChoice {
     ];
     pub fn label(&self) -> &'static str {
         match self {
-            Self::StopRunning => "Stop running",
-            Self::ContinueToRun => "Continue to run",
-            Self::AlwaysStop => "Always stop",
-            Self::AlwaysContinue => "Always continue",
+            Self::StopRunning => tr("Stop running"),
+            Self::ContinueToRun => tr("Continue to run"),
+            Self::AlwaysStop => tr("Always stop"),
+            Self::AlwaysContinue => tr("Always continue"),
         }
     }
 }
@@ -383,57 +384,57 @@ pub(crate) fn default_palette_entries(
     let mut entries = vec![
         // ── Session ──
         PaletteEntry {
-            label: "Session".into(),
+            label: tr("Session").into(),
             shortcut: String::new(),
             command: PaletteCommand::SectionHeader("Session".into()),
         },
         PaletteEntry {
-            label: "New Session".into(),
+            label: tr("New Session").into(),
             shortcut: "Ctrl+N".into(),
             command: PaletteCommand::NewSession,
         },
         PaletteEntry {
-            label: "New Session in Worktree".into(),
+            label: tr("New Session in Worktree").into(),
             shortcut: "Ctrl+P → worktree".into(),
             command: PaletteCommand::NewSessionInWorktree,
         },
         PaletteEntry {
-            label: "Agent Dashboard".into(),
+            label: tr("Agent Dashboard").into(),
             shortcut: "/dashboard".into(),
             command: PaletteCommand::SlashCommand("/dashboard".into()),
         },
         PaletteEntry {
-            label: "Back to Home".into(),
+            label: tr("Back to Home").into(),
             shortcut: "/home".into(),
             command: PaletteCommand::Home,
         },
         PaletteEntry {
-            label: "Delete This Session".into(),
+            label: tr("Delete This Session").into(),
             shortcut: "/delete".into(),
             command: PaletteCommand::SlashCommand("/delete".into()),
         },
         PaletteEntry {
-            label: "Resume Session".into(),
+            label: tr("Resume Session").into(),
             shortcut: "/resume".into(),
             command: PaletteCommand::SlashCommand("/resume".into()),
         },
         PaletteEntry {
-            label: "Share Session".into(),
+            label: tr("Share Session").into(),
             shortcut: "/share".into(),
             command: PaletteCommand::SlashCommand("/share".into()),
         },
         PaletteEntry {
-            label: "Rename Session".into(),
+            label: tr("Rename Session").into(),
             shortcut: "/rename ".into(),
             command: PaletteCommand::SlashCommand("/rename ".into()),
         },
         PaletteEntry {
-            label: "Session Info".into(),
+            label: tr("Session Info").into(),
             shortcut: "/session-info".into(),
             command: PaletteCommand::SlashCommand("/session-info".into()),
         },
         PaletteEntry {
-            label: "Send Feedback".into(),
+            label: tr("Send Feedback").into(),
             shortcut: "/feedback".into(),
             command: if screen_mode.is_minimal() {
                 PaletteCommand::InsertFeedbackSlash
@@ -443,127 +444,127 @@ pub(crate) fn default_palette_entries(
         },
         // ── Context ──
         PaletteEntry {
-            label: "Context".into(),
+            label: tr("Context").into(),
             shortcut: String::new(),
             command: PaletteCommand::SectionHeader("Context".into()),
         },
         PaletteEntry {
-            label: "Compact History".into(),
+            label: tr("Compact History").into(),
             shortcut: "/compact".into(),
             command: PaletteCommand::SlashCommand("/compact".into()),
         },
         PaletteEntry {
-            label: "Context Usage".into(),
+            label: tr("Context Usage").into(),
             shortcut: "/context".into(),
             command: PaletteCommand::SlashCommand("/context".into()),
         },
         PaletteEntry {
-            label: "View Plan".into(),
+            label: tr("View Plan").into(),
             shortcut: "/view-plan".into(),
             command: PaletteCommand::SlashCommand("/view-plan".into()),
         },
         PaletteEntry {
-            label: "Memory".into(),
+            label: tr("Memory").into(),
             shortcut: "/memory".into(),
             command: PaletteCommand::Memory,
         },
         // ── Model & Input ──
         PaletteEntry {
-            label: "Model & Input".into(),
+            label: tr("Model & Input").into(),
             shortcut: String::new(),
             command: PaletteCommand::SectionHeader("Model & Input".into()),
         },
         PaletteEntry {
-            label: "Switch Model".into(),
+            label: tr("Switch Model").into(),
             shortcut: "/model".into(),
             command: PaletteCommand::SlashCommand("/model ".into()),
         },
         PaletteEntry {
-            label: "Always Approve Mode".into(),
+            label: tr("Always Approve Mode").into(),
             shortcut: "/always-approve".into(),
             command: PaletteCommand::SlashCommand("/always-approve".into()),
         },
         PaletteEntry {
-            label: "Multiline Input".into(),
+            label: tr("Multiline Input").into(),
             shortcut: "/multiline".into(),
             command: PaletteCommand::SlashCommand("/multiline".into()),
         },
         PaletteEntry {
-            label: "Edit Prompt in External Editor".into(),
+            label: tr("Edit Prompt in External Editor").into(),
             shortcut: "Ctrl+G".into(),
             command: PaletteCommand::EditPromptExternal,
         },
         // ── Tools ──
         PaletteEntry {
-            label: "Tools".into(),
+            label: tr("Tools").into(),
             shortcut: String::new(),
             command: PaletteCommand::SectionHeader("Tools".into()),
         },
         PaletteEntry {
-            label: "Hooks".into(),
+            label: tr("Hooks").into(),
             shortcut: "/hooks".into(),
             command: PaletteCommand::OpenExtensionsTab(
                 crate::views::extensions_modal::ExtensionsTab::Hooks,
             ),
         },
         PaletteEntry {
-            label: "Plugins".into(),
+            label: tr("Plugins").into(),
             shortcut: "/plugins".into(),
             command: PaletteCommand::OpenExtensionsTab(
                 crate::views::extensions_modal::ExtensionsTab::Plugins,
             ),
         },
         PaletteEntry {
-            label: "Marketplace".into(),
+            label: tr("Marketplace").into(),
             shortcut: "/marketplace".into(),
             command: PaletteCommand::OpenExtensionsTab(
                 crate::views::extensions_modal::ExtensionsTab::Marketplace,
             ),
         },
         PaletteEntry {
-            label: "Skills".into(),
+            label: tr("Skills").into(),
             shortcut: "/skills".into(),
             command: PaletteCommand::OpenExtensionsTab(
                 crate::views::extensions_modal::ExtensionsTab::Skills,
             ),
         },
         PaletteEntry {
-            label: "Workflows".into(),
+            label: tr("Workflows").into(),
             shortcut: "/workflows".into(),
             command: PaletteCommand::OpenExtensionsTab(
                 crate::views::extensions_modal::ExtensionsTab::Workflows,
             ),
         },
         PaletteEntry {
-            label: "MCP Servers".into(),
+            label: tr("MCP Servers").into(),
             shortcut: "/mcps".into(),
             command: PaletteCommand::OpenExtensionsTab(
                 crate::views::extensions_modal::ExtensionsTab::McpServers,
             ),
         },
         PaletteEntry {
-            label: "Manage Agents".into(),
+            label: tr("Manage Agents").into(),
             shortcut: "/config-agents".into(),
             command: PaletteCommand::OpenAgentsModal,
         },
         // ── Other ──
         PaletteEntry {
-            label: "Other".into(),
+            label: tr("Other").into(),
             shortcut: String::new(),
             command: PaletteCommand::SectionHeader("Other".into()),
         },
         PaletteEntry {
-            label: "Switch Theme".into(),
+            label: tr("Switch Theme").into(),
             shortcut: "/theme".into(),
             command: PaletteCommand::SlashCommand("/theme ".into()),
         },
         PaletteEntry {
-            label: "Settings".into(),
+            label: tr("Settings").into(),
             shortcut: "F2".into(),
             command: PaletteCommand::OpenSettings,
         },
         PaletteEntry {
-            label: "Keyboard Shortcuts".into(),
+            label: tr("Keyboard Shortcuts").into(),
             shortcut: if crate::actions::ctrl_dot_unreliable() {
                 "Ctrl+X".into()
             } else {
@@ -572,17 +573,17 @@ pub(crate) fn default_palette_entries(
             command: PaletteCommand::KeyboardShortcuts,
         },
         PaletteEntry {
-            label: "How-to Guides".into(),
+            label: tr("How-to Guides").into(),
             shortcut: "/docs".into(),
             command: PaletteCommand::HowTo,
         },
         PaletteEntry {
-            label: "Tutorial".into(),
+            label: tr("Tutorial").into(),
             shortcut: "/tutorial".into(),
             command: PaletteCommand::SlashCommand("/tutorial".into()),
         },
         PaletteEntry {
-            label: "Quit".into(),
+            label: tr("Quit").into(),
             shortcut: "Ctrl+Q".into(),
             command: PaletteCommand::Quit,
         },
@@ -685,31 +686,31 @@ impl ActiveModal {
         match self {
             ActiveModal::EditConfirm { .. } => {
                 if drain_blocked {
-                    "Save and send?"
+                    tr("Save and send?")
                 } else {
-                    "Save changes?"
+                    tr("Save changes?")
                 }
             }
-            ActiveModal::CommandPalette { .. } => "Commands",
-            ActiveModal::SessionPicker { .. } => "Resume session",
+            ActiveModal::CommandPalette { .. } => tr("Commands"),
+            ActiveModal::SessionPicker { .. } => tr("Resume session"),
             ActiveModal::ArgPicker {
                 command,
                 args_query,
                 ..
             } => match command.as_str() {
-                "model" | "m" if !args_query.is_empty() => "Pick reasoning effort",
-                "model" | "m" => "Pick model",
-                "theme" | "t" => "Pick theme",
-                _ => "Pick option",
+                "model" | "m" if !args_query.is_empty() => tr("Pick reasoning effort"),
+                "model" | "m" => tr("Pick model"),
+                "theme" | "t" => tr("Pick theme"),
+                _ => tr("Pick option"),
             },
-            ActiveModal::DocPicker { .. } => "How-to Guides",
+            ActiveModal::DocPicker { .. } => tr("How-to Guides"),
             ActiveModal::DocViewer { title, .. } => title.as_str(),
-            ActiveModal::ShortcutsHelp { .. } => "Keyboard Shortcuts",
-            ActiveModal::MemoryBrowser { .. } => "Memory",
-            ActiveModal::Settings { .. } => crate::views::settings_modal::MODAL_TITLE,
-            ActiveModal::ResetSettingsConfirm { .. } => "Reset setting?",
-            ActiveModal::RememberNoteReview { .. } => "Memory Note",
-            ActiveModal::UsageInfo { .. } => "Usage",
+            ActiveModal::ShortcutsHelp { .. } => tr("Keyboard Shortcuts"),
+            ActiveModal::MemoryBrowser { .. } => tr("Memory"),
+            ActiveModal::Settings { .. } => tr(crate::views::settings_modal::MODAL_TITLE),
+            ActiveModal::ResetSettingsConfirm { .. } => tr("Reset setting?"),
+            ActiveModal::RememberNoteReview { .. } => tr("Memory Note"),
+            ActiveModal::UsageInfo { .. } => tr("Usage"),
         }
     }
 }
@@ -727,9 +728,12 @@ pub fn reset_confirm_prompt(modal: &ActiveModal) -> Option<String> {
     let meta = settings_state.registry.find(key)?;
     let default = crate::settings::default_value_for(meta);
     Some(format!(
-        "Reset '{}' to default ({})?",
+        "{}'{}'{}{}{}",
+        tr("Reset "),
         meta.label,
+        tr(" to default ("),
         format_default_for_prompt(&meta.kind, &default),
+        tr(")?"),
     ))
 }
 /// Abbreviated title breadcrumb for the reset-confirm dialog, e.g. "Reset 'Compact mode'".
@@ -743,7 +747,7 @@ pub fn reset_confirm_breadcrumb(modal: &ActiveModal) -> Option<String> {
         return None;
     };
     let meta = settings_state.registry.find(key)?;
-    Some(format!("Reset '{}'", meta.label))
+    Some(tr("Reset '{}'").replace("{}", &meta.label))
 }
 /// Format a `SettingValue` for the prompt's `(<default>)` display.
 fn format_default_for_prompt(
@@ -752,8 +756,8 @@ fn format_default_for_prompt(
 ) -> String {
     use crate::settings::{SettingKind, SettingValue};
     match value {
-        SettingValue::Bool(true) => "on".to_owned(),
-        SettingValue::Bool(false) => "off".to_owned(),
+        SettingValue::Bool(true) => tr("on").to_owned(),
+        SettingValue::Bool(false) => tr("off").to_owned(),
         SettingValue::Enum(canonical) => {
             if let SettingKind::Enum { choices, .. } = kind {
                 for c in *choices {
@@ -905,16 +909,16 @@ pub fn render_cancel_turn_panel(
         content_x,
         y,
         &Line::from(Span::styled(
-            "Subagents are still running. Stop them?",
+            tr("Subagents are still running. Stop them?"),
             title_style,
         )),
         content_w as u16,
     );
     y += 1;
     let count_text = if state.running_count == 1 {
-        "1 subagent running".to_string()
+        tr("1 subagent running").to_string()
     } else {
-        format!("{} subagents running", state.running_count)
+        tr("{} subagents running").replace("{}", &state.running_count.to_string())
     };
     buf.set_line(
         content_x,
@@ -1038,25 +1042,26 @@ fn fit_docs_ask_grok_tip(docs_path: &str, width: usize) -> String {
     if width == 0 {
         return String::new();
     }
-    let long =
-        format!("Tip · Ask Grok about the docs ({docs_path}), e.g. \"how do I set up MCP?\"");
+    let long = tr("Tip · Ask Grok about the docs ({docs_path}), e.g. \"how do I set up MCP?\"")
+        .replace("{docs_path}", docs_path);
     if long.width() <= width {
         return long;
     }
-    let short = format!("Tip · Ask Grok about the docs · {docs_path}");
+    let short =
+        tr("Tip · Ask Grok about the docs · {docs_path}").replace("{docs_path}", docs_path);
     if short.width() <= width {
         return short;
     }
-    let path_only = format!("Tip · {docs_path}");
+    let path_only = tr("Tip · {docs_path}").replace("{docs_path}", docs_path);
     if path_only.width() <= width {
         return path_only;
     }
-    const PREFIX: &str = "Tip · ";
-    let budget = width.saturating_sub(PREFIX.width());
+    let prefix = tr("Tip · ");
+    let budget = width.saturating_sub(prefix.width());
     if budget == 0 {
-        return truncate_str("Tip", width);
+        return truncate_str(tr("Tip"), width);
     }
-    format!("{PREFIX}{}", truncate_str(docs_path, budget))
+    format!("{prefix}{}", truncate_str(docs_path, budget))
 }
 pub fn render_doc_picker_overlay(
     buf: &mut ratatui::buffer::Buffer,
@@ -1087,17 +1092,17 @@ pub fn render_doc_picker_overlay(
     let non_sel = vec![false; filtered.len()];
     let mut picker_shortcuts: Vec<Shortcut<'_>> = vec![
         Shortcut {
-            label: "\u{2191}/\u{2193} nav",
+            label: tr("\u{2191}/\u{2193} nav"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "Enter select",
+            label: tr("Enter select"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "Esc close",
+            label: tr("Esc close"),
             clickable: false,
             id: 0,
         },
@@ -1118,7 +1123,7 @@ pub fn render_doc_picker_overlay(
         ..base_sizing
     };
     let modal_config = ModalWindowConfig {
-        title: "How-to Guides",
+        title: tr("How-to Guides"),
         tabs: None,
         shortcuts: &picker_shortcuts,
         sizing,
@@ -1135,11 +1140,13 @@ pub fn render_doc_picker_overlay(
     }
     const NARROW_THRESHOLD: u16 = 70;
     let narrow = picker_area.width < NARROW_THRESHOLD;
+    // Doc entries come from crate::docs; translate at this render exit (state/data stays English).
+    let row_labels: Vec<(String, String)> = filtered
+        .iter()
+        .map(|(_, e)| (tr_str(&e.title), tr_str(&e.description)))
+        .collect();
     let desc_slices: Vec<Vec<&str>> = if narrow {
-        filtered
-            .iter()
-            .map(|(_, e)| vec![e.description.as_str()])
-            .collect()
+        row_labels.iter().map(|(_, d)| vec![d.as_str()]).collect()
     } else {
         Vec::new()
     };
@@ -1150,10 +1157,11 @@ pub fn render_doc_picker_overlay(
     let picker_entries: Vec<PickerEntry<'_>> = filtered
         .iter()
         .enumerate()
-        .map(|(i, (orig_idx, e))| {
+        .map(|(i, (orig_idx, _))| {
+            let (title, description) = &row_labels[i];
             PickerEntry::Row(PickerRow {
-                label: &e.title,
-                right_label: if narrow { "" } else { &e.description },
+                label: title.as_str(),
+                right_label: if narrow { "" } else { description.as_str() },
                 selected: *orig_idx == selected_orig,
                 expanded: narrow,
                 fields: &[],
@@ -1195,12 +1203,12 @@ pub fn render_doc_viewer_overlay(
 ) {
     let doc_shortcuts = [
         super::modal_window::Shortcut {
-            label: "\u{2191}/\u{2193} scroll",
+            label: tr("\u{2191}/\u{2193} scroll"),
             clickable: false,
             id: 0,
         },
         super::modal_window::Shortcut {
-            label: "Esc back",
+            label: tr("Esc back"),
             clickable: false,
             id: 0,
         },
@@ -1233,8 +1241,9 @@ pub fn render_doc_viewer_overlay_with_shortcuts(
     shortcuts: &[super::modal_window::Shortcut<'_>],
 ) {
     use ratatui::widgets::{Paragraph, Widget, Wrap};
+    let translated_title = tr_str(title);
     let modal_config = super::modal_window::ModalWindowConfig {
-        title,
+        title: translated_title.as_str(),
         tabs: None,
         shortcuts,
         sizing: super::modal_window::ModalSizing {

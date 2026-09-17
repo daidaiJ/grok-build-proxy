@@ -27,6 +27,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::input::key::RowWalk;
 use crate::render::line_utils::{byte_offset_at_width, truncate_line, truncate_str};
 use crate::render::wrapping::word_wrap_lines_with_joiners;
+use crate::slash::i18n::tr;
 use crate::syntax::get_syntect;
 use crate::theme::Theme;
 use crate::theme::md_style;
@@ -1505,8 +1506,8 @@ fn build_freeform_line(
     } else {
         // Empty: show placeholder
         (
-            "Type your answer here".to_string(),
-            Style::default().fg(fg(theme.gray)).bg(row_bg),
+            tr("Type your answer here").to_string(),
+            Style::default().fg(theme.gray).bg(row_bg),
         )
     };
 
@@ -1755,7 +1756,7 @@ fn render_truncation_indicator(buf: &mut Buffer, x: u16, y: u16, width: u16, the
             "Ctrl-F",
             Style::default().fg(theme.accent_user).bg(theme.bg_light),
         ),
-        Span::styled(" to expand", style),
+        Span::styled(tr(" to expand"), style),
     ]);
     buf.set_line(x, y, &indicator, width);
 }

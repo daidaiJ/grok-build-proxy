@@ -14,6 +14,7 @@ use xai_grok_workspace::permission::{
 
 use unicode_width::UnicodeWidthStr;
 
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -553,14 +554,14 @@ pub fn render_permission_view(
         let mut spans: Vec<Span<'static>> = Vec::new();
         if show_scope_hint {
             spans.push(Span::styled("\u{2190} \u{2192}", key_style));
-            spans.push(Span::styled(" narrow scope", hint_style));
+            spans.push(Span::styled(tr(" narrow scope"), hint_style));
         }
         if show_edit_hint {
             if show_scope_hint {
                 spans.push(Span::styled("  \u{00b7}  ", hint_style));
             }
             spans.push(Span::styled("e", key_style));
-            spans.push(Span::styled(" edit pattern", hint_style));
+            spans.push(Span::styled(tr(" edit pattern"), hint_style));
         }
         buf.set_line(content_x, y, &Line::from(spans), content_width);
         y += 1;
@@ -771,35 +772,35 @@ fn render_pattern_preview_line(
     match edit.trimmed() {
         None => {
             spans.push(Span::styled(
-                "type a command pattern to allow (e.g. gh api repos/*)",
+                tr("type a command pattern to allow (e.g. gh api repos/*)"),
                 dim,
             ));
         }
         Some(pattern) if xai_grok_workspace::permission::bash_glob_is_catchall(pattern) => {
             spans.push(Span::styled(
-                "\u{2717} matches everything, won't be saved",
+                tr("\u{2717} matches everything, won't be saved"),
                 Style::default().fg(theme.accent_error),
             ));
             spans.push(sep);
             spans.push(Span::styled("Esc", Style::default().fg(theme.accent_user)));
-            spans.push(Span::styled(" cancel", dim));
+            spans.push(Span::styled(tr(" cancel"), dim));
         }
         Some(pattern) => {
             if xai_grok_workspace::permission::bash_pattern_matches_command(pattern, command) {
                 spans.push(Span::styled(
-                    "\u{2713} matches this command",
+                    tr("\u{2713} matches this command"),
                     Style::default().fg(theme.accent_success),
                 ));
             } else {
                 spans.push(Span::styled(
-                    "\u{2717} won't match this command",
+                    tr("\u{2717} won't match this command"),
                     Style::default().fg(theme.accent_error),
                 ));
             }
             if xai_grok_workspace::permission::bash_pattern_is_broad(pattern) {
                 spans.push(sep.clone());
                 spans.push(Span::styled(
-                    "\u{26a0} very broad",
+                    tr("\u{26a0} very broad"),
                     Style::default().fg(theme.warning),
                 ));
             }
@@ -808,9 +809,9 @@ fn render_pattern_preview_line(
                 "Enter",
                 Style::default().fg(theme.accent_user),
             ));
-            spans.push(Span::styled(" save  ", dim));
+            spans.push(Span::styled(tr(" save  "), dim));
             spans.push(Span::styled("Esc", Style::default().fg(theme.accent_user)));
-            spans.push(Span::styled(" cancel", dim));
+            spans.push(Span::styled(tr(" cancel"), dim));
         }
     }
     buf.set_line(content_x, y, &Line::from(spans), content_width);
@@ -1275,7 +1276,7 @@ fn truncation_indicator_line(theme: &Theme) -> Line<'static> {
             "Ctrl-F",
             Style::default().fg(theme.accent_user).bg(theme.bg_light),
         ),
-        Span::styled(" to expand", style),
+        Span::styled(tr(" to expand"), style),
     ])
 }
 
@@ -1441,7 +1442,7 @@ fn build_reject_once_line<'a>(
         (preview, Style::default().fg(theme.text_primary).bg(row_bg))
     } else {
         (
-            "No, reject (type to add feedback)".to_string(),
+            tr("No, reject (type to add feedback)").to_string(),
             Style::default().fg(theme.gray).bg(row_bg),
         )
     };
@@ -1478,7 +1479,8 @@ fn dynamic_option_label(
             let scope_text = match scope.selected {
                 McpScope::Tool => perm.display_name(),
                 McpScope::Server => match scope.server_prefix.as_deref() {
-                    Some(s) => format!("all tools from {}", mcp_titleize_segment(s)),
+                    // LOCAL: 模板固定片段成键，插值（服务器名）保留；英文模式下拼接结果与原句一致
+                    Some(s) => format!("{} {}", tr("all tools from"), mcp_titleize_segment(s)),
                     None => perm.display_name(),
                 },
             };

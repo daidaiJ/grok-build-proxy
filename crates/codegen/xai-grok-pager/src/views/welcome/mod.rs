@@ -16,6 +16,8 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::app::app_view::{AuthMode, AuthState, SessionPickerEntry, TrustState};
 use crate::app::consent::ConsentState;
+// LOCAL: 界面文案中文化（welcome 屏说明/菜单/认证文案），状态串保持英文、渲染出口查表
+use crate::slash::i18n::{tr, tr_str};
 use crate::startup::StartupWarning;
 use crate::theme::Theme;
 use crate::views::prompt_widget::{PromptFlag, PromptInfo, PromptWidget};
@@ -65,7 +67,7 @@ fn quit_hint_spans(theme: &Theme) -> Vec<Span<'static>> {
                 .fg(theme.accent_user)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  quit", Style::default().fg(theme.gray)),
+        Span::styled(format!("  {}", tr("quit")), Style::default().fg(theme.gray)),
     ]
 }
 
@@ -101,7 +103,11 @@ pub(super) fn render_pending_hint(
     let line = Line::from(vec![
         Span::styled(format!("  {}", pending.shortcut.display()), key_style),
         Span::styled(":", action_style),
-        Span::styled(format!("press again to {}", pending.label), action_style),
+        // LOCAL: 前缀/标签渲染出口查表（与 shortcuts_bar 同键）
+        Span::styled(
+            format!("{} {}", tr("press again to"), tr_str(pending.label)),
+            action_style,
+        ),
     ]);
     buf.set_line(area.x, area.y, &line, area.width);
 }
@@ -539,14 +545,14 @@ pub(super) fn render_version_badge(
         } = &mode
     {
         spans.push(Span::styled(
-            format!("Tier: {tier}"),
+            format!("{}{tier}", tr("Tier: ")),
             Style::default().fg(theme.gray),
         ));
         spans.push(sep.clone());
     }
     if show_api_key && is_api_key_auth {
         spans.push(Span::styled(
-            "Logged in with API key",
+            tr("Logged in with API key"),
             Style::default().fg(theme.gray),
         ));
         spans.push(sep);
@@ -792,8 +798,8 @@ pub fn render_welcome(
     let mut result = match params.auth_state {
         AuthState::Pending { error } => {
             let label = params.login_label.unwrap_or("grok.com");
-            let login_text = format!("Login with {}", label);
-            let menu = [("l", login_text.as_str()), ("q", "Quit")];
+            let login_text = tr("Login with {}").replace("{}", label);
+            let menu = [("l", login_text.as_str()), ("q", tr("Quit"))];
             let msg = error.as_deref().map(|e| (e, theme.accent_error));
             let info = PromptInfo {
                 model_name: params.model_name,
@@ -840,12 +846,12 @@ pub fn render_welcome(
             }
         }
         AuthState::Done if params.is_zdr_blocked => {
-            let menu = [("l", "Switch account"), ("q", "Quit")];
+            let menu = [("l", tr("Switch account")), ("q", tr("Quit"))];
             let (menu_rects, post_flush_escapes) = render_welcome_blocked(
                 content_area,
                 buf,
                 Some((
-                    "Grok Build is not yet available for this account.",
+                    tr("Grok Build is not yet available for this account."),
                     theme.gray_bright,
                 )),
                 &menu,
@@ -1010,10 +1016,10 @@ fn render_welcome_trust(
     h_margin: u16,
     compact: bool,
 ) -> WelcomeRenderResult {
-    let menu_items = [("y", "Yes, proceed"), ("n", "No, quit")];
+    let menu_items = [("y", tr("Yes, proceed")), ("n", tr("No, quit"))];
     let lines = vec![
         Line::from(Span::styled(
-            "Do you trust the contents of this directory?",
+            tr("Do you trust the contents of this directory?"),
             Style::default().fg(theme.gray_bright),
         ))
         .alignment(Alignment::Center),
@@ -1025,12 +1031,12 @@ fn render_welcome_trust(
         Line::default(),
         // Two lines so the warning never clips at narrow / compact widths (a single ~78-char line would truncate "...posing security risks")
         Line::from(Span::styled(
-            "Grok Build may run or modify contents in this directory,",
+            tr("Grok Build may run or modify contents in this directory,"),
             Style::default().fg(theme.gray),
         ))
         .alignment(Alignment::Center),
         Line::from(Span::styled(
-            "posing security risks.",
+            tr("posing security risks."),
             Style::default().fg(theme.gray),
         ))
         .alignment(Alignment::Center),
@@ -1100,28 +1106,33 @@ const AUTH_COPY_SUFFIX: &str = " to copy.";
 
 /// Build the "click here to copy" line with "here" underlined in accent color.
 fn auth_copy_line(theme: &Theme) -> Line<'static> {
+    // LOCAL: 三个固定片段分别查表，"here" 保持下划线链接样式
     Line::from(vec![
-        Span::styled(AUTH_COPY_PREFIX, Style::default().fg(theme.gray_bright)),
+        Span::styled(tr(AUTH_COPY_PREFIX), Style::default().fg(theme.gray_bright)),
         Span::styled(
-            AUTH_COPY_HERE,
+            tr(AUTH_COPY_HERE),
             Style::default()
                 .fg(theme.accent_user)
                 .add_modifier(Modifier::UNDERLINED),
         ),
-        Span::styled(AUTH_COPY_SUFFIX, Style::default().fg(theme.gray_bright)),
+        Span::styled(tr(AUTH_COPY_SUFFIX), Style::default().fg(theme.gray_bright)),
     ])
     .alignment(Alignment::Center)
 }
 
 /// Number of physical rows the header and the blank row occupy before the copy line.
 fn auth_copy_preceding_rows(header: &str, inner_width: u16) -> u16 {
-    let header_rows = (header.len() as u16).div_ceil(inner_width);
+    // LOCAL: 按显示宽度估算换行（译文含全角字符时 len() 会以字节计数导致虚高）
+    let header_rows = (header.width() as u16).div_ceil(inner_width);
     header_rows + 1 // header + blank
 }
 
 /// Number of physical rows the copy line occupies when wrapped.
 fn auth_copy_line_rows(inner_width: u16) -> u16 {
-    let copy_len = AUTH_COPY_PREFIX.len() + AUTH_COPY_HERE.len() + AUTH_COPY_SUFFIX.len();
+    // LOCAL: 与 auth_copy_line 同源查表，按显示宽度估算
+    let copy_len = tr(AUTH_COPY_PREFIX).width()
+        + tr(AUTH_COPY_HERE).width()
+        + tr(AUTH_COPY_SUFFIX).width();
     (copy_len as u16).div_ceil(inner_width)
 }
 
@@ -1130,7 +1141,7 @@ const AUTH_FALLBACK_TEXT: &str = "Copying not working? Click here to show full U
 /// Build the fallback "show full URL" link line.
 fn auth_fallback_line(theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(
-        AUTH_FALLBACK_TEXT,
+        tr(AUTH_FALLBACK_TEXT),
         Style::default()
             .fg(theme.gray)
             .add_modifier(Modifier::UNDERLINED),
@@ -1149,16 +1160,16 @@ fn push_auth_copy_block(
     lines.push(Line::default());
     lines.push(match clipboard_delivery {
         Some(crate::clipboard::ClipboardDelivery::Confirmed) => {
-            Line::from(Span::styled("copied!", Style::default().fg(theme.gray)))
+            Line::from(Span::styled(tr("copied!"), Style::default().fg(theme.gray)))
                 .alignment(Alignment::Center)
         }
         Some(crate::clipboard::ClipboardDelivery::Unverified) => Line::from(Span::styled(
-            "copy sent: verify paste",
+            tr("copy sent: verify paste"),
             Style::default().fg(theme.gray),
         ))
         .alignment(Alignment::Center),
         Some(crate::clipboard::ClipboardDelivery::Failed) => {
-            Line::from(Span::styled("copy failed", Style::default().fg(theme.gray)))
+            Line::from(Span::styled(tr("copy failed"), Style::default().fg(theme.gray)))
                 .alignment(Alignment::Center)
         }
         None => Line::default(),
@@ -1229,7 +1240,7 @@ fn render_raw_url_mode(
 
     // Render hint above the URL.
     let hint = Line::from(Span::styled(
-        "Select the URL below with your mouse and copy manually.",
+        tr("Select the URL below with your mouse and copy manually."),
         Style::default().fg(theme.gray),
     ))
     .alignment(Alignment::Center);
@@ -1277,7 +1288,7 @@ fn render_raw_url_mode(
                 .fg(theme.accent_user)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("  go back", Style::default().fg(theme.gray)),
+        Span::styled(format!("  {}", tr("go back")), Style::default().fg(theme.gray)),
     ];
     let hints = Line::from(hint_spans).alignment(Alignment::Center);
     Paragraph::new(hints).render(hint_area, buf);
@@ -1317,18 +1328,23 @@ fn render_browser_status_arm(
     }
 
     // Device also parses the user code from the verification URL.
+    // LOCAL: header/等待文案渲染出口查表；行数估算随译文显示宽度走
     let (header, waiting_text, user_code) = match kind {
-        BrowserStatusKind::Command => (AUTH_HEADER, "Waiting for login to complete...", None),
+        BrowserStatusKind::Command => (
+            tr(AUTH_HEADER),
+            tr("Waiting for login to complete..."),
+            None,
+        ),
         BrowserStatusKind::Device => (
-            DEVICE_AUTH_HEADER,
-            "Waiting for approval...",
+            tr(DEVICE_AUTH_HEADER),
+            tr("Waiting for approval..."),
             auth_url.and_then(extract_user_code),
         ),
     };
 
-    let header_rows = (header.len() as u16).div_ceil(inner_width);
+    let header_rows = (header.width() as u16).div_ceil(inner_width);
     let code_extra = if user_code.is_some() {
-        let caption_rows = (DEVICE_CODE_CAPTION.len() as u16).div_ceil(inner_width);
+        let caption_rows = (tr(DEVICE_CODE_CAPTION).width() as u16).div_ceil(inner_width);
         1 + 1 + 1 + caption_rows // blank + code + blank + caption
     } else {
         0
@@ -1371,7 +1387,7 @@ fn render_browser_status_arm(
         lines.push(Line::default());
         lines.push(
             Line::from(Span::styled(
-                DEVICE_CODE_CAPTION,
+                tr(DEVICE_CODE_CAPTION),
                 Style::default().fg(theme.gray),
             ))
             .alignment(Alignment::Center),
@@ -1436,7 +1452,7 @@ fn render_welcome_authenticating(
             }
 
             let msg_height = if auth_url.is_some() {
-                let header_rows = (AUTH_HEADER.len() as u16).div_ceil(inner_width);
+                let header_rows = (tr(AUTH_HEADER).width() as u16).div_ceil(inner_width);
                 header_rows + auth_copy_block_rows(inner_width)
             } else {
                 1u16
@@ -1461,7 +1477,7 @@ fn render_welcome_authenticating(
             if auth_url.is_some() {
                 lines.push(
                     Line::from(Span::styled(
-                        AUTH_HEADER,
+                        tr(AUTH_HEADER),
                         Style::default().fg(theme.gray_bright),
                     ))
                     .alignment(Alignment::Center),
@@ -1470,7 +1486,7 @@ fn render_welcome_authenticating(
             } else {
                 lines.push(
                     Line::from(Span::styled(
-                        "Waiting for auth URL...",
+                        tr("Waiting for auth URL..."),
                         Style::default().fg(theme.gray),
                     ))
                     .alignment(Alignment::Center),
@@ -1482,7 +1498,7 @@ fn render_welcome_authenticating(
                 .render(msg_area, buf);
 
             let (click_rect, fallback_rect) = if auth_url.is_some() {
-                auth_hit_rects(msg_area, h_pad, inner_width, AUTH_HEADER, 0)
+                auth_hit_rects(msg_area, h_pad, inner_width, tr(AUTH_HEADER), 0)
             } else {
                 (None, None)
             };
@@ -1512,7 +1528,8 @@ fn render_welcome_authenticating(
                         .fg(theme.accent_user)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled("  submit    ", Style::default().fg(theme.gray)),
+                // LOCAL: 键名保留英文，动作词查表，尾部空格保持与退出提示的间距
+                Span::styled(format!("  {}    ", tr("submit")), Style::default().fg(theme.gray)),
             ];
             hint_spans.extend(quit_hint_spans(theme));
             let hints = Line::from(hint_spans).alignment(Alignment::Center);
@@ -1561,7 +1578,7 @@ fn render_welcome_authenticating(
             render_logo(logo_area, buf, theme, content_area.height);
 
             let msg = Line::from(Span::styled(
-                "Connecting...",
+                tr("Connecting..."),
                 Style::default().fg(theme.gray_bright),
             ))
             .alignment(Alignment::Center);
@@ -1622,7 +1639,7 @@ fn render_changelog_section(
             .fg(theme.gray_bright)
             .add_modifier(Modifier::DIM),
     );
-    let title = "Changelog";
+    let title = tr("Changelog");
     buf.set_span(
         centered.x,
         centered.y,
@@ -1719,7 +1736,7 @@ fn render_welcome_done(
     let cta = p
         .gate
         .and_then(|g| g.label.as_deref())
-        .unwrap_or("Upgrade Subscription");
+        .unwrap_or(tr("Upgrade Subscription"));
     let in_vscode_family = welcome_in_vscode_family();
     let (key_g, key_l, key_q) = (
         "ctrl+g",
@@ -1768,7 +1785,7 @@ fn render_welcome_done(
     let gate_menu;
     let owned_menu;
     let menu_items: &[(&str, &str)] = if !p.has_access {
-        gate_menu = [(key_g, cta), (key_l, "Logout"), (key_q, "Quit")];
+        gate_menu = [(key_g, cta), (key_l, tr("Logout")), (key_q, tr("Quit"))];
         &gate_menu
     } else {
         let (key_w, key_resume, key_q, key_i_with_x) = (
@@ -1778,20 +1795,21 @@ fn render_welcome_done(
             "ctrl+i  [x]",
         );
         // Insert the import row at the top when there are pending `.claude/` settings to import; it's the most actionable item right now
+        // LOCAL: 菜单标签仅用于展示（命中测试按行矩形索引），渲染出口查表
         let mut items: Vec<(&str, &str)> = Vec::with_capacity(5);
         if p.has_claude_import {
             // The trailing "[x]" is a clickable dismiss control
             // The welcome screen mouse handler treats clicks on the rightmost 3 cells of this row as dismiss instead of open. Keyboard: ctrl-shift-i.
             // The key string is right-aligned by render_menu, so [x] sits at the very end of the row
-            items.push((key_i_with_x, "Import Claude settings"));
+            items.push((key_i_with_x, tr("Import Claude settings")));
         }
-        items.push((key_w, "New worktree"));
-        items.push((key_resume, "Resume session"));
+        items.push((key_w, tr("New worktree")));
+        items.push((key_resume, tr("Resume session")));
         // "Changelog" above Quit; no shortcut, opened by click (row or block)
         if show_changelog_action {
-            items.push(("", "Changelog"));
+            items.push(("", tr("Changelog")));
         }
-        items.push((key_q, "Quit"));
+        items.push((key_q, tr("Quit")));
         owned_menu = items;
         owned_menu.as_slice()
     };
@@ -2028,12 +2046,13 @@ fn render_welcome_done(
         .flex(Flex::Center)
         .areas(layout.prompt);
         // Show the user's current tier and a clickable refresh button above the gate message
-        let tier_label = p.subscription_tier.unwrap_or("Free");
-        let tier_prefix = format!("Tier: {tier_label}  ");
-        let refresh_text = "[Refresh]";
-        let total_width = tier_prefix.len() + refresh_text.len();
+        // LOCAL: 套餐值是运行时数据经 tr_str 查表；宽度按显示宽度计（含全角译文）
+        let tier_label = tr_str(p.subscription_tier.unwrap_or("Free"));
+        let tier_prefix = format!("{}{}  ", tr("Tier: "), tier_label);
+        let refresh_text = tr("[Refresh]");
+        let total_width = tier_prefix.width() + refresh_text.width();
         let tier_line = Line::from(vec![
-            Span::styled("Tier: ", Style::default().fg(theme.gray)),
+            Span::styled(tr("Tier: "), Style::default().fg(theme.gray)),
             Span::styled(
                 tier_label,
                 Style::default()
@@ -2058,16 +2077,16 @@ fn render_welcome_done(
         // Compute the click rect for "[Refresh]" within the centered line.
         let line_start_x = tier_area.x + tier_area.width.saturating_sub(total_width as u16) / 2;
         refresh_hit_rect = Some(Rect {
-            x: line_start_x + tier_prefix.len() as u16,
+            x: line_start_x + tier_prefix.width() as u16,
             y: tier_area.y,
-            width: refresh_text.len() as u16,
+            width: refresh_text.width() as u16,
             height: 1,
         });
 
         let gate_text = p
             .gate
             .map(|g| g.message.as_str())
-            .unwrap_or("SuperGrok subscription required");
+            .unwrap_or(tr("SuperGrok subscription required"));
         let msg = Line::from(Span::styled(
             gate_text,
             Style::default().fg(theme.gray_bright),
@@ -2165,15 +2184,18 @@ fn render_welcome_done(
                 height: tip_centered.height,
             };
             let key_name = "ctrl+u";
+            // LOCAL: 带插值模板整键查表后替换占位符
             let line = Line::from(vec![
                 Span::styled(
-                    "Update: ",
+                    tr("Update: "),
                     Style::default()
                         .fg(theme.accent_user)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
-                    format!("v{ver} available, press {key_name} to restart"),
+                    tr("v{ver} available, press {key_name} to restart")
+                        .replace("{ver}", ver)
+                        .replace("{key_name}", key_name),
                     Style::default().fg(theme.accent_user),
                 ),
             ]);
@@ -2203,18 +2225,22 @@ fn render_welcome_done(
                 height: tip_centered.height,
             };
             let mins = hint.age.as_secs() / 60;
+            // LOCAL: 相对时间词族渲染出口查表（state/比较键保持英文），带计数的模板整键进表
             let when = if mins == 0 {
-                "moments ago".to_string()
+                tr("moments ago").to_string()
             } else {
-                format!("{mins}m ago")
+                tr("{mins}m ago").replace("{mins}", &mins.to_string())
             };
             let accent = Style::default().fg(theme.accent_user);
             let accent_bold = accent.add_modifier(Modifier::BOLD);
             let tool = crate::app::foreign_tool_display_label(hint.tool);
             let line = Line::from(vec![
-                Span::styled("Coming from ", accent),
+                Span::styled(tr("Coming from "), accent),
                 Span::styled(tool, accent_bold),
-                Span::styled(format!("? Resume your session from {when} using "), accent),
+                Span::styled(
+                    tr("? Resume your session from {when} using ").replace("{when}", &when),
+                    accent,
+                ),
                 Span::styled("ctrl+u", accent_bold),
             ]);
             Paragraph::new(line)
@@ -2438,7 +2464,7 @@ pub(crate) fn render_session_picker_body(
             summary_lines: &[],
             dimmed: false,
             indent: 1,
-            badge: if has_snippet { "match" } else { "" },
+            badge: if has_snippet { tr("match") } else { "" },
             badge_color: Some(theme.accent_user),
             collapsible: true,
             underline_last_desc: false,
@@ -2509,7 +2535,7 @@ pub(crate) fn render_session_picker_body(
     }
 
     let config = PickerConfig {
-        title: Some("Resume session"),
+        title: Some(tr("Resume session")),
         show_search_hint: true,
         expandable: true,
         esc_clears_query: true,
@@ -2663,7 +2689,8 @@ fn build_masked_auth_token(input: &str, cursor_byte: usize) -> MaskedAuthToken {
 
 fn masked_auth_token_view(input: &str, cursor_byte: usize, width: usize) -> (String, usize) {
     if input.is_empty() {
-        return ("Paste your token here...".to_string(), 0);
+        // LOCAL: 占位符渲染出口查表（测试构建旁路，英文断言不受影响）
+        return (tr_str("Paste your token here..."), 0);
     }
     let masked = build_masked_auth_token(input, cursor_byte);
     let buffer =

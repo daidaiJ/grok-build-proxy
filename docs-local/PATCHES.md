@@ -408,3 +408,40 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - `/stats` 斜杠命令 + `grok stats` 段：正向 saved tokens/%，负向 expanded +
   retrieve 回灌 tokens，CCR 额外 I/O ops/ms
 - `docs/user-guide/29-local-enhancements.md` 配置说明
+
+## 七期补丁（2026-09-18：界面文案中文化 P0 交互必经）
+
+> 方案见 `docs-local/ui-i18n-plan.md`（P0 = 每个会话都撞上的交互路径，8 个视图）。
+> 翻译表 280 → 449 组；施工规约与术语表以方案文档为准（状态存英文键渲染出口翻译、
+> 比较/匹配键不包翻译、测试构建查表旁路不变）。
+
+### xai-grok-pager（P0：命令面板/启动屏/隐私横幅/会话选择/引导采集/权限·提问·计划审批）
+- `src/slash/i18n.rs`：翻译表追加 P0 段 169 组（命令面板条目名与按钮、启动屏信任确认/
+  认证流程/菜单/相对时间词族、隐私横幅分段文案、会话选择过滤徽章与加载头、引导采集
+  标签与 URL 校验错误、权限模式编辑预览与页脚、提问占位符、计划审批状态标签与空计划
+  占位段等）
+- `src/views/modal.rs`：36 条命令面板条目在 `default_palette_entries` 构造处 tr（渲染
+  出口在 app/modals.rs，属后续批次；已核实 label 无比较点，中文模式下按 shortcut 列
+  仍可英文检索）；按钮 label()/面板标题问句/reset 确认拆片段/docs 选择器与查看器页脚
+  图例等约 14 组
+- `src/views/welcome/mod.rs`：trust 确认逐行成键、认证流程常量（AUTH_HEADER 等渲染处
+  查表）、菜单项、Yes/No 确认、gate 屏、更新通知模板、相对时间族（"just now" 保留
+  英文键，goal_detail.rs 的 `ago == "just now"` 比较不受影响）；3 处命中矩形/换行
+  估算 `.len()` → `.width()`（测试构建走英文旁路，ASCII 宽度不变，断言不受影响）
+- `src/views/privacy_banner.rs`：标题/说明段整段成键；LEGAL 链接逐段成键保分段数，
+  热区宽度改按译文 `shown.width()` 计（三变体中文渲染宽度均 ≤ 英文，选档不变量保持）
+- `src/views/session_picker.rs`：`SourceFilter::label()` 六个过滤徽章、"(no prompt)"/
+  "(no summary)"、加载头（spinner 改 `"{} {}"` 拼接，英文输出逐字不变）、hidden 外部
+  会话计数模板整键；`session_picker_surface.rs` 零改动（"Open session" 标题经
+  modal_window 渲染出口 tr_str 命中，图例 nav/select/close/search 键已在表）
+- `src/views/elicitation_view/{render,state}.rs`：标签/按钮/等待/滚动标记 render 处
+  tr；3 个标题模板与 4 条 URL 校验错误构造处 tr 后 replace 占位（键含 {} 占位符）
+- `src/views/permission_view.rs` + `question_view.rs` + `plan_approval_view.rs`：模式
+  编辑 5 态预览行/页脚动作词/`"all tools from {}"` 拆片段；提问占位符与截断提示
+  （question_view:834 "Other" 是 ACP 线上协议串，不译；可见行标签在 dashboard/peek.rs
+  属 P3）；`plan_approval_status_label` 纯展示出口 tr
+- `src/app/agent_view/plan.rs`：空计划占位段渲染出口 `tr_str(EMPTY_PLAN_PLACEHOLDER)`
+  （常量本体保持英文，trim 判空逻辑不动）
+- 遗留（后续批次处理）：session_picker 展开卡字段标签 ID/CWD/Created/… 因 picker.rs
+  用 `{:<12}` 字符补齐 + `.len()` 布局暂不译，需先把该处改 unicode_width；命令面板
+  渲染出口 app/modals.rs、peek.rs "Other" 行标签在 P3

@@ -115,7 +115,9 @@ impl AgentView {
         } else if approval_empty {
             LineViewerState::open_markdown_content(
                 "plan.md",
-                crate::views::plan_approval_view::EMPTY_PLAN_PLACEHOLDER.to_owned(),
+                crate::slash::i18n::tr_str(
+                    crate::views::plan_approval_view::EMPTY_PLAN_PLACEHOLDER,
+                ),
                 None,
             )
         } else if let Some(plan_path) = self.plan_file_path() {

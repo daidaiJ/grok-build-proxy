@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use indexmap::IndexMap;
 
 use crate::app::app_view::SessionPickerEntry;
+use crate::slash::i18n::tr;
 use crate::views::picker::{PickerEntry, PickerField, PickerRow, PickerState};
 
 // ---------------------------------------------------------------------------
@@ -242,13 +243,15 @@ pub enum SourceFilter {
 
 impl SourceFilter {
     pub fn label(self) -> &'static str {
+        // Display-only filter badge (rendered via `render_filter_indicator`, which measures
+        // display width); never compared or used as a key.
         match self {
-            Self::Grok => "Grok",
-            Self::Headless => "Headless",
-            Self::Local => "Local",
-            Self::Remote => "Remote",
-            Self::External => "External",
-            Self::All => "All",
+            Self::Grok => tr("Grok"),
+            Self::Headless => tr("Headless"),
+            Self::Local => tr("Local"),
+            Self::Remote => tr("Remote"),
+            Self::External => tr("External"),
+            Self::All => tr("All"),
         }
     }
 
@@ -717,7 +720,7 @@ pub(crate) fn build_session_entry_data(
         .map(|(fi, &orig_idx)| {
             let entry = &entries_data[orig_idx];
             let summary = if entry.summary.is_empty() {
-                "(no prompt)".to_string()
+                tr("(no prompt)").to_string()
             } else {
                 entry.summary.clone()
             };
@@ -763,7 +766,12 @@ pub(crate) fn build_session_entry_data(
                 if let Some(ref detail) = entry.card_detail {
                     field_data.push((
                         "Turns".into(),
-                        format!("{}    Tools  {}", detail.turn_count, detail.tool_call_count),
+                        format!(
+                            "{}    {}  {}",
+                            detail.turn_count,
+                            tr("Tools"),
+                            detail.tool_call_count
+                        ),
                     ));
                     if !detail.first_prompt_preview.is_empty() {
                         let preview = truncate_str(&detail.first_prompt_preview, max_w);
@@ -875,7 +883,7 @@ pub(crate) fn build_content_entry_data(
             let summary = if h.summary.is_empty() {
                 h.snippet
                     .as_deref()
-                    .unwrap_or("(no summary)")
+                    .unwrap_or(tr("(no summary)"))
                     .lines()
                     .next()
                     .unwrap_or_default()
@@ -935,11 +943,12 @@ pub(crate) fn build_content_header_label(
         let spinner_frames = crate::glyphs::dot_spinner_frames();
         let frame_idx = (tick / 4) as usize % spinner_frames.len();
         format!(
-            "{} Searching session content\u{2026}",
-            spinner_frames[frame_idx]
+            "{} {}",
+            spinner_frames[frame_idx],
+            tr("Searching session content\u{2026}")
         )
     } else if has_content_rows {
-        "Extended search results (remote and local sessions)".to_string()
+        tr("Extended search results (remote and local sessions)").to_string()
     } else {
         String::new()
     }
@@ -957,8 +966,15 @@ pub(crate) fn hidden_external_hint(
                 .filter(|entry| crate::app::is_foreign_picker_source(&entry.source))
                 .count();
             (hidden > 0).then(|| {
-                let plural = if hidden == 1 { "" } else { "s" };
-                format!("{hidden} external session{plural} hidden \u{b7} f to show")
+                // Counting template: the full singular/plural sentence is the table key and the
+                // `{hidden}` placeholder is substituted after lookup, so the number can move
+                // position in the Chinese word order.
+                let template = if hidden == 1 {
+                    "{hidden} external session hidden \u{b7} f to show"
+                } else {
+                    "{hidden} external sessions hidden \u{b7} f to show"
+                };
+                tr(template).replace("{hidden}", &hidden.to_string())
             })
         }
         _ => None,

@@ -5,6 +5,7 @@ pub use xai_grok_tools::implementations::grok_build::exit_plan_mode::{
     ExitPlanModeExtRequest, ExitPlanModeExtResponse,
 };
 
+use crate::slash::i18n::tr;
 use crate::views::prompt_widget::StashedPrompt;
 
 /// Placeholder body for the plan-approval preview when `exit_plan_mode` parks with no plan content.
@@ -23,11 +24,12 @@ The agent exited plan mode without writing a plan.
 /// Status-line label while plan approval is parked.
 ///
 /// Empty plans use an active decision prompt instead of "Waiting…", so the UI doesn't look stuck when there is no preview body to open.
+/// LOCAL: 纯展示标签，出口处 tr 查表（测试构建旁路，英文断言不受影响）。
 pub fn plan_approval_status_label(has_plan: bool) -> &'static str {
     if has_plan {
-        "Waiting on plan approval"
+        tr("Waiting on plan approval")
     } else {
-        "No plan written: approve or request changes"
+        tr("No plan written: approve or request changes")
     }
 }
 

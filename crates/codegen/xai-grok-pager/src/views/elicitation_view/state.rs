@@ -10,6 +10,7 @@ use xai_grok_tools::mcp_elicitation::{
     McpElicitModeFields, parse_form_schema, take_chars, validate_form,
 };
 
+use crate::slash::i18n::tr;
 use crate::views::prompt_widget::StashedPrompt;
 
 pub type ElicitResponseTx = tokio::sync::oneshot::Sender<AcpResult<acp::ExtResponse>>;
@@ -272,15 +273,15 @@ fn sanitize_spec(spec: &mut ElicitFieldSpec) {
 /// Validate a URL elicitation target before it is ever offered for consent: it must parse, be plain http(s), and carry no embedded credentials.
 /// The returned URL is the parser's normalized form (Unicode hosts render as their Punycode labels, which the card then flags).
 pub(super) fn check_elicit_url(raw: &str) -> Result<UrlDisplay, String> {
-    let parsed = url::Url::parse(raw.trim()).map_err(|_| "malformed URL".to_string())?;
+    let parsed = url::Url::parse(raw.trim()).map_err(|_| tr("malformed URL").to_string())?;
     if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(format!("unsupported scheme \"{}\"", parsed.scheme()));
+        return Err(tr("unsupported scheme \"{}\"").replace("{}", parsed.scheme()));
     }
     if !parsed.username().is_empty() || parsed.password().is_some() {
-        return Err("URL embeds credentials".to_string());
+        return Err(tr("URL embeds credentials").to_string());
     }
     let Some(host) = parsed.host_str() else {
-        return Err("URL has no host".to_string());
+        return Err(tr("URL has no host").to_string());
     };
     let punycode_host = host.split('.').any(|label| label.starts_with("xn--"));
     Ok(UrlDisplay {
@@ -369,13 +370,13 @@ impl ElicitationViewState {
     pub fn title(&self) -> String {
         match &self.stage {
             ElicitationStage::Form(_) => {
-                format!("MCP “{}” requests your input", self.server_name)
+                tr("MCP “{}” requests your input").replace("{}", &self.server_name)
             }
             ElicitationStage::UrlConsent(_) => {
-                format!("MCP “{}” wants to open a URL", self.server_name)
+                tr("MCP “{}” wants to open a URL").replace("{}", &self.server_name)
             }
             ElicitationStage::UrlWaiting(_) => {
-                format!("MCP “{}”, waiting for completion", self.server_name)
+                tr("MCP “{}”, waiting for completion").replace("{}", &self.server_name)
             }
         }
     }
