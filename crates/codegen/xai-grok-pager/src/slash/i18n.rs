@@ -69,6 +69,21 @@ pub fn tr(text: &'static str) -> &'static str {
         .map_or(text, |(_, zh)| zh)
 }
 
+/// LOCAL: 动态字符串（ACP 命令描述、快捷键标签等运行时文案）的查表版本。
+/// 英文模式原样返回；中文模式查表，命中返回译文，未命中原样拷贝。
+pub fn tr_str(text: &str) -> String {
+    if current_lang() == Lang::En {
+        return text.to_owned();
+    }
+    static TABLE: OnceLock<&[( &'static str, &'static str)]> = OnceLock::new();
+    let table = TABLE.get_or_init(translations);
+    table
+        .iter()
+        .find(|(en, _)| *en == text)
+        .map(|(_, zh)| (*zh).to_owned())
+        .unwrap_or_else(|| text.to_owned())
+}
+
 fn translations() -> &'static [(&'static str, &'static str)] {
     &[
         // -- 斜杠命令描述 --
@@ -246,6 +261,124 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         (
             "<name> [--agent-budget N] [--effort LEVEL] [args] | runs | pause|resume|stop|save [name]",
             "<名称> [--agent-budget N] [--effort LEVEL] [参数] | runs | pause|resume|stop|save [名称]",
+        ),
+        // -- 快捷键提示栏（shortcuts_bar 标签，经 tr_str 在渲染时查表） --
+        ("press again to", "再按一次确认:"),
+        ("New Agent", "新建代理"),
+        ("accept", "接受"),
+        ("accept / toggle", "接受/切换"),
+        ("answer", "回答"),
+        ("apply", "应用"),
+        ("approve", "批准"),
+        ("back", "返回"),
+        ("bg", "后台"),
+        ("cancel", "取消"),
+        ("clear", "清空"),
+        ("clear search", "清除搜索"),
+        ("close", "关闭"),
+        ("comment", "评论"),
+        ("confirm", "确认"),
+        ("copy", "复制"),
+        ("copy cmd", "复制命令"),
+        ("copy output", "复制输出"),
+        ("copy path", "复制路径"),
+        ("copy pattern", "复制模式"),
+        ("copy plan", "复制计划"),
+        ("copy query", "复制查询"),
+        ("copy url", "复制链接"),
+        ("create", "创建"),
+        ("decline", "拒绝"),
+        ("delete", "删除"),
+        ("delete row", "删除行"),
+        ("dismiss", "关闭"),
+        ("drill", "深入"),
+        ("edit", "编辑"),
+        ("edit pattern", "编辑模式"),
+        ("expand", "展开"),
+        ("filename", "文件名"),
+        ("filter", "过滤"),
+        ("fire", "触发"),
+        ("fwd", "前进"),
+        ("go", "跳转"),
+        ("goto", "跳转"),
+        ("history", "历史"),
+        ("input", "输入"),
+        ("keep filter", "保留筛选"),
+        ("kill", "终止"),
+        ("lines", "行数"),
+        ("list", "列表"),
+        ("mode", "模式"),
+        ("nav", "导航"),
+        ("next answer", "下一答案"),
+        ("next choice", "下一项"),
+        ("next field", "下一字段"),
+        ("next option", "下一选项"),
+        ("open", "打开"),
+        ("plan", "计划"),
+        ("prompt", "提示词"),
+        ("quit", "退出"),
+        ("quit plan", "退出计划"),
+        ("quote", "引用"),
+        ("raw", "原文"),
+        ("request changes", "请求修改"),
+        ("save", "保存"),
+        ("save comment", "保存评论"),
+        ("search", "搜索"),
+        ("select", "选择"),
+        ("send", "发送"),
+        ("send now", "立即发送"),
+        ("send to bg", "转后台"),
+        ("send+open", "发送并打开"),
+        ("shortcuts", "快捷键"),
+        ("submit", "提交"),
+        ("switch tab", "切换标签"),
+        ("toggle", "切换"),
+        ("view", "查看"),
+        ("wrap", "换行"),
+        // -- shell 经 ACP 下发的内置命令（acp_command.rs 构造时经 tr_str 查表） --
+        (
+            "Compress conversation history to save context window",
+            "压缩对话历史以节省上下文窗口",
+        ),
+        ("Flush conversation memory to disk now", "立即把会话记忆写入磁盘"),
+        (
+            "Run memory consolidation (merge session logs into organized topics)",
+            "运行记忆整理（把会话日志合并为有条目的主题）",
+        ),
+        ("Browse, view, and manage your memories", "浏览、查看和管理记忆"),
+        ("Show context window usage and session stats", "显示上下文窗口用量与会话统计"),
+        ("Trust this project for hook execution", "信任当前项目以执行钩子"),
+        ("Show hooks loaded in this session", "显示本会话加载的钩子"),
+        ("Add a custom hook file or directory", "添加自定义钩子文件或目录"),
+        ("Remove a custom hook file or directory path", "移除自定义钩子文件或目录路径"),
+        ("Remove trust for the current project", "取消对当前项目的信任"),
+        (
+            "Manage plugins (list, reload, trust, add, remove)",
+            "管理插件（列出、重载、信任、添加、移除）",
+        ),
+        (
+            "Reload plugins from disk (alias for /plugins reload)",
+            "从磁盘重载插件（/plugins reload 的别名）",
+        ),
+        (
+            "Show session details (model, turns, context usage)",
+            "显示会话详情（模型、轮数、上下文用量）",
+        ),
+        (
+            "Research with bounded parallel agents, cross-check evidence, and write a cited report",
+            "用有上限的并行代理做研究，交叉验证证据并写出带引用的报告",
+        ),
+        ("Set, manage, or check an autonomous goal", "设置、管理或检查自治目标"),
+        (
+            "optional context about what to preserve",
+            "可选：说明要保留哪些内容",
+        ),
+        ("path to hook file or directory", "钩子文件或目录的路径"),
+        ("list | reload | trust <path> | add <path> | remove <path>", "list | reload | trust <路径> | add <路径> | remove <路径>"),
+        ("<query>", "<查询>"),
+        (
+            "<objective> [--budget <tokens>] | status | pause | resume | clear",
+            "<目标> [--budget <token 数>] | status | pause | resume | clear",
         ),
     ]
 }

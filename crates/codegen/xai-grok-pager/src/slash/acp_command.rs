@@ -154,11 +154,12 @@ impl From<&acp::AvailableCommand> for AcpSlashCommand {
 
         Self {
             name: cmd.name.clone(),
-            description: cmd.description.clone(),
+            // LOCAL: shell 下发的描述经 i18n 查表（/memory 等运行时命令），未命中原样保留
+            description: crate::slash::i18n::tr_str(&cmd.description),
             // ACP commands always accept free-form input; the shell handles whatever text follows the command name
             // The `input` field only determines the placeholder hint, not whether args are allowed
             has_args: true,
-            arg_hint,
+            arg_hint: arg_hint.map(|h| crate::slash::i18n::tr_str(&h)),
             skill: SkillMeta::parse(cmd.meta.as_ref()),
         }
     }

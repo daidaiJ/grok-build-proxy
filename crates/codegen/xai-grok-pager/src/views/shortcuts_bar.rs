@@ -228,7 +228,12 @@ impl Widget for ShortcutsBar<'_> {
         // If pending confirmation, show only "press again to {label}"
         if let Some(pending) = &self.pending_confirmation {
             let key_text = pending.shortcut.display();
-            let label = format!("press again to {}", pending.label);
+            // LOCAL: 前缀经 i18n 查表（中文"再按一次确认:"），标签本身另查
+            let label = format!(
+                "{}{}",
+                crate::slash::i18n::tr("press again to"),
+                crate::slash::i18n::tr_str(pending.label)
+            );
 
             let mut x = area.x;
 
@@ -282,8 +287,10 @@ impl Widget for ShortcutsBar<'_> {
             buf.set_span(x, area.y, &colon, 1);
             x += 1;
 
-            let action_span = Span::styled(hint.label.as_ref(), action_style);
-            let action_width = hint.label.width() as u16;
+            // LOCAL: 标签经 i18n 查表渲染（英文模式原样），宽度按译文计
+            let label = crate::slash::i18n::tr_str(hint.label.as_ref());
+            let action_span = Span::styled(label.as_str(), action_style);
+            let action_width = label.width() as u16;
             if x + action_width > area.x + area.width {
                 break;
             }
