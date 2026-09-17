@@ -4,9 +4,7 @@ use std::borrow::Cow;
 use std::io::Write;
 
 use super::{BucketRow, SessionRow, StatsReport, Totals};
-use xai_grok_tools::implementations::output_compression::{
-    format_stats_report, is_enabled as compression_enabled, stats_for_display,
-};
+use xai_grok_tools::implementations::output_compression::format_stats_report;
 
 /// Session ids show as their first 8 columns; `sessions` names the rest.
 const ID_COLS: usize = 8;
@@ -17,7 +15,11 @@ const MODEL_COLS: usize = 32;
 
 pub(super) fn print_report(report: &StatsReport, limit: usize, out: &mut impl Write) {
     if report.sessions.is_empty() && report.days.is_empty() {
-        let _ = writeln!(out, "No usage recorded.");
+        if report.tool_output_compression.is_none() {
+            let _ = writeln!(out, "No usage recorded.");
+            return;
+        }
+        print_compression(report, out);
         return;
     }
     print_sessions(report, limit, out);
@@ -31,11 +33,10 @@ fn print_compression(report: &StatsReport, out: &mut impl Write) {
     let Some(json) = report.tool_output_compression.as_ref() else {
         return;
     };
-    let stats = stats_for_display(None);
     let _ = writeln!(
         out,
         "{}",
-        format_stats_report(&stats, json.enabled || compression_enabled())
+        format_stats_report(&json.as_stats(), json.enabled)
     );
     let _ = writeln!(out);
 }
@@ -44,7 +45,16 @@ fn print_sessions(report: &StatsReport, limit: usize, out: &mut impl Write) {
     let _ = writeln!(
         out,
         "{:<idw$} {:<projw$} {:<whenw$} {:>6} {:>9} {:>9} {:>9} {:>9} {:>10}  {}",
-        "SESSION", "PROJECT", "LAST ACTIVITY", "TURNS", "INPUT", "OUTPUT", "CACHED", "REASON", "COST", "MODEL",
+        "SESSION",
+        "PROJECT",
+        "LAST ACTIVITY",
+        "TURNS",
+        "INPUT",
+        "OUTPUT",
+        "CACHED",
+        "REASON",
+        "COST",
+        "MODEL",
         idw = ID_COLS,
         projw = PROJECT_COLS,
         whenw = WHEN_COLS,
@@ -102,7 +112,12 @@ fn print_buckets(title: &str, rows: &[BucketRow], out: &mut impl Write) {
     let _ = writeln!(
         out,
         "{:<keyw$} {:>8} {:>6} {:>9} {:>9} {:>10}",
-        "BUCKET", "SESSIONS", "TURNS", "INPUT", "OUTPUT", "COST",
+        "BUCKET",
+        "SESSIONS",
+        "TURNS",
+        "INPUT",
+        "OUTPUT",
+        "COST",
         keyw = KEY_COLS,
     );
     for row in rows {
@@ -131,7 +146,12 @@ fn print_models(rows: &[super::ModelRow], out: &mut impl Write) {
     let _ = writeln!(
         out,
         "{:<modelw$} {:>6} {:>7} {:>9} {:>9} {:>10}",
-        "MODEL ID", "TURNS", "CALLS", "INPUT", "OUTPUT", "COST",
+        "MODEL ID",
+        "TURNS",
+        "CALLS",
+        "INPUT",
+        "OUTPUT",
+        "COST",
         modelw = MODEL_COLS,
     );
     for row in rows {

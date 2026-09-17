@@ -271,6 +271,8 @@ pub struct CompressionStatsJson {
     pub io_write_avg_ms: f64,
     pub io_read_avg_ms: f64,
     pub io_total_ms: f64,
+    pub io_write_bytes: u64,
+    pub io_read_bytes: u64,
 }
 
 impl CompressionStatsJson {
@@ -295,6 +297,28 @@ impl CompressionStatsJson {
             io_write_avg_ms: stats.io_write_avg_ms(),
             io_read_avg_ms: stats.io_read_avg_ms(),
             io_total_ms: stats.io_total_ms(),
+            io_write_bytes: stats.io_write_bytes,
+            io_read_bytes: stats.io_read_bytes,
+        }
+    }
+
+    pub(crate) fn as_stats(&self) -> ToolOutputCompressionStats {
+        ToolOutputCompressionStats {
+            compressed_calls: self.compressed_calls,
+            skipped_calls: self.skipped_calls,
+            no_win_calls: self.no_win_calls,
+            retrieve_calls: self.retrieve_calls,
+            original_tokens: self.original_tokens,
+            saved_tokens: self.saved_tokens,
+            expanded_tokens: self.expanded_tokens,
+            retrieved_tokens: self.retrieved_tokens,
+            io_write_ops: self.io_write_ops,
+            io_read_ops: self.io_read_ops,
+            io_write_ns: (self.io_write_ms * 1_000_000.0) as u64,
+            io_read_ns: (self.io_read_ms * 1_000_000.0) as u64,
+            io_write_bytes: self.io_write_bytes,
+            io_read_bytes: self.io_read_bytes,
+            updated_at_unix: None,
         }
     }
 }
@@ -399,8 +423,14 @@ pub(crate) fn aggregate(
         schema_version: SCHEMA_VERSION,
         generated_at: now.to_rfc3339(),
         sessions,
-        days: day_buckets.into_iter().map(|(key, acc)| acc.finish(key)).collect(),
-        weeks: week_buckets.into_iter().map(|(key, acc)| acc.finish(key)).collect(),
+        days: day_buckets
+            .into_iter()
+            .map(|(key, acc)| acc.finish(key))
+            .collect(),
+        weeks: week_buckets
+            .into_iter()
+            .map(|(key, acc)| acc.finish(key))
+            .collect(),
         models: model_rows(every_model),
         tool_output_compression,
     }
@@ -451,7 +481,8 @@ fn model_rows(models: BTreeMap<String, Totals>) -> Vec<ModelRow> {
         .map(|(model_id, totals)| ModelRow { model_id, totals })
         .collect();
     rows.sort_by(|a, b| {
-        (b.totals.model_calls, b.totals.total_tokens).cmp(&(a.totals.model_calls, a.totals.total_tokens))
+        (b.totals.model_calls, b.totals.total_tokens)
+            .cmp(&(a.totals.model_calls, a.totals.total_tokens))
     });
     rows
 }

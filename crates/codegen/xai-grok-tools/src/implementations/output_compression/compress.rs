@@ -1,13 +1,4 @@
-//! Headroom-style compressors, simplified: json / logs / search / diff / generic.
-//!
-//! Equivalence vs headroom/only-cc-lite (same detector order and keep-rules;
-//! not a byte-equal port of SmartCrusher):
-//! - JSON arrays → first 3 + last 2 items (SmartCrusher samples fields)
-//! - JSON objects → protect `exit_code`/`stderr`, compress large string fields
-//! - logs → ERROR/FAIL/stack/summary + head/tail (LogCompressor's keep set)
-//! - search → per-file 3 hits (SearchCompressor)
-//! - diff → headers + capped change lines (DiffCompressor)
-//! Tool schemas and already-persisted conversation items are never rewritten.
+//! Headroom-style compressors for new tool results only.
 
 use serde_json::{Map, Value};
 
@@ -19,10 +10,8 @@ use super::store;
 use crate::types::output::ToolOutput;
 use crate::util::truncate::estimate_tokens;
 
-/// Compress a **new** tool-result prompt. Callers must pass the session
-/// snapshot taken at session start (`SessionCompressionPolicy`). Process-wide
-/// config changes do not affect an already-running session, so prompt-cache
-/// prefixes stay byte-stable for the whole session lifetime.
+/// Compress a newly produced tool-result. Pass the session-start snapshot so
+/// later config reloads cannot rewrite this conversation's prefix.
 pub(crate) fn maybe_compress_prompt(
     output: &ToolOutput,
     prompt_text: String,
@@ -78,21 +67,24 @@ fn compress_text(prompt_text: &str, rt: &ToolOutputCompressionRuntime) -> String
         format!("{prefix}\n{compressed_body}")
     };
 
-    let hash = rt.ccr_enabled.then(|| store::compute_key(prompt_text));
-    if let Some(h) = &hash {
-        candidate.push('\n');
-        candidate.push_str(&store::marker_for(h));
-        candidate.push('\n');
-        candidate.push_str("Original stored. Call expand_output with this hash to retrieve it.");
+    let mut with_marker = candidate.clone();
+    if rt.ccr_enabled {
+        let h = store::compute_key(prompt_text);
+        with_marker.push('\n');
+        with_marker.push_str(&store::marker_for(&h));
+        with_marker.push('\n');
+        with_marker.push_str("Original stored. Call expand_output with this hash to retrieve it.");
+        if (estimate_tokens(&with_marker) as u64) < original_tokens {
+            if store::put(prompt_text, rt).is_some() {
+                candidate = with_marker;
+            }
+        }
     }
 
     let new_tokens = estimate_tokens(&candidate) as u64;
     if new_tokens >= original_tokens {
         record_no_win(original_tokens, new_tokens.saturating_sub(original_tokens));
         return prompt_text.to_string();
-    }
-    if hash.is_some() {
-        let _ = store::put(prompt_text);
     }
     record_win(original_tokens, original_tokens.saturating_sub(new_tokens));
     candidate
@@ -494,6 +486,7 @@ mod tests {
 
     #[test]
     fn json_object_keeps_exit_code_and_stderr() {
+        let _guard = test_lock();
         let dir = tempfile::tempdir().unwrap();
         reset_for_tests(enabled_rt(dir.path()));
         let mut stdout = String::new();

@@ -188,14 +188,9 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Quick tips to get the most out of Grok Build", "善用 Grok Build 的快速技巧"),
         ("View usage", "查看用量"),
         (
-            "Show usage and tool-output compression savings",
-            "查看用量与工具输出压缩收益",
+            "Show tool-output compression savings",
+            "查看工具输出压缩收益（正向/负向与额外 I/O）",
         ),
-        (
-            "Show usage and tool-output compression savings",
-            "查看用量与工具输出压缩收益",
-        ),
-        ("/stats", "/stats"),
         ("Manage billing", "管理账单"),
         ("View the current plan", "查看当前计划"),
         (

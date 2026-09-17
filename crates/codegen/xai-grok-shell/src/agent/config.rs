@@ -2350,6 +2350,7 @@ impl Config {
             Ok(parsed_config) => {
                 self.memory = parsed_config.memory;
                 self.compaction = parsed_config.compaction;
+                self.tool_output_compression = parsed_config.tool_output_compression;
             }
             Err(error) => {
                 tracing::warn!(%error, "config parse failed during runtime re-resolution");

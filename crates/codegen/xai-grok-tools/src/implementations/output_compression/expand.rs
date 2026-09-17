@@ -63,7 +63,7 @@ impl xai_tool_runtime::Tool for ExpandOutputTool {
 
     async fn run(
         &self,
-        _ctx: xai_tool_runtime::ToolCallContext,
+        ctx: xai_tool_runtime::ToolCallContext,
         input: ExpandOutputInput,
     ) -> Result<ToolOutput, xai_tool_runtime::ToolError> {
         let hash = input
@@ -71,7 +71,17 @@ impl xai_tool_runtime::Tool for ExpandOutputTool {
             .trim()
             .trim_matches(|c| c == '<' || c == '>' || c == ':');
         let hash = hash.strip_prefix("ccr:").unwrap_or(hash).trim();
-        match store::get(hash) {
+        let rt = match crate::types::tool_metadata::shared_resources(&ctx) {
+            Ok(res) => res
+                .lock()
+                .await
+                .get::<super::SessionCompressionPolicy>()
+                .cloned()
+                .map(|p| p.0)
+                .unwrap_or_else(super::runtime::current_runtime),
+            Err(_) => super::runtime::current_runtime(),
+        };
+        match store::get(hash, &rt) {
             Some(original) => {
                 record_retrieve(estimate_tokens(&original) as u64);
                 Ok(ToolOutput::Text(original.into()))

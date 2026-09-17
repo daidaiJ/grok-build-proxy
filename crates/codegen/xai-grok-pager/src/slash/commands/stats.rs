@@ -1,5 +1,4 @@
-//! LOCAL: `/stats` — session usage plus experimental tool-output compression
-//! savings (positive), regressions/retrieves (negative), and extra I/O latency.
+//! `/stats` — experimental tool-output compression ledger.
 
 use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand, slash_meta};
 use xai_grok_tools::implementations::output_compression::{
@@ -11,7 +10,7 @@ pub struct StatsCommand;
 impl SlashCommand for StatsCommand {
     slash_meta! {
         name: "stats",
-        description: "Show usage and tool-output compression savings",
+        description: "Show tool-output compression savings",
         usage: "/stats",
         takes_args: false,
     }

@@ -13,6 +13,11 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 static CCR_ENABLED: AtomicBool = AtomicBool::new(false);
 static RUNTIME: OnceLock<Mutex<ToolOutputCompressionRuntime>> = OnceLock::new();
 static STATS: OnceLock<Mutex<ToolOutputCompressionStats>> = OnceLock::new();
+static STATS_PATH: OnceLock<Mutex<PathBuf>> = OnceLock::new();
+
+fn stats_path_lock() -> &'static Mutex<PathBuf> {
+    STATS_PATH.get_or_init(|| Mutex::new(PathBuf::new()))
+}
 
 fn runtime_lock() -> &'static Mutex<ToolOutputCompressionRuntime> {
     RUNTIME.get_or_init(|| Mutex::new(ToolOutputCompressionRuntime::disabled()))
@@ -188,10 +193,7 @@ impl ToolOutputCompressionRuntime {
     }
 }
 
-/// Session-scoped snapshot of compression config. Inserted once when the
-/// toolset is finalized; never updated in place. Mid-session config reloads
-/// change the process-wide runtime for the *next* session only, so an
-/// already-running conversation keeps a byte-stable prompt-cache prefix.
+/// Compression config pinned at toolset finalize; not updated mid-session.
 #[derive(Debug, Clone)]
 pub struct SessionCompressionPolicy(pub ToolOutputCompressionRuntime);
 
@@ -294,6 +296,9 @@ pub fn set_runtime(cfg: &ToolOutputCompressionConfig) {
     if let Ok(mut guard) = runtime_lock().lock() {
         *guard = rt.clone();
     }
+    if let Ok(mut path) = stats_path_lock().lock() {
+        *path = rt.stats_path.clone();
+    }
     if rt.enabled {
         load_persisted_into_memory(&rt.stats_path);
     }
@@ -343,7 +348,6 @@ pub fn stats_for_display(grok_home: Option<&Path>) -> ToolOutputCompressionStats
 pub(crate) fn record_skip() {
     if let Ok(mut g) = stats_lock().lock() {
         g.skipped_calls = g.skipped_calls.saturating_add(1);
-        persist_locked(&mut g);
     }
 }
 
@@ -398,8 +402,8 @@ fn persist_locked(stats: &mut ToolOutputCompressionStats) {
             .map(|d| d.as_secs())
             .unwrap_or(0),
     );
-    let path = runtime_lock().lock().ok().map(|rt| rt.stats_path.clone());
-    let Some(path) = path else {
+    let path = stats_path_lock().lock().ok().map(|p| p.clone());
+    let Some(path) = path.filter(|p| !p.as_os_str().is_empty()) else {
         return;
     };
     write_stats_file(&path, stats);
@@ -501,7 +505,10 @@ pub(crate) fn reset_for_tests(rt: ToolOutputCompressionRuntime) {
     ENABLED.store(rt.enabled, Ordering::Relaxed);
     CCR_ENABLED.store(rt.ccr_enabled, Ordering::Relaxed);
     if let Ok(mut g) = runtime_lock().lock() {
-        *g = rt;
+        *g = rt.clone();
+    }
+    if let Ok(mut path) = stats_path_lock().lock() {
+        *path = rt.stats_path;
     }
     if let Ok(mut g) = stats_lock().lock() {
         *g = ToolOutputCompressionStats::default();

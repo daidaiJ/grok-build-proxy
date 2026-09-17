@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-use super::runtime::{current_runtime, record_io_read, record_io_write};
+use super::runtime::{ToolOutputCompressionRuntime, record_io_read, record_io_write};
 
 pub(crate) fn compute_key(payload: &str) -> String {
     let hex = blake3::hash(payload.as_bytes()).to_hex();
@@ -14,8 +14,7 @@ pub(crate) fn marker_for(hash: &str) -> String {
     format!("<<ccr:{hash}>>")
 }
 
-pub(crate) fn put(payload: &str) -> Option<String> {
-    let rt = current_runtime();
+pub(crate) fn put(payload: &str, rt: &ToolOutputCompressionRuntime) -> Option<String> {
     if !rt.ccr_enabled {
         return None;
     }
@@ -37,12 +36,11 @@ pub(crate) fn put(payload: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn get(hash: &str) -> Option<String> {
+pub(crate) fn get(hash: &str, rt: &ToolOutputCompressionRuntime) -> Option<String> {
     let hash = hash.trim();
     if hash.is_empty() {
         return None;
     }
-    let rt = current_runtime();
     let path = entry_path(&rt.ccr_dir, hash);
     let ttl = Duration::from_secs(rt.ccr_ttl_secs);
     let start = Instant::now();
@@ -62,6 +60,7 @@ fn entry_path(dir: &Path, hash: &str) -> PathBuf {
     let safe: String = hash
         .chars()
         .filter(|c| c.is_ascii_hexdigit())
+        .map(|c| c.to_ascii_lowercase())
         .take(24)
         .collect();
     dir.join(safe)
@@ -105,9 +104,10 @@ mod tests {
     #[test]
     fn put_get_roundtrip() {
         with_store(|| {
-            let key = put("hello original").expect("put");
+            let rt = crate::implementations::output_compression::runtime::current_runtime();
+            let key = put("hello original", &rt).expect("put");
             assert_eq!(key.len(), 24);
-            assert_eq!(get(&key).as_deref(), Some("hello original"));
+            assert_eq!(get(&key, &rt).as_deref(), Some("hello original"));
         });
     }
 
@@ -119,8 +119,9 @@ mod tests {
     #[test]
     fn rejects_path_escape_in_hash() {
         with_store(|| {
-            assert!(get("../etc/passwd").is_none());
-            assert!(get("zzzz").is_none());
+            let rt = crate::implementations::output_compression::runtime::current_runtime();
+            assert!(get("../etc/passwd", &rt).is_none());
+            assert!(get("zzzz", &rt).is_none());
         });
     }
 }
