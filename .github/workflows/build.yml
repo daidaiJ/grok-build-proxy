@@ -15,7 +15,16 @@ name: build
 on:
   push:
     branches: [main]
+    # Docs-only commits can't change the binary; skip the build for them.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "docs-local/**"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "docs-local/**"
   workflow_dispatch:
 
 concurrency:
