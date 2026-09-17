@@ -70,3 +70,69 @@ ttl_secs = 3600
 - 不压工具定义/描述（约束 1）。
 - 不做外部代理形态（约束 2）。
 - 一期不接 `relevance/embedding`（only-cc-lite 里的可选模块），bm25/hybrid 留二期。
+
+## 二期方向：低损/无损组合（2026-09-17 调研定稿）
+
+> 目标升级为**低损甚至无损**。三个信息源：本地机制消融（`mech_ablation_report`
+> 测试）、headroom/only-cc-lite/DCP/context-mode 源码、四家社区风评
+> （HN/Reddit/GitHub issues）。
+
+### 本地消融结论（token 轴 + 结构保留轴）
+
+| 机制 | 重复型 JSON | 唯一型 JSON | 日志(错误埋中) | 日志(重复) | 保留率 |
+|---|---|---|---|---|---|
+| 一期基线 head/tail | 92.7% | 93.4% | 78.8% | 72.3% | 重复型 JSON **丢唯一项**；search 每文件 3 条上限**丢尾部命中** |
+| M1 精确去重 | 91.3% | 25.1% | — | — | 全保留（无损） |
+| M2 adaptive-k（膝点） | 87.9% | 23.0% | — | — | 全保留 |
+| M3 重要性打分限预算 | — | — | 93.0% | 92.0% | 全保留 |
+| M4 模板折叠 xN | — | — | 93.1% | 92.4% | 全保留（可逆重建） |
+
+关键读数：**唯一型内容"低损=低省"是物理极限**（保全部只能省 23-25%），
+无损收益全部来自"重复信息的折叠"；日志类 M4 双轴碾压一期基线。
+
+### 社区风评要点（机制取舍依据）
+
+- headroom #3545：search 压缩熔接行 → **行号↔内容假配对**（agent 行动坐标被毁，
+  比丢内容更危险）。#3580：代码当 prose 被 ML 压缩静默删词。#3590：小结构化输出
+  压缩后像真数据被误读。#3625：**截断时未写 CCR marker**。#3544/#3560：有 marker
+  但客户端调不了 retrieve。#3587：1886 请求零次检索——marker 成本可能白付。
+- headroom 无损层 `lossless_compaction.py` 是正解：格式原生（grep 仍是 grep）、
+  **运行时往返自校验、失败退回原文**；`cross_turn_dedup.py` 跨轮逐字去重
+  （前缀单调 + keep-earliest，缓存字节安全）。
+- tsheadroom 保守化配方：不装 ML 通道、只压 tool_result 大块、fail-open、
+  实测压缩率 ~40%（vs 宣传 60-95%）。
+- brandonbarker 实测：**重写历史 → cache bust 123 vs 14，净省 ≈0**；
+  headroom 自报 savings 计量 ~1.9x 高估（/stats 数字只当相对指标）。
+- DCP（模型主动 compress + 自动清理）：issue 重灾区——摘要膨胀反烧 738k token
+  （#573）、静默丢数据（#534）、原地替换破 cache（#614/#604）、保护白名单
+  Windows 路径分隔符从未匹配成功（#592）。模型主动调用的路线**不采用**。
+- context-mode（事前沙箱，仅 stdout 进上下文）：理念好、零缓存伤害，但覆盖不了
+  MCP 工具，FTS5 召回依赖模型写对脚本，且有删错数据的 bug（evict 排序反了）。
+  本 fork 不做——rtk hook 已覆盖同场景。
+
+### 二期组合（低风险排序：无损层 → 低损层 → 有损兜底）
+
+1. **无损层**（新，源 headroom lossless_compaction，全部可逆 + 往返自校验失败退回原文）：
+   ANSI 剥离；重复行折叠 `... (repeated N times)`（即 M4 泛化）；JSON 数组精确
+   去重 `xN`（M1）；search 结果路径前缀提升为标题（行数全保留，修一期 3 条上限）；
+   diff `index` 行剥离。
+2. **低损层**（源 only-cc-lite）：折叠后仍超预算时，日志用重要性打分限预算
+   （M3，错误/堆栈永远优先于配额）；JSON 用 adaptive-k 膝点决定保留数
+   （M2，锚点头尾 + 去重序填充）。
+3. **有损兜底**（一期已有，加帽）：generic head/tail 仅在前两层后仍超预算时启用，
+   引入 `max_lossy_ratio`（默认 0.25，headroom F2.2 保守档）；**任何截断路径
+   必写 CCR marker**（#3625 教训），`expand_output` 注册与 marker 严格同生共死。
+4. **不采用**：ML/prose 压缩通道；模型主动压缩（DCP 病全部命中我们约束）；
+   回溯改写历史/live_zone 面（cache 经济学实测净亏）；子进程沙箱（rtk 已覆盖）；
+   跨轮逐字去重（要动已发送历史，同上，留观察）。
+
+### 配置面增量
+
+```toml
+[tool_output_compression]
+max_lossy_ratio = 0.25   # 有损兜底最多压到原文的 25%；0 = 只用无损层
+# 其余沿用一期；lossless 层随 enabled 总开关生效，不单独设开关
+```
+
+验收补充：每个无损变换的往返重建单测；marker-in-all-truncations 回归；
+search 行号↔内容不熔接回归。
