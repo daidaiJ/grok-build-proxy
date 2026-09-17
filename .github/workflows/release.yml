@@ -65,6 +65,14 @@ jobs:
           cache-scope: release
           cache-targets: "true"
           cache-workspace-crates: "true"
+          # The build is the only long step; a post-build failure (asset
+          # upload) leaves a complete, valid tree worth caching for the
+          # rerun. Trade-off: a build-stage failure also saves, and its
+          # partial tree then occupies the exact key until Cargo.lock
+          # changes — bounded at the workspace-rebuild cost a rerun already
+          # pays (deps stay complete in the blob), never a 50-min full
+          # rebuild like the v1.0.28 cancel-poisoning.
+          cache-on-failure: "true"
       - name: Build release binary
         run: |
           # xai-grok-version falls back to its Cargo.toml version unless
@@ -113,6 +121,8 @@ jobs:
           cache-workspace-crates: "true"
           rust-targets: x86_64-pc-windows-msvc
           rust-components: llvm-tools
+          # Same reasoning as the linux job: build completes before upload.
+          cache-on-failure: "true"
       - name: Cache MSVC SDK (xwin)
         uses: actions/cache@v4
         with:

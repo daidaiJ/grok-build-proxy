@@ -31,6 +31,14 @@ inputs:
       Release.yml does both; build.yml does not (it does not cache target/).
     required: false
     default: "false"
+  cache-on-failure:
+    description: >
+      Save the cache even when the job later fails. Turn on only for jobs
+      whose build completes before anything that can fail (release upload);
+      the blob is then complete and a rerun exact-hits it. Keep off for jobs
+      that can fail mid-compile.
+    required: false
+    default: "false"
   rust-targets:
     description: Extra rustup targets for dtolnay/rust-toolchain (comma-separated).
     required: false
@@ -65,10 +73,14 @@ runs:
         shared-key: ${{ inputs.cache-scope }}
         cache-targets: ${{ inputs.cache-targets }}
         cache-workspace-crates: ${{ inputs.cache-workspace-crates }}
-        # false: a failed compile must not occupy the exact key. Cancelled
-        # jobs still run this action's post (v1.0.28 poisoned release that
-        # way); release.yml therefore also sets cancel-in-progress: false.
-        cache-on-failure: false
+        # Default false: a failed compile must not occupy the exact key.
+        # Cancelled jobs still run this action's post (v1.0.28 poisoned
+        # release that way); release.yml therefore also sets
+        # cancel-in-progress: false. Release overrides to true — its build
+        # finishes before the only fallible step left (asset upload), so a
+        # failed-upload rerun restores the exact key instead of the previous
+        # tag's blob (which forces a full workspace rebuild, v1.0.31).
+        cache-on-failure: ${{ inputs.cache-on-failure }}
         save-if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
 
     - name: Install protoc (Linux)
