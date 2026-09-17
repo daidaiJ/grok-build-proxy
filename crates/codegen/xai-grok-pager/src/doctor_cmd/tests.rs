@@ -527,7 +527,9 @@ fn human_mixed_fixture_is_exact() {
     );
 }
 
+// LOCAL: ssh-wrap 修复规划在 Windows 上返回 PlatformUnsupported（POSIX 专属表面），与 diagnostics::fix 同族门控。
 #[test]
+#[cfg(unix)]
 fn fix_preview_contains_exact_change_and_caveats() {
     let temp = tempfile::tempdir().unwrap();
     let terminal = local_terminal();
@@ -555,6 +557,7 @@ fn fix_preview_contains_exact_change_and_caveats() {
 }
 
 #[test]
+#[cfg(unix)]
 fn decline_is_success_and_does_not_write() {
     let temp = tempfile::tempdir().unwrap();
     let terminal = local_terminal();
@@ -587,6 +590,7 @@ fn decline_is_success_and_does_not_write() {
 }
 
 #[test]
+#[cfg(unix)]
 fn non_tty_without_yes_fails_safely_before_write() {
     let temp = tempfile::tempdir().unwrap();
     let terminal = local_terminal();

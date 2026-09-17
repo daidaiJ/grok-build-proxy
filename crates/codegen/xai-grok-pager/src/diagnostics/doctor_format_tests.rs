@@ -221,6 +221,11 @@ fn tmux_config_and_reload_notes_output_is_stable() {
 
 #[test]
 fn limited_color_output_is_stable() {
+    // LOCAL: 期望文本含 `terminal` 主题（3/6），但 `terminal_theme_enabled` 全局开关
+    // fail-closed 默认关闭，selectable() 会滤掉 Terminal 导致实际输出 2/5。
+    // 测试内显式播种并在结束时还原，消除对其他用例执行顺序的隐式依赖。
+    let seeded = xai_grok_pager_render::theme::cache::terminal_theme_enabled();
+    xai_grok_pager_render::theme::cache::set_terminal_theme_enabled(true);
     let terminal = ghostty(false);
     let output = build_doctor(snapshot(
         &terminal,
@@ -231,6 +236,7 @@ fn limited_color_output_is_stable() {
         ColorLevel::Ansi256,
         runtime(None, true),
     ));
+    xai_grok_pager_render::theme::cache::set_terminal_theme_enabled(seeded);
 
     assert_eq!(
         output,

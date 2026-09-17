@@ -110,7 +110,10 @@ impl AgentView {
     }
 }
 
-#[cfg(test)]
+// LOCAL: 本组用例驱动 bash 模式的终端式 Tab 补全，而该路径在 Windows 上被产品代码有意
+// 禁用（见 prompt.rs Priority 5 的 `cfg!(not(windows))`：补全分词器 shell_token 仅支持
+// POSIX，Windows 保留原生焦点循环 Tab）。整组用例仅限 Unix 执行。
+#[cfg(all(test, unix))]
 mod shell_suggestion_key_tests {
     use super::*;
     use crate::app::actions::{Action, Effect};

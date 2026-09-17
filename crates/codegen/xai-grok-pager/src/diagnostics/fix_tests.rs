@@ -1,3 +1,7 @@
+// LOCAL: 下列用例经 `#[cfg(unix)]` 门控。它们驱动 ssh-wrap（bash/zsh/fish rc 文件别名
+// 规划）与 tmux/byobu 托管配置的修复流程——两者都是 POSIX 专属表面：
+// Windows 上产品有意返回 PlatformUnsupported（无 POSIX shell），tmux 在 Windows 无生产
+// 场景且其托管写入依赖 Unix 目录语义（fs::read 目录在 Windows 上是 PermissionDenied）。
 use super::*;
 use crate::clipboard::{ClipboardDelivery, NativeClipboardPreflight, Osc52Capability};
 use crate::diagnostics::{DiagnosticFinding, FindingDisposition, ManualRemediation};
@@ -100,6 +104,7 @@ fn canonical_and_short_ids_resolve_to_canonical_id() {
 }
 
 #[test]
+#[cfg(unix)]
 fn applicable_fix_listing_uses_report_metadata_and_planner_availability() {
     let temp = tempfile::tempdir().unwrap();
     let report = report();
@@ -400,6 +405,7 @@ fn tmux_plain_byobu_and_custom_config_paths_are_physical() {
 }
 
 #[test]
+#[cfg(unix)]
 fn tmux_managed_items_coexist_and_each_apply_is_one_transaction() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join(".tmux.conf");
@@ -586,6 +592,7 @@ fn conflicting_direct_form_after_managed_block_fails_persistent_verification() {
 }
 
 #[test]
+#[cfg(unix)]
 fn healthy_direct_does_not_suppress_repair_of_noncanonical_managed_item() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join(".tmux.conf");
@@ -658,6 +665,7 @@ fn tmux_applicability_uses_exact_positive_probe_gates() {
 }
 
 #[test]
+#[cfg(unix)]
 fn tmux_stale_plan_and_idempotence_reuse_managed_writer_safety() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join(".tmux.conf");
@@ -711,6 +719,7 @@ fn tmux_stale_plan_and_idempotence_reuse_managed_writer_safety() {
 }
 
 #[test]
+#[cfg(unix)]
 fn bash_zsh_and_fish_plans_use_exact_paths_and_aliases() {
     let temp = tempfile::tempdir().unwrap();
     for (shell, relative, alias) in [
@@ -747,6 +756,7 @@ fn bash_zsh_and_fish_plans_use_exact_paths_and_aliases() {
 }
 
 #[test]
+#[cfg(unix)]
 fn remote_vscode_and_unsupported_shell_are_refused() {
     let temp = tempfile::tempdir().unwrap();
     let mut remote = terminal();
@@ -781,6 +791,7 @@ fn windows_is_manual_only_before_shell_selection() {
 }
 
 #[test]
+#[cfg(unix)]
 fn existing_alias_and_function_conflicts_are_preserved() {
     let cases = [
         ("/bin/bash", ".bashrc", "alias ssh='ssh -A'\n"),
@@ -870,6 +881,7 @@ fn posix_function_scanner_requires_exact_ssh_name_boundary() {
 }
 
 #[test]
+#[cfg(unix)]
 fn conflict_scan_uses_the_exact_validated_source_snapshot() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join(".bashrc");
@@ -889,6 +901,7 @@ fn conflict_scan_uses_the_exact_validated_source_snapshot() {
 }
 
 #[test]
+#[cfg(unix)]
 fn non_utf8_source_fails_closed_before_conflict_policy() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join(".zshrc");
@@ -938,6 +951,7 @@ fn validator_prefers_custom_executable_shell_and_uses_path_for_basename_only() {
 }
 
 #[test]
+#[cfg(unix)]
 fn comments_and_managed_alias_do_not_create_false_conflicts() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join(".zshrc");
@@ -974,6 +988,7 @@ fn managed_alias_with_later_unmanaged_conflict_is_not_configured() {
 }
 
 #[test]
+#[cfg(unix)]
 fn stale_plan_is_rejected_and_apply_verifies_postcondition() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join(".bashrc");
@@ -998,6 +1013,7 @@ fn stale_plan_is_rejected_and_apply_verifies_postcondition() {
 }
 
 #[test]
+#[cfg(unix)]
 fn ssh_wrap_outcome_verifies_with_planned_shell_not_process_shell() {
     // Post-apply verification must use the shell stored on the outcome
     // Even if `$SHELL` is missing or points at a different shell family, a successful apply against bash must still report the alias configured
@@ -1028,6 +1044,7 @@ fn ssh_wrap_outcome_verifies_with_planned_shell_not_process_shell() {
 }
 
 #[test]
+#[cfg(unix)]
 fn configured_report_reaches_pass_state_only_for_exact_managed_alias() {
     let mut diagnostic = report();
     diagnostic = configured_report(diagnostic, false);
@@ -1215,6 +1232,7 @@ fn shell_aliases_expand_to_exact_argv_and_bypass_is_explicit() {
 /// tmux applies Grok's managed block last and the features merge.
 /// A direct-assignment remedy would refuse to touch the file.
 #[test]
+#[cfg(unix)]
 fn tmux_truecolor_fix_appends_alongside_existing_terminal_features() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join(".tmux.conf");

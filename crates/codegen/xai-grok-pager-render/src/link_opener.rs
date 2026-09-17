@@ -299,7 +299,10 @@ pub fn ensure_query_param(url: &str, key: &str, value: &str) -> String {
 mod tests {
     use super::*;
 
+    // LOCAL: build_open_path_command 仅非 Windows 存在（Windows 走 reveal_in_explorer），
+    // 上游测试漏了对应门控，Windows 下 lib test 无法编译。
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn open_path_command_passes_path_as_a_single_arg() {
         // Path with spaces must be one argument, never shell-interpolated.
         let path = std::path::Path::new("/tmp/grok session/image 1.jpg");

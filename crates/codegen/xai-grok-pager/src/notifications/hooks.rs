@@ -129,7 +129,10 @@ mod tests {
         }
     }
 
+    // LOCAL: 以下用例经 `sh -c` 执行 POSIX 命令（env/touch/printf 重定向）并断言其副作用，
+    // Windows 上 `sh` 不存在、spawn 失败属预期，故仅限 Unix 跑。
     #[test]
+    #[cfg(unix)]
     fn sets_environment_variables() {
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("env.txt");
@@ -163,6 +166,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn omits_session_id_when_none() {
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("env.txt");
@@ -225,6 +229,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn successful_command_completes_without_error() {
         let dir = tempfile::tempdir().unwrap();
         let marker = dir.path().join("done");
@@ -280,6 +285,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn run_hook_passes_correct_env_via_thread() {
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("env.txt");

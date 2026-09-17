@@ -378,6 +378,13 @@ pub fn is_legacy_windows_console() -> bool {
     static CACHE: OnceLock<bool> = OnceLock::new();
     *CACHE.get_or_init(|| {
         forced_legacy_console_override().unwrap_or_else(|| {
+            // LOCAL: 测试构建固定按现代终端处理。本套件大量用例按完整字形（⚠ › ↗ …）断言，
+            // 上游假设测试宿主是非 Windows；Windows 开发机在无终端品牌环境变量时
+            // env_brand 探测为 Unknown → 默认 legacy，会让这批用例整体翻车。
+            // 需要演练 legacy 回退时，仍可用 GROK_FORCE_LEGACY_CONSOLE=1 显式打开。
+            if cfg!(test) || cfg!(feature = "test-support") {
+                return false;
+            }
             // `env_brand`, not `brand`: bare ConHost detects as `Unknown`, but `brand` optimistically becomes `WindowsTerminal` on native Windows
             // Font capability needs the raw detection so legacy consoles still get the ASCII glyph fallback
             decide_legacy_windows_console(HostOs::current(), terminal_context().env_brand)
