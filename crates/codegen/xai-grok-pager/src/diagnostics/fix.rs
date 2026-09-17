@@ -48,13 +48,25 @@ impl SafeAbsoluteDirectory {
     fn parse(path: PathBuf, label: &'static str) -> Result<Self, FixError> {
         use std::path::Component;
 
-        let is_root_only = path.parent().is_none();
+        // LOCAL: Windows 环境路径可能携带 8.3 短名（如 `C:\Users\SHENG1~1.ZHA\AppData\...`，
+        // TEMP/HOME 由系统代填时常见），短名中的 `~` 会触发下方的 is_renderable 拒绝，
+        // 把合法目录误判为 UnsafeDirectory。仅在「绝对路径且含 ~」时解析回长路径再判定：
+        // 真短名会被展开（无 ~ → 放行），字面 ~ 目录名解析后仍在（仍拒绝），路径不存在时
+        // 解析失败按含 ~ 拒绝。相对路径、`.`/`..`、控制字符等敌意输入不走解析，保持原语义。
+        let raw = path.to_str().unwrap_or_default();
+        let tilde_resolves_away = raw.contains('~')
+            && path.is_absolute()
+            && std::fs::canonicalize(&path)
+                .map(|resolved| !dunce::simplified(&resolved).to_string_lossy().contains('~'))
+                .unwrap_or(false);
         let has_unsafe_component = path
             .components()
             .any(|component| matches!(component, Component::CurDir | Component::ParentDir));
         let is_renderable = path
             .to_str()
-            .is_some_and(|value| !value.chars().any(char::is_control) && !value.contains('~'));
+            .is_some_and(|value| !value.chars().any(char::is_control))
+            && (!raw.contains('~') || tilde_resolves_away);
+        let is_root_only = path.parent().is_none();
         if !path.is_absolute() || is_root_only || has_unsafe_component || !is_renderable {
             return Err(FixError::UnsafeDirectory { label, path });
         }
