@@ -218,26 +218,51 @@ fn exact_noop_creates_no_transaction_artifacts_or_rewrite() {
     assert!(artifacts(temp.path()).is_empty());
 }
 
+// LOCAL: 上游把三组字节非法输入和八种 marker 形状塞进同一个测试函数，失败时无法从
+// 测试名定位具体用例；按用例拆分，失败即自报场景。
 #[test]
-fn invalid_inputs_and_all_marker_shapes_are_refused() {
+fn oversize_input_is_refused() {
     let temp = tempfile::tempdir().unwrap();
-    let oversize = temp.path().join("oversize");
+    let path = temp.path().join("oversize");
     fs::write(
-        &oversize,
+        &path,
         vec![b'x'; super::source::MAX_CONFIG_BYTES as usize + 1],
     )
     .unwrap();
-    let nul = temp.path().join("nul");
-    fs::write(&nul, b"a\0b").unwrap();
-    let non_utf8 = temp.path().join("non-utf8");
-    fs::write(&non_utf8, [0xff]).unwrap();
-    for path in [&oversize, &nul, &non_utf8] {
-        assert!(matches!(
-            ManagedConfig::plan(request(path, &[("item", "body")])),
-            Err(ManagedConfigError::UnsafePath { .. })
-        ));
-    }
+    assert!(matches!(
+        ManagedConfig::plan(request(&path, &[("item", "body")])),
+        Err(ManagedConfigError::UnsafePath { .. })
+    ));
+}
 
+#[test]
+fn nul_bytes_are_refused() {
+    let temp = tempfile::tempdir().unwrap();
+    // LOCAL: 夹具原名 "nul" 是 Windows 保留设备名，写入进 NUL 黑洞导致本用例在
+    // Windows 必挂；测试意图只关乎「内容含 NUL 字节」，换合法文件名。
+    let path = temp.path().join("contains-nul");
+    fs::write(&path, b"a\0b").unwrap();
+    assert!(matches!(
+        ManagedConfig::plan(request(&path, &[("item", "body")])),
+        Err(ManagedConfigError::UnsafePath { .. })
+    ));
+}
+
+#[test]
+fn non_utf8_content_is_refused() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("non-utf8");
+    fs::write(&path, [0xff]).unwrap();
+    assert!(matches!(
+        ManagedConfig::plan(request(&path, &[("item", "body")])),
+        Err(ManagedConfigError::UnsafePath { .. })
+    ));
+}
+
+#[test]
+fn invalid_marker_shapes_are_refused() {
+
+    let temp = tempfile::tempdir().unwrap();
     let cases = [
         "# >>> grok doctor >>>\n",
         "# <<< grok doctor <<<\n# >>> grok doctor >>>\n",

@@ -142,7 +142,7 @@ impl ParentAnchor {
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
             return Err(ManagedConfigError::ParentChanged(path.to_path_buf()));
         }
-        let directory = fs::File::open(path).map_err(|source| ManagedConfigError::Read {
+        let directory = open_directory_handle(path).map_err(|source| ManagedConfigError::Read {
             path: path.to_path_buf(),
             source,
         })?;
@@ -190,9 +190,11 @@ pub(super) struct FileIdentity {
     dev: u64,
     #[cfg(unix)]
     ino: u64,
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    created: u64,
+    #[cfg(not(any(unix, windows)))]
     len: u64,
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     modified: Option<std::time::SystemTime>,
 }
 
@@ -206,13 +208,43 @@ impl FileIdentity {
                 ino: metadata.ino(),
             }
         }
-        #[cfg(not(unix))]
+        // LOCAL: Windows 不能用 mtime/len 做目录节点身份——mtime 随内容变化（并发测试共享
+        // 临时根目录时互相干扰，ParentChanged 误报）。creation_time 是目录节点的稳定属性，
+        // 与 Unix 的 (dev, ino) 一样不受兄弟条目增删影响；目录被重建时它才会改变，恰好
+        // 契合该护栏「路径被替换即拒绝」的意图。
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt as _;
+            Self {
+                created: metadata.creation_time(),
+            }
+        }
+        #[cfg(not(any(unix, windows)))]
         {
             Self {
                 len: metadata.len(),
                 modified: metadata.modified().ok(),
             }
         }
+    }
+}
+
+// LOCAL: Windows 上 `File::open` 打开目录会 ACCESS_DENIED（os error 5）——目录句柄必须
+// 携带 FILE_FLAG_BACKUP_SEMANTICS。缺它时 managed_text 事务在锚定阶段即失败，
+// 整个模块（含 doctor 的配置修复流程）在 Windows 上不可用。
+fn open_directory_handle(path: &Path) -> std::io::Result<fs::File> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)
+    }
+    #[cfg(not(windows))]
+    {
+        fs::File::open(path)
     }
 }
 
