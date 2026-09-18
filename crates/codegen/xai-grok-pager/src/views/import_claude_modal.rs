@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use xai_grok_shell::claude_import::{ImportPlan, ImportableItem, PathKind, find_project_root};
 use xai_grok_workspace::permission::types::RuleAction;
 
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::modal_window::{
     FoldInfo, ModalSizing, ModalWindowConfig, ModalWindowOutcome, ModalWindowState, Shortcut,
@@ -573,7 +574,7 @@ pub fn render_import_claude_modal(
     theme: &Theme,
     compact: bool,
 ) {
-    let confirm_label = format!("Enter import {}", state.selected_count());
+    let confirm_label = tr("Enter import {}").replace("{}", &state.selected_count().to_string());
     let shortcuts = [
         Shortcut {
             label: "\u{2191}\u{2193} navigate",
@@ -728,7 +729,7 @@ fn build_rows(
         let project_config = find_project_root(cwd)
             .join(".grok")
             .join(xai_grok_config::USER_CONFIG_FILENAME);
-        let label = format!("Project  {}", project_config.display());
+        let label = format!("{}{}", tr("Project  "), project_config.display());
         let scope_header_pos = rows.len();
         rows.push(Row::ScopeHeader {
             label,
@@ -854,7 +855,7 @@ fn render_row_dispatch<'a>(
             flat_indices,
             section_key,
         } => {
-            let label = format!("{} ({})", kind.label(), flat_indices.len());
+            let label = format!("{} ({})", tr(kind.label()), flat_indices.len());
             render_header_line(
                 &label,
                 flat_indices,
@@ -940,7 +941,7 @@ fn render_header_line<'a>(
         Span::styled(mark, mark_style),
         Span::styled("]", bracket_style),
         Span::raw(" "),
-        Span::styled(label.to_string(), label_style),
+        Span::styled(tr_str(label), label_style),
     ])
 }
 

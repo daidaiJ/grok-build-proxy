@@ -10,6 +10,8 @@ use ratatui::style::{Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::input::line_editor::{LineEditOutcome, LineEditor};
+// LOCAL: 屏显文案经 i18n 查表（测试构建整体旁路，键保持英文原文）
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::managed_connectors_wait::WAIT_BACK_SHORTCUT_ID;
 use crate::views::mcps_modal::MCP_SERVERS_REFRESH_KEY;
@@ -330,9 +332,21 @@ type GroupedPlugins<'a> = std::collections::BTreeMap<
 /// Header count suffix: `1 plugin`, `2 plugins`.
 fn plugin_count_label(n: usize) -> String {
     if n == 1 {
-        "1 plugin".to_string()
+        tr("1 plugin").to_string()
     } else {
-        format!("{n} plugins")
+        tr("{n} plugins").replace("{n}", &n.to_string())
+    }
+}
+
+/// LOCAL: 分组头标签的屏显翻译。英文标签同时是 skills 分组折叠键，故此处只在渲染出口
+/// 查表（`Plugin: {name}` / `Custom: {path}` 为运行时拼接串，按前缀拆分翻译）。
+fn tr_group_label(label: &str) -> String {
+    if let Some(rest) = label.strip_prefix("Plugin: ") {
+        format!("{}{rest}", tr("Plugin: "))
+    } else if let Some(rest) = label.strip_prefix("Custom: ") {
+        format!("{}{rest}", tr("Custom: "))
+    } else {
+        tr_str(label)
     }
 }
 
@@ -350,7 +364,7 @@ fn mcp_row_badge(
             Some(server.status.theme_color(theme)),
         )
     } else {
-        ("[disabled]".to_string(), Some(theme.accent_error))
+        (tr("[disabled]").to_string(), Some(theme.accent_error))
     }
 }
 
@@ -810,7 +824,14 @@ impl ModalInput {
                     .map(|(_, f)| f.label())
                     .collect();
                 if !empty_required.is_empty() {
-                    self.error = Some(format!("Required: {}", empty_required.join(", ")));
+                    // LOCAL: 错误串存进 state，按 P1 先例在构造出口翻译；字段标签同步翻译，
+                    // 与表单内展示的译名保持一致
+                    let labels = empty_required
+                        .iter()
+                        .map(|l| tr_str(l))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    self.error = Some(format!("{}: {}", tr("Required"), labels));
                     return ModalInputOutcome::Changed;
                 }
                 ModalInputOutcome::Submit {
@@ -995,7 +1016,7 @@ impl McpSetupFormState {
             }
             KeyCode::Enter => {
                 if self.selected_value().is_none() {
-                    self.error = Some("Select an option".to_string());
+                    self.error = Some(tr("Select an option").to_string());
                     McpSetupOutcome::Changed
                 } else {
                     McpSetupOutcome::Submit
@@ -2224,11 +2245,15 @@ impl ExtensionsModalState {
             .and_then(|key| key.as_deref())
             .is_some_and(|key| !self.is_group_expanded(sel, key));
         let verb = verb.label();
-        self.modal_message = Some(ModalMessage::Info(if collapsed_header {
-            format!("Expand this row (Enter), then select a {noun} row to {verb}.")
+        // LOCAL: 提示串存进 state，按 P1 先例在构造出口整句模板查表注入名词/动词
+        let hint = if collapsed_header {
+            tr("Expand this row (Enter), then select a {noun} row to {verb}.")
         } else {
-            format!("Select a {noun} row to {verb}.")
-        }));
+            tr("Select a {noun} row to {verb}.")
+        }
+        .replace("{noun}", &tr_str(noun))
+        .replace("{verb}", tr(verb));
+        self.modal_message = Some(ModalMessage::Info(hint));
     }
 
     pub fn selected_item_enabled(&self) -> Option<bool> {
@@ -2669,24 +2694,28 @@ fn build_plugin_fields(plugin: &xai_hooks_plugins_types::PluginInfo) -> Vec<Stri
     use xai_hooks_plugins_types::McpStatus;
     let mut components = Vec::new();
     if !plugin.skill_names.is_empty() {
-        components.push(format!("skills: {}", plugin.skill_names.join(", ")));
+        components.push(format!("{}: {}", tr("skills"), plugin.skill_names.join(", ")));
     } else if plugin.skill_count > 0 {
-        components.push(format!("{} skills", plugin.skill_count));
+        components.push(tr("{n} skills").replace("{n}", &plugin.skill_count.to_string()));
     }
     if !plugin.agent_names.is_empty() {
-        components.push(format!("agents: {}", plugin.agent_names.join(", ")));
+        components.push(format!("{}: {}", tr("agents"), plugin.agent_names.join(", ")));
     } else if plugin.agent_count > 0 {
-        components.push(format!("{} agents", plugin.agent_count));
+        components.push(tr("{n} agents").replace("{n}", &plugin.agent_count.to_string()));
     }
     if plugin.hook_count > 0 {
-        components.push(format!("{} hooks", plugin.hook_count));
+        components.push(tr("{n} hooks").replace("{n}", &plugin.hook_count.to_string()));
     }
     match plugin.mcp_status {
         McpStatus::Active | McpStatus::ActiveInline => {
-            components.push(format!("{} MCP servers", plugin.mcp_server_count));
+            components.push(
+                tr("{n} MCP servers").replace("{n}", &plugin.mcp_server_count.to_string()),
+            );
         }
         McpStatus::Blocked => {
-            components.push(format!("{} MCP: blocked", plugin.mcp_server_count));
+            components.push(
+                tr("{n} MCP: blocked").replace("{n}", &plugin.mcp_server_count.to_string()),
+            );
         }
         McpStatus::None => {}
     }
@@ -2705,12 +2734,12 @@ fn component_categories(
     use xai_hooks_plugins_types::ComponentCategory;
     components.categories().map(|(category, items)| {
         let label = match category {
-            ComponentCategory::Skills => "skills",
-            ComponentCategory::Commands => "commands",
-            ComponentCategory::Agents => "agents",
-            ComponentCategory::McpServers => "mcp servers",
-            ComponentCategory::Hooks => "hooks",
-            ComponentCategory::LspServers => "lsp servers",
+            ComponentCategory::Skills => tr("skills"),
+            ComponentCategory::Commands => tr("commands"),
+            ComponentCategory::Agents => tr("agents"),
+            ComponentCategory::McpServers => tr("mcp servers"),
+            ComponentCategory::Hooks => tr("hooks"),
+            ComponentCategory::LspServers => tr("lsp servers"),
         };
         (label, items)
     })
@@ -2732,7 +2761,10 @@ pub(crate) fn render_components_fields(
             .collect();
         let mut value = names.join(", ");
         if items.len() > COMPONENT_ITEMS_CAP {
-            value.push_str(&format!(" +{} more", items.len() - COMPONENT_ITEMS_CAP));
+            value.push_str(
+                &tr(" +{n} more")
+                    .replace("{n}", &(items.len() - COMPONENT_ITEMS_CAP).to_string()),
+            );
         }
         fields.push((label.to_string(), value));
     }
@@ -2785,7 +2817,8 @@ pub fn render_extensions_modal(
     }
 
     // Tab labels and active index.
-    let labels: Vec<&str> = ExtensionsTab::ALL.iter().map(|t| t.label()).collect();
+    // LOCAL: 标签页名为屏显文案，渲染出口查表（遥测/输入路径仍用英文 label()）
+    let labels: Vec<&str> = ExtensionsTab::ALL.iter().map(|t| tr(t.label())).collect();
     let active_idx = ExtensionsTab::ALL
         .iter()
         .position(|t| *t == state.active_tab)
@@ -2856,11 +2889,17 @@ pub fn render_extensions_modal(
                         let collapsed =
                             !searching && state.skills_collapsed_groups.contains(group_label);
                         let count = members.len();
-                        entry_labels.push(if count == 1 {
-                            format!("{group_label} (1 skill)")
+                        // LOCAL: 分组头为折叠键（英文），仅屏显侧翻译
+                        let count_label = if count == 1 {
+                            tr("1 skill").to_string()
                         } else {
-                            format!("{group_label} ({count} skills)")
-                        });
+                            tr("{n} skills").replace("{n}", &count.to_string())
+                        };
+                        entry_labels.push(format!(
+                            "{} ({})",
+                            tr_group_label(group_label),
+                            count_label
+                        ));
                         entry_right_labels.push(String::new());
                         entry_desc_lines.push(vec![]);
                         entry_summary_lines.push(vec![]);
@@ -2882,8 +2921,10 @@ pub fn render_extensions_modal(
                             let source = skill_source_str(skill);
                             entry_labels.push(skill.label().to_string());
                             let right = match &skill.author {
-                                Some(a) if !a.is_empty() => format!("({} · {})", source, a),
-                                _ => format!("({})", source),
+                                Some(a) if !a.is_empty() => {
+                                    format!("({} · {})", tr_str(&source), a)
+                                }
+                                _ => format!("({})", tr_str(&source)),
                             };
                             entry_right_labels.push(right);
                             let desc = skill
@@ -2896,16 +2937,16 @@ pub fn render_extensions_modal(
                                 entry_desc_lines.push(vec![desc.to_string()]);
                             }
                             entry_summary_lines.push(vec![]);
-                            let mut fields = vec![("path".to_string(), skill.path.clone())];
+                            let mut fields = vec![(tr("path").to_string(), skill.path.clone())];
                             if let Some(ref a) = skill.author
                                 && !a.is_empty()
                             {
-                                fields.push(("author".to_string(), a.clone()));
+                                fields.push((tr("author").to_string(), a.clone()));
                             }
                             if let Some(ref tools) = skill.allowed_tools
                                 && !tools.is_empty()
                             {
-                                fields.push(("tools".to_string(), tools.join(", ")));
+                                fields.push((tr("tools").to_string(), tools.join(", ")));
                             }
                             entry_fields.push(fields);
                             entry_is_header.push(false);
@@ -2914,7 +2955,7 @@ pub fn render_extensions_modal(
                             entry_data_indices.push(Some(si));
                             entry_group_keys.push(None);
                             if !skill.enabled {
-                                entry_badge_text.push("[disabled]".into());
+                                entry_badge_text.push(tr("[disabled]").into());
                                 entry_badge_color.push(Some(theme.accent_error));
                             } else {
                                 entry_badge_text.push(String::new());
@@ -2923,7 +2964,7 @@ pub fn render_extensions_modal(
                         }
                     }
                 } else if let TabDataState::Error(ref msg) = state.skills_data {
-                    entry_labels.push(format!("Error: {}", msg));
+                    entry_labels.push(format!("{}: {}", tr("Error"), msg));
                     entry_right_labels.push(String::new());
                     entry_desc_lines.push(vec![]);
                     entry_summary_lines.push(vec![]);
@@ -2985,9 +3026,10 @@ pub fn render_extensions_modal(
                         let searching = !state.picker_state.query().is_empty();
                         let collapsed =
                             !searching && state.plugins_collapsed_groups.contains(group_key);
+                        // LOCAL: 分组头为折叠键（英文），仅屏显侧翻译
                         entry_labels.push(format!(
                             "{} ({})",
-                            label,
+                            tr_group_label(label),
                             plugin_count_label(plugins.len())
                         ));
                         entry_right_labels.push(String::new());
@@ -3025,9 +3067,9 @@ pub fn render_extensions_modal(
                             if let Some(ref desc) = plugin.description
                                 && !desc.is_empty()
                             {
-                                fields.push(("description".to_string(), desc.clone()));
+                                fields.push((tr("description").to_string(), desc.clone()));
                             }
-                            fields.push(("path".to_string(), plugin.root.clone()));
+                            fields.push((tr("path").to_string(), plugin.root.clone()));
                             entry_fields.push(fields);
                             entry_is_header.push(false);
                             entry_dimmed.push(!plugin.enabled);
@@ -3035,7 +3077,7 @@ pub fn render_extensions_modal(
                             entry_data_indices.push(Some(pi));
                             entry_group_keys.push(None);
                             entry_badge_text.push(if !plugin.enabled {
-                                "[disabled]".into()
+                                tr("[disabled]").into()
                             } else {
                                 String::new()
                             });
@@ -3047,7 +3089,7 @@ pub fn render_extensions_modal(
                         }
                     }
                 } else if let TabDataState::Error(ref msg) = state.plugins_data {
-                    entry_labels.push(format!("Error: {}", msg));
+                    entry_labels.push(format!("{}: {}", tr("Error"), msg));
                     entry_right_labels.push(String::new());
                     entry_desc_lines.push(vec![]);
                     entry_summary_lines.push(vec![]);
@@ -3077,8 +3119,13 @@ pub fn render_extensions_modal(
                         let collapsed =
                             !searching && state.hooks_collapsed_groups.contains(source_dir);
                         let count = indices.len();
-                        let noun = if count == 1 { "hook" } else { "hooks" };
-                        entry_labels.push(format!("{label} ({count} {noun})"));
+                        // LOCAL: 分组头为折叠键（英文），仅屏显侧翻译；计数后缀整键进表
+                        let noun = if count == 1 {
+                            tr("1 hook").to_string()
+                        } else {
+                            tr("{n} hooks").replace("{n}", &count.to_string())
+                        };
+                        entry_labels.push(format!("{} ({})", tr_group_label(label), noun));
                         entry_right_labels.push(String::new());
                         entry_desc_lines.push(vec![]);
                         entry_summary_lines.push(vec![]);
@@ -3099,7 +3146,7 @@ pub fn render_extensions_modal(
                             let cmd = hook
                                 .command
                                 .as_deref()
-                                .unwrap_or(hook.url.as_deref().unwrap_or("(no command)"));
+                                .unwrap_or(hook.url.as_deref().unwrap_or(tr("(no command)")));
                             entry_right_labels.push(String::new());
                             entry_desc_lines.push(vec![format!("\u{2192} {}", cmd)]);
                             entry_summary_lines.push(vec![]);
@@ -3112,9 +3159,9 @@ pub fn render_extensions_modal(
                             // Pinned (managed-policy) hooks show their state up front, so a refused Disable isn't the first signal
                             // A pinned hook never shows [disabled]
                             entry_badge_text.push(if hook.pinned {
-                                "[policy]".into()
+                                tr("[policy]").into()
                             } else if hook.disabled {
-                                "[disabled]".into()
+                                tr("[disabled]").into()
                             } else {
                                 String::new()
                             });
@@ -3128,7 +3175,7 @@ pub fn render_extensions_modal(
                         }
                     }
                 } else if let TabDataState::Error(ref msg) = state.hooks_data {
-                    entry_labels.push(format!("Error: {}", msg));
+                    entry_labels.push(format!("{}: {}", tr("Error"), msg));
                     entry_right_labels.push(String::new());
                     entry_desc_lines.push(vec![]);
                     entry_summary_lines.push(vec![]);
@@ -3161,7 +3208,7 @@ pub fn render_extensions_modal(
                         entry_desc_lines.push(vec![]);
                         entry_summary_lines.push(vec![]);
                         if let Some(ref err) = source.error {
-                            entry_fields.push(vec![("error".to_string(), err.clone())]);
+                            entry_fields.push(vec![(tr("error").to_string(), err.clone())]);
                         } else {
                             entry_fields.push(vec![]);
                         }
@@ -3171,7 +3218,7 @@ pub fn render_extensions_modal(
                         entry_data_indices.push(None);
                         entry_group_keys.push(Some(si.to_string()));
                         if source.error.is_some() {
-                            entry_badge_text.push("[error]".into());
+                            entry_badge_text.push(tr("[error]").into());
                             entry_badge_color.push(Some(theme.accent_error));
                         } else {
                             entry_badge_text.push(String::new());
@@ -3186,16 +3233,18 @@ pub fn render_extensions_modal(
                                 continue;
                             }
                             let status_label = match plugin.install_status.as_str() {
-                                "installed" => "[installed]",
-                                "update_available" => "[update available]",
+                                "installed" => tr("[installed]"),
+                                "update_available" => tr("[update available]"),
                                 _ => "",
                             };
                             entry_labels.push(plugin.name.clone());
                             let right = match (plugin.version.as_deref(), plugin.author.as_deref())
                             {
-                                (Some(v), Some(a)) => format!("v{v} by {a}"),
+                                (Some(v), Some(a)) => tr("v{v} by {a}")
+                                    .replace("{v}", v)
+                                    .replace("{a}", a),
                                 (Some(v), None) => format!("v{v}"),
-                                (None, Some(a)) => format!("by {a}"),
+                                (None, Some(a)) => tr("by {a}").replace("{a}", a),
                                 (None, None) => String::new(),
                             };
                             entry_right_labels.push(right);
@@ -3212,16 +3261,16 @@ pub fn render_extensions_modal(
                             // Fields for expanded view.
                             let mut fields = Vec::new();
                             if let Some(ref version) = plugin.version {
-                                fields.push(("version".to_string(), version.clone()));
+                                fields.push((tr("version").to_string(), version.clone()));
                             }
                             if let Some(ref author) = plugin.author {
-                                fields.push(("author".to_string(), author.clone()));
+                                fields.push((tr("author").to_string(), author.clone()));
                             }
                             if let Some(ref category) = plugin.category {
-                                fields.push(("category".to_string(), category.clone()));
+                                fields.push((tr("category").to_string(), category.clone()));
                             }
                             if !plugin.tags.is_empty() {
-                                fields.push(("tags".to_string(), plugin.tags.join(", ")));
+                                fields.push((tr("tags").to_string(), plugin.tags.join(", ")));
                             }
                             match &plugin.components {
                                 Some(components) if !components.is_empty() => {
@@ -3229,23 +3278,26 @@ pub fn render_extensions_modal(
                                 }
                                 Some(_) => {
                                     fields.push((
-                                        "provides".to_string(),
-                                        NO_DETECTABLE_COMPONENTS.to_string(),
+                                        tr("provides").to_string(),
+                                        tr(NO_DETECTABLE_COMPONENTS).to_string(),
                                     ));
                                 }
                                 None => {
                                     if plugin.remote_url.is_some() {
                                         fields.push((
-                                            "provides".to_string(),
-                                            "contents shown after install".to_string(),
+                                            tr("provides").to_string(),
+                                            tr("contents shown after install").to_string(),
                                         ));
                                     }
                                 }
                             }
                             if plugin.install_status != "not_installed" {
-                                fields.push(("status".to_string(), plugin.install_status.clone()));
+                                fields.push((
+                                    tr("status").to_string(),
+                                    tr_str(&plugin.install_status),
+                                ));
                                 if let Some(ref iv) = plugin.installed_version {
-                                    fields.push(("installed".to_string(), iv.clone()));
+                                    fields.push((tr("installed").to_string(), iv.clone()));
                                 }
                             }
                             entry_fields.push(fields);
@@ -3263,7 +3315,7 @@ pub fn render_extensions_modal(
                         }
                     }
                 } else if let TabDataState::Error(ref msg) = state.marketplace_data {
-                    entry_labels.push(format!("Error: {}", msg));
+                    entry_labels.push(format!("{}: {}", tr("Error"), msg));
                     entry_right_labels.push(String::new());
                     entry_desc_lines.push(vec![]);
                     entry_summary_lines.push(vec![]);
@@ -3341,40 +3393,39 @@ pub fn render_extensions_modal(
                                     .clone()
                                     .unwrap_or_else(|| server.name.clone()),
                             );
-                            entry_right_labels.push(format!("({})", server.source));
+                            entry_right_labels.push(format!("({})", tr_str(&server.source)));
                             // Summary line: name the actual cause of an empty tool list instead of guessing at connection state.
                             if server.tools.is_empty() {
                                 let line =
                                     if server.status == McpServerDisplayStatus::BlockedByPolicy {
                                         // The reason already carries its source in parentheses.
                                         match server.blocked_reason.as_deref() {
-                                            Some(reason) => format!("blocked by policy — {reason}"),
-                                            None => "blocked by policy".to_string(),
+                                            Some(reason) => tr("blocked by policy — {reason}")
+                                                .replace("{reason}", reason),
+                                            None => tr("blocked by policy").to_string(),
                                         }
                                     } else if !server.enabled {
-                                        "no tools — server is disabled".to_string()
+                                        tr("no tools — server is disabled").to_string()
                                     } else if matches!(
                                         server.status,
                                         McpServerDisplayStatus::SetupRequired
                                             | McpServerDisplayStatus::NeedsAuth
                                     ) {
-                                        format!("no tools — {}", server.status.label())
+                                        format!("{} {}", tr("no tools —"), server.status.label())
                                     } else {
-                                        "no tools (server may not be connected)".to_string()
+                                        tr("no tools (server may not be connected)").to_string()
                                     };
                                 entry_desc_lines.push(vec![line]);
                             } else {
                                 let enabled_count =
                                     server.tools.iter().filter(|t| t.enabled).count();
                                 if enabled_count == server.tools.len() {
-                                    entry_desc_lines
-                                        .push(vec![format!("{} tools", server.tools.len())]);
+                                    entry_desc_lines.push(vec![tr("{n} tools")
+                                        .replace("{n}", &server.tools.len().to_string())]);
                                 } else {
-                                    entry_desc_lines.push(vec![format!(
-                                        "{} tools ({} enabled)",
-                                        server.tools.len(),
-                                        enabled_count
-                                    )]);
+                                    entry_desc_lines.push(vec![tr("{n} tools ({m} enabled)")
+                                        .replace("{n}", &server.tools.len().to_string())
+                                        .replace("{m}", &enabled_count.to_string())]);
                                 }
                             }
                             entry_summary_lines.push(vec![]);
@@ -3408,7 +3459,7 @@ pub fn render_extensions_modal(
                                     entry_data_indices.push(Some(si));
                                     entry_group_keys.push(None);
                                     let tool_badge = if !t.enabled {
-                                        ("[disabled]".to_string(), Some(theme.accent_error))
+                                        (tr("[disabled]").to_string(), Some(theme.accent_error))
                                     } else {
                                         (String::new(), None)
                                     };
@@ -3419,7 +3470,7 @@ pub fn render_extensions_modal(
                         }
                     }
                 } else if let TabDataState::Error(ref msg) = state.mcps_data {
-                    entry_labels.push(format!("Error: {}", msg));
+                    entry_labels.push(format!("{}: {}", tr("Error"), msg));
                     entry_right_labels.push(String::new());
                     entry_desc_lines.push(vec![]);
                     entry_summary_lines.push(vec![]);
@@ -3441,7 +3492,8 @@ pub fn render_extensions_modal(
         && let Some(ref pending_text) = state.pending_action
     {
         if let Some(badge) = entry_badge_text.get_mut(pending_idx) {
-            *badge = format!("[{}]", pending_text.trim_end_matches("..."));
+            // LOCAL: pending 描述串由 modals.rs 构造（英文），渲染出口查表
+            *badge = format!("[{}]", tr_str(pending_text.trim_end_matches("...")));
         }
         if let Some(color) = entry_badge_color.get_mut(pending_idx) {
             *color = Some(theme.warning);
@@ -3544,7 +3596,7 @@ pub fn render_extensions_modal(
                 &entry_group_keys,
                 selected,
             );
-            Some((i, format!("{key_str} {verb}")))
+            Some((i, format!("{} {}", key_str, tr(verb))))
         })
         .collect();
 
@@ -3572,12 +3624,12 @@ pub fn render_extensions_modal(
         }
         // Same non-clickable hint as the list footer; the painted URL is the mouse target.
         shortcuts.push(Shortcut {
-            label: MCP_SERVERS_OPEN_CONNECTORS_FOOTER,
+            label: tr(MCP_SERVERS_OPEN_CONNECTORS_FOOTER),
             clickable: false,
             id: 0,
         });
         shortcuts.push(Shortcut {
-            label: "esc back",
+            label: tr("esc back"),
             clickable: true,
             id: WAIT_BACK_SHORTCUT_ID,
         });
@@ -3591,17 +3643,17 @@ pub fn render_extensions_modal(
         // Input-mode is handled below; it owns its own footer.
     } else if state.mcp_setup.is_some() {
         shortcuts.push(Shortcut {
-            label: "Enter save and authenticate",
+            label: tr("Enter save and authenticate"),
             clickable: false,
             id: 0,
         });
         shortcuts.push(Shortcut {
-            label: "↑/↓ select",
+            label: tr("↑/↓ select"),
             clickable: false,
             id: 0,
         });
         shortcuts.push(Shortcut {
-            label: "Esc cancel",
+            label: tr("Esc cancel"),
             clickable: false,
             id: 0,
         });
@@ -3609,21 +3661,21 @@ pub fn render_extensions_modal(
         // "Add"/input mode: show the keys the input form actually handles
         // Tab is either path completion (single-field) or field navigation (multi-field)
         shortcuts.push(Shortcut {
-            label: "Enter submit",
+            label: tr("Enter submit"),
             clickable: false,
             id: 0,
         });
         shortcuts.push(Shortcut {
             label: if input.is_multi_field() {
-                "Tab/Shift+Tab field"
+                tr("Tab/Shift+Tab field")
             } else {
-                "Tab complete"
+                tr("Tab complete")
             },
             clickable: false,
             id: 0,
         });
         shortcuts.push(Shortcut {
-            label: "Esc cancel",
+            label: tr("Esc cancel"),
             clickable: false,
             id: 0,
         });
@@ -3631,7 +3683,7 @@ pub fn render_extensions_modal(
         // Tab/Shift+Tab cycles tabs (handled in picker.rs). Click on the hint cycles to the next tab only
         // (sentinel id 98, dispatched in `handle_extensions_modal_mouse`).
         shortcuts.push(Shortcut {
-            label: "Tab tabs",
+            label: tr("Tab tabs"),
             clickable: true,
             id: 98,
         });
@@ -3644,7 +3696,7 @@ pub fn render_extensions_modal(
         }
         if state.active_tab == ExtensionsTab::McpServers {
             shortcuts.push(Shortcut {
-                label: MCP_SERVERS_OPEN_CONNECTORS_FOOTER,
+                label: tr(MCP_SERVERS_OPEN_CONNECTORS_FOOTER),
                 clickable: false,
                 id: 0,
             });
@@ -3653,7 +3705,7 @@ pub fn render_extensions_modal(
         // The hint is omitted from the footer to save space; the cheatsheet still lists it
         // ID 99 is the close action, handled in the mouse handler
         shortcuts.push(Shortcut {
-            label: "Esc close",
+            label: tr("Esc close"),
             clickable: true,
             id: 99,
         });
@@ -3731,7 +3783,8 @@ pub fn render_extensions_modal(
             content_area.y,
             search_width,
             &theme,
-            filter.label(),
+            // LOCAL: 过滤标签为屏显文案，渲染出口查表
+            tr(filter.label()),
             "f",
             filter != StatusFilter::All,
             state.picker_state.filter_hovered,
@@ -3899,7 +3952,12 @@ pub fn render_extensions_modal(
             popup_rect.y + popup_rect.height.saturating_sub(1),
         )
     {
-        let label = state.pending_action.as_deref().unwrap_or("Processing...");
+        // LOCAL: pending 描述串由 modals.rs 构造（英文），渲染出口查表
+        let label = state
+            .pending_action
+            .as_deref()
+            .map(tr_str)
+            .unwrap_or_else(|| tr("Processing...").to_string());
         let frames = crate::glyphs::braille_spinner_frames();
         let frame_idx = (tick / SPINNER_DIVISOR) as usize % frames.len();
         let display = format!("{} {label}", frames[frame_idx]);
@@ -3920,11 +3978,12 @@ pub fn render_extensions_modal(
     }
     // Stop the overlay above the footer so the dismissal hint we render into the footer below
     // stays visible. Applies to errors, info, and confirmations.
-    let overlay_text: Option<(&str, ratatui::style::Color)> = match &state.modal_message {
-        Some(ModalMessage::Error(e)) => Some((e.as_str(), theme.accent_error)),
-        Some(ModalMessage::Info(m)) => Some((m.as_str(), theme.text_secondary)),
+    // LOCAL: 弹窗消息（错误/提示/确认）多由 modals.rs 构造（英文），渲染出口 tr_str 查表
+    let overlay_text: Option<(String, ratatui::style::Color)> = match &state.modal_message {
+        Some(ModalMessage::Error(e)) => Some((tr_str(e), theme.accent_error)),
+        Some(ModalMessage::Info(m)) => Some((tr_str(m), theme.text_secondary)),
         Some(ModalMessage::Confirmation { message, .. }) => {
-            Some((message.as_str(), theme.accent_tool))
+            Some((tr_str(message), theme.accent_tool))
         }
         None => None,
     };
@@ -3936,7 +3995,7 @@ pub fn render_extensions_modal(
         let text_style = Style::reset().fg(fg).bg(theme.bg_base);
         let pad = 2u16;
         let max_w = msg_area.width.saturating_sub(pad * 2) as usize;
-        let wrapped_lines: Vec<&str> = word_wrap(text, max_w);
+        let wrapped_lines: Vec<&str> = word_wrap(&text, max_w);
         let msg_height = wrapped_lines.len().min(msg_area.height as usize);
         let msg_y = msg_area.y + (msg_area.height.saturating_sub(msg_height as u16)) / 2;
         // Centered: left-aligned overlay text reads poorly.
@@ -3949,9 +4008,10 @@ pub fn render_extensions_modal(
 
     // Custom render (not via Shortcut) is needed because dismissal keys ("any key") are multi-word.
     if let Some(kind) = modal_msg_kind {
+        // LOCAL: 键与说明均为屏显文案，渲染出口查表
         let segments: &[(&str, &str)] = match kind {
-            ModalMsgKind::Error => &[("any key", " back")],
-            ModalMsgKind::Confirm => &[("y", " confirm"), ("any other key", " cancel")],
+            ModalMsgKind::Error => &[(tr("any key"), tr(" back"))],
+            ModalMsgKind::Confirm => &[("y", tr(" confirm")), (tr("any other key"), tr(" cancel"))],
             ModalMsgKind::ConnectorsWait => &[],
         };
         if !segments.is_empty() {
@@ -3962,9 +4022,10 @@ pub fn render_extensions_modal(
     {
         // Result status line (per-row and tab-wide): a non-covering success line in the footer so the list stays visible above it
         // Auto-expires; the per-row case also gets a "✓" on its row
-        let text = n.message.lines().next().unwrap_or(n.message.as_str());
+        // LOCAL: 结果提示由 modals.rs 构造（英文），渲染出口查表
+        let text = tr_str(n.message.lines().next().unwrap_or(n.message.as_str()));
         let avail = footer_area.width.saturating_sub(2) as usize;
-        let shown: String = if UnicodeWidthStr::width(text) > avail {
+        let shown: String = if UnicodeWidthStr::width(text.as_str()) > avail {
             // Truncate by display width (file convention) so wide chars can't overflow the footer, then add an ellipsis
             let mut s = String::new();
             let mut w = 0usize;
@@ -3979,7 +4040,7 @@ pub fn render_extensions_modal(
             s.push('…');
             s
         } else {
-            text.to_string()
+            text
         };
         let y = footer_area.y + footer_area.height.saturating_sub(1);
         // The shortcuts bar renders underneath this row and its keys are BOLD
@@ -4012,7 +4073,8 @@ fn render_mcp_setup_form(buf: &mut Buffer, area: Rect, setup: &McpSetupFormState
     let w = area.width.saturating_sub(h_inset * 2);
     let rows = (setup.field.options.len() as u16).saturating_add(4);
     let top = area.y + area.height.saturating_sub(rows) / 2;
-    let title = format!("{} · {}", setup.server_name, setup.field.label);
+    // LOCAL: 标题中的字段标签来自 MCP 服务器 setup 配置（英文），渲染出口查表
+    let title = format!("{} · {}", setup.server_name, tr_str(&setup.field.label));
     buf.set_string(
         x,
         top,
@@ -4022,7 +4084,7 @@ fn render_mcp_setup_form(buf: &mut Buffer, area: Rect, setup: &McpSetupFormState
             .bg(theme.bg_base)
             .add_modifier(Modifier::BOLD),
     );
-    let hint = "Save and authenticate";
+    let hint = tr("Save and authenticate");
     buf.set_string(
         x,
         top.saturating_add(1),
@@ -4036,7 +4098,8 @@ fn render_mcp_setup_form(buf: &mut Buffer, area: Rect, setup: &McpSetupFormState
         }
         let selected = idx == setup.selected;
         let marker = if selected { "❯" } else { " " };
-        let label = format!("{marker} {}", option.label);
+        // LOCAL: 选项标签来自 MCP 服务器 setup 配置（英文），渲染出口查表
+        let label = format!("{marker} {}", tr_str(&option.label));
         let style = if selected {
             Style::default()
                 .fg(theme.text_primary)
@@ -4168,12 +4231,13 @@ fn render_input_form(buf: &mut Buffer, area: Rect, input: &ModalInput, theme: &T
         let is_focused = fi == input.focused_index();
 
         // Row 1: Label (sits above the bordered input, not inside).
+        // LOCAL: 字段标签/占位符存于 state（英文），渲染出口 tr_str 查表
         let ls = if is_focused {
             label_style
         } else {
             label_dim_style
         };
-        buf.set_string(label_x, cur_y, field.label(), ls);
+        buf.set_string(label_x, cur_y, tr_str(field.label()), ls);
         cur_y += 1;
 
         // Rows 2-4: Rounded border around the single-line input.
@@ -4211,7 +4275,7 @@ fn render_input_form(buf: &mut Buffer, area: Rect, input: &ModalInput, theme: &T
             // Placeholder only renders when the field is NOT focused
             // This matches the prompt widget convention so the cursor isn't overlapping placeholder text on the active row
             if !is_focused && let Some(ph) = field.placeholder() {
-                let display: String = take_by_width(ph, max_text_w);
+                let display: String = take_by_width(&tr_str(ph), max_text_w);
                 buf.set_string(text_x, content_y, &display, placeholder_style);
             }
             if is_focused && let Some(cell) = buf.cell_mut((text_x, content_y)) {

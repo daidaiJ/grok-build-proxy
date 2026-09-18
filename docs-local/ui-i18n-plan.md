@@ -7,6 +7,8 @@
 > agents_modal、persona_detail。
 > 已完成（九期补丁 2026-09-18）：P1 常用弹窗与帮助（settings_modal / shortcuts_help /
 > usage_modal / mcps_modal / tutorial，翻译表 449 → 917 组），见 PATCHES.md 九期。
+> 已完成（十期补丁 2026-09-18）：P2 集成管理弹窗（extensions_modal + workflows_picker_rows /
+> memory_modal / feedback_modal / import_claude_modal，翻译表 917 → 1138 组），见 PATCHES.md 十期。
 
 ## 机制与口径
 

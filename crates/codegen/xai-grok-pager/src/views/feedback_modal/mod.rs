@@ -14,6 +14,7 @@ pub use xai_grok_feedback::{
 use xai_grok_feedback::{FeedbackSource, structured_feedback};
 pub use xai_grok_shell::session::FeedbackTraceUploadIntent;
 
+use crate::slash::i18n::tr;
 use crate::views::modal_window::{self, ModalWindowOutcome, ModalWindowState};
 use crate::views::prompt_widget::{EnterOutcome, FeedbackImages, PromptEvent, PromptWidget};
 
@@ -89,13 +90,15 @@ pub(crate) enum FeedbackModalDisplacement {
 impl FeedbackModalDisplacement {
     pub(crate) fn notice(self) -> &'static str {
         match self {
-            Self::CancelTurn => "Feedback closed because the turn-cancel prompt needs an answer.",
-            Self::PlanApproval => "Feedback closed because a plan is ready for approval.",
-            Self::Permission => "Feedback closed because a permission request needs an answer.",
-            Self::AcpQuestion => "Feedback closed because the agent asked a question.",
-            Self::LocalQuestion => "Feedback closed because another prompt needs an answer.",
-            Self::McpElicitation => "Feedback closed because a tool needs your input.",
-            Self::HookBlockedPrompt => "Feedback closed because a hook blocked the prompt.",
+            Self::CancelTurn => {
+                tr("Feedback closed because the turn-cancel prompt needs an answer.")
+            }
+            Self::PlanApproval => tr("Feedback closed because a plan is ready for approval."),
+            Self::Permission => tr("Feedback closed because a permission request needs an answer."),
+            Self::AcpQuestion => tr("Feedback closed because the agent asked a question."),
+            Self::LocalQuestion => tr("Feedback closed because another prompt needs an answer."),
+            Self::McpElicitation => tr("Feedback closed because a tool needs your input."),
+            Self::HookBlockedPrompt => tr("Feedback closed because a hook blocked the prompt."),
         }
     }
 }
@@ -118,9 +121,9 @@ impl FeedbackTraceChoice {
 
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::SendThisSession => "Send this session's trace",
-            Self::FeedbackOnly => "No, just the feedback",
-            Self::NeverAsk => "No, and don't ask again",
+            Self::SendThisSession => tr("Send this session's trace"),
+            Self::FeedbackOnly => tr("No, just the feedback"),
+            Self::NeverAsk => tr("No, and don't ask again"),
         }
     }
 }
@@ -181,19 +184,19 @@ impl FeedbackModalMetadata {
     fn field_text(&self, field: MetadataField) -> Option<String> {
         match field {
             MetadataField::Type => Some(match &self.r#type {
-                Some(value) => format!("Type: {}", value.label()),
-                None if self.draft_id.is_some() => "Type: (choose)".to_string(),
+                Some(value) => format!("{}{}", tr("Type: "), tr(value.label())),
+                None if self.draft_id.is_some() => tr("Type: (choose)").to_string(),
                 None => return None,
             }),
             MetadataField::Task => Some(match &self.task_category {
-                Some(value) => format!("Task: {}", value.label()),
-                None if self.draft_id.is_some() => "Task: (choose)".to_string(),
+                Some(value) => format!("{}{}", tr("Task: "), tr(value.label())),
+                None if self.draft_id.is_some() => tr("Task: (choose)").to_string(),
                 None => return None,
             }),
             MetadataField::Failure => self
                 .failure_mode
                 .as_ref()
-                .map(|value| format!("Failure: {}", value.label())),
+                .map(|value| format!("{}{}", tr("Failure: "), tr(value.label()))),
         }
     }
 
@@ -383,8 +386,9 @@ impl FeedbackModalState {
             image_rehydrations_in_flight,
             deferred_submit: false,
             trace_outcome_reported: false,
-            error: (rejected_images > 0)
-                .then(|| format!("Dropped {rejected_images} invalid image(s).")),
+            error: (rejected_images > 0).then(|| {
+                tr("Dropped {n} invalid image(s).").replace("{n}", &rejected_images.to_string())
+            }),
             drafts: DraftsState::Unloaded,
             open_on_drafts_if_any,
             draft_generation: 0,
@@ -607,12 +611,16 @@ impl FeedbackModalState {
     /// an absent type uses the neutral line, and user-authored text never picks it.
     fn trace_prompt(&self) -> &'static str {
         match self.metadata.r#type {
-            Some(FeedbackType::Bug) => "Attach this session's trace to help us debug this bug?",
-            Some(FeedbackType::Idea) => "Attach this session's trace to give this idea context?",
-            Some(FeedbackType::MissingCapability) => {
-                "Attach this session's trace to show what was missing?"
+            Some(FeedbackType::Bug) => {
+                tr("Attach this session's trace to help us debug this bug?")
             }
-            None => "Attach this session's trace to your feedback?",
+            Some(FeedbackType::Idea) => {
+                tr("Attach this session's trace to give this idea context?")
+            }
+            Some(FeedbackType::MissingCapability) => {
+                tr("Attach this session's trace to show what was missing?")
+            }
+            None => tr("Attach this session's trace to your feedback?"),
         }
     }
 

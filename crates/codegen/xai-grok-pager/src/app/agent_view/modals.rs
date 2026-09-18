@@ -5,6 +5,7 @@ use super::AgentView;
 use super::test_fixtures;
 use crate::app::actions::Action;
 use crate::app::app_view::InputOutcome;
+use crate::slash::i18n::tr;
 use crate::views::extensions_modal::ActionVerb;
 use crate::views::feedback_modal::{FeedbackModalDisplacement, FeedbackModalOutcome};
 use crate::views::file_search::line_viewer::LineViewerState;
@@ -98,9 +99,11 @@ impl AgentView {
             return false;
         };
         let draft_disposition = if modal.is_draft_submit_pending() {
-            "The feedback send is still in progress; its outcome will appear here."
+            crate::slash::i18n::tr(
+                "The feedback send is still in progress; its outcome will appear here.",
+            )
         } else {
-            "Your draft was discarded."
+            crate::slash::i18n::tr("Your draft was discarded.")
         };
         let reason_text = reason.notice();
         let notice = format!("{reason_text} {draft_disposition}");
@@ -1852,13 +1855,13 @@ impl AgentView {
                         if let Some(ref mut s) = self.extensions_modal {
                             s.modal_message =
                                 Some(crate::views::extensions_modal::ModalMessage::Error(
-                                    format!("Cannot remove managed server '{name}'"),
+                                    format!("{}'{name}'", tr("Cannot remove managed server ")),
                                 ));
                         }
                         InputOutcome::Changed
                     }
                     Some(Ok(server_name)) => self.prompt_extensions_confirm(
-                        format!("Remove MCP server \"{server_name}\"?"),
+                        format!("{}\"{server_name}\"?", tr("Remove MCP server ")),
                         crate::views::extensions_modal::ConfirmationAction::DeleteMcpServer {
                             server_name,
                         },
@@ -1943,7 +1946,7 @@ impl AgentView {
                 } else {
                     let (label, _) = crate::views::extensions_modal::derive_source_label(&path);
                     self.prompt_extensions_confirm(
-                        format!("Remove hook source \"{label}\"?"),
+                        format!("{}\"{label}\"?", tr("Remove hook source ")),
                         crate::views::extensions_modal::ConfirmationAction::Hooks(
                             xai_hooks_plugins_types::HooksAction::Remove { path },
                         ),
@@ -2032,7 +2035,7 @@ impl AgentView {
             ButtonAction::UninstallSelectedPlugin => {
                 if let Some(plugin) = self.selected_plugin_for_action(ActionVerb::Uninstall) {
                     return self.prompt_extensions_confirm(
-                        format!("Uninstall plugin \"{}\"?", plugin.name),
+                        format!("{}\"{}\"?", tr("Uninstall plugin "), plugin.name),
                         crate::views::extensions_modal::ConfirmationAction::Plugins(
                             xai_hooks_plugins_types::PluginsAction::Uninstall {
                                 plugin_id: plugin.id,
@@ -2240,7 +2243,7 @@ impl AgentView {
                     self.selected_marketplace_plugin_for_action(ActionVerb::Uninstall)
                 {
                     return self.prompt_extensions_confirm(
-                        format!("Uninstall marketplace plugin \"{}\"?", plugin.name),
+                        format!("{}\"{}\"?", tr("Uninstall marketplace plugin "), plugin.name),
                         crate::views::extensions_modal::ConfirmationAction::Marketplace(
                             xai_hooks_plugins_types::MarketplaceAction::Uninstall {
                                 source_url_or_path: plugin.source_url_or_path,
@@ -2259,8 +2262,10 @@ impl AgentView {
                 };
                 self.prompt_extensions_confirm(
                     format!(
-                        "Remove source \"{}\" and uninstall all its plugins?",
-                        source.name
+                        "{}\"{}\" {}",
+                        tr("Remove source "),
+                        source.name,
+                        tr("and uninstall all its plugins?")
                     ),
                     crate::views::extensions_modal::ConfirmationAction::Marketplace(
                         xai_hooks_plugins_types::MarketplaceAction::RemoveSource {

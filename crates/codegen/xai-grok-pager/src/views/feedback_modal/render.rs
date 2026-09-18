@@ -7,6 +7,7 @@ use super::{
     CANCEL_SHORTCUT_ID, DraftSubmitTerminal, DraftsState, FEEDBACK_TABS, FeedbackModalRender,
     FeedbackModalState, FeedbackModalStep, FeedbackTab, FeedbackTraceChoice,
 };
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::modal_window::{self, ModalSizing, ModalWindowConfig, Shortcut};
 use crate::views::prompt_widget::PromptStyle;
@@ -80,7 +81,7 @@ impl FeedbackModalState {
             buf.set_string(
                 areas.footer.x,
                 areas.footer.y,
-                error,
+                &tr_str(error),
                 ratatui::style::Style::default().fg(theme.accent_error),
             );
         }
@@ -143,14 +144,14 @@ impl FeedbackModalState {
             buf.set_stringn(
                 content.x,
                 content.y,
-                "Discard the current Write composition and open the selected draft?",
+                tr("Discard the current Write composition and open the selected draft?"),
                 content.width as usize,
                 normal,
             );
             buf.set_stringn(
                 content.x,
                 content.y.saturating_add(2),
-                "y discard  |  n cancel",
+                tr("y discard  |  n cancel"),
                 content.width as usize,
                 dim,
             );
@@ -161,18 +162,18 @@ impl FeedbackModalState {
         }
         if let Some(draft_id) = self.delete_confirm.as_ref() {
             let prompt = if self.metadata.draft_id.as_ref() == Some(draft_id) {
-                "Delete the stored recovery copy? Your current edits will remain."
+                tr("Delete the stored recovery copy? Your current edits will remain.")
             } else {
-                "Delete this feedback draft?"
+                tr("Delete this feedback draft?")
             };
             buf.set_stringn(content.x, content.y, prompt, content.width as usize, normal);
             buf.set_stringn(
                 content.x,
                 content.y.saturating_add(2),
                 if self.draft_delete.is_some() {
-                    "Deleting…"
+                    tr("Deleting…")
                 } else {
-                    "y delete  |  n cancel"
+                    tr("y delete  |  n cancel")
                 },
                 content.width as usize,
                 dim,
@@ -191,7 +192,7 @@ impl FeedbackModalState {
                 buf.set_stringn(
                     content.x,
                     content.y,
-                    "Open Drafts to load saved feedback.",
+                    tr("Open Drafts to load saved feedback."),
                     content.width as usize,
                     dim,
                 );
@@ -200,7 +201,7 @@ impl FeedbackModalState {
                 buf.set_stringn(
                     content.x,
                     content.y,
-                    "Loading drafts…",
+                    tr("Loading drafts…"),
                     content.width as usize,
                     dim,
                 );
@@ -245,7 +246,7 @@ impl FeedbackModalState {
                     buf.set_stringn(
                         content.x,
                         y,
-                        error,
+                        &tr_str(error),
                         content.width as usize,
                         ratatui::style::Style::default().fg(theme.accent_error),
                     );
@@ -268,10 +269,10 @@ impl FeedbackModalState {
                         .unwrap_or(draft.title.as_str());
                     let failure = draft
                         .failure_mode
-                        .map(|value| format!(" · {}", value.label()))
+                        .map(|value| format!(" · {}", tr(value.label())))
                         .unwrap_or_default();
-                    let r#type = draft.r#type.map_or("Unclassified", |value| value.label());
-                    let task = draft.task_category.map_or("Other", |value| value.label());
+                    let r#type = tr(draft.r#type.map_or("Unclassified", |value| value.label()));
+                    let task = tr(draft.task_category.map_or("Other", |value| value.label()));
                     let line = format!("{marker} {type} · {task}{failure} · {preview}");
                     let style = if is_selected {
                         ratatui::style::Style::default()
@@ -288,9 +289,9 @@ impl FeedbackModalState {
                 }
                 if rendered == 0 && y < content.bottom() {
                     let empty = if rows.is_empty() {
-                        "No drafts."
+                        tr("No drafts.")
                     } else {
-                        "No matching drafts."
+                        tr("No matching drafts.")
                     };
                     buf.set_stringn(content.x, y, empty, content.width as usize, dim);
                 }
@@ -329,7 +330,9 @@ impl FeedbackModalState {
             ratatui::style::Style::default().fg(theme.text_primary),
         );
         let disclosure = ratatui::text::Line::styled(
-            "One archive of this session is sent with this report only. Nothing is turned on for future sessions.",
+            tr(
+                "One archive of this session is sent with this report only. Nothing is turned on for future sessions.",
+            ),
             ratatui::style::Style::default().fg(theme.gray),
         );
         for wrapped in crate::render::wrapping::word_wrap_line(&disclosure, width) {
@@ -363,7 +366,7 @@ impl FeedbackModalState {
             line(
                 buf,
                 &mut y,
-                error,
+                &tr_str(error),
                 ratatui::style::Style::default().fg(theme.accent_error),
             );
         }
@@ -373,7 +376,7 @@ impl FeedbackModalState {
         PromptStyle {
             show_prefix: false,
             placeholder_when_focused: true,
-            placeholder_override: Some("Tell us what happened"),
+            placeholder_override: Some(tr("Tell us what happened")),
             // Chips only: the fullscreen preview overlay would paint over the modal.
             image_preview: false,
             ..PromptStyle::overlay()

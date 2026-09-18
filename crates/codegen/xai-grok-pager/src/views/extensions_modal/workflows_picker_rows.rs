@@ -1,4 +1,6 @@
 use super::{TabDataState, WorkflowInfo, cmp_str_ci, fuzzy_matches};
+// LOCAL: 空态句/字段标签等屏显文案经 i18n 查表（测试构建整体旁路，键保持英文原文）
+use crate::slash::i18n::{tr, tr_str};
 
 /// Placeholder row when the catalog comes back empty (also what a disabled workflows feature looks like on the wire, hence the hedged phrasing).
 pub(super) const WORKFLOWS_EMPTY_PLACEHOLDER: &str =
@@ -35,12 +37,14 @@ pub(super) fn build_workflows_picker_rows(
 ) -> Vec<WorkflowRow> {
     let workflows = match data {
         TabDataState::Loaded(workflows) => workflows,
-        TabDataState::Error(msg) => return vec![WorkflowRow::notice(format!("Error: {msg}"))],
+        TabDataState::Error(msg) => {
+            return vec![WorkflowRow::notice(format!("{}: {msg}", tr("Error")))]
+        }
         // The render path never builds entries while the tab loads; it shows a spinner instead
         TabDataState::Loading => return Vec::new(),
     };
     if workflows.is_empty() {
-        return vec![WorkflowRow::notice(WORKFLOWS_EMPTY_PLACEHOLDER.to_string())];
+        return vec![WorkflowRow::notice(tr(WORKFLOWS_EMPTY_PLACEHOLDER).to_string())];
     }
     let mut visible: Vec<&WorkflowInfo> = workflows
         .iter()
@@ -52,14 +56,14 @@ pub(super) fn build_workflows_picker_rows(
         .map(|wf| {
             let mut fields = Vec::new();
             if let Some(ref p) = wf.path {
-                fields.push(("path".to_string(), p.clone()));
+                fields.push((tr("path").to_string(), p.clone()));
             }
             if let Some(ref w) = wf.when_to_use {
-                fields.push(("when to use".to_string(), w.clone()));
+                fields.push((tr("when to use").to_string(), w.clone()));
             }
             WorkflowRow {
                 label: wf.name.clone(),
-                right_label: format!("({})", wf.source),
+                right_label: format!("({})", tr_str(&wf.source)),
                 desc_lines: if wf.description.is_empty() {
                     Vec::new()
                 } else {

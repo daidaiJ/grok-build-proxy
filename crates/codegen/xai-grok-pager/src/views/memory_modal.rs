@@ -28,6 +28,7 @@ use crate::input::line_editor::{LineEditOutcome, LineEditor};
 use crate::render::SafeBuf;
 use crate::render::scrollbar::{ScrollbarClickResult, render_scrollbar, scrollbar_click_to_offset};
 use crate::scrollback::blocks::markdown_content::MarkdownContent;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::modal_window::{
     self, ModalContentArea, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
@@ -267,7 +268,7 @@ impl MemoryModalState {
                 let path = std::path::Path::new(&e.path);
                 match std::fs::metadata(path) {
                     Ok(meta) if meta.len() > MAX_PREVIEW_BYTES => {
-                        Some(MarkdownContent::new("*(File too large to preview)*"))
+                        Some(MarkdownContent::new(tr("*(File too large to preview)*")))
                     }
                     Err(_) => None,
                     _ => std::fs::read_to_string(path).ok().map(MarkdownContent::new),
@@ -380,7 +381,7 @@ pub fn render_memory_modal(
     let shortcuts = build_shortcuts(&state.mode, state.memory_enabled, state.fullscreen);
 
     let modal_config = ModalWindowConfig {
-        title: "Memory",
+        title: tr("Memory"),
         tabs: None,
         shortcuts: &shortcuts,
         sizing: if state.fullscreen {
@@ -475,9 +476,9 @@ fn render_file_list(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, 
     let viewport = state.query.viewport(area.width as usize);
     if state.query().is_empty() {
         let placeholder = if filter_focused {
-            "type to filter..."
+            tr("type to filter...")
         } else {
-            "/ to filter..."
+            tr("/ to filter...")
         };
         buf.set_span(
             area.x,
@@ -561,7 +562,8 @@ fn render_file_list(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, 
                 .fg(theme.accent_user)
                 .bg(theme.bg_base)
                 .add_modifier(Modifier::BOLD);
-            let line = Line::from(Span::styled(&entry.label, header_style));
+            // Section headers store English keys in state (used by filter matching); translate at render exit.
+            let line = Line::from(Span::styled(tr_str(&entry.label), header_style));
             buf.set_line(area.x, y, &line, content_width);
         } else {
             let bg = if is_selected {
@@ -597,8 +599,11 @@ fn render_file_list(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, 
             if is_selected
                 && matches!(state.mode, MemoryModalMode::ConfirmingDelete { idx } if idx == filt_idx)
             {
-                let hint = " [x to confirm]";
-                let hint_w = hint.len() as u16;
+                let hint = tr(" [x to confirm]");
+                // `.width()` (display columns) instead of `.len()` (bytes): identical for the
+                // ASCII English key, correct for the CJK translation. Leading space is part of
+                // the key so the gap to the label is preserved.
+                let hint_w = hint.width() as u16;
                 let hint_x = (area.x + content_width).saturating_sub(hint_w + 1);
                 buf.set_span(
                     hint_x,
@@ -641,7 +646,7 @@ fn render_preview(buf: &mut Buffer, area: Rect, state: &mut MemoryModalState, th
     if state.preview_markdown.is_none() {
         state.preview_total_lines = 0;
         state.preview_scrollbar_area = None;
-        let msg = "No file selected";
+        let msg = tr("No file selected");
         let style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
         let cy = area.y + area.height / 2;
         let cx = area.x + area.width.saturating_sub(msg.width() as u16) / 2;
@@ -1026,28 +1031,28 @@ fn build_shortcuts(
     match mode {
         MemoryModalMode::Browse => {
             let toggle_label = if memory_enabled {
-                "t toggle (on)"
+                tr("t toggle (on)")
             } else {
-                "t toggle (off)"
+                tr("t toggle (off)")
             };
             let mut shortcuts = vec![
                 Shortcut {
-                    label: "\u{2191}/\u{2193} nav",
+                    label: tr("\u{2191}/\u{2193} nav"),
                     clickable: false,
                     id: 0,
                 },
                 Shortcut {
-                    label: "/ search",
+                    label: tr("/ search"),
                     clickable: false,
                     id: 0,
                 },
                 Shortcut {
-                    label: "y copy path",
+                    label: tr("y copy path"),
                     clickable: false,
                     id: 0,
                 },
                 Shortcut {
-                    label: "x delete",
+                    label: tr("x delete"),
                     clickable: false,
                     id: 0,
                 },
@@ -1058,15 +1063,15 @@ fn build_shortcuts(
                 },
                 Shortcut {
                     label: if fullscreen {
-                        "^F normal"
+                        tr("^F normal")
                     } else {
-                        "^F fullscreen"
+                        tr("^F fullscreen")
                     },
                     clickable: false,
                     id: 0,
                 },
                 Shortcut {
-                    label: "Esc close",
+                    label: tr("Esc close"),
                     clickable: false,
                     id: 0,
                 },
@@ -1077,24 +1082,24 @@ fn build_shortcuts(
         }
         MemoryModalMode::FilterFocused => vec![
             Shortcut {
-                label: "type to filter",
+                label: tr("type to filter"),
                 clickable: false,
                 id: 0,
             },
             Shortcut {
-                label: "Esc exit filter",
+                label: tr("Esc exit filter"),
                 clickable: false,
                 id: 0,
             },
         ],
         MemoryModalMode::ConfirmingDelete { .. } => vec![
             Shortcut {
-                label: "x confirm delete",
+                label: tr("x confirm delete"),
                 clickable: false,
                 id: 0,
             },
             Shortcut {
-                label: "any key cancel",
+                label: tr("any key cancel"),
                 clickable: false,
                 id: 0,
             },
@@ -1118,25 +1123,25 @@ fn file_label(path: &str) -> String {
 
 fn format_modified(epoch_secs: Option<u64>, now_secs: u64) -> String {
     let Some(modified) = epoch_secs else {
-        return "unknown".to_string();
+        return tr("unknown").to_string();
     };
     if now_secs <= modified {
-        return "just now".to_string();
+        return tr("just now").to_string();
     }
     let delta = now_secs - modified;
     if delta < 60 {
-        return "just now".to_string();
+        return tr("just now").to_string();
     }
     if delta < 3600 {
         let mins = delta / 60;
-        return format!("{mins}m ago");
+        return tr("{mins}m ago").replace("{mins}", &mins.to_string());
     }
     if delta < 86400 {
         let hours = delta / 3600;
-        return format!("{hours}h ago");
+        return tr("{hours}h ago").replace("{hours}", &hours.to_string());
     }
     let days = delta / 86400;
-    format!("{days}d ago")
+    tr("{days}d ago").replace("{days}", &days.to_string())
 }
 
 fn load_fullscreen_pref() -> bool {

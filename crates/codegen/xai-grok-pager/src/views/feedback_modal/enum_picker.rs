@@ -13,6 +13,7 @@ use super::{
     FeedbackFailureMode, FeedbackModalMetadata, FeedbackModalOutcome, FeedbackModalState,
     FeedbackTaskCategory, FeedbackType, MetadataField,
 };
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::modal_window::Shortcut;
 use crate::views::picker::{
@@ -252,7 +253,8 @@ impl FeedbackModalState {
             .enumerate()
             .map(|(vis, &variant)| {
                 PickerEntry::Row(PickerRow {
-                    label: labels[variant],
+                    // 屏显侧翻译；type-to-filter 的比较键保持英文（见 filtered_variants）。
+                    label: tr(labels[variant]),
                     right_label: "",
                     selected: picker.state.hovered == Some(vis)
                         || (picker.state.hovered.is_none() && vis == picker.state.selected),

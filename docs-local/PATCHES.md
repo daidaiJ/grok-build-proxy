@@ -503,3 +503,54 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - 主题专名（Grok Night/Tokyo Night 等）、"ZDR"、模型名不译（与 `/theme <name>` 用法
   一致）；settings 页脚图例 "type to filter" 译文呈 "type 以过滤"（shortcut_label_i18n
   固定保留键位 token，属机制限制，后续如需整句成键要改 modal_window 渲染函数）
+
+## 十期补丁（2026-09-18：界面文案中文化 P2 集成管理弹窗）
+
+> 方案见 `docs-local/ui-i18n-plan.md`（P2 = 集成管理弹窗，5 个模块）。
+> 翻译表 917 → 1138 组（+221）；施工规约与术语表以方案文档为准。
+
+### xai-grok-pager（P2：扩展/记忆/反馈/导入 Claude 五弹窗）
+
+- `src/slash/i18n.rs`：翻译表追加 P2 段共 221 组，分节与代码注释一一对应：
+  import_claude（标题/类型分组头/范围头/Enter 确认模板/页脚 rest 键）、memory（节头/占位符/
+  空态/页脚/相对时间）、feedback（移出通知/trace 问句/标签行/空态/存储长句/taxonomy 枚举
+  label/标题标签页）、extensions（分组头/徽章/计数模板/表单/页脚动作词）、modals.rs 侧
+  （确认问句前缀/后缀键与静态提示）。合并时 "Name"/" cancel"/"Hooks"/"navigate"/"toggle"/
+  "cancel"/"search"/"Import Claude settings" 等与既有条目同键同译，按既有条目去重；
+  查重脚本按 translations() 全表解析断言无重复键（九期的临时脚本已清理，重放时按本条
+  描述重建即可）
+- `src/views/extensions_modal.rs` + `extensions_modal/workflows_picker_rows.rs`：
+  6 个标签页名渲染出口 tr；分组头新增 `tr_group_label`（`Plugin: {name}`/`Custom: {path}`
+  运行时拼接串按既有 `Plugin: ` 前缀键拆分，其余整串 tr_str；分组英文标签是折叠 state 键
+  保持英文）；计数模板整键 + replace（`{n} plugins`/`{n} skills`/`{n} tools ({m} enabled)`
+  等，单复数中文合并）；`post_select_row_hint` 整句模板键 + `{noun}`(tr_str)/`{verb}`(tr)
+  注入（disable/enable 成对）；徽章 [policy]/[disabled]/[installed]/[error]/[update available]；
+  展开字段标签；`Error: {msg}` 拆为 `format!("{}: {msg}", tr("Error"))`；modal_message
+  渲染出口 tr_str（类型 `(&str, Color)` → `(String, Color)`）；result_notice/pending 徽章/
+  表单标签与占位符渲染出口 tr_str；install_status 屏显值补 `not_installed`/`update_available`
+- `src/views/memory_modal.rs`：节头 Global/Workspace/Sessions 存 state 英文（compute_filtered
+  做 contains 过滤）→ 渲染出口 tr_str；页脚 13 条 tr；format_modified 相对时间模板键
+  （`{mins}m ago` 复用既有键，`{hours}h`/`{days}d` 新增）；删除确认行内提示键含前导空格，
+  对齐宽度 `len()` → `width()`（英文行为不变，中文译文修正右对齐）
+- `src/views/feedback_modal/{mod,render,enum_picker}.rs`（drafts.rs 零改动，其字符串全部
+  是存 state 的英文键）：7 条移出通知 notice() tr；trace 选项/确认问句/空态/删除确认/
+  composer 占位符 tr；error 渲染出口 3 处 tr_str 覆盖 drafts.rs 全部存储键（多条多行长句
+  整段成键，与源码逐字符核对含分号与 U+2026）；enum_picker 行 `tr(labels[variant])`，
+  type-to-filter 过滤比较键保持英文；xai_grok_feedback taxonomy 枚举 label 渲染出口查表
+  并补 25 键（Bug/Shell 保留英文不入表）
+- `src/views/import_claude_modal.rs`：类型分组头 `tr(kind.label())`；Global 范围头整键存
+  state → render_header_line 出口 tr_str；Project 范围头 `tr("Project  ")` 前缀键保宽；
+  `"Enter import {}"` 模板键 + replace（shortcut_label_i18n 再拆时译文透传）；页脚
+  navigate/toggle/fold/all/none/cancel/search 走 rest 键机制（部分 P0/P1 已入表）
+- `src/app/agent_view/modals.rs`：feedback 移出通知配套两句 tr（与 notice() 同一条系统
+  通知）；extensions 确认问句带动态名的用前缀键（`format!("{}\"{name}\"?",
+  tr("Remove MCP server "))` 式，英文输出与原 format! 逐字一致，测试构建旁路不受影响）；
+  pending_action 静态值（Reloading.../Processing.../adding.../Adding source.../
+  Uninstalling.../Installing...）只补表，渲染出口已接 tr_str
+
+### 已知余留
+
+- `Authenticating {server}...`（modals.rs 存储期插值）无渲染侧模板可拆，中文模式显示英文；
+- "Dropped {n} invalid image(s)." 采用存储期模板键 + replace（渲染侧拿不到计数），/lang
+  切换不追溯已存文案；
+- tests 断言的 state 值全部保持英文（测试构建查表整体旁路），tests 模块零改动。
