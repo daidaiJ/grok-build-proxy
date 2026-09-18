@@ -53,7 +53,8 @@ impl SlashCommand for DebugCommand {
                     display: name.to_string(),
                     match_text: name.to_string(),
                     insert_text: name.to_string(),
-                    description: desc.to_string(),
+                    // LOCAL: i18n — 子命令说明查表（desc 仅用于展示，match_text 仍是子命令名）
+                    description: crate::slash::i18n::tr_str(desc),
                 })
                 .collect(),
         )

@@ -131,6 +131,7 @@ use ratatui::layout::Rect;
 use ratatui::widgets::StatefulWidget;
 
 use crate::appearance::LayoutConfig;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::ThemeKind;
 
 use super::list_pane::{ListPane, ListPaneConfig, ListPaneState, ListPaneStyle, WrapMode};
@@ -158,12 +159,14 @@ impl TodoCounts {
 
 fn empty_placeholder_message(todos_empty: bool, counts: TodoCounts) -> String {
     if todos_empty {
-        return "No todo items.".into();
+        return tr("No todo items.").into();
     }
     match (counts.completed, counts.cancelled) {
-        (_, 0) => "All done.".into(),
-        (0, c) => format!("{c} cancelled."),
-        (d, c) => format!("{d} done. {c} cancelled."),
+        (_, 0) => tr("All done.").into(),
+        (0, c) => tr_str("{c} cancelled.").replace("{c}", &c.to_string()),
+        (d, c) => tr_str("{d} done. {c} cancelled.")
+            .replace("{d}", &d.to_string())
+            .replace("{c}", &c.to_string()),
     }
 }
 

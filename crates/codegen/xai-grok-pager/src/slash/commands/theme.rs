@@ -11,6 +11,8 @@ use crate::app::actions::Action;
 use crate::slash::command::{
     AppCtx, ArgItem, CommandExecCtx, CommandResult, SlashCommand, slash_meta,
 };
+// LOCAL: i18n — 参数建议文案查表（description/usage 由 slash_meta! 统一包 tr）
+use crate::slash::i18n::tr;
 use crate::slash::{ModeSupport, Remedy};
 use crate::theme::{Theme, ThemeKind, cache as theme_cache};
 
@@ -70,18 +72,19 @@ impl SlashCommand for ThemeCommand {
         let available = ThemeKind::available();
 
         // Prepend "auto" (follow system appearance) as the first option.
-        let auto_active = if is_auto { " (active)" } else { "" };
+        // LOCAL: i18n — 状态后缀与说明查表
+        let auto_active = if is_auto { tr(" (active)") } else { "" };
         let mut items = vec![ArgItem {
             display: "auto".to_string(),
             match_text: picker_match_text(ThemeKind::Auto),
             insert_text: "auto".to_string(),
-            description: format!("auto (follow system){auto_active}"),
+            description: format!("{}{auto_active}", tr("auto (follow system)")),
         }];
 
         // Concrete themes: only show "(active)" when not in auto mode
         items.extend(available.iter().map(|kind| {
             let active = if *kind == current && !is_auto {
-                " (active)"
+                tr(" (active)")
             } else {
                 ""
             };

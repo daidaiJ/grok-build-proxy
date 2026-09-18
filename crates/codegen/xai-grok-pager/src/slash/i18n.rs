@@ -1664,6 +1664,123 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("No tasks or agents.", "暂无任务或代理。"),
         ("No running tasks. Press ", "当前没有运行中的任务。按 "),
         (" to show all.", " 显示全部。"),
+        // -- P4 扫尾: jump / rewind 轮跳转浮层 --
+        ("Jump to which turn?", "跳转到哪一轮？"),
+        ("Rewind to which turn?", "回退到哪一轮？"),
+        ("(no preview)", "（无预览）"),
+        ("Loading rewind points...", "正在加载回退点…"),
+        // -- P4 扫尾: queue_pane / todo_pane / subagent_catalog_pane --
+        (" (+1 line)", " （+1 行）"),
+        (" (+{n} lines)", " （+{n} 行）"),
+        ("No todo items.", "暂无待办项。"),
+        ("All done.", "全部完成。"),
+        ("{c} cancelled.", "{c} 项已取消。"),
+        ("{d} done. {c} cancelled.", "{d} 项完成，{c} 项已取消。"),
+        ("Roles", "角色"),
+        ("No bundled items.", "暂无捆绑条目。"),
+        // -- P4 扫尾: btw_overlay / location / session_title --
+        ("Answering\u{2026}", "回答中…"),
+        ("detached", "分离头指针"),
+        (" (worktree of {repo})", " （{repo} 的工作树）"),
+        ("session {id}", "会话 {id}"),
+        ("loading...", "加载中…"),
+        ("now", "刚刚"),
+        ("{secs}s ago", "{secs} 秒前"),
+        // -- P4 扫尾: 新建工作树 / 连接器等待 --
+        ("New Worktree", "新建工作树"),
+        ("[Esc] to close", "[Esc] 关闭"),
+        ("Name (optional): ", "名称（可选）： "),
+        (" = create   ", " = 创建   "),
+        (" = cancel", " = 取消"),
+        ("[copied]", "[已复制]"),
+        ("[copy the url]", "[复制 URL]"),
+        ("Finish in the browser.", "在浏览器中完成。"),
+        ("Refresh when you're done.", "完成后请刷新。"),
+        // -- P4 扫尾: welcome hero / 工作区选择 --
+        (
+            "Code together, cola together — thanks for pairing with Panda! (/feedback)",
+            "一起写代码，一起喝可乐 — 感谢与 Panda 并肩同行！(/feedback)",
+        ),
+        ("Local workspace", "本地工作区"),
+        ("Local·CLI", "本地·CLI"),
+        ("confirm local workspace? y/N", "确认本地工作区？y/N"),
+        ("locked by CLI", "已由 CLI 锁定"),
+        ("y/N confirm local", "y/N 确认本地"),
+        // -- P4 扫尾: dock 分组页签 --
+        ("Queued", "队列"),
+        ("show {n} more", "显示另外 {n} 行"),
+        ("subagents", "子代理"),
+        ("tasks", "任务"),
+        ("watchers", "监视器"),
+        ("queued", "队列"),
+        ("[stop]", "[停止]"),
+        // -- P4 扫尾: credit_bar（状态条渲染路径当前未接，键先入表备用）--
+        ("Next reset", "下次重置"),
+        ("Auto topup", "自动充值"),
+        ("Max monthly topup", "每月充值上限"),
+        ("Auto topup: disabled", "自动充值：已禁用"),
+        (
+            "Pay-as-you-go: ${used} used of ${cap} limit",
+            "按量付费：已用 ${used}，上限 ${cap}",
+        ),
+        ("Pay-as-you-go limit left", "按量付费剩余"),
+        ("Usage left", "用量剩余"),
+        ("Weekly limit left", "每周限额剩余"),
+        ("Monthly limit left", "每月限额剩余"),
+        ("Credits left", "积分剩余"),
+        ("Credits used", "积分已用"),
+        // -- P4 扫尾: list_pane 输入条 / 复制提示 --
+        (" Copied!", " 已复制！"),
+        ("search: ", "搜索: "),
+        ("filter: ", "过滤: "),
+        ("go to: ", "跳转: "),
+        ("comment: ", "评论: "),
+        // -- P4 扫尾: block_viewer 元数据 / picker 搜索条 --
+        ("limit: ", "上限: "),
+        ("1 result", "1 个结果"),
+        ("{} results", "{} 个结果"),
+        ("Sources ({})", "来源 ({})"),
+        (" search: ", " 搜索: "),
+        (" / to search", " / 搜索"),
+        ("Loading\u{2026}", "加载中…"),
+        ("No matches", "没有匹配项"),
+        // -- P4 扫尾: theme / debug 子命令提示 --
+        ("auto (follow system)", "auto（跟随系统）"),
+        (" (active)", "（生效中）"),
+        ("Toggle the FPS overlay", "切换 FPS 浮层"),
+        ("Toggle the scroll flight recorder (JSONL)", "切换滚动飞行记录器（JSONL）"),
+        // -- P4 扫尾: mode_support 模式拒绝说明（why/instead 在消费点插值）--
+        (
+            "/{token} isn't available in {current} mode ({why}). Run {switch} to switch this session.",
+            "/{token} 在 {current} 模式下不可用（{why}）。运行 {switch} 切换当前会话。",
+        ),
+        (
+            "/{token} isn't available in {current} mode: {instead}.",
+            "/{token} 在 {current} 模式下不可用：{instead}。",
+        ),
+        ("You're already in {current} mode.", "你已处于 {current} 模式。"),
+        (
+            "minimal scrolls with your terminal's native scrollback",
+            "minimal 滚动使用终端原生回滚缓冲",
+        ),
+        ("minimal is single-session", "minimal 为单会话模式"),
+        (
+            "minimal renders with your terminal's own palette",
+            "minimal 用终端自身配色渲染",
+        ),
+        (
+            "minimal has no scrollback pane: use your terminal's own search",
+            "minimal 没有回滚缓冲面板：请使用终端自带搜索",
+        ),
+        (
+            "the timeline rail needs the interactive scrollback pane",
+            "时间线栏需要交互式回滚缓冲面板",
+        ),
+        ("the tutorial overlay needs fullscreen", "教程浮层需要全屏模式"),
+        (
+            "press Tab to focus the scrollback, then → on the block",
+            "按 Tab 聚焦回滚缓冲，再对块按 →",
+        ),
     ]
 }
 

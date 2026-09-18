@@ -18,6 +18,7 @@ use crate::scrollback::render::map_hyperlinks_to_overlay;
 use crate::scrollback::text_selection::{
     ResolvedSelectableLine, ResolvedSelectionModel, VisibleBlockGeometry,
 };
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 
 /// Synthetic entry index for btw overlay selection (never collides with real scrollback).
@@ -360,7 +361,7 @@ pub fn render_btw_panel(
             let loading_style = Style::default().fg(theme.gray).bg(bg);
             let line = Line::from(vec![
                 Span::styled(format!("{spinner} "), loading_style),
-                Span::styled("Answering\u{2026}", loading_style),
+                Span::styled(tr("Answering\u{2026}"), loading_style),
             ]);
             buf.set_line(content_x, body_y, &line, content_width as u16);
         }

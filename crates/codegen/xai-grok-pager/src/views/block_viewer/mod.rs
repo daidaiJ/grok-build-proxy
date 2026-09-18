@@ -17,6 +17,8 @@ use ratatui::widgets::StatefulWidget;
 use xai_grok_workspace::permission::mcp_titleize_segment;
 
 use crate::clipboard::SystemClipboard;
+// LOCAL: i18n — 渲染出口文案查表
+use crate::slash::i18n::tr;
 use crate::render::scrollbar::SCROLLBAR_TOTAL_COLS;
 use crate::scrollback::block::{BlockContent, RenderBlock};
 use crate::scrollback::blocks::ToolCallBlock;
@@ -518,7 +520,8 @@ impl BlockViewerPane {
                 Style::default().fg(theme.gray_dim),
             )));
             lines.push(Line::from(Span::styled(
-                format!("Sources ({})", ws.citations.len()),
+                // LOCAL: i18n — 计数模板整键成键
+                tr("Sources ({})").replace("{}", &ws.citations.len().to_string()),
                 Style::default().fg(theme.text_secondary),
             )));
             let url_style = Style::default().fg(theme.gray);
@@ -554,17 +557,20 @@ impl BlockViewerPane {
         let mut lines: Vec<Line<'static>> = Vec::new();
 
         // Metadata
+        // LOCAL: i18n — 元数据标签查表
         if let Some(limit) = st.limit {
             lines.push(Line::from(vec![
-                Span::styled("limit: ", label),
+                Span::styled(tr("limit: "), label),
                 Span::styled(limit.to_string(), value),
             ]));
         }
-        let s = if st.result_count == 1 { "" } else { "s" };
-        lines.push(Line::from(Span::styled(
-            format!("{} result{s}", st.result_count),
-            label,
-        )));
+        // LOCAL: i18n — 计数模板整键成键（单复数分开）
+        let results_text = if st.result_count == 1 {
+            tr("1 result").to_string()
+        } else {
+            tr("{} results").replace("{}", &st.result_count.to_string())
+        };
+        lines.push(Line::from(Span::styled(results_text, label)));
 
         // Tool list
         for (i, tool) in st.results.iter().enumerate() {
@@ -1038,34 +1044,35 @@ impl BlockViewerPane {
     /// Build shortcuts bar hints for this viewer.
     pub fn shortcuts_hints(&self) -> Vec<HintItem> {
         let mut hints = vec![
-            HintItem::new(crate::key!(Esc), "close"),
-            HintItem::new(crate::key!(Enter), "quote"),
-            HintItem::new(crate::key!('/'), "search"),
-            HintItem::new(crate::key!('f'), "filter"),
-            HintItem::new(crate::key!('v'), "select"),
-            HintItem::new(crate::key!('w'), "wrap"),
+            // LOCAL: i18n — 快捷键提示标签查表（键均已在翻译表中）
+            HintItem::new(crate::key!(Esc), tr("close")),
+            HintItem::new(crate::key!(Enter), tr("quote")),
+            HintItem::new(crate::key!('/'), tr("search")),
+            HintItem::new(crate::key!('f'), tr("filter")),
+            HintItem::new(crate::key!('v'), tr("select")),
+            HintItem::new(crate::key!('w'), tr("wrap")),
         ];
         match self.kind {
             ViewerKind::Markdown => {
-                hints.push(HintItem::new(crate::key!('r'), "raw"));
+                hints.push(HintItem::new(crate::key!('r'), tr("raw")));
             }
             ViewerKind::Execute => {
-                hints.push(HintItem::new(crate::key!('Y'), "copy cmd"));
+                hints.push(HintItem::new(crate::key!('Y'), tr("copy cmd")));
             }
             ViewerKind::Edit => {
-                hints.push(HintItem::new(crate::key!('Y'), "copy path"));
+                hints.push(HintItem::new(crate::key!('Y'), tr("copy path")));
             }
             ViewerKind::WebFetch => {
-                hints.push(HintItem::new(crate::key!('Y'), "copy url"));
+                hints.push(HintItem::new(crate::key!('Y'), tr("copy url")));
             }
             ViewerKind::WebSearch => {
-                hints.push(HintItem::new(crate::key!('Y'), "copy query"));
+                hints.push(HintItem::new(crate::key!('Y'), tr("copy query")));
             }
             ViewerKind::Read => {
-                hints.push(HintItem::new(crate::key!('Y'), "copy path"));
+                hints.push(HintItem::new(crate::key!('Y'), tr("copy path")));
             }
             ViewerKind::Grep => {
-                hints.push(HintItem::new(crate::key!('Y'), "copy pattern"));
+                hints.push(HintItem::new(crate::key!('Y'), tr("copy pattern")));
             }
             ViewerKind::BgTask => {}
             ViewerKind::IntegrationSearch | ViewerKind::UseTool | ViewerKind::PlainText => {}

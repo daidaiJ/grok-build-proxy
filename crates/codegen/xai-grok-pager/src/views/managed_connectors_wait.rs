@@ -13,6 +13,7 @@ use ratatui::style::{Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::clipboard::ClipboardDelivery;
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::mcps_modal::{MCP_SERVERS_REFRESH_KEY, managed_connectors_url};
 use crate::views::modal_window::{fill_overlay_content, word_wrap};
@@ -126,9 +127,9 @@ pub(crate) fn render_managed_connectors_wait(
     fill_overlay_content(buf, msg_area, theme);
 
     let btn = if wait.url_copied {
-        "[copied]"
+        tr("[copied]")
     } else {
-        "[copy the url]"
+        tr("[copy the url]")
     };
     // Chunks borrow a local handle so the paint loop below can still record rects on `wait`.
     let url = Arc::clone(&wait.url);
@@ -142,9 +143,9 @@ pub(crate) fn render_managed_connectors_wait(
         Url(&'a str),
     }
     let mut lines = vec![
-        Line::Text("Finish in the browser."),
+        Line::Text(tr("Finish in the browser.")),
         Line::Spacer,
-        Line::Text("Refresh when you're done."),
+        Line::Text(tr("Refresh when you're done.")),
         Line::Spacer,
         Line::Btn(btn),
     ];

@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use crate::app::agent_view::AgentView;
 use crate::scrollback::block::RenderBlock;
+use crate::slash::i18n::{tr, tr_str};
 
 /// Maximum characters of a derived first-prompt title.
 const MAX_TITLE_CHARS: usize = 60;
@@ -47,9 +48,9 @@ pub fn entry_title(agent: &AgentView) -> String {
     match agent.session.session_id.as_ref() {
         Some(sid) => {
             let short: String = sid.0.chars().take(8).collect();
-            format!("session {short}")
+            tr_str("session {id}").replace("{id}", &short)
         }
-        None => "loading...".to_string(),
+        None => tr("loading...").to_string(),
     }
 }
 
@@ -168,24 +169,26 @@ pub(crate) fn sanitize_display_text(s: &str) -> Cow<'_, str> {
 }
 
 /// Format an elapsed duration as a compact relative label (`now`, `30s ago`, `5m ago`, `2h ago`, `3d ago`).
+/// Keys follow the shared relative-time templates already in the table (`{mins}m ago` etc.);
+/// `now` and the seconds variant are new keys.
 pub(crate) fn format_relative_time(elapsed: Duration) -> String {
     let secs = elapsed.as_secs();
     if secs < 1 {
-        return "now".to_string();
+        return tr("now").to_string();
     }
     if secs < 60 {
-        return format!("{secs}s ago");
+        return tr_str("{secs}s ago").replace("{secs}", &secs.to_string());
     }
     let mins = secs / 60;
     if mins < 60 {
-        return format!("{mins}m ago");
+        return tr_str("{mins}m ago").replace("{mins}", &mins.to_string());
     }
     let hours = mins / 60;
     if hours < 24 {
-        return format!("{hours}h ago");
+        return tr_str("{hours}h ago").replace("{hours}", &hours.to_string());
     }
     let days = hours / 24;
-    format!("{days}d ago")
+    tr_str("{days}d ago").replace("{days}", &days.to_string())
 }
 
 #[cfg(test)]
