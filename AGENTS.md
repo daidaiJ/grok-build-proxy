@@ -1,5 +1,12 @@
 # 项目工作规则（LOCAL fork）
 
+## 分支纪律（MANDATORY）
+
+- **主分支只收文档，不收功能代码**：一切新功能/修复/重构必须在 feature 分支（如
+  `feat/local-*`）上开发提交，验证通过后合入 main 并按 `vX.Y.Z` 打 tag 发版。
+  main 上只允许直接提交文档类改动（AGENTS.md、docs-local/、README 等），禁止在
+  main 上直接提交任何非文档变更。
+
 ## 调试的时间成本原则（MANDATORY）
 
 一切调试先算时间账，优先长期时效，不为单点问题反复烧整轮编译：
