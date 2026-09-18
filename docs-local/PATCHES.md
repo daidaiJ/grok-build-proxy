@@ -773,3 +773,69 @@ agent_ops.rs `resolve_agent_definition`）中 ACP agentProfile（第 2 步）优
 - 三处均为同步文件；闸门是纯前置条件，不改变 agent_profile() 本身的映射表
 - 已知边界：配置 agent 后 plan 模式不再自动带 plan 工具集（enter/exit_plan_mode
   随 plan 定义走）——需要 plan 工作流时显式 `grok2 --agent grok-build-plan`
+
+## 十四期补丁（2026-09-18：国模适配——think 标记泄漏 + ChatCompletions 网关 quirk）
+
+> 背景：DeepSeek V4 Flash 经 OpenAI 兼容端点接入时，`</think>` 结束标记被当作正文
+> 泄漏到 UI（推理本体走 `reasoning_content` 字段，网关在 reasoning→正文边界把孤立的
+> `</think>` 作为单独 content chunk 下发；opencode issue #34126 同款流形态）。
+> 调研结论（opencode #1325/#34698/#15389、vercel/ai extractReasoningMiddleware、
+> qwen-code taggedThinkingParser.ts、crush/fantasy、vLLM ReasoningParser）：朴素
+> 字符串替换必败于跨 chunk 拆分（LiteLLM ollama 反面教材），正确做法是跨 chunk
+> 流式状态机；存储层保持"正文已剥离 + reasoning 单独成项"（opencode 保留原文的
+> 哲学被否：grok 的 content_acc 会原样回传下一轮，标记必须不进存储正文）。
+
+### xai-grok-sampler
+- 新 `src/stream/think_split.rs`：`ThinkTagSplitter` 两相状态机（text/think），
+  喂 content delta 产出 (text, reasoning) 二元组。要点：
+  - 双标记集 `<think>|<thinking>` / `</think>|</thinking>`（qwen-code 同款）；
+  - 跨 chunk holdback：buffer 整体或最长后缀是任一标记的真前缀时扣留
+    （vercel/ai getPotentialStartIndex 同款；上限 11 字节）；
+  - 边界孤儿标记：字段 reasoning 已见 + 正文未开始（纯空白不算）时，孤立或
+    前导 `</think>` 丢弃——正文开始后同串原样保留（opencode #34698 的
+    窄语义 + no-regression 两条测试同款）；
+  - EOF flush 不丢字节：未闭合 think 块归 reasoning，扣留的半截标记归正文
+    （qwen-code `final` 语义，修 vercel/ai TransformStream 无 flush 的坑）；
+  - 17 个单测（含 #34126 流形态、跨 chunk 拆分、`<think></think>` 空块、
+    先正文后 think、多 think 块、`value < than` 误报保护等）。
+- `src/stream/mod.rs`：`mod think_split;`（LOCAL 注释处）
+- `src/stream/chat_completions.rs`：
+  - reasoning 分支提到 content 分支前（混合 delta 时先武装边界规则），
+    `reasoning_content.or(reasoning).or(reasoning_text)` 归一化（GLM/vLLM 的
+    `reasoning`、Kimi 的 `reasoning_text` 别名字段上同一通道）；
+  - content 分支过 `think_splitter.feed()`，reasoning 产出与字段产出同路：
+    FirstToken/chunk_index/reasoning_acc/ChannelToken::Reasoning；text 产出照旧
+    （无标记流逐字节不变，存量测试零改动通过）；
+  - 流尾 `finish()` flush 尾巴（Partial marker/未闭合块）；
+  - 工具调用 id 缺失时合成 `call_{index}`（部分网关从不发 id，结果无法配对）；
+  - 测试追加 6 个：#34126 边界流形态（断言零 Text token）、内联 think 跨 chunk、
+    别名字段、未知 finish_reason serde、DeepSeek 缓存 token、空工具 id 合成。
+- `src/stream_classify.rs`：`chat_chunk_has_content` 解构补 `reasoning`/`reasoning_text`
+  并计入 content 判定（TTFT 门控对别名字段不失效）
+
+### xai-grok-sampling-types
+- `src/types.rs`：
+  - `ChatChunkDelta` 尾部追加 `reasoning: Option<String>` /
+    `reasoning_text: Option<String>`（serde default + skip_serializing_if）
+  - `FinishReason` 追加 `#[serde(other)] Other` 变体——DeepSeek 专有
+    `insufficient_system_resources` 等未知 finish_reason 会让整个 chunk 反序列化
+    失败杀掉整条流，此变体兜住
+  - `Usage` 尾部追加 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`
+    （DeepSeek 把缓存命中报成扁平 usage 字段而非
+    `prompt_tokens_details.cached_tokens`）
+- `src/conversation.rs`：
+  - `From<FinishReason> for StopReason`：`Other => StopReason::Stop`（最诚实的
+    近似映射）
+  - `From<Usage> for TokenUsage`：`cached_prompt_tokens` 取
+    `details.cached_tokens.max(prompt_cache_hit_tokens)`（两套字段并存时取大）
+
+### 决策记录
+- Messages（Anthropic 兼容）后端不改：思考走结构化 thinking block
+  （`ThinkingDelta` 已处理），DeepSeek Anthropic 端点不会内联标记进 text
+- Responses 后端不改：结构化 reasoning item，同理免疫（opencode PR #34698
+  描述中同样结论）
+- 多轮回传不额外剥历史：流层修复后新 content 不再含标记；存量会话含标记的
+  按 opencode 争议决策保留原样（改动面大、收益不确定）
+- 不加配置开关：无标记流逐字节直通（仅尾部 `<` 类前缀的跨 chunk 扣留，下一
+  chunk 或 EOF 必然归还），常开零风险
+- 版本：v1.0.35

@@ -14,6 +14,7 @@ use xai_grok_sampling_types::{
     ResponseModelMetadata, SamplingError, StopReason, TokenUsage, ToolCall,
 };
 
+use super::think_split::ThinkTagSplitter; // LOCAL(deepseek-compat)
 use crate::events::{SamplingChannel, SamplingErrorInfo, SamplingEvent};
 use crate::metrics::InferenceLatencyStats;
 use crate::types::RequestId;
@@ -59,6 +60,10 @@ pub fn stream_chat_completions<'a>(
         let mut usage: Option<TokenUsage> = None;
         let mut cost_usd_ticks: Option<i64> = None;
         let mut finish_reason: Option<StopReason> = None;
+
+        // LOCAL(deepseek-compat): re-classifies content deltas carrying inline
+        // `<think>`/`</think>` markers before they reach the text channel.
+        let mut think_splitter = ThinkTagSplitter::new();
 
         let mut content_acc = String::new();
         let mut reasoning_acc = String::new();
@@ -137,31 +142,16 @@ pub fn stream_chat_completions<'a>(
 
                 let delta = choice.delta;
 
-                if let Some(text) = delta.content
-                    && !text.is_empty()
-                {
-                    if !first_token_emitted {
-                        first_token_emitted = true;
-                        yield SamplingEvent::FirstToken {
-                            request_id: request_id.clone(),
-                        };
-                    }
-                    chunk_has_content = true;
-                    chunk_timestamps.push(Instant::now());
-                    chunk_index += 1;
-                    message_chunk_count += 1;
-                    content_acc.push_str(&text);
-                    yield SamplingEvent::ChannelToken {
-                        request_id: request_id.clone(),
-                        channel: SamplingChannel::Text,
-                        text,
-                        chunk_index,
-                    };
-                }
-
-                if let Some(thought) = delta.reasoning_content
-                    && !thought.is_empty()
-                {
+                // LOCAL(deepseek-compat): field reasoning is processed before content so a
+                // mixed delta arms the splitter's boundary rule before its content is
+                // classified. GLM/vLLM-style `reasoning` and Kimi-style `reasoning_text`
+                // are normalized onto the same channel.
+                let thought = delta
+                    .reasoning_content
+                    .or(delta.reasoning)
+                    .or(delta.reasoning_text)
+                    .filter(|s| !s.is_empty());
+                if let Some(thought) = thought {
                     if !first_token_emitted {
                         first_token_emitted = true;
                         yield SamplingEvent::FirstToken {
@@ -171,12 +161,58 @@ pub fn stream_chat_completions<'a>(
                     chunk_has_content = true;
                     chunk_index += 1;
                     reasoning_acc.push_str(&thought);
+                    think_splitter.note_reasoning_field();
                     yield SamplingEvent::ChannelToken {
                         request_id: request_id.clone(),
                         channel: SamplingChannel::Reasoning,
                         text: thought,
                         chunk_index,
                     };
+                }
+
+                // LOCAL(deepseek-compat): content goes through the think-tag splitter so
+                // inline `<think>` blocks and a boundary `</think>` artifact surface on the
+                // reasoning channel instead of leaking into assistant text.
+                if let Some(text) = delta.content
+                    && !text.is_empty()
+                {
+                    let split = think_splitter.feed(&text);
+                    if !split.text.is_empty() {
+                        if !first_token_emitted {
+                            first_token_emitted = true;
+                            yield SamplingEvent::FirstToken {
+                                request_id: request_id.clone(),
+                            };
+                        }
+                        chunk_has_content = true;
+                        chunk_timestamps.push(Instant::now());
+                        chunk_index += 1;
+                        message_chunk_count += 1;
+                        content_acc.push_str(&split.text);
+                        yield SamplingEvent::ChannelToken {
+                            request_id: request_id.clone(),
+                            channel: SamplingChannel::Text,
+                            text: split.text,
+                            chunk_index,
+                        };
+                    }
+                    if !split.reasoning.is_empty() {
+                        if !first_token_emitted {
+                            first_token_emitted = true;
+                            yield SamplingEvent::FirstToken {
+                                request_id: request_id.clone(),
+                            };
+                        }
+                        chunk_has_content = true;
+                        chunk_index += 1;
+                        reasoning_acc.push_str(&split.reasoning);
+                        yield SamplingEvent::ChannelToken {
+                            request_id: request_id.clone(),
+                            channel: SamplingChannel::Reasoning,
+                            text: split.reasoning,
+                            chunk_index,
+                        };
+                    }
                 }
 
                 for tc_delta in delta.tool_calls.into_iter() {
@@ -229,13 +265,60 @@ pub fn stream_chat_completions<'a>(
             }
         }
 
+        // LOCAL(deepseek-compat): flush the splitter's holdback tail so neither a
+        // partial marker nor an unclosed think block loses bytes at end of stream.
+        let tail = think_splitter.finish();
+        if !tail.reasoning.is_empty() {
+            if !first_token_emitted {
+                first_token_emitted = true;
+                yield SamplingEvent::FirstToken {
+                    request_id: request_id.clone(),
+                };
+            }
+            chunk_timestamps.push(Instant::now());
+            chunk_index += 1;
+            reasoning_acc.push_str(&tail.reasoning);
+            yield SamplingEvent::ChannelToken {
+                request_id: request_id.clone(),
+                channel: SamplingChannel::Reasoning,
+                text: tail.reasoning,
+                chunk_index,
+            };
+        }
+        if !tail.text.is_empty() {
+            if !first_token_emitted {
+                yield SamplingEvent::FirstToken {
+                    request_id: request_id.clone(),
+                };
+            }
+            chunk_timestamps.push(Instant::now());
+            chunk_index += 1;
+            message_chunk_count += 1;
+            content_acc.push_str(&tail.text);
+            yield SamplingEvent::ChannelToken {
+                request_id: request_id.clone(),
+                channel: SamplingChannel::Text,
+                text: tail.text,
+                chunk_index,
+            };
+        }
+
         // ── Build the final response ─────────────────────────────────
         let tool_calls: Vec<ToolCall> = tool_call_acc
-            .into_values()
-            .map(|(id, name, arguments)| ToolCall {
-                id: std::sync::Arc::<str>::from(id),
-                name,
-                arguments: std::sync::Arc::<str>::from(arguments),
+            .into_iter()
+            .map(|(index, (id, name, arguments))| {
+                // LOCAL(deepseek-compat): some gateways never send a tool-call id;
+                // synthesize a stable one so later tool results can pair.
+                let id = if id.is_empty() {
+                    format!("call_{index}")
+                } else {
+                    id
+                };
+                ToolCall {
+                    id: std::sync::Arc::<str>::from(id),
+                    name,
+                    arguments: std::sync::Arc::<str>::from(arguments),
+                }
             })
             .collect();
 
@@ -352,6 +435,9 @@ mod tests {
             role: Some(Role::Assistant),
             content: Some(text.to_string()),
             reasoning_content: None,
+            // LOCAL(deepseek-compat)
+            reasoning: None,
+            reasoning_text: None,
             tool_calls: vec![],
             tool_call_id: None,
         }])
@@ -443,6 +529,9 @@ mod tests {
             role: Some(Role::Assistant),
             content: None,
             reasoning_content: Some("thinking...".into()),
+            // LOCAL(deepseek-compat)
+            reasoning: None,
+            reasoning_text: None,
             tool_calls: vec![],
             tool_call_id: None,
         }]);
@@ -533,6 +622,9 @@ mod tests {
             role: None,
             content: None,
             reasoning_content: None,
+            // LOCAL(deepseek-compat)
+            reasoning: None,
+            reasoning_text: None,
             tool_calls: vec![ChunkToolCallDelta {
                 index: 0,
                 id: Some("call_cut".into()),
@@ -573,6 +665,9 @@ mod tests {
             role: None,
             content: None,
             reasoning_content: None,
+            // LOCAL(deepseek-compat)
+            reasoning: None,
+            reasoning_text: None,
             tool_calls: vec![ChunkToolCallDelta {
                 index: 0,
                 id: Some("call_abc".into()),
@@ -589,6 +684,9 @@ mod tests {
             role: None,
             content: None,
             reasoning_content: None,
+            // LOCAL(deepseek-compat)
+            reasoning: None,
+            reasoning_text: None,
             tool_calls: vec![ChunkToolCallDelta {
                 index: 0,
                 id: None,
@@ -740,6 +838,9 @@ mod tests {
             total_tokens: 150,
             prompt_tokens_details: None,
             completion_tokens_details: None,
+            // LOCAL(deepseek-compat)
+            prompt_cache_hit_tokens: None,
+            prompt_cache_miss_tokens: None,
             cost_in_usd_ticks: None,
         });
 
@@ -779,6 +880,9 @@ mod tests {
                 total_tokens: 15,
                 prompt_tokens_details: None,
                 completion_tokens_details: None,
+                // LOCAL(deepseek-compat)
+                prompt_cache_hit_tokens: None,
+                prompt_cache_miss_tokens: None,
                 cost_in_usd_ticks: wire,
             });
             let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> = vec![
@@ -812,6 +916,9 @@ mod tests {
             total_tokens: 15,
             prompt_tokens_details: None,
             completion_tokens_details: None,
+            // LOCAL(deepseek-compat)
+            prompt_cache_hit_tokens: None,
+            prompt_cache_miss_tokens: None,
             cost_in_usd_ticks: Some(99),
         });
         let mut second = make_chunk(vec![ChatChunkDelta::default()]);
@@ -821,6 +928,9 @@ mod tests {
             total_tokens: 18,
             prompt_tokens_details: None,
             completion_tokens_details: None,
+            // LOCAL(deepseek-compat)
+            prompt_cache_hit_tokens: None,
+            prompt_cache_miss_tokens: None,
             cost_in_usd_ticks: Some(0),
         });
         let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> = vec![
@@ -840,6 +950,230 @@ mod tests {
         match events.last().unwrap() {
             SamplingEvent::Completed { response, .. } => {
                 assert_eq!(response.cost_usd_ticks, Some(99));
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    // ====================================================================
+    // LOCAL(deepseek-compat): think-tag splitting and gateway quirks
+    // ====================================================================
+
+    fn reasoning_field_chunk(text: &str) -> ChatCompletionChunk {
+        make_chunk(vec![ChatChunkDelta {
+            role: Some(Role::Assistant),
+            content: None,
+            reasoning_content: Some(text.to_string()),
+            reasoning: None,
+            reasoning_text: None,
+            tool_calls: vec![],
+            tool_call_id: None,
+        }])
+    }
+
+    async fn run(chunks: Vec<ChatCompletionChunk>) -> Vec<SamplingEvent> {
+        let raw =
+            stream::iter(chunks.into_iter().map(Ok).collect::<Vec<_>>()).boxed();
+        collect(stream_chat_completions(raw, None, rid(), Duration::from_secs(60))).await
+    }
+
+    fn text_tokens(events: &[SamplingEvent]) -> Vec<&str> {
+        events
+            .iter()
+            .filter_map(|e| match e {
+                SamplingEvent::ChannelToken {
+                    channel: SamplingChannel::Text,
+                    text,
+                    ..
+                } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn reasoning_tokens(events: &[SamplingEvent]) -> Vec<&str> {
+        events
+            .iter()
+            .filter_map(|e| match e {
+                SamplingEvent::ChannelToken {
+                    channel: SamplingChannel::Reasoning,
+                    text,
+                    ..
+                } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// opencode #34126 shape: field reasoning, then a standalone `</think>` content
+    /// chunk, then a tool call. The marker must not surface as assistant text.
+    #[tokio::test]
+    async fn boundary_think_marker_chunk_is_not_text() {
+        let marker = make_chunk(vec![ChatChunkDelta {
+            role: Some(Role::Assistant),
+            content: Some("</think>".into()),
+            reasoning_content: None,
+            reasoning: None,
+            reasoning_text: None,
+            tool_calls: vec![],
+            tool_call_id: None,
+        }]);
+        let tool = make_chunk(vec![ChatChunkDelta {
+            role: None,
+            content: None,
+            reasoning_content: None,
+            reasoning: None,
+            reasoning_text: None,
+            tool_calls: vec![ChunkToolCallDelta {
+                index: 0,
+                id: Some("call_1".into()),
+                kind: Some("function".into()),
+                function: Some(ToolCallFunctionDelta {
+                    name: Some("lookup".into()),
+                    arguments: Some("{}".into()),
+                }),
+            }],
+            tool_call_id: None,
+        }]);
+        let events = run(vec![
+            reasoning_field_chunk("thinking"),
+            marker,
+            tool,
+            final_chunk(FinishReason::ToolCalls),
+        ])
+        .await;
+
+        assert!(text_tokens(&events).is_empty(), "no text may leak");
+        assert_eq!(reasoning_tokens(&events), vec!["thinking"]);
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                assert_eq!(response.assistant_text(), "");
+                assert_eq!(response.tool_calls().len(), 1);
+                let r = response.reasoning_items().next().expect("reasoning kept");
+                let rs::SummaryPart::SummaryText(t) = &r.summary[0];
+                assert_eq!(t.text, "thinking");
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    /// Whole thinking inlined in `content` (no reasoning field) with the markers
+    /// split across chunks; must land on the reasoning channel and stay out of
+    /// the persisted assistant content that gets replayed next turn.
+    #[tokio::test]
+    async fn inline_think_block_split_across_chunks_routes_to_reasoning() {
+        let events = run(vec![
+            text_chunk("<think>deep "),
+            text_chunk("thought</thi"),
+            text_chunk("nk>Answer"),
+            final_chunk(FinishReason::Stop),
+        ])
+        .await;
+
+        let joined_reasoning = reasoning_tokens(&events).join("");
+        let joined_text = text_tokens(&events).join("");
+        assert_eq!(joined_reasoning, "deep thought");
+        assert_eq!(joined_text, "Answer");
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                assert_eq!(response.assistant_text(), "Answer");
+                let r = response.reasoning_items().next().expect("reasoning kept");
+                let rs::SummaryPart::SummaryText(t) = &r.summary[0];
+                assert_eq!(t.text, "deep thought");
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    /// GLM/vLLM-style `reasoning` delta field maps onto the reasoning channel.
+    #[tokio::test]
+    async fn alias_reasoning_field_maps_to_reasoning_channel() {
+        let chunk = make_chunk(vec![ChatChunkDelta {
+            role: Some(Role::Assistant),
+            content: None,
+            reasoning_content: None,
+            reasoning: Some("glm think".into()),
+            reasoning_text: None,
+            tool_calls: vec![],
+            tool_call_id: None,
+        }]);
+        let events = run(vec![chunk, text_chunk("hi"), final_chunk(FinishReason::Stop)]).await;
+        assert_eq!(reasoning_tokens(&events), vec!["glm think"]);
+        assert_eq!(text_tokens(&events), vec!["hi"]);
+    }
+
+    /// An unknown proprietary finish reason (e.g. DeepSeek's
+    /// `insufficient_system_resources`) must not fail chunk deserialization.
+    #[test]
+    fn unknown_finish_reason_deserializes_as_other() {
+        let json = r#"{"id":"c","object":"chat.completion.chunk","created":0,"model":"m","choices":[{"index":0,"delta":{},"finish_reason":"insufficient_system_resources"}]}"#;
+        let chunk: ChatCompletionChunk =
+            serde_json::from_str(json).expect("unknown finish reason must not kill the chunk");
+        assert_eq!(chunk.choices[0].finish_reason, Some(FinishReason::Other));
+        assert_eq!(
+            StopReason::from(chunk.choices[0].finish_reason.unwrap()),
+            StopReason::Stop
+        );
+    }
+
+    /// DeepSeek reports cache hits as a flat usage field; it must land on
+    /// `cached_prompt_tokens` even without OpenAI-style details.
+    #[tokio::test]
+    async fn deepseek_cache_hit_tokens_reach_usage() {
+        let mut usage_chunk = make_chunk(vec![ChatChunkDelta::default()]);
+        usage_chunk.usage = Some(Usage {
+            prompt_tokens: 100,
+            completion_tokens: 5,
+            total_tokens: 105,
+            prompt_tokens_details: None,
+            completion_tokens_details: None,
+            // LOCAL(deepseek-compat)
+            prompt_cache_hit_tokens: Some(64),
+            prompt_cache_miss_tokens: Some(36),
+            cost_in_usd_ticks: None,
+        });
+        let events = run(vec![
+            text_chunk("ok"),
+            usage_chunk,
+            final_chunk(FinishReason::Stop),
+        ])
+        .await;
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                let u = response.usage.as_ref().expect("usage extracted");
+                assert_eq!(u.cached_prompt_tokens, 64);
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    /// Gateways that never send a tool-call id still get a usable, pairable id.
+    #[tokio::test]
+    async fn missing_tool_call_id_is_synthesized() {
+        let tool = make_chunk(vec![ChatChunkDelta {
+            role: None,
+            content: None,
+            reasoning_content: None,
+            reasoning: None,
+            reasoning_text: None,
+            tool_calls: vec![ChunkToolCallDelta {
+                index: 0,
+                id: None,
+                kind: Some("function".into()),
+                function: Some(ToolCallFunctionDelta {
+                    name: Some("do_thing".into()),
+                    arguments: Some("{}".into()),
+                }),
+            }],
+            tool_call_id: None,
+        }]);
+        let events = run(vec![tool, final_chunk(FinishReason::ToolCalls)]).await;
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                let calls = response.tool_calls();
+                assert_eq!(calls.len(), 1);
+                assert_eq!(calls[0].id.as_ref(), "call_0");
+                assert_eq!(calls[0].name, "do_thing");
             }
             other => panic!("expected Completed, got {other:?}"),
         }

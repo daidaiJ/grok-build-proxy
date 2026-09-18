@@ -717,6 +717,9 @@ impl From<FinishReason> for StopReason {
             FinishReason::Length => StopReason::Length,
             FinishReason::ToolCalls | FinishReason::FunctionCall => StopReason::ToolCalls,
             FinishReason::ContentFilter => StopReason::ContentFilter,
+            // LOCAL(deepseek-compat): unknown proprietary reason (e.g. DeepSeek's
+            // `insufficient_system_resources`); the closest honest mapping is a stop.
+            FinishReason::Other => StopReason::Stop,
         }
     }
 }
@@ -751,10 +754,13 @@ impl TokenUsage {
 
 impl From<Usage> for TokenUsage {
     fn from(u: Usage) -> Self {
+        // LOCAL(deepseek-compat): DeepSeek-style flat cache fields fold in when the
+        // OpenAI-style details field is absent (or lower) on the same response.
         let cached_prompt_tokens = u
             .prompt_tokens_details
             .as_ref()
-            .map_or(0, |d| d.cached_tokens);
+            .map_or(0, |d| d.cached_tokens)
+            .max(u.prompt_cache_hit_tokens.unwrap_or(0));
         Self {
             prompt_tokens: u.prompt_tokens,
             completion_tokens: u.completion_tokens,
