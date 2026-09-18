@@ -57,6 +57,40 @@ impl SessionActor {
                 );
                 ok_end_turn(0, None)
             }
+            BuiltinAction::SetMinimalStyle { enabled } => {
+                // LOCAL(minimal-style): persist the toggle for future session spawns;
+                // rewrite the live prompt only while no model call has happened yet,
+                // so mid-session toggles never rewrite an established history.
+                let current = crate::agent::output_style::minimal_style_enabled();
+                let enabled = enabled.unwrap_or(!current);
+                if let Err(e) = crate::agent::output_style::store_minimal_style(enabled) {
+                    tracing::warn!(
+                        session_id = %self.session_info.id.0,
+                        error = %e,
+                        "failed to persist output style state"
+                    );
+                }
+                let before_first_model_call = !self
+                    .first_model_call_done
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                if before_first_model_call {
+                    let base = self.agent.borrow().system_prompt().to_string();
+                    let prompt = xai_grok_agent::prompt::template::apply_minimal_style(
+                        &base,
+                        enabled,
+                    );
+                    let _ = self.chat_state_handle.replace_system_head(&prompt).await;
+                    self.output_style_applied
+                        .store(enabled, std::sync::atomic::Ordering::Relaxed);
+                }
+                tracing::info!(
+                    session_id = %self.session_info.id.0,
+                    enabled,
+                    applied_to_live_prompt = before_first_model_call,
+                    "minimal output style toggled via /style",
+                );
+                ok_end_turn(0, None)
+            }
             BuiltinAction::FlushMemory => {
                 if self.memory.is_enabled() {
                     let did_flush = self.run_memory_flush("slash_command", None).await;

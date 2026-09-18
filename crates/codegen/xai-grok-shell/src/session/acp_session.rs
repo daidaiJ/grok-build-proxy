@@ -864,6 +864,15 @@ pub(crate) struct SessionActor {
     /// status-line endpoint-health row. Lives on the actor because the turn
     /// loop's own counters reset per prompt/step.
     pub(crate) session_transient_retries: std::sync::atomic::AtomicU64,
+    /// LOCAL(minimal-style): whether the minimal output-style rules are live in
+    /// this session's system prompt — set at spawn from the persisted `/style`
+    /// state, or by a `/style` toggle before the first model call. Consulted on
+    /// prompt rebuilds (agent/model switches); never flipped once the first
+    /// model call has happened, per the toggle's session semantics.
+    pub(crate) output_style_applied: std::sync::atomic::AtomicBool,
+    /// LOCAL(minimal-style): any model request has been made this session;
+    /// gates the `/style` rewrite of the live prompt.
+    pub(crate) first_model_call_done: std::sync::atomic::AtomicBool,
     /// Shared models manager for etag-triggered refresh from response headers.
     pub(crate) models_manager: crate::agent::remote_config::ModelsManager,
     /// The system prompt's `Workspace Path` is set at build time via `AgentBuilder::with_prompt_working_directory()`.

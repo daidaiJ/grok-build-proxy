@@ -1128,6 +1128,10 @@ impl SessionActor {
     fn log_terminal_failure(&self, error_type: &str, status_code: Option<u16>, message: &str) {
         // LOCAL: feed the status-line endpoint-health counters; the actor attributes by its current sampling model when None.
         self.chat_state_handle.record_model_call_failure(None);
+        // LOCAL(minimal-style): a model request has happened — the /style toggle
+        // stops rewriting the live prompt from this point on.
+        self.first_model_call_done
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         let auth = self
             .auth_manager
             .as_ref()
@@ -2183,6 +2187,10 @@ impl SessionActor {
         if let Some(ref u) = response.usage {
             self.tool_context
                 .record_task_model_output(u64::from(u.completion_tokens));
+            // LOCAL(minimal-style): a model request has happened — the /style toggle
+            // stops rewriting the live prompt from this point on.
+            self.first_model_call_done
+                .store(true, std::sync::atomic::Ordering::Relaxed);
             // LOCAL: last-call API duration for the status-line TPS window.
             self.last_turn_api_duration_ms
                 .store(api_duration_ms.unwrap_or(0), std::sync::atomic::Ordering::Relaxed);

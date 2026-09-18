@@ -52,12 +52,14 @@ pub(crate) fn subagent_template() -> Zeroizing<String> {
 pub const COMPACT_SYSTEM_PROMPT: &str = "You are an AI coding agent. You operate in a workspace with a provided codebase.\n\n\
      Your main goal is to complete the user's request, denoted within the <user_query> tag.";
 
-// LOCAL: output-style rules for the built-in `grok-build-concise` primary agent
-// (phase-3 minimal mode). Appended after the compact base prompt; also injected
-// by the mid-session concise switch (xai-grok-shell model_switch). Rules merge
-// three sources: qwen-code's built-in Concise style (Apache-2.0), the `caveman`
-// compression skill, and `i-have-adhd` (github.com/ayghri/i-have-adhd, MIT).
-pub const LOCAL_CONCISE_RULES: &str = "\
+// LOCAL(minimal-style): orthogonal minimal output-style overlay, attachable to
+// ANY agent (builtin, plan, concise, custom) at session start via the persisted
+// `/style` toggle (xai-grok-shell agent/output_style.rs). Deliberately NOT
+// embedded in the `grok-build-concise` definition — style and agent variant are
+// independent axes. Rules merge three sources: qwen-code's built-in Concise
+// style (Apache-2.0), the `caveman` compression skill, and `i-have-adhd`
+// (github.com/ayghri/i-have-adhd, MIT).
+pub const LOCAL_MINIMAL_STYLE_RULES: &str = "\
 # Output style: minimal
 
 Answer-first mode. The work stays as thorough as ever; only the narration shrinks.
@@ -77,12 +79,51 @@ Answer-first mode. The work stays as thorough as ever; only the narration shrink
 Where this conflicts with other formatting guidance, this section wins.
 ";
 
+/// The header that opens [`LOCAL_MINIMAL_STYLE_RULES`]; rules are always
+/// appended at the very end of a prompt, so stripping is a truncation here.
+const MINIMAL_STYLE_HEADER: &str = "# Output style: minimal";
+
+/// Append the minimal style rules to `base` when `enabled`, first stripping any
+/// rules block already present. Idempotent in both directions, so callers can
+/// apply it unconditionally on every prompt rebuild.
+pub fn apply_minimal_style(base: &str, enabled: bool) -> String {
+    let base = match base.find(MINIMAL_STYLE_HEADER) {
+        Some(pos) => base[..pos].trim_end(),
+        None => base.trim_end(),
+    };
+    if enabled {
+        format!("{}\n\n{}", base, LOCAL_MINIMAL_STYLE_RULES)
+    } else {
+        base.to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
     use xai_grok_tools::types::template_renderer::TemplateRenderer;
     use xai_grok_tools::types::tool::ToolKind;
+
+    // LOCAL(minimal-style)
+    #[test]
+    fn minimal_style_overlay_appends_strips_and_is_idempotent() {
+        let base = "You are an agent. Workspace: /tmp.";
+        let styled = apply_minimal_style(base, true);
+        assert!(styled.starts_with(base), "rules append after the base");
+        assert!(styled.contains(MINIMAL_STYLE_HEADER));
+        assert_eq!(
+            apply_minimal_style(&styled, true),
+            styled,
+            "re-apply is a no-op"
+        );
+        assert_eq!(
+            apply_minimal_style(&styled, false),
+            base,
+            "disable strips back to the bare base"
+        );
+        assert_eq!(apply_minimal_style(base, false), base, "disabled passthrough");
+    }
 
     /// Verify the pre-generated encrypted file matches the current template sources.
     /// If this fails, run: `python3 scripts/encrypt_templates.py`

@@ -5,7 +5,10 @@ impl SessionActor {
     pub(super) async fn handle_set_session_model(
         self: &std::sync::Arc<Self>,
         sampling_config: xai_grok_sampler::SamplerConfig,
-        use_concise: bool,
+        // LOCAL(minimal-style): the concise special-case in the prompt rewrite was
+        // removed — style is orthogonal to the agent variant now, so the target
+        // variant no longer changes the rewrite.
+        _use_concise: bool,
         is_family_switch: bool,
         apply_prompt_override: bool,
         skip_prompt_rewrite: bool,
@@ -96,18 +99,16 @@ impl SessionActor {
             let mut conversation = self.chat_state_handle.get_conversation().await;
             for item in conversation.iter_mut() {
                 if let ConversationItem::System(sys) = item {
-                    if use_concise {
-                        // LOCAL: keep the mid-session concise switch consistent with the
-                        // startup definition — compact base plus the minimal-style rules.
-                        sys.content = std::sync::Arc::<str>::from(format!(
-                            "{}\n\n{}",
-                            xai_grok_agent::prompt::template::COMPACT_SYSTEM_PROMPT,
-                            xai_grok_agent::prompt::template::LOCAL_CONCISE_RULES,
-                        ));
-                    } else {
-                        sys.content =
-                            std::sync::Arc::<str>::from(self.agent.borrow().system_prompt());
-                    }
+                    // LOCAL(minimal-style): re-apply the session's live style state onto
+                    // whichever prompt this switch lands on. The rules no longer live in
+                    // the concise definition; the overlay is idempotent (strip+append).
+                    sys.content = std::sync::Arc::<str>::from(
+                        xai_grok_agent::prompt::template::apply_minimal_style(
+                            self.agent.borrow().system_prompt(),
+                            self.output_style_applied
+                                .load(std::sync::atomic::Ordering::Relaxed),
+                        ),
+                    );
                     break;
                 }
             }
@@ -232,7 +233,13 @@ impl SessionActor {
                     "rebuild_agent: build failed for agent_type={new_agent_name}: {e}"
                 ))
             })?;
-        let new_system_prompt = new_agent.system_prompt().to_string();
+        // LOCAL(minimal-style): carry the session's live style onto the rebuilt
+        // agent's prompt (idempotent strip+append).
+        let new_system_prompt = xai_grok_agent::prompt::template::apply_minimal_style(
+            new_agent.system_prompt(),
+            self.output_style_applied
+                .load(std::sync::atomic::Ordering::Relaxed),
+        );
         let mut new_prompt_context = new_agent.prompt_context().clone();
         new_prompt_context.normalize_for_persistence();
         self.abort_and_clear_prefire().await;

@@ -81,6 +81,25 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
             ),
         },
     },
+    // LOCAL(minimal-style): orthogonal minimal output-style overlay. A toggle
+    // lands on the next session; the current session only picks it up when no
+    // model call has happened yet (enforced by the executor).
+    BuiltinCommand {
+        name: "style",
+        description: "Toggle minimal output style overlay (applies to this session only if set before the first model call; afterwards it takes effect from the next session)",
+        argument_hint: Some("minimal|default"),
+        aliases: &[],
+        model_authored_eligibility: ModelAuthoredEligibility::Denied,
+        gate: BuiltinGate::AlwaysOn,
+        workflow_projection: WorkflowProjection::None,
+        resolve: |args| BuiltinAction::SetMinimalStyle {
+            enabled: match args.to_lowercase().trim() {
+                "minimal" | "on" | "true" | "1" | "enable" => Some(true),
+                "default" | "off" | "false" | "0" | "no" | "disable" => Some(false),
+                _ => None,
+            },
+        },
+    },
     BuiltinCommand {
         name: "flush",
         description: "Flush conversation memory to disk now",
@@ -1266,12 +1285,17 @@ pub(super) enum BuiltinAction {
         name: String,
         input: String,
     },
+    // LOCAL(minimal-style): `None` = toggle the persisted state.
+    SetMinimalStyle {
+        enabled: Option<bool>,
+    },
 }
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
         match self {
             BuiltinAction::Compact { .. } => "compact",
             BuiltinAction::SetYolo { .. } => "yolo",
+            BuiltinAction::SetMinimalStyle { .. } => "style",
             BuiltinAction::FlushMemory => "flush",
             BuiltinAction::Dream => "dream",
             BuiltinAction::ContextInfo => "context",
@@ -1306,6 +1330,7 @@ impl BuiltinAction {
         match self {
             BuiltinAction::Compact { user_context } => user_context.is_some(),
             BuiltinAction::SetYolo { .. } => true,
+            BuiltinAction::SetMinimalStyle { enabled } => enabled.is_some(),
             BuiltinAction::FlushMemory => false,
             BuiltinAction::Dream => false,
             BuiltinAction::ContextInfo => false,
