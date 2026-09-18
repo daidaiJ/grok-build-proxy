@@ -11,6 +11,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::agent::{QueueEntryKind, QueuedPrompt};
 use crate::app::prompt_queue::QueueEntryWire;
 use crate::render::line_utils::truncate_str;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::{Theme, ThemeKind};
 
 use super::list_pane::ListItem;
@@ -224,9 +225,9 @@ impl QueuedPromptEntry {
         // Build the suffix for multiline prompts: " (+N lines)" or " (+1 line)"
         let suffix = if extra_lines > 0 {
             if extra_lines == 1 {
-                " (+1 line)".to_string()
+                tr(" (+1 line)").to_string()
             } else {
-                format!(" (+{extra_lines} lines)")
+                tr_str(" (+{n} lines)").replace("{n}", &extra_lines.to_string())
             }
         } else {
             String::new()

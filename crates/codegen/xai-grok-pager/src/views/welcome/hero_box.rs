@@ -6,6 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Block, BorderType, Borders, Widget};
 
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 
 use super::{WelcomeLayout, WelcomeLayoutInput};
@@ -327,7 +328,7 @@ pub(super) fn render_hero_box(
         buf.set_span(
             layout.hero_subtitle.x,
             layout.hero_subtitle.y,
-            &Span::styled(HERO_SUBTITLE, subtitle_style),
+            &Span::styled(tr(HERO_SUBTITLE), subtitle_style),
             layout.hero_subtitle.width,
         );
     }
@@ -539,7 +540,7 @@ fn render_hero_changelog(
             .fg(theme.gray_bright)
             .add_modifier(Modifier::DIM),
     );
-    let title = "Changelog";
+    let title = tr("Changelog");
     buf.set_span(
         area.x,
         area.y,

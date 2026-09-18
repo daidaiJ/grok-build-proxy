@@ -6,6 +6,7 @@ use ratatui::widgets::Widget;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::app_view::NewWorktreeDialogState;
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 
 /// Minimum dialog width (fits the title, an empty input, and the hints).
@@ -27,7 +28,7 @@ pub fn render_new_worktree_dialog(area: Rect, buf: &mut Buffer, state: &NewWorkt
         // Too small to render. Draw a minimal hint so the user knows the dialog is still active and can press Esc to dismiss.
         if area.height >= 1 && area.width >= 16 {
             let hint = Line::from(Span::styled(
-                "[Esc] to close",
+                tr("[Esc] to close"),
                 Style::default().fg(theme.gray_dim),
             ));
             hint.render(Rect::new(area.x, area.y, area.width.min(16), 1), buf);
@@ -112,7 +113,7 @@ pub fn render_new_worktree_dialog(area: Rect, buf: &mut Buffer, state: &NewWorkt
 
     // Row 1: Title
     let title = Line::from(Span::styled(
-        "New Worktree",
+        tr("New Worktree"),
         Style::default()
             .fg(theme.text_primary)
             .add_modifier(Modifier::BOLD),
@@ -120,12 +121,13 @@ pub fn render_new_worktree_dialog(area: Rect, buf: &mut Buffer, state: &NewWorkt
     title.render(Rect::new(inner_x, dialog.y + 1, inner_width, 1), buf);
 
     // Row 2: Label input.
-    let prefix_w = LABEL_PREFIX.width() as u16;
+    let label_prefix = tr(LABEL_PREFIX);
+    let prefix_w = label_prefix.width() as u16;
     let input_width = inner_width.saturating_sub(prefix_w);
     let viewport = state.viewport(input_width as usize);
     let visible_input = &state.label()[viewport.visible_byte_range];
 
-    let prefix_span = Span::styled(LABEL_PREFIX, Style::default().fg(theme.gray_bright));
+    let prefix_span = Span::styled(label_prefix, Style::default().fg(theme.gray_bright));
     let input_span = Span::styled(visible_input, Style::default().fg(theme.text_primary));
     let input_line = Line::from(vec![prefix_span, input_span]);
     input_line.render(Rect::new(inner_x, dialog.y + 2, inner_width, 1), buf);
@@ -144,14 +146,14 @@ pub fn render_new_worktree_dialog(area: Rect, buf: &mut Buffer, state: &NewWorkt
                 .fg(theme.accent_user)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" = create   ", Style::default().fg(theme.gray)),
+        Span::styled(tr(" = create   "), Style::default().fg(theme.gray)),
         Span::styled(
             "esc",
             Style::default()
                 .fg(theme.accent_user)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" = cancel", Style::default().fg(theme.gray)),
+        Span::styled(tr(" = cancel"), Style::default().fg(theme.gray)),
     ]);
     hints.render(Rect::new(inner_x, dialog.y + 3, inner_width, 1), buf);
 }
@@ -160,7 +162,7 @@ pub fn render_new_worktree_dialog(area: Rect, buf: &mut Buffer, state: &NewWorkt
 fn dialog_width_for(area_width: u16, label: &str) -> u16 {
     let max_width = area_width.saturating_sub(4);
     // The extra 1 is the block cursor cell
-    let needed = (LABEL_PREFIX.width() + label.width() + 1 + INNER_PAD as usize) as u16;
+    let needed = (tr(LABEL_PREFIX).width() + label.width() + 1 + INNER_PAD as usize) as u16;
     needed.max(MIN_DIALOG_WIDTH).min(max_width)
 }
 

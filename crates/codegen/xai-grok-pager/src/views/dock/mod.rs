@@ -10,6 +10,7 @@ use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
 use crate::render::line_utils::truncate_line;
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::turn_status::SPINNER_DIVISOR;
 
@@ -102,19 +103,25 @@ impl Section {
         }
     }
 
+    /// Tab-key hint label; its only production exit is the Tab hint text
+    /// (`agent_view/panes.rs::dock_tab_label`), so the translation wraps here.
     pub(crate) fn tab_hint(self) -> &'static str {
         match self {
-            Section::Subagents => "subagents",
-            Section::Tasks => "tasks",
-            Section::Watchers => "watchers",
-            Section::Queued => "queued",
+            Section::Subagents => tr("subagents"),
+            Section::Tasks => tr("tasks"),
+            Section::Watchers => tr("watchers"),
+            Section::Queued => tr("queued"),
         }
     }
 
     /// Every killable dock row paints `[stop]`, including subagents.
+    /// Paint and the kill hit-rect both derive from this string, so a translated
+    /// badge stays self-consistent.
     pub fn kill_label(self) -> &'static str {
         match self {
-            Section::Subagents | Section::Tasks | Section::Watchers | Section::Queued => STOP_LABEL,
+            Section::Subagents | Section::Tasks | Section::Watchers | Section::Queued => {
+                tr(STOP_LABEL)
+            }
         }
     }
 }
@@ -284,7 +291,7 @@ pub fn render(buf: &mut Buffer, area: Rect, theme: &Theme, data: &DockData) {
                     Section::Watchers => (counts.watchers, counts.watchers_expanded),
                     Section::Queued => (counts.queued, data.queue_body_rows > 0),
                 };
-                let line = section_header(theme, area.width, expanded, section.label(), count);
+                let line = section_header(theme, area.width, expanded, tr(section.label()), count);
                 buf.set_line(area.x, y, &line, area.width);
                 highlight(
                     buf,
@@ -319,8 +326,9 @@ pub fn render(buf: &mut Buffer, area: Rect, theme: &Theme, data: &DockData) {
                 let hidden = layout.hidden_rows(section);
                 let arrow = crate::glyphs::disclosure_open();
                 let indent_len = MORE_INDENT.len().min(area.width.saturating_sub(1) as usize);
+                let more = tr("show {n} more").replace("{n}", &hidden.to_string());
                 let line = Line::from(Span::styled(
-                    format!("{}{arrow} show {hidden} more", &MORE_INDENT[..indent_len]),
+                    format!("{}{arrow} {more}", &MORE_INDENT[..indent_len]),
                     Style::default().fg(theme.gray),
                 ));
                 buf.set_line(area.x, y, &line, area.width);

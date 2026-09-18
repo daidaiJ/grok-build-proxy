@@ -4,6 +4,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::prompt_widget::StashedPrompt;
 
@@ -350,7 +351,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 content_x,
                 y,
                 &Line::from(Span::styled(
-                    "Loading rewind points...",
+                    tr("Loading rewind points..."),
                     Style::default().fg(theme.gray),
                 )),
                 content_w,
@@ -363,11 +364,11 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 len: points.len(),
                 selected: *selected,
             }
-            .render(buf, area, "Rewind to which turn?", focused, |i, ctx| {
+            .render(buf, area, tr("Rewind to which turn?"), focused, |i, ctx| {
                 let point = &points[i];
                 let dot_style = Style::default().fg(theme.gray).bg(ctx.row_bg);
                 let preview: String = crate::render::line_utils::truncate_str(
-                    point.prompt_preview.as_deref().unwrap_or("(no preview)"),
+                    point.prompt_preview.as_deref().unwrap_or(tr("(no preview)")),
                     ctx.content_width.saturating_sub(8) as usize,
                 );
                 let text_style = Style::default()

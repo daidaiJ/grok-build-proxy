@@ -26,6 +26,8 @@ use ratatui::widgets::Widget;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::input::line_editor::{LineEditOutcome, LineEditor};
+// LOCAL: i18n — 渲染出口文案查表
+use crate::slash::i18n::tr;
 use crate::render::line_utils::truncate_str;
 use crate::render::wrapping::word_wrap_line;
 use crate::theme::Theme;
@@ -200,7 +202,9 @@ impl SearchBarLayout {
 }
 
 pub fn search_bar_layout(width: u16, trailing_width: u16) -> SearchBarLayout {
-    let label_width = (SEARCH_BAR_LABEL.len() as u16).min(width);
+    // LOCAL: i18n — 标签查表；宽度按显示列宽计算（成对调整，英文下与 byte len 等价）
+    let label = tr(SEARCH_BAR_LABEL);
+    let label_width = (UnicodeWidthStr::width(label) as u16).min(width);
     let available_input = width - label_width;
     let trailing_reserved = if trailing_width > 0
         && available_input
@@ -245,7 +249,7 @@ pub fn render_search_bar(
         y,
         width,
         theme,
-        SEARCH_BAR_LABEL,
+        tr(SEARCH_BAR_LABEL),
         query,
         active,
         show_hint,
@@ -273,7 +277,7 @@ pub fn render_search_bar_with_viewport(
         y,
         layout.render_width,
         theme,
-        SEARCH_BAR_LABEL,
+        tr(SEARCH_BAR_LABEL),
         query,
         active,
         show_hint,
@@ -316,7 +320,7 @@ pub(crate) fn render_line_editor_search_bar(
         y,
         width,
         theme,
-        SEARCH_BAR_LABEL,
+        tr(SEARCH_BAR_LABEL),
         editor,
         active,
         show_hint,
@@ -364,7 +368,8 @@ fn render_line_editor_search_bar_with_label(
     show_hint: bool,
     bg: Option<ratatui::style::Color>,
 ) {
-    let input_width = width.saturating_sub(label.len() as u16) as usize;
+    // LOCAL: i18n — 输入窗口宽度按标签显示列宽计算（成对调整；英文 ASCII 下与 byte len 等价）
+    let input_width = width.saturating_sub(UnicodeWidthStr::width(label) as u16) as usize;
     let viewport = editor.viewport(input_width);
     render_search_bar_with_label_viewport(
         buf,
@@ -383,7 +388,7 @@ fn render_line_editor_search_bar_with_label(
 }
 
 /// Like [`render_search_bar`] but with a caller-supplied prompt `label` (e.g. `" path: "`) instead of the default `" search: "`.
-/// The label width is measured in bytes (ASCII), matching the input-window math.
+/// The label width is measured in display columns (ASCII labels equal byte length), matching the input-window math.
 #[allow(clippy::too_many_arguments)]
 pub fn render_search_bar_with_label(
     buf: &mut Buffer,
@@ -441,7 +446,8 @@ fn render_search_bar_with_label_viewport(
     let always_active = !active && !show_hint;
 
     if active || !query.is_empty() || always_active {
-        let label_w = label.len() as u16;
+        // LOCAL: i18n — 标签宽度按显示列宽计算（成对调整）
+        let label_w = UnicodeWidthStr::width(label) as u16;
         buf.set_line(
             x,
             y,
@@ -520,7 +526,8 @@ fn render_search_bar_with_label_viewport(
             x,
             y,
             &Line::from(Span::styled(
-                " / to search",
+                // LOCAL: i18n — 提示语查表（前导空格保留在键内）
+                tr(" / to search"),
                 bg_style(Style::default().fg(theme.gray_dim)),
             )),
             width,
@@ -1726,13 +1733,14 @@ pub fn picker_shortcuts() -> &'static [HintItem] {
         vec![
             HintItem {
                 keys: vec![],
-                label: "nav".into(),
+                // LOCAL: i18n — 提示标签查表
+                label: tr("nav").into(),
                 custom_display: Some("\u{2191}/\u{2193}"),
                 description: None,
                 pinned: false,
             },
-            HintItem::new(crate::key!(Enter), "select"),
-            HintItem::new(crate::key!(Esc), "close"),
+            HintItem::new(crate::key!(Enter), tr("select")),
+            HintItem::new(crate::key!(Esc), tr("close")),
         ]
     });
     &SHORTCUTS
@@ -1959,7 +1967,8 @@ fn render_picker_content_inner(
     if loading {
         let spinner_frames = crate::glyphs::dot_spinner_frames();
         let frame = spinner_frames[(loading_tick / 4) as usize % spinner_frames.len()];
-        let msg = format!("{frame} Loading\u{2026}");
+        // LOCAL: i18n — 加载提示查表
+        let msg = format!("{frame} {}", tr("Loading\u{2026}"));
         let msg_style = Style::default().fg(theme.gray);
         let cx = content_area.x + content_area.width.saturating_sub(msg.width() as u16) / 2;
         let cy = content_area.y + content_area.height / 2;
@@ -1972,7 +1981,13 @@ fn render_picker_content_inner(
         let msg_style = Style::default()
             .fg(theme.gray_dim)
             .bg(picker_base_bg(bg, theme));
-        buf.set_string(content_area.x, content_area.y, "  No matches", msg_style);
+        // LOCAL: i18n — 空态提示查表（前导缩进空格保留在代码侧）
+        buf.set_string(
+            content_area.x,
+            content_area.y,
+            format!("  {}", tr("No matches")),
+            msg_style,
+        );
         return empty_hit;
     }
 
@@ -2413,20 +2428,21 @@ pub fn render_picker(
         }
         // Show `i` in vim nav mode so users discover how to start typing
         if config.vim_normal_first && !state.search_active {
-            all_hints.push(HintItem::new(crate::key!('i'), "search"));
+            all_hints.push(HintItem::new(crate::key!('i'), tr("search")));
         }
         // Expandable: add the e (expand) and y (copy) hints
         if config.expandable && !config.compact_bottom_bar {
             all_hints.push(HintItem {
                 keys: vec![],
-                label: "expand".into(),
+                // LOCAL: i18n — 提示标签查表
+                label: tr("expand").into(),
                 custom_display: Some("e/Shift+e"),
                 description: None,
                 pinned: false,
             });
             all_hints.push(HintItem {
                 keys: vec![],
-                label: "copy".into(),
+                label: tr("copy").into(),
                 custom_display: Some("y"),
                 description: None,
                 pinned: false,

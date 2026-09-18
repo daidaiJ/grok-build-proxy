@@ -20,6 +20,8 @@ use ratatui::widgets::StatefulWidget;
 use super::layout::WrapMode;
 use super::state::ListPaneState;
 use super::{ListItem, ListPaneStyle};
+// LOCAL: i18n — 渲染出口文案查表
+use crate::slash::i18n::tr;
 use crate::render::SafeBuf;
 use crate::render::highlight::paint_match_highlights;
 use crate::render::scrollbar::{maybe_split_for_scrollbar, render_scrollbar_styled};
@@ -112,15 +114,21 @@ impl<T: ListItem> StatefulWidget for ListPane<'_, T> {
         // Render the "Copied!" toast (bottom-right corner, briefly after y-copy)
         // Rendered after the indicators so it can replace the bottom-right indicator instead of overlapping it
         if state.copy_toast_active() && content_area.height > 0 && content_area.width > 8 {
-            let toast_text = " Copied!";
-            let x = content_area.right().saturating_sub(toast_text.len() as u16);
+            // LOCAL: i18n — 提示语查表；定位与铺写按显示列宽计算（译文可能含宽字符），
+            // 并保留每个单元格原有背景（选中高亮）。
+            let toast_text = tr(" Copied!");
+            let toast_w =
+                unicode_width::UnicodeWidthStr::width(toast_text).min(content_area.width as usize)
+                    as u16;
+            let x = content_area.right().saturating_sub(toast_w);
             let y = content_area.bottom().saturating_sub(1);
-            // Write each char, keeping bg (selection highlight) but overriding fg and modifiers so content styles don't leak
-            for (i, ch) in toast_text.chars().enumerate() {
-                let cell = &mut buf[(x + i as u16, y)];
-                cell.set_char(ch);
-                cell.fg = self.style.toast_fg;
-                cell.modifier = ratatui::style::Modifier::BOLD;
+            let toast_style = ratatui::style::Style::default()
+                .fg(self.style.toast_fg)
+                .add_modifier(ratatui::style::Modifier::BOLD);
+            let bgs: Vec<_> = (0..toast_w).map(|i| buf[(x + i, y)].bg).collect();
+            buf.set_string(x, y, toast_text, toast_style);
+            for (i, bg) in bgs.into_iter().enumerate() {
+                buf[(x + i as u16, y)].bg = bg;
             }
         }
 
@@ -517,17 +525,18 @@ fn render_bottom_bar(
 
     if let Some(mode) = state.input_mode() {
         // Active input bar: left-aligned, editable
+        // LOCAL: i18n — 输入前缀查表；宽度按显示列宽计算（成对调整，译文含宽字符时对齐仍正确）
         let label = match mode {
-            super::state::InputBarMode::Search => "search: ",
-            super::state::InputBarMode::Filter => "filter: ",
-            super::state::InputBarMode::GotoLine => "go to: ",
-            super::state::InputBarMode::Comment => "comment: ",
+            super::state::InputBarMode::Search => tr("search: "),
+            super::state::InputBarMode::Filter => tr("filter: "),
+            super::state::InputBarMode::GotoLine => tr("go to: "),
+            super::state::InputBarMode::Comment => tr("comment: "),
         };
         let label_style = Style::default()
             .fg(style.input_bar_prompt_fg)
             .bg(style.input_bar_bg);
         let label_line = Line::from(Span::styled(label, label_style));
-        let label_w = label.len() as u16;
+        let label_w = unicode_width::UnicodeWidthStr::width(label) as u16;
         buf.set_line_safe(area.x, area.y, &label_line, label_w);
 
         // Textarea fills the rest. Multi-line for comment mode.
@@ -542,12 +551,13 @@ fn render_bottom_bar(
         }
     } else if let Some(matcher) = state.matcher() {
         // Accepted matcher: right-aligned, dim
+        // LOCAL: i18n — 模式词复用既有键；右对齐宽度按显示列宽计算（成对调整）
         let mode_word = match matcher.mode {
-            super::state::MatchMode::Filter => "filter",
-            super::state::MatchMode::Search => "search",
+            super::state::MatchMode::Filter => tr("filter"),
+            super::state::MatchMode::Search => tr("search"),
         };
         let status = format!("[{}: {}]  ", mode_word, matcher.query());
-        let status_w = status.len() as u16;
+        let status_w = unicode_width::UnicodeWidthStr::width(status.as_str()) as u16;
         let dim_style = Style::default()
             .fg(style.input_bar_text_fg)
             .bg(style.input_bar_bg)

@@ -6,6 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
 
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 
 /// Welcome-screen workspace selection (in-memory until session start).
@@ -48,11 +49,13 @@ impl WelcomeWorkspaceMode {
     }
 
     /// Compact in-session / status-bar label.
+    /// Render exit is the status bar in `agent_view/render.rs`; the label never feeds
+    /// comparisons, so the translation wraps here (the sole caller paints it verbatim).
     pub fn status_label(self, cli_locked: bool) -> &'static str {
         match (self, cli_locked) {
-            (Self::Sandbox, _) => "Sandbox",
-            (Self::LocalWorkspace, true) => "Local·CLI",
-            (Self::LocalWorkspace, false) => "Local",
+            (Self::Sandbox, _) => tr("Sandbox"),
+            (Self::LocalWorkspace, true) => tr("Local·CLI"),
+            (Self::LocalWorkspace, false) => tr("Local"),
         }
     }
 
@@ -236,9 +239,11 @@ pub fn render_workspace_mode_picker(
         .add_modifier(Modifier::BOLD);
     let locked_style = Style::default().fg(theme.gray);
 
-    buf.set_span(row.x, row.y, &Span::styled("Workspace  ", label_style), 11);
+    let workspace_label = format!("{}  ", tr("Workspace"));
+    let workspace_w = UnicodeWidthStr::width(workspace_label.as_str()) as u16;
+    buf.set_span(row.x, row.y, &Span::styled(workspace_label, label_style), workspace_w);
 
-    let mut x = row.x.saturating_add(11);
+    let mut x = row.x.saturating_add(workspace_w);
     let mut options = [None; 2];
 
     let modes: &[WelcomeWorkspaceMode] = if startup_locked {
@@ -256,9 +261,9 @@ pub fn render_workspace_mode_picker(
             break;
         }
         let text = if *mode == selected {
-            format!(" • {} ", mode.label())
+            format!(" • {} ", tr(mode.label()))
         } else {
-            format!(" {} ", mode.label())
+            format!(" {} ", tr(mode.label()))
         };
         let w = UnicodeWidthStr::width(text.as_str()) as u16;
         if x + w > row.x + row.width {
@@ -293,11 +298,11 @@ pub fn render_workspace_mode_picker(
     }
 
     let trailing = if ack_pending {
-        "  confirm local workspace? y/N"
+        format!("  {}", tr("confirm local workspace? y/N"))
     } else if startup_locked {
-        "  locked by CLI"
+        format!("  {}", tr("locked by CLI"))
     } else {
-        "  ctrl+e"
+        "  ctrl+e".to_string()
     };
     let trailing_style = if ack_pending {
         Style::default()
@@ -308,22 +313,25 @@ pub fn render_workspace_mode_picker(
     } else {
         key_style
     };
-    if !trailing.is_empty() && x + trailing.len() as u16 <= row.x + row.width {
+    // Right-align by display columns, not bytes: the translated trailing text can be wider in bytes than on screen.
+    let trailing_w = UnicodeWidthStr::width(trailing.as_str()) as u16;
+    if !trailing.is_empty() && x + trailing_w <= row.x + row.width {
         buf.set_span(
-            row.x + row.width - trailing.len() as u16,
+            row.x + row.width - trailing_w,
             row.y,
             &Span::styled(trailing, trailing_style),
-            trailing.len() as u16,
+            trailing_w,
         );
     } else if ack_pending && row.width > 20 {
         // Narrow terminals: paint confirm over the right side so it stays visible.
-        let short = "  y/N confirm local";
-        let start = row.x + row.width.saturating_sub(short.len() as u16);
+        let short = format!("  {}", tr("y/N confirm local"));
+        let short_w = UnicodeWidthStr::width(short.as_str()) as u16;
+        let start = row.x + row.width.saturating_sub(short_w);
         buf.set_span(
             start,
             row.y,
             &Span::styled(short, trailing_style),
-            short.len() as u16,
+            short_w,
         );
     }
 

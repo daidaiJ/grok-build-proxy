@@ -629,3 +629,110 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - tests 断言的 state 值全部保持英文（测试构建查表整体旁路），tests 模块与
   *_tests.rs 零改动；查重脚本（translations() 全表解析断言无重复键无同键异译）
   重放时从本文件十期条目描述重建（Python，Rust \u{...} 转义需自行解码）
+
+## 十二期补丁（2026-09-18：界面文案中文化 P4 低感知扫尾，i18n 计划全部完工）
+
+> 方案见 `docs-local/ui-i18n-plan.md`（P4 = 低感知扫尾，约 20 个小文件）。
+> 翻译表 1338 → 1417 组（+79）；施工规约与术语表以方案文档为准。
+> 施工方式：3 个并发子代理分批接线（面板浮层 / 弹窗 dock 状态条 / 列表命令层），
+> 主会话合并键值 + 补 rewind.rs 两处清单外漏网。
+
+### xai-grok-pager（P4：jump/queue/todo/subagent_catalog/btw/location/session_title/
+### new_worktree/managed_connectors_wait/hero_box/workspace_mode/dock/credit_bar/
+### list_pane/block_viewer/picker/theme/debug/mode_support + rewind 补漏）
+
+- `src/slash/i18n.rs`：翻译表追加 P4 段 79 组，分节与文件一一对应（jump/rewind、
+  queue/todo/subagent_catalog、btw/location/session_title、new_worktree/
+  managed_connectors、hero/workspace_mode、dock、credit_bar、list_pane、
+  block_viewer/picker、theme/debug、mode_support 拒绝模板）
+- `src/views/jump.rs`：浮层标题 "Jump to which turn?"、"(no preview)" 兜底 tr
+- `src/views/rewind.rs`（清单外补漏，与 jump 共用键）：标题 "Rewind to which
+  turn?"、"Loading rewind points..."、"(no preview)" 三处 tr
+- `src/views/queue_pane.rs`：多行后缀 " (+1 line)"/" (+{n} lines)" 整键（宽度按
+  实际译文动态算，无对齐破坏）
+- `src/views/todo_pane.rs`：空态/完成态 4 条（含 {c}/{d} 计数模板整键 + replace）
+- `src/views/subagent_catalog_pane.rs`：分组头 tr_str(owned_name)（构造期英文、
+  显示出口翻译，search_text 过滤键不动）、空态；"Roles" 新键，Personas/Agents
+  复用既有键
+- `src/views/btw_overlay.rs`：Loading 态 "Answering…"（键含 U+2026）
+- `src/views/location.rs`：detached→分离头指针、" (worktree of {repo})" 前导空格
+  整键（测试构建英文输出逐字节不变）
+- `src/views/session_title.rs`：合成回退标题 "session {id}"、"loading..."、相对
+  时间 "now"/"{secs}s ago"（{mins}m/{hours}h/{days}d ago 复用既有键只接线）
+- `src/views/new_worktree_dialog.rs`：标题/Esc 提示/字段前缀（尾随空格在键内）/
+  " = create   "/" = cancel"，宽度计算与渲染同源（tr(LABEL_PREFIX).width()）
+- `src/views/managed_connectors_wait.rs`：[copied]/[copy the url] 按钮（命中矩形
+  由实际绘制串宽度推导）+ 两行说明
+- `src/views/welcome/hero_box.rs`：HERO_SUBTITLE 整段一键（译文 57 列短于原文
+  74 列不撑爆右栏）；Changelog 复用既有键
+- `src/views/welcome/workspace_mode.rs`：status_label() 三分支 tr（唯一生产出口
+  是状态条绘制，无比较消费）；"Workspace  " 前进量由硬编码 11 改显示宽度（英文
+  等值）；选项 label() 在渲染处 tr（方法本身进日志/测试不动）；trailing 右对齐
+  由字节 len 改显示宽度（中文按 3 字节会错位的必要伴随修正）
+- `src/views/dock/mod.rs`：分组表头 tr(section.label())、"show {n} more" 整键、
+  tab_hint() 与 kill_label()（[stop]）在方法内包 tr（命中矩形由绘制串宽度推导）；
+  小写 subagents/tasks/watchers/queued 分键；layout.rs 无文案零改动
+- `src/views/context_bar.rs`：**零改动**——"MAX %" 有 PCT_WIDTH=5 固定宽度契约
+  （hover 进度条宽度由它反推 + 测试断言 len==5），无等宽中文等价物，豁免
+- `src/views/credit_bar.rs`：usage_label() 出口 tr、标签冒号前缀全部重构为
+  "{}: {}"（英文逐字节不变）、PAYG 双插值模板 ${used}/${cap} 整键、
+  tr_str(&format!("{label} left")) 动态键三态。事实结论：credit_bar_line 系列
+  生产无调用点（状态条不渲染它，真正在用的是 usage_warning/format_usage_summary），
+  键入表备用
+- `src/views/list_pane/render.rs`：" Copied!" toast（铺写改 set_string + 逐格还原
+  bg，宽字符不错位；位置 min() 防越界）、输入条 4 前缀、matcher 模式词复用既有键；
+  3 处宽度由 len 改 UnicodeWidthStr::width
+- `src/views/block_viewer/mod.rs`：shortcuts_hints 12 处 hint 标签纯接线（键均在
+  表）、"limit: "、result 计数两条（单复数拆键）、"Sources ({})"
+- `src/views/picker.rs`：SEARCH_BAR_LABEL 四处出口 tr（布局宽度改显示列宽）、
+  " / to search"、"Loading…"、"No matches"；picker_shortcuts 等 hint 纯接线；
+  注意 picker_shortcuts 是 LazyLock——译文首次调用固化，语言随启动固定故无影响
+- `src/slash/commands/theme.rs`：suggest_args 的 "auto (follow system)" 与
+  " (active)" 后缀 tr（description/usage 由 slash_meta! 宏统一包 tr 无需重复）
+- `src/slash/commands/debug.rs`：suggest_args 出口 tr_str；两条新键，第三条
+  scroll-diagnostics 已在表纯接线
+- `src/slash/mode_support.rs`：refusal() 三个模板整键 + {why}/{instead} 插值处
+  tr；6 条 why（定义分散在 jump/dashboard/theme/find/timeline/tutorial 各命令
+  文件）与 1 条 instead 在消费点统一查表，各定义文件零改动
+
+### 仲裁与取舍（P4）
+
+- `[cancel]`/`[Send now]`/`[edit]`（queue_pane 按钮组）不译：宽度按 ASCII
+  `label.len()` 预算，三按钮 flush 链与窄面板丢按钮顺序被测试按 ASCII 宽断言
+- `worktree ` 徽标（location.rs）不译：状态栏孪生实现（agent_view/render.rs）
+  按 `"worktree ".width()` 预算路径热区偏移，两侧必须同进退
+- `[Esc]`（btw_overlay）不译：键名徽标，参与右对齐宽度预留/命中矩形
+- 近重复键并存：`"New Worktree"`（本文件原文大写）与既有 `"New worktree"` 分键
+  （原文不可改）；`" search: "`（picker 布局 pad）与 `"search: "`（list_pane
+  输入条）分键；`"queued"` 小写与 P3 `"Queued"` 分键
+- 宽度语义伴随修正（英文逐值不变，中文才生效）：list_pane toast/输入条/status、
+  picker 搜索条、workspace_mode trailing/Workspace 前进量共 6+ 处 byte len →
+  UnicodeWidthStr::width，属"译文保宽"铁律的成对调整
+- 模式名 minimal/fullscreen（refusal 模板 {current} 运行时值）未译：模式/命令
+  标识符，与既有表正文用极简/全屏、命令名保留原文的译法并存
+- screen_mode_switch.rs 零改动：计划所记"漏译一条"前提不成立（两键均在表且已包
+  tr）；expand.rs 零改动：UseInstead 提示在 mode_support 消费点统一查表
+- credit_bar 结论性豁免记录：状态条渲染路径当前未接（死代码），键入表备用，
+  未来接线即生效
+
+### 已知 Windows 环境族测试失败（与 P4 无关，A/B 定责留档）
+
+P4 后跑 `cargo test --lib views::` 为 2766 通过 / 2 失败；两失败在 main 基线
+（0878bc8d，P4 之前）同样失败，且 git -S 考古确认缺陷逻辑均来自上游提交
+（c68e39f6 首发 / a5589e95 同步），LOCAL 各期未触碰：
+
+- `views::extensions_modal::tests::handle_key_tab_completes_single_field_path`：
+  `tab_complete_path()`（extensions_modal.rs ~1620）父目录回拼只认 `/`
+  （`expanded.contains('/')` → `rsplit_once('/')`），Windows 路径是 `\` 分隔，
+  parent_str 得空串 → Tab 补全只剩基名。上游 Linux CI 不撞的 Windows 真缺陷
+  （同步文件，修复须登记重放），另行立项
+- `views::btw_overlay::tests::done_state_scans_file_paths_like_scrollback`：
+  测试用 POSIX 路径 `/Users/...`，扫描与解析链路（osc8.rs pass 2 →
+  resolve_tool_path_target）全通，最后 `file_path_to_url` 的
+  `Url::from_file_path` 在 Windows 拒绝无盘符路径 → 无 osc8_url。POSIX 语义
+  假设的平台差异，非产品缺陷（Windows 真实路径带盘符，走 Prefix 分支正常）
+
+## 十二期后：i18n 分级施工计划（P0–P4）全部完工
+
+后续新增 UI 文案随写随补键即可；doctor 诊断与 tips 面板、markdown 正文仍是
+范围外（见方案文档"砍掉/决策项"）。

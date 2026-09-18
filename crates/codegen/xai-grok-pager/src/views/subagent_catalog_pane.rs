@@ -15,6 +15,7 @@ use ratatui::widgets::StatefulWidget;
 use crate::app::bundle::BundleState;
 use crate::appearance::LayoutConfig;
 use crate::scrollback::layout::HorizontalLayout;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 
 use super::list_pane::{
@@ -139,9 +140,11 @@ impl SubagentCatalogPane {
             let mut hasher = DefaultHasher::new();
             name.hash(&mut hasher);
             let owned_name = name.to_string();
+            // Display copy goes through tr_str (header labels show translated); `label`/`search_text`
+            // stays English so pane filtering keeps matching the canonical group names.
             self.entries.push(CatalogEntry {
                 id: hasher.finish(),
-                styled: Line::from(Span::styled(owned_name.clone(), header_style)),
+                styled: Line::from(Span::styled(tr_str(&owned_name), header_style)),
                 label: owned_name,
                 is_header: true,
                 kind: None,
@@ -267,7 +270,7 @@ impl SubagentCatalogPane {
             if inner.height > 0 && inner.width > 0 {
                 let theme = Theme::current();
                 let span =
-                    Span::styled("No bundled items.", Style::default().fg(theme.gray_bright));
+                    Span::styled(tr("No bundled items."), Style::default().fg(theme.gray_bright));
                 buf.set_span(inner.x, inner.y, &span, inner.width);
             }
             return;

@@ -7,6 +7,7 @@ use ratatui::style::Style;
 use ratatui::text::Span;
 
 use crate::git_info;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 
 /// The `worktree ` marker painted before the path of a linked worktree, matching the session status bar (accent_user).
@@ -36,7 +37,7 @@ fn location_parts_from(cwd: &Path, info: Option<git_info::CwdGitInfo>) -> Locati
     let is_worktree = info.as_ref().is_some_and(|i| i.is_worktree);
     let branch = info.and_then(|i| i.branch).map(|b| {
         if b.is_empty() {
-            "detached".to_owned()
+            tr("detached").to_owned()
         } else {
             b
         }
@@ -58,9 +59,12 @@ fn format_cwd_display(cwd: &Path, info: Option<&git_info::CwdGitInfo>) -> String
 }
 
 /// Pure formatting for the cwd display; no global state.
+/// The `(worktree of …)` suffix goes through tr_str (display-only; the dashboard text filter
+/// matches `compact_cwd` output, not this string).
 fn format_cwd_parts(display: &str, main_repo: Option<&str>) -> String {
     if let Some(main_repo) = main_repo {
-        format!("{display} (worktree of {main_repo})")
+        let suffix = tr_str(" (worktree of {repo})").replace("{repo}", main_repo);
+        format!("{display}{suffix}")
     } else {
         display.to_string()
     }

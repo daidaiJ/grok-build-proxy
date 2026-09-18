@@ -40,15 +40,28 @@ impl ModeSupport {
             Self::FullscreenOnly(remedy) => (remedy, "minimal", "/fullscreen"),
             Self::MinimalOnly(remedy) => (remedy, "fullscreen", "/minimal"),
         };
+        // LOCAL: i18n — 拒绝文案模板整键成键（具名占位符，运行时插值保留）；
+        // why/instead 是各命令定义的 &'static str 说明（用户可见），在消费点统一查表，
+        // 因此各命令文件内的英文原文无需改动。
+        use crate::slash::i18n::tr;
         Some(match remedy {
-            Remedy::SwitchMode { why } => format!(
+            Remedy::SwitchMode { why } => tr(
                 "/{token} isn't available in {current} mode ({why}). \
-                 Run {switch} to switch this session."
-            ),
+                 Run {switch} to switch this session.",
+            )
+            .replace("{token}", token)
+            .replace("{current}", current)
+            .replace("{why}", tr(why))
+            .replace("{switch}", switch),
             Remedy::UseInstead(instead) => {
-                format!("/{token} isn't available in {current} mode: {instead}.")
+                tr("/{token} isn't available in {current} mode: {instead}.")
+                    .replace("{token}", token)
+                    .replace("{current}", current)
+                    .replace("{instead}", tr(instead))
             }
-            Remedy::AlreadyInMode => format!("You're already in {current} mode."),
+            Remedy::AlreadyInMode => {
+                tr("You're already in {current} mode.").replace("{current}", current)
+            }
         })
     }
 }
