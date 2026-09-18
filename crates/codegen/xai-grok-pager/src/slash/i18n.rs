@@ -351,6 +351,11 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Compress conversation history to save context window",
             "压缩对话历史以节省上下文窗口",
         ),
+        // LOCAL(minimal-style)
+        (
+            "Toggle minimal output style overlay (applies to this session only if set before the first model call; afterwards it takes effect from the next session)",
+            "切换极简输出风格覆盖层（首次模型调用前切换对本会话生效；之后切换从下一次会话启动起生效）",
+        ),
         ("Flush conversation memory to disk now", "立即把会话记忆写入磁盘"),
         (
             "Run memory consolidation (merge session logs into organized topics)",

@@ -13,6 +13,8 @@ pub mod init;
 pub mod model_providers;
 pub mod mvp_agent;
 pub(crate) mod otel_gate;
+// LOCAL(minimal-style)
+pub(crate) mod output_style;
 pub(crate) mod proxy;
 pub mod relay;
 pub mod remote_config;

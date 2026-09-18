@@ -1290,7 +1290,14 @@ pub(crate) async fn spawn_session_actor(
     drop(tool_setup_span);
     crate::waterfall::mark(&wf_sid, crate::waterfall::stage::SB_AGENT_BUILT);
     let prefix_build_span = tracing::info_span!("spawn.prefix_build").entered();
-    let system_prompt = agent.system_prompt().to_string();
+    // LOCAL(minimal-style): apply the persisted output-style overlay at session
+    // bootstrap. Primary and subagent spawns share this path, so every agent
+    // picks the style up; `apply_minimal_style` is idempotent.
+    let output_style_applied = crate::agent::output_style::minimal_style_enabled();
+    let system_prompt = xai_grok_agent::prompt::template::apply_minimal_style(
+        agent.system_prompt(),
+        output_style_applied,
+    );
     let mut prompt_context = agent.prompt_context().clone();
     prompt_context.normalize_for_persistence();
     save_prompt_context(&session_info, &prompt_context);
@@ -1857,6 +1864,10 @@ pub(crate) async fn spawn_session_actor(
         status_line_enabled: client_caps.status_line.clone(),
         last_turn_api_duration_ms: std::sync::atomic::AtomicU64::new(0),
         session_transient_retries: std::sync::atomic::AtomicU64::new(0),
+        // LOCAL(minimal-style): seeded from the same persisted read that styled
+        // the bootstrap prompt above.
+        output_style_applied: std::sync::atomic::AtomicBool::new(output_style_applied),
+        first_model_call_done: std::sync::atomic::AtomicBool::new(false),
         models_manager,
         display_cwd: {
             let lock = std::sync::OnceLock::new();

@@ -774,6 +774,94 @@ agent_ops.rs `resolve_agent_definition`）中 ACP agentProfile（第 2 步）优
 - 已知边界：配置 agent 后 plan 模式不再自动带 plan 工具集（enter/exit_plan_mode
   随 plan 定义走）——需要 plan 工作流时显式 `grok2 --agent grok-build-plan`
 
+## 十五期补丁（2026-09-18：极简风格与 agent 变体解耦，`/style` 正交覆盖层）
+
+> 背景：十三期的极简模式把风格规则绑死在 `grok-build-concise` 变体里（换载体=换工具
+> 集+丢 AGENTS.md/MCP/子代理），用户要的是"风格约束叠加到任何 agent"。
+> 本期把两者正交化：风格 = 可持久化开关的覆盖层；concise 变体回归上游本义
+> （瘦工具集 + COMPACT_SYSTEM_PROMPT + agents_md:false，不再内嵌规则）。
+
+### 语义（用户定义）
+
+- `/style`（无参数）= 在开/关间切换；`/style minimal` 强制开；`/style default`
+  强制关
+- 切换**持久化**（`<grok_home>/output_style.json`，容错解析：缺文件/损坏=关）
+- 每次 session spawn（主会话与子代理同一条路径）读一次持久化状态，把规则叠加到
+  系统提示 → 下一次会话启动必然生效
+- **首次模型调用前**切换：同时改写当前会话的 System 头（`replace_system_head`）
+  并更新 actor 上的 live 标志 → 本会话立即生效
+- 首次模型调用后切换：只持久化，**当前会话提示词不动**（不改写已建立的会话历史，
+  无缓存抖动）；live 标志不再翻转
+- 判定闸门 = actor 的 `first_model_call_done`（sampler_turn 的
+  `record_response_token_usage` 与 `log_terminal_failure` 两个收口置位——成功与
+  终态失败都算"发生过模型请求"）
+- agent/model 切换重建提示词时按 live 标志重放覆盖层（幂等 strip+append），风格
+  跨载体切换保持
+
+### 改动（按 crate）
+
+- `xai-grok-agent/src/prompt/template.rs`：`LOCAL_CONCISE_RULES` 更名
+  `LOCAL_MINIMAL_STYLE_RULES`；新 `apply_minimal_style(base, enabled)`（按
+  `# Output style: minimal` 头截断剥离 + 尾部追加，双向幂等）+ 单测
+- `xai-grok-agent/src/config.rs`：`grok_build_concise()` 的 system_prompt 回归
+  纯 `COMPACT_SYSTEM_PROMPT`（规则注入移除）
+- `xai-grok-shell/src/agent/output_style.rs`（新）：持久化读/写
+  `<grok_home>/output_style.json`（`grok_home()` 同款路径；容错解析）+ 单测
+- `xai-grok-shell/src/session/acp_session.rs`：SessionActor 新增
+  `output_style_applied: AtomicBool`（live 标志）与 `first_model_call_done:
+  AtomicBool`
+- `xai-grok-shell/src/session/acp_session_impl/spawn.rs`：bootstrap 处
+  `apply_minimal_style(agent.system_prompt(), 持久化状态)`（主/子代理共享路径，
+  全 agent 覆盖）；actor 初始化两个字段
+- `xai-grok-shell/src/session/acp_session_impl/sampler_turn.rs`：两个收口点置位
+  `first_model_call_done`
+- `xai-grok-shell/src/session/acp_session_impl/model_switch.rs`：
+  `handle_set_session_model` 的 concise 特例分支删除（`use_concise` 参数退化为
+  `_use_concise`），改写统一走 `apply_minimal_style(agent.system_prompt(),
+  output_style_applied)`；`handle_rebuild_agent_for_definition` 重建提示词同样
+  按 live 标志重放
+- `xai-grok-shell/src/session/slash_commands.rs`：`BuiltinCommand "style"` 注册
+  （`BuiltinGate::AlwaysOn` 自动进保留名单）+ `BuiltinAction::SetMinimalStyle
+  { enabled: Option<bool> }`（None=切换）+ `command_name`/`args_provided` 臂
+- `xai-grok-shell/src/session/acp_session_impl/slash_exec.rs`：执行器（持久化 +
+  首次调用前 `replace_system_head` 重写 + 翻转 live 标志；失败仅告警不回滚）
+- `xai-grok-pager/src/slash/i18n.rs`：命令描述中文键 1 组（描述经
+  acp_command 的 tr_str 通道自动翻译；argument_hint 与 always-approve 的
+  "on|off" 同例不译）
+
+### 决策记录 / 重放注意
+
+- 覆盖层是**替换式**（strip 头截断 + append）：若自定义 agent 提示词正文恰好含
+  `# Output style: minimal` 头会被截断——自定义提示词避免使用该头
+- 持久化是进程外文件而非 config.toml：避免程序化改写用户手编配置；与
+  announcements.json 同款小状态文件模式
+- 压缩不重建系统头（`COMPACT_SYSTEM_PROMPT` 仅 concise 定义与
+  `compact_system_prompt()` 访问器用，后者无生产调用方）——压缩后风格保持，无需
+  额外接点
+- 十三期的"concise = compact 基座 + 规则节"语义由本期取代：两者现在可独立组合
+  （concise 载体 + `/style` 开 = 等价旧行为；默认载体 + `/style` 开 = 全工具集
+  极简风格，MCP/子代理/AGENTS.md 不受影响）
+- 测试PROFILE 注意：xai-grok-shell 测试 profile 有上游自带编译错误（见"已知
+  问题"），本期 shell 侧验证以 `cargo check` 为准，单测覆盖放在
+  xai-grok-agent（apply_minimal_style）与 output_style.rs 模块内
+
+### agent crate 测试基线归因（A/B 静态证明，与本期无关）
+
+`cargo test -p xai-grok-agent --lib` 10 失败，全部与本期 diff 零文件交集（diff
+仅触及 template.rs/config.rs + shell/pager 10 文件，失败测试的输入在分支与
+main 逐字节相同，属 main 既有 Windows 环境族）：
+
+- `prompt::template::test_encrypted_templates_not_stale`：`.gitattributes` 对
+  `templates/` 无 LF 规则，Windows CRLF checkout 使 include_bytes! 读到 CRLF，
+  与 LF 生成的加密常量不匹配（上游 `Synced from monorepo` 自带）
+- plugins::local_refresh / install_registry 7 例：symlink / 文件锁 / 临时路径
+  家族
+- prompt::skills 2 例：目录扫描家族
+
+本期触及面全部通过：`minimal_style_overlay_appends_strips_and_is_idempotent`、
+`test_mid_session_switch_concise_to_full`、template 组 31/32（唯一失败即上述
+既有项）。
+
 ## 十四期补丁（2026-09-18：国模适配——think 标记泄漏 + ChatCompletions 网关 quirk）
 
 > 背景：DeepSeek V4 Flash 经 OpenAI 兼容端点接入时，`</think>` 结束标记被当作正文

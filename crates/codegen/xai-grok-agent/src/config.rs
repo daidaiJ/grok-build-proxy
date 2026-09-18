@@ -1433,14 +1433,12 @@ impl AgentDefinition {
         Self {
             tool_config: grok_build_concise_toolset(),
             agents_md: false,
-            // LOCAL: minimal-mode primary agent — the lean compact base plus the
-            // merged concise output-style rules, so startup and the mid-session
-            // concise switch (model_switch.rs) produce the same prompt.
-            system_prompt: TemplateOverride::Custom(format!(
-                "{}\n\n{}",
-                crate::prompt::template::COMPACT_SYSTEM_PROMPT,
-                crate::prompt::template::LOCAL_CONCISE_RULES,
-            )),
+            // LOCAL(minimal-style): the minimal style rules were decoupled from
+            // this variant (period 15) — the lean compact base alone; style is
+            // an orthogonal overlay applied by the shell (`/style` toggle).
+            system_prompt: TemplateOverride::Custom(
+                crate::prompt::template::COMPACT_SYSTEM_PROMPT.to_owned(),
+            ),
             ..Self::base(
                 BuiltinAgentName::GrokBuildConcise,
                 "Grok Build agent with concise output format.",
