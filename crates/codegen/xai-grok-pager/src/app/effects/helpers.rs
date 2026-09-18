@@ -325,8 +325,22 @@ pub(crate) struct SessionFlags {
     /// Startup resume target deferred to the worktree handler after missing local id/title resolution.
     /// Worktree failure messages append the no-match hint only when the failing target equals this value.
     pub resume_local_miss: Option<String>,
+    /// LOCAL: 配置里显式设置了 `[agent] name` 时，不再按 plan/ask-user 旗标默认合成
+    /// agentProfile。合成的 profile 在 shell 解析链里优先级高于 `[agent] name`，
+    /// 默认开启的旗标会静默覆盖用户配置的默认 agent；显式选择（`--agent` /
+    /// `GROK_AGENT`）不受本开关影响，仍照常注入。
+    pub respect_config_agent: bool,
 }
 impl SessionFlags {
+    /// LOCAL: 生效配置里显式设置的 `[agent] name`（用户指定的默认 agent）。
+    /// 每次建会话读一次配置（用户手动触发，非热路径），换取「配置不被默认旗标静默覆盖」。
+    pub(crate) fn config_default_agent_name() -> Option<String> {
+        xai_grok_shell::config::load_effective_config()
+            .ok()
+            .and_then(|root| xai_grok_shell::agent::config::Config::new_from_toml_cfg(&root).ok())
+            .and_then(|cfg| cfg.agent.name)
+            .filter(|s| !s.trim().is_empty())
+    }
     /// Resolve the agent profile name from the flags.
     /// Returns `None` for the default `grok-build` profile (no `_meta` needed; it already includes TaskTool).
     /// Chat mode never injects a Build profile (remote owns agent behavior).
@@ -356,8 +370,13 @@ impl SessionFlags {
             }
         } else if let Some(ref profile) = self.agent_override {
             meta.insert("agentProfile".into(), profile.clone());
-        } else if std::env::var("GROK_AGENT").ok().is_some_and(|s| !s.trim().is_empty())
-        {} else if let Some(profile) = self.agent_profile() {
+        } else if std::env::var("GROK_AGENT").ok().is_some_and(|s| !s.trim().is_empty()) {
+            // GROK_AGENT set: the shell resolves it; no synthesized profile here.
+        }
+        // LOCAL: respect_config_agent — 配置已显式选择默认 agent 时不合成 plan/ask-user profile
+        else if !self.respect_config_agent
+            && let Some(profile) = self.agent_profile()
+        {
             meta.insert("agentProfile".into(), serde_json::json!(profile));
         }
         if self.chat_mode {
