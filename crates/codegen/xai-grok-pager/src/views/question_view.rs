@@ -1507,7 +1507,7 @@ fn build_freeform_line(
         // Empty: show placeholder
         (
             tr("Type your answer here").to_string(),
-            Style::default().fg(theme.gray).bg(row_bg),
+            Style::default().fg(fg(theme.gray)).bg(row_bg),
         )
     };
 
