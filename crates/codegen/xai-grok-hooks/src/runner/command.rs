@@ -27,9 +27,12 @@ use crate::result::StopHookOutcome;
 use super::{
     GateHookJson, GateKind, GateOutcome, HookHealth, HookRunnerResult, PostToolUseHookJson,
     PostToolUseParse, PromptHookJson, RunContext, StopHookJson, extract_system_message,
-    gate_outcome, gate_outcome_for_gate, post_tool_use_json_to_outcome,
+    gate_outcome_for_gate, post_tool_use_json_to_outcome,
     prompt_json_to_block, stop_json_to_outcome,
 };
+// Legacy test-surface wrapper (see `runner::gate_outcome`): only the pre-ModelCall tests use it.
+#[cfg(test)]
+use super::gate_outcome;
 
 const CAPTURE_HEADROOM_OVER_REPLACEMENT: usize = 16;
 pub(crate) const MAX_OUTPUT_BYTES: usize =
@@ -2016,6 +2019,9 @@ mod tests {
         }
     }
 
+    // Only the unix-gated process-group tests construct a scoped ctx; windows builds would
+    // otherwise see this helper as dead code.
+    #[cfg(unix)]
     fn make_scoped_ctx(scope: xai_grok_tools::util::ProcessScope) -> RunContext<'static> {
         RunContext {
             process_scope: Some(scope),

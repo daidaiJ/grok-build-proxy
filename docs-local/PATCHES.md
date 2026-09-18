@@ -445,3 +445,23 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - 遗留（后续批次处理）：session_picker 展开卡字段标签 ID/CWD/Created/… 因 picker.rs
   用 `{:<12}` 字符补齐 + `.len()` 布局暂不译，需先把该处改 unicode_width；命令面板
   渲染出口 app/modals.rs、peek.rs "Other" 行标签在 P3
+
+## 八期补丁（2026-09-18：release 构建告警清理）
+
+> v1.0.31 win/linux release 构建日志中的 rustc 告警清零，无行为变更；上游同步冲掉后按本条重放。
+
+### xai-grok-shared
+- `src/clipboard.rs` `get_text`/`get_image`：`arboard_error` 由"先初始化 None 再 match 赋值"
+  改为按 match 臂直接产出不可变绑定（Windows 下 Ok(None) 提前返回导致初始化值永不被读，
+  `unused_assignments` 告警 ×2）；错误在尾部的 `if let Some(error)` 统一上抛，语义不变
+
+### xai-grok-pager-render
+- `src/terminal/probe.rs`：`use std::time::Duration` 加 `#[cfg(unix)]`（仅 unix 门控的
+  `LATE_REPLY_GRACE`/`read_tty_reply` 使用，Windows 侧 unused import）
+
+### xai-grok-hooks
+- `src/runner/mod.rs`：`gate_outcome`（文档注明 legacy test surface）加 `#[cfg(test)]`，
+  release 构建不再编译（unused fn 告警）
+- `src/runner/command.rs`：`gate_outcome` 导入拆分为 `#[cfg(test)] use super::gate_outcome;`
+- `src/runner/command.rs` 测试模块：`make_scoped_ctx` 加 `#[cfg(unix)]`（仅 unix 门控的
+  进程组测试使用；Windows 测试构建 dead_code 告警，构建日志不显示但 `--all-targets` 可见）

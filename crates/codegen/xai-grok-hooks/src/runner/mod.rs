@@ -283,6 +283,7 @@ impl HookHealth {
 }
 
 /// Tool-gate semantics: legacy entry point kept for the pre-ModelCall test surface.
+#[cfg(test)]
 pub(crate) fn gate_outcome(
     json: GateHookJson,
     hook_name: &str,

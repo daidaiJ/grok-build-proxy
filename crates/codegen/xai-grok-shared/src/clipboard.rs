@@ -1724,18 +1724,19 @@ mod platform {
     // -- Public API ----------------------------------------------------------
 
     pub fn get_text() -> anyhow::Result<Option<String>> {
-        let mut arboard_error = None;
-        match arboard_get_text() {
+        // Bound per match arm: a pre-initialized `mut` binding holds a never-read `None` on
+        // non-Linux builds (every other path returns early) and trips unused_assignments.
+        let arboard_error = match arboard_get_text() {
             Ok(Some(text)) => return Ok(Some(text)),
             // Wayland-only: arboard's empty answer is not authoritative, fall through to wl-paste (see `wayland_tool_selected`)
             #[cfg(target_os = "linux")]
-            Ok(None) if wayland_tool_selected(linux_tool_spec()) => {}
+            Ok(None) if wayland_tool_selected(linux_tool_spec()) => None,
             Ok(None) => return Ok(None),
             Err(e) => {
                 tracing::debug!("arboard get_text failed: {e}");
-                arboard_error = Some(e);
+                Some(e)
             }
-        }
+        };
         #[cfg(target_os = "linux")]
         if let Some(spec) = linux_tool_spec() {
             // Not checked: `wl-paste -t text` exits non-zero on image-only boards.
@@ -1826,18 +1827,18 @@ mod platform {
     }
 
     pub fn get_image() -> anyhow::Result<Option<ImageData>> {
-        let mut arboard_error = None;
-        match arboard_get_image() {
+        // Same per-arm binding as `get_text`: avoids a never-read `None` init on non-Linux.
+        let arboard_error = match arboard_get_image() {
             Ok(Some(image)) => return Ok(Some(image)),
             // Wayland-only: arboard's empty answer is not authoritative, fall through to wl-paste (see `wayland_tool_selected`)
             #[cfg(target_os = "linux")]
-            Ok(None) if wayland_tool_selected(linux_tool_spec()) => {}
+            Ok(None) if wayland_tool_selected(linux_tool_spec()) => None,
             Ok(None) => return Ok(None),
             Err(e) => {
                 tracing::debug!("arboard get_image failed: {e}");
-                arboard_error = Some(e);
+                Some(e)
             }
-        }
+        };
         #[cfg(target_os = "linux")]
         if let Some(spec) = linux_tool_spec()
             && let Some(argv) = spec.read_png
