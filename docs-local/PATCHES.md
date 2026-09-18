@@ -715,6 +715,23 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - credit_bar 结论性豁免记录：状态条渲染路径当前未接（死代码），键入表备用，
   未来接线即生效
 
+### 已知 Windows 环境族测试失败（与 P4 无关，A/B 定责留档）
+
+P4 后跑 `cargo test --lib views::` 为 2766 通过 / 2 失败；两失败在 main 基线
+（0878bc8d，P4 之前）同样失败，且 git -S 考古确认缺陷逻辑均来自上游提交
+（c68e39f6 首发 / a5589e95 同步），LOCAL 各期未触碰：
+
+- `views::extensions_modal::tests::handle_key_tab_completes_single_field_path`：
+  `tab_complete_path()`（extensions_modal.rs ~1620）父目录回拼只认 `/`
+  （`expanded.contains('/')` → `rsplit_once('/')`），Windows 路径是 `\` 分隔，
+  parent_str 得空串 → Tab 补全只剩基名。上游 Linux CI 不撞的 Windows 真缺陷
+  （同步文件，修复须登记重放），另行立项
+- `views::btw_overlay::tests::done_state_scans_file_paths_like_scrollback`：
+  测试用 POSIX 路径 `/Users/...`，扫描与解析链路（osc8.rs pass 2 →
+  resolve_tool_path_target）全通，最后 `file_path_to_url` 的
+  `Url::from_file_path` 在 Windows 拒绝无盘符路径 → 无 osc8_url。POSIX 语义
+  假设的平台差异，非产品缺陷（Windows 真实路径带盘符，走 Prefix 分支正常）
+
 ## 十二期后：i18n 分级施工计划（P0–P4）全部完工
 
 后续新增 UI 文案随写随补键即可；doctor 诊断与 tips 面板、markdown 正文仍是
