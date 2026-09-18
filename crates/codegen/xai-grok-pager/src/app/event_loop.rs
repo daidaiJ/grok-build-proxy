@@ -4447,6 +4447,10 @@ pub(crate) fn session_flags_for_effects(
         ask_user: app.ask_user,
         restore_code: take_load_restore_code(app, effs),
         agent_override: app.agent_override.clone(),
+        // LOCAL: 配置里显式设置 `[agent] name` 且本次启动未用 --agent 覆盖时，
+        // 不默认合成 plan/ask-user agentProfile（其解析优先级高于 [agent] name）
+        respect_config_agent: app.agent_override.is_none()
+            && effects::SessionFlags::config_default_agent_name().is_some(),
         yolo_mode: app.default_yolo,
         auto_mode: super::dispatch::effective_auto(
             app.default_yolo,

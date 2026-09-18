@@ -736,3 +736,40 @@ P4 后跑 `cargo test --lib views::` 为 2766 通过 / 2 失败；两失败在 m
 
 后续新增 UI 文案随写随补键即可；doctor 诊断与 tips 面板、markdown 正文仍是
 范围外（见方案文档"砍掉/决策项"）。
+
+## 十三期补丁（2026-09-18：会话默认 agent 尊重 `[agent] name` 配置）
+
+### 问题
+
+上游默认 `plan_mode`/`ask_user`/`subagents` 全开（`app.plan_mode = !args.no_plan`，
+event_loop.rs:1241-1243，无正向 `--plan` 旗标、无法表达"用户显式选择"），TUI 创建
+会话时 `SessionFlags::agent_profile()`（app/effects/helpers.rs）按旗标合成
+`_meta.agentProfile = "grok-build-plan"`。shell 解析链（xai-grok-shell
+agent_ops.rs `resolve_agent_definition`）中 ACP agentProfile（第 2 步）优先级
+高于 config `[agent] name`（第 5 步）→ 用户配置的默认 agent 被静默覆盖，
+新会话永远是 grok-build-plan。
+
+### 改动（respect_config_agent 闸门）
+
+- `src/app/effects/helpers.rs`：`SessionFlags` 增 `respect_config_agent: bool`；
+  新增关联函数 `config_default_agent_name()`（读生效配置的 `[agent] name`）；
+  `to_meta()` 的 agentProfile 合成分支加 `!respect_config_agent` 前置条件
+- `src/app/event_loop.rs`：`session_flags_for_effects` 构造点：
+  `respect_config_agent = app.agent_override.is_none() && config_default_agent_name().is_some()`
+- `src/app/effects/tests.rs`：新增
+  `respect_config_agent_suppresses_synthesized_profile`（闸门只抑制 profile，
+  不影响 yoloMode 等其余 meta）
+
+### 行为矩阵
+
+- 配置无 `[agent] name`：行为与上游一致（合成 profile）
+- 配置有 `[agent] name` 且无 `--agent`/`GROK_AGENT`：不发 agentProfile →
+  配置 agent（grok-build-concise）生效；plan/ask-user 其余 meta 不受影响
+- `--agent` / `GROK_AGENT`：显式选择，优先级照旧，闸门自动让位
+- 每次 create-session 读一次配置（用户手动触发，非热路径）
+
+### 重放注意
+
+- 三处均为同步文件；闸门是纯前置条件，不改变 agent_profile() 本身的映射表
+- 已知边界：配置 agent 后 plan 模式不再自动带 plan 工具集（enter/exit_plan_mode
+  随 plan 定义走）——需要 plan 工作流时显式 `grok2 --agent grok-build-plan`

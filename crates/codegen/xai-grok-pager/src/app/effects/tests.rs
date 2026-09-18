@@ -1938,6 +1938,26 @@ fn subagents_without_plan_produces_no_profile() {
     };
     assert_eq!(flags.agent_profile(), None);
 }
+/// LOCAL: respect_config_agent 抑制默认合成的 agentProfile（配置的 `[agent] name` 优先），
+/// 且不影响 askUserQuestion / yoloMode 等其余 meta 的产出。
+#[test]
+fn respect_config_agent_suppresses_synthesized_profile() {
+    let mut flags = SessionFlags {
+        plan_mode: true,
+        subagents: true,
+        ask_user: false,
+        ..Default::default()
+    };
+    assert!(flags.agent_profile().is_some());
+    flags.respect_config_agent = true;
+    assert_eq!(flags.agent_profile(), Some("grok-build-plan"));
+    let meta = flags.to_meta().expect("permission seeds keep meta non-empty");
+    assert!(
+        !meta.contains_key("agentProfile"),
+        "respect_config_agent must not synthesize agentProfile, got {meta:?}"
+    );
+    assert!(meta.contains_key("yoloMode"));
+}
 /// Neutralize `GROK_AGENT` for the profile-matrix tests below.
 /// The tests would then assert the wrong branch.
 /// Callers must be `#[serial_test::serial(GROK_AGENT)]` (process-global env).
