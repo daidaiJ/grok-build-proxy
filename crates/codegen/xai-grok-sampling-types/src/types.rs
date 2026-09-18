@@ -470,6 +470,13 @@ pub enum FinishReason {
     ToolCalls,
     ContentFilter,
     FunctionCall,
+    // LOCAL(deepseek-compat) start
+    /// Unknown or proprietary finish reason (e.g. DeepSeek's
+    /// `insufficient_system_resources`). Without this arm a single chunk carrying
+    /// one would fail chunk deserialization and kill the whole stream.
+    #[serde(other)]
+    Other,
+    // LOCAL(deepseek-compat) end
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -530,6 +537,15 @@ pub struct Usage {
     /// The REST mapper backfills `0` for unbilled requests; capture sites normalize `0` to "unreported" (see `stream/chat_completions.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost_in_usd_ticks: Option<i64>,
+    // LOCAL(deepseek-compat) start
+    /// DeepSeek reports cache hits/misses as flat usage fields instead of
+    /// `prompt_tokens_details.cached_tokens`. `prompt_tokens` already includes
+    /// the hit subset; both fold into `cached_prompt_tokens` on conversion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_hit_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_miss_tokens: Option<u32>,
+    // LOCAL(deepseek-compat) end
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -615,6 +631,14 @@ pub struct ChatChunkDelta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     pub reasoning_content: Option<String>,
+    // LOCAL(deepseek-compat) start
+    /// GLM/vLLM-style `reasoning` delta — same meaning as `reasoning_content`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
+    /// Kimi-style `reasoning_text` delta — same meaning as `reasoning_content`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_text: Option<String>,
+    // LOCAL(deepseek-compat) end
     /// A JSON `null` deserializes as an empty vec.
     #[serde(
         default,

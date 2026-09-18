@@ -8,6 +8,8 @@ pub mod chat_completions;
 pub mod collect;
 pub mod messages;
 pub mod responses;
+// LOCAL(deepseek-compat)
+mod think_split;
 
 pub use chat_completions::stream_chat_completions;
 pub use collect::collect_response;
