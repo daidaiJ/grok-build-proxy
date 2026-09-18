@@ -13,6 +13,7 @@ use xai_grok_shell::extensions::notification::GoalClassifierVerdict;
 
 use crate::app::agent::{GoalDisplayState, GoalDisplayStatus};
 use crate::render::SafeBuf;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::agent_status::{
     active_phase_label, classifier_attempts_label, format_tokens_compact,
@@ -85,6 +86,10 @@ fn status_label(goal: &GoalDisplayState) -> (&'static str, Color, String) {
         GoalDisplayStatus::Complete => ("Complete", theme.accent_success, String::new()),
     }
 }
+
+// LOCAL: `active_phase_label` (agent_status.rs) already translates at its own outlet,
+// including the `Verifying ({})` counter template; the render pass-through below keeps
+// unknown future variants English-safe via table miss.
 
 // ---------------------------------------------------------------------------
 // Wrapping helpers: pause-message reason block
@@ -214,7 +219,9 @@ fn sanitize_title(s: &str) -> String {
 /// [`wrap_pause_message_lines`] splits on the kept newlines for multi-line block reasons, so they never reach a rendered row.
 /// Shared by the height calc and the render so they wrap identical text.
 fn format_pause_reason(msg: &str) -> String {
-    format!("Reason: {}", strip_control_chars(msg, true))
+    // LOCAL: the fixed prefix is translated at this shared outlet so the height calc and the
+    // render wrap identical text; the message body is runtime wire data and stays verbatim.
+    format!("{}{}", tr("Reason: "), strip_control_chars(msg, true))
 }
 
 // ---------------------------------------------------------------------------
@@ -256,26 +263,26 @@ fn humanize_goal_event(event: &str, detail: Option<&str>) -> String {
     // Variable passthroughs (model/wire-derived) are control-stripped so they can't leak control bytes; the fixed labels below are `&'static`
     let phrase = |d: Option<&str>| d.map(|s| strip_control_chars(&s.replace('_', " "), false));
     match event {
-        "goal_created" => "Goal created".into(),
-        "planning_started" => "Planning started".into(),
-        "planning_completed" => "Planning completed".into(),
-        "planning_failed" => "Planning failed".into(),
-        "worker_started" => "Worker started".into(),
-        "worker_completed" => "Worker completed".into(),
-        "worker_failed" => "Worker failed".into(),
-        "context_rotated" => "Context rotated".into(),
+        "goal_created" => tr("Goal created").into(),
+        "planning_started" => tr("Planning started").into(),
+        "planning_completed" => tr("Planning completed").into(),
+        "planning_failed" => tr("Planning failed").into(),
+        "worker_started" => tr("Worker started").into(),
+        "worker_completed" => tr("Worker completed").into(),
+        "worker_failed" => tr("Worker failed").into(),
+        "context_rotated" => tr("Context rotated").into(),
         // A plain user pause has no extra cause worth showing.
         "goal_paused" => match phrase(detail).filter(|d| d != "user") {
-            Some(d) => format!("Paused: {d}"),
-            None => "Paused".into(),
+            Some(d) => format!("{}{d}", tr("Paused: ")),
+            None => tr("Paused").into(),
         },
-        "goal_resumed" => "Resumed".into(),
-        "goal_completed" => "Completed".into(),
-        "goal_cleared" => "Cleared".into(),
-        "budget_exceeded" => "Budget exceeded".into(),
+        "goal_resumed" => tr("Resumed").into(),
+        "goal_completed" => tr("Completed").into(),
+        "goal_cleared" => tr("Cleared").into(),
+        "budget_exceeded" => tr("Budget exceeded").into(),
         "premature_stop_detected" => match phrase(detail) {
-            Some(d) => format!("Stopped early: {d}"),
-            None => "Stopped early".into(),
+            Some(d) => format!("{}{d}", tr("Stopped early: ")),
+            None => tr("Stopped early").into(),
         },
         other => {
             let mut s = strip_control_chars(&other.replace('_', " "), false);
@@ -301,8 +308,21 @@ fn humanize_event_timestamp(ts: &str) -> String {
         .num_seconds()
         .max(0) as u64;
     let ago = crate::util::format_time_ago(std::time::Duration::from_secs(secs));
+    // LOCAL: `format_time_ago` yields compact English units (`5m`/`3h`/`2d`/`1mo`/`1y`); the
+    // comparison key above stays English, and the render outlet maps each unit onto the shared
+    // relative-time template keys already in the i18n table (see memory_modal's format_modified).
     if ago == "just now" {
-        ago
+        tr("just now").to_string()
+    } else if let Some(mins) = ago.strip_suffix('m') {
+        tr("{mins}m ago").replace("{mins}", mins)
+    } else if let Some(hours) = ago.strip_suffix('h') {
+        tr("{hours}h ago").replace("{hours}", hours)
+    } else if let Some(days) = ago.strip_suffix('d') {
+        tr("{days}d ago").replace("{days}", days)
+    } else if let Some(months) = ago.strip_suffix("mo") {
+        tr("{months}mo ago").replace("{months}", months)
+    } else if let Some(years) = ago.strip_suffix('y') {
+        tr("{years}y ago").replace("{years}", years)
     } else {
         format!("{ago} ago")
     }
@@ -480,7 +500,7 @@ pub fn render_goal_detail(
         .saturating_sub(2); // leading and trailing space
     let cleaned = sanitize_title(&goal.objective);
     let objective = if cleaned.is_empty() {
-        "Active Goal".to_owned()
+        tr("Active Goal").to_owned()
     } else {
         truncate_to_width(&cleaned, objective_budget)
     };
@@ -519,9 +539,9 @@ pub fn render_goal_detail(
     // ── Status line ──
     let (status_text, status_color, phase_text) = status_label(goal);
     let mut status_spans = vec![
-        Span::styled("Status: ", Style::default().fg(theme.gray)),
+        Span::styled(tr("Status: "), Style::default().fg(theme.gray)),
         Span::styled(
-            status_text,
+            tr(status_text),
             Style::default()
                 .fg(status_color)
                 .add_modifier(Modifier::BOLD),
@@ -529,7 +549,7 @@ pub fn render_goal_detail(
     ];
     if !phase_text.is_empty() {
         status_spans.push(Span::styled(
-            format!(" \u{00b7} {phase_text}"),
+            format!(" \u{00b7} {}", tr_str(&phase_text)),
             Style::default().fg(theme.gray_bright),
         ));
     }
@@ -543,8 +563,10 @@ pub fn render_goal_detail(
 
     if goal.status.is_paused() {
         let hint = format!(
-            "Status: {}. Type /goal resume to continue",
-            goal.status.pause_label()
+            "{}{}. {}",
+            tr("Status: "),
+            tr(goal.status.pause_label()),
+            tr("Type /goal resume to continue")
         );
         buf.set_line_safe(
             x,
@@ -562,7 +584,12 @@ pub fn render_goal_detail(
         } else {
             "Failed"
         };
-        let hint = format!("Status: {label}. Type /goal clear, then start a new goal");
+        let hint = format!(
+            "{}{}. {}",
+            tr("Status: "),
+            tr(label),
+            tr("Type /goal clear, then start a new goal")
+        );
         buf.set_line_safe(
             x,
             y,
@@ -615,9 +642,17 @@ pub fn render_goal_detail(
     let has_budget = goal.token_budget.is_some_and(|b| b > 0);
     let budget_label = if has_budget {
         let pct_display = format!(" ({:.0}%)", pct * 100.0);
-        format!("Budget: {budget_display}{pct_display}  Elapsed: {elapsed_str}")
+        format!(
+            "{}{budget_display}{pct_display}  {}{elapsed_str}",
+            tr("Budget: "),
+            tr("Elapsed: ")
+        )
     } else {
-        format!("Tokens: {budget_display}  Elapsed: {elapsed_str}")
+        format!(
+            "{}{budget_display}  {}{elapsed_str}",
+            tr("Tokens: "),
+            tr("Elapsed: ")
+        )
     };
     buf.set_line_safe(
         x,
@@ -669,7 +704,7 @@ pub fn render_goal_detail(
             x,
             y,
             &Line::from(Span::styled(
-                "No progress items yet",
+                tr("No progress items yet"),
                 Style::default().fg(theme.gray),
             )),
             w,
@@ -680,7 +715,7 @@ pub fn render_goal_detail(
             x,
             y,
             &Line::from(Span::styled(
-                "Progress:",
+                tr("Progress:"),
                 Style::default()
                     .fg(theme.text_primary)
                     .add_modifier(Modifier::BOLD),
@@ -719,7 +754,7 @@ pub fn render_goal_detail(
                 x,
                 y,
                 &Line::from(Span::styled(
-                    format!("  +{remaining} more"),
+                    format!("  {}", tr("+{n} more").replace("{n}", &remaining.to_string())),
                     Style::default().fg(theme.gray),
                 )),
                 w,
@@ -740,7 +775,7 @@ pub fn render_goal_detail(
             return Some(close_rect);
         }
         let mut subagent_spans = vec![
-            Span::styled("Active Subagent: ", Style::default().fg(theme.gray)),
+            Span::styled(tr("Active Subagent: "), Style::default().fg(theme.gray)),
             Span::styled(
                 role.as_str(),
                 Style::default()
@@ -751,7 +786,7 @@ pub fn render_goal_detail(
         let rounds = goal.total_worker_rounds + goal.total_verify_rounds;
         if rounds > 0 {
             subagent_spans.push(Span::styled(
-                format!(" (round {rounds})"),
+                format!(" {}", tr("(round {n})").replace("{n}", &rounds.to_string())),
                 Style::default().fg(theme.gray),
             ));
         }
@@ -763,18 +798,19 @@ pub fn render_goal_detail(
             let mut detail_parts: Vec<String> = Vec::new();
             if let Some(tok) = goal.live_subagent_tokens {
                 detail_parts.push(format!(
-                    "Tokens: {}",
+                    "{}{}",
+                    tr("Tokens: "),
                     format_tokens_compact(tok.min(i64::MAX as u64) as i64)
                 ));
             }
             if let Some(ctx) = goal.live_context_pct {
-                detail_parts.push(format!("Context: {ctx}%"));
+                detail_parts.push(format!("{}{ctx}%", tr("Context: ")));
             }
             if let Some(turns) = goal.live_turn_count {
-                detail_parts.push(format!("Turns: {turns}"));
+                detail_parts.push(format!("{}{turns}", tr("Turns: ")));
             }
             if let Some(tools) = goal.live_tool_call_count {
-                detail_parts.push(format!("Tools: {tools}"));
+                detail_parts.push(format!("{}{tools}", tr("Tools: ")));
             }
             if !detail_parts.is_empty() {
                 let detail = format!("  {}", detail_parts.join("  "));
@@ -820,7 +856,7 @@ pub fn render_goal_detail(
                     x,
                     y,
                     &Line::from(Span::styled(
-                        format!("  +{remaining} more"),
+                        format!("  {}", tr("+{n} more").replace("{n}", &remaining.to_string())),
                         Style::default().fg(theme.gray),
                     )),
                     w,
@@ -846,7 +882,7 @@ pub fn render_goal_detail(
             x,
             y,
             &Line::from(Span::styled(
-                "Completion review:",
+                tr("Completion review:"),
                 Style::default()
                     .fg(theme.text_primary)
                     .add_modifier(Modifier::BOLD),
@@ -861,8 +897,8 @@ pub fn render_goal_detail(
                 x,
                 y,
                 &Line::from(vec![
-                    Span::styled("  Last verdict: ", Style::default().fg(theme.gray)),
-                    Span::styled(verdict_label, Style::default().fg(theme.text_secondary)),
+                    Span::styled(tr("  Last verdict: "), Style::default().fg(theme.gray)),
+                    Span::styled(tr(verdict_label), Style::default().fg(theme.text_secondary)),
                 ]),
                 w,
             );
@@ -881,7 +917,7 @@ pub fn render_goal_detail(
                 x,
                 y,
                 &Line::from(vec![
-                    Span::styled("  Attempts: ", Style::default().fg(theme.gray)),
+                    Span::styled(tr("  Attempts: "), Style::default().fg(theme.gray)),
                     Span::styled(attempts_display, Style::default().fg(theme.text_secondary)),
                 ]),
                 w,
@@ -898,9 +934,9 @@ pub fn render_goal_detail(
                 x,
                 y,
                 &Line::from(vec![
-                    Span::styled("  Details: ", Style::default().fg(theme.gray)),
+                    Span::styled(tr("  Details: "), Style::default().fg(theme.gray)),
                     Span::styled(
-                        path_display.to_owned(),
+                        tr_str(path_display),
                         Style::default().fg(theme.text_secondary),
                     ),
                 ]),
@@ -925,7 +961,7 @@ pub fn render_goal_detail(
             x,
             y,
             &Line::from(Span::styled(
-                "Recent History:",
+                tr("Recent History:"),
                 Style::default()
                     .fg(theme.text_primary)
                     .add_modifier(Modifier::BOLD),
@@ -968,7 +1004,7 @@ pub fn render_goal_detail(
         } else {
             "Esc: close  /goal resume | pause | status | clear"
         };
-        buf.set_line_safe(x, y, &Line::from(Span::styled(hint, hint_style)), w);
+        buf.set_line_safe(x, y, &Line::from(Span::styled(tr(hint), hint_style)), w);
     }
 
     Some(close_rect)

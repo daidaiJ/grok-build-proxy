@@ -19,6 +19,7 @@ use crate::app::agent::{BgTaskState, BgTaskStatus, ScheduledTaskInfo};
 use crate::app::subagent::{SubagentInfo, format_context_badge, format_subagent_label};
 use crate::appearance::LayoutConfig;
 use crate::scrollback::layout::HorizontalLayout;
+use crate::slash::i18n::{tr, tr_str};
 use crate::syntax::get_syntect;
 use crate::theme::{Theme, ThemeKind};
 use crate::util::format_duration;
@@ -263,14 +264,16 @@ impl TaskEntry {
                 .map(|d| d.replace('\n', " "))
                 .unwrap_or_else(|| task.command.trim().replace('\n', " "));
             const TAG: &str = "Monitor";
+            // LOCAL(i18n): 标签固定片段查表，动态描述原样保留
+            let tag = tr(TAG);
             let desc_style = if running {
                 Style::default().fg(theme.text_secondary)
             } else {
                 Style::default().fg(theme.gray_bright)
             };
-            let label = format!("{TAG} {text}");
+            let label = format!("{tag} {text}");
             let styled = Line::from(vec![
-                Span::styled(format!("{TAG} "), Style::default().fg(theme.accent_system)),
+                Span::styled(format!("{tag} "), Style::default().fg(theme.accent_system)),
                 Span::styled(text, desc_style),
             ]);
             (label, styled)
@@ -282,14 +285,16 @@ impl TaskEntry {
             // The tag makes the entry type identifiable at a glance, the same way subagent rows lead with their persona/role label
             // The prefix is included in `label` so it is searchable (the tasks-pane filter matches against `label`)
             const PREFIX: &str = "Task ";
+            // LOCAL(i18n): 复用既有键 "Task"，显式补空格，避免表内出现尾随空格的近重复键
+            let prefix = format!("{} ", tr("Task"));
             let desc_style = if running {
                 Style::default().fg(theme.text_primary)
             } else {
                 Style::default().fg(theme.gray_bright)
             };
-            let label = format!("{PREFIX}{one_line}");
+            let label = format!("{prefix}{one_line}");
             let styled = Line::from(vec![
-                Span::styled(PREFIX, Style::default().fg(theme.text_secondary)),
+                Span::styled(prefix.clone(), Style::default().fg(theme.text_secondary)),
                 Span::styled(one_line, desc_style),
             ]);
             (label, styled)
@@ -457,21 +462,26 @@ impl TaskEntry {
                 .filter(|p| !p.is_empty());
             let agents = match run.agents.iter().filter(|a| a.state == "running").count() {
                 0 => None,
-                1 => Some("1 agent".to_string()),
-                n => Some(format!("{n} agents")),
+                // LOCAL(i18n): 复用既有复数模板键 "{n} agent"/"{n} agents"
+                1 => Some(tr("{n} agent").replace("{n}", "1")),
+                n => Some(tr("{n} agents").replace("{n}", &n.to_string())),
             };
             match (phase, agents) {
                 (Some(p), Some(a)) => format!("{p} · {a}"),
                 (Some(p), None) => p.to_string(),
                 (None, Some(a)) => a,
-                (None, None) => "running".to_string(),
+                (None, None) => tr("running").to_string(),
             }
         } else {
-            run.status.replace('_', " ")
+            // LOCAL(i18n): 动态状态串走 tr_str，未命中原样返回英文
+            tr_str(&run.status.replace('_', " "))
         };
 
         let mut spans = vec![
-            Span::styled("Workflow ".to_string(), Style::default().fg(tag_color)),
+            Span::styled(
+                format!("{} ", tr("Workflow")),
+                Style::default().fg(tag_color),
+            ),
             Span::styled(run.name.clone(), name_style),
         ];
         if !suffix.is_empty() {
@@ -481,7 +491,7 @@ impl TaskEntry {
             ));
         }
 
-        let label = format!("Workflow {} {suffix}", run.name);
+        let label = format!("{} {} {suffix}", tr("Workflow"), run.name);
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         "workflow:".hash(&mut hasher);
         run.run_id.hash(&mut hasher);
@@ -513,9 +523,10 @@ impl TaskEntry {
                 let approx = created + std::time::Duration::from_secs(secs);
                 let now = std::time::Instant::now();
                 if approx > now {
-                    format!(" (next in {})", format_duration(approx.duration_since(now)))
+                    // LOCAL(i18n): 固定片段整键成表，前导空格是键的一部分
+                    tr(" (next in {})").replace("{}", &format_duration(approx.duration_since(now)))
                 } else {
-                    " (due now)".to_string()
+                    tr(" (due now)").to_string()
                 }
             } else {
                 String::new()
@@ -523,18 +534,18 @@ impl TaskEntry {
         };
         let is_provisional = info.task_id.starts_with("provisional-");
         let suffix = if linked_running {
-            " (running)".to_string()
+            tr(" (running)").to_string()
         } else if is_provisional {
-            " (starting)".to_string()
+            tr(" (starting)").to_string()
         } else if let Some(n) = &info.next_fire_at {
             if let Ok(dt) = DateTime::<chrono::FixedOffset>::parse_from_rfc3339(n) {
                 let dt = dt.with_timezone(&Utc);
                 let now = Utc::now();
                 if dt > now {
                     let dur = (dt - now).to_std().unwrap_or_default();
-                    format!(" (next in {})", format_duration(dur))
+                    tr(" (next in {})").replace("{}", &format_duration(dur))
                 } else {
-                    " (due now)".to_string()
+                    tr(" (due now)").to_string()
                 }
             } else {
                 countdown(&info.human_schedule, info.created_at)
@@ -598,7 +609,8 @@ impl TaskEntry {
         let styled = Line::from(vec![
             Span::styled(chevron, Style::default().fg(theme.gray)),
             Span::styled(
-                group.label(),
+                // LOCAL(i18n): 仅译展示侧；search_text() 仍返回英文原文供过滤匹配
+                tr(group.label()),
                 Style::default()
                     .fg(theme.gray_bright)
                     .add_modifier(Modifier::BOLD),
@@ -1238,7 +1250,7 @@ impl TasksPane {
                 let theme = Theme::current();
                 if self.show_done {
                     let span = Span::styled(
-                        "No tasks or agents.",
+                        tr("No tasks or agents."),
                         Style::default().fg(theme.gray_bright),
                     );
                     buf.set_span(inner.x, inner.y, &span, inner.width);
@@ -1247,10 +1259,11 @@ impl TasksPane {
                     let key_style = Style::default()
                         .fg(theme.text_primary)
                         .add_modifier(Modifier::BOLD);
+                    // LOCAL(i18n): 三段拼接结构不变，每段固定文案分别成键（"h" 为按键提示不译）
                     let line = Line::from(vec![
-                        Span::styled("No running tasks. Press ", muted),
+                        Span::styled(tr("No running tasks. Press "), muted),
                         Span::styled("h", key_style),
-                        Span::styled(" to show all.", muted),
+                        Span::styled(tr(" to show all."), muted),
                     ]);
                     buf.set_line(inner.x, inner.y, &line, inner.width);
                 }
@@ -1486,7 +1499,7 @@ impl TasksPane {
             (
                 frames[frame_idx],
                 Style::default().fg(theme.accent_error),
-                "killing\u{2026} ".to_string(),
+                tr("killing\u{2026} ").to_string(),
                 Style::default().fg(theme.accent_error),
             )
         } else {
@@ -1628,7 +1641,7 @@ impl TasksPane {
             (
                 frames[frame_idx],
                 Style::default().fg(theme.accent_error),
-                "killing\u{2026} ".to_string(),
+                tr("killing\u{2026} ").to_string(),
                 Style::default().fg(theme.accent_error),
             )
         } else if info.is_running() {

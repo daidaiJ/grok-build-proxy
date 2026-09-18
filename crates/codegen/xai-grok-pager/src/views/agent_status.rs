@@ -199,16 +199,17 @@ fn format_elapsed_compact(ms: u64) -> String {
 /// Paused variants render their `pause_label()`, Budget renders "Budget", Done renders "Done".
 /// An Active goal uses the shared [`active_phase_label`] suffix.
 fn goal_phase_label(goal: &GoalDisplayState) -> String {
+    // LOCAL: 状态 chip 标签渲染出口查表（pause_label() 存英文键，仅展示侧翻译）
     match goal.status {
         GoalDisplayStatus::UserPaused
         | GoalDisplayStatus::BackOffPaused
         | GoalDisplayStatus::NoProgressPaused
         | GoalDisplayStatus::InfraPaused
-        | GoalDisplayStatus::Blocked => goal.status.pause_label().into(),
-        GoalDisplayStatus::Failed => "Failed".into(),
-        GoalDisplayStatus::Interrupted => "Interrupted".into(),
-        GoalDisplayStatus::BudgetLimited => "Budget".into(),
-        GoalDisplayStatus::Complete => "Done".into(),
+        | GoalDisplayStatus::Blocked => crate::slash::i18n::tr(goal.status.pause_label()).into(),
+        GoalDisplayStatus::Failed => crate::slash::i18n::tr("Failed").into(),
+        GoalDisplayStatus::Interrupted => crate::slash::i18n::tr("Interrupted").into(),
+        GoalDisplayStatus::BudgetLimited => crate::slash::i18n::tr("Budget").into(),
+        GoalDisplayStatus::Complete => crate::slash::i18n::tr("Done").into(),
         GoalDisplayStatus::Active => active_phase_label(goal),
     }
 }
@@ -218,20 +219,21 @@ fn goal_phase_label(goal: &GoalDisplayState) -> String {
 pub fn active_phase_label(goal: &GoalDisplayState) -> String {
     if goal.verifying_completion {
         let attempts = classifier_attempts_label(goal);
+        // LOCAL: 标签查表；计数后缀整键进表，插值为运行时 "n/m"
         // Omit the "(n/m)" suffix until the first counter arrives so the chip reads "Verifying" instead of a confusing "Verifying (0/0)"
         return if attempts.is_empty() {
-            "Verifying".into()
+            crate::slash::i18n::tr("Verifying").into()
         } else {
-            format!("Verifying ({attempts})")
+            crate::slash::i18n::tr("Verifying ({})").replace("{}", &attempts)
         };
     }
     if goal.planning {
-        return "Planning".into();
+        return crate::slash::i18n::tr("Planning").into();
     }
     match goal.phase {
-        GoalDisplayPhase::Idle => "Idle".into(),
-        GoalDisplayPhase::Planning => "Planning".into(),
-        GoalDisplayPhase::Executing => "Executing".into(),
+        GoalDisplayPhase::Idle => crate::slash::i18n::tr("Idle").into(),
+        GoalDisplayPhase::Planning => crate::slash::i18n::tr("Planning").into(),
+        GoalDisplayPhase::Executing => crate::slash::i18n::tr("Executing").into(),
     }
 }
 
@@ -262,11 +264,12 @@ pub fn goal_status_line(
 
     let tokens_str =
         format_tokens_compact(goal.live_tokens_used(context_used, active_subagent_tokens));
+    // LOCAL: 计数模板整键进表，插值为运行时数值；token 术语按术语表保留
     let tokens_display = match goal.token_budget {
-        Some(budget) if budget > 0 => {
-            format!("{}/{} tokens", tokens_str, format_tokens_compact(budget))
-        }
-        _ => format!("{} tokens", tokens_str),
+        Some(budget) if budget > 0 => crate::slash::i18n::tr("{}/{} tokens")
+            .replacen("{}", &tokens_str, 1)
+            .replacen("{}", &format_tokens_compact(budget), 1),
+        _ => crate::slash::i18n::tr("{} tokens").replacen("{}", &tokens_str, 1),
     };
 
     let elapsed_str = format_elapsed_compact(goal.live_elapsed_ms());
@@ -292,7 +295,8 @@ pub fn goal_status_line(
 
     let is_active = matches!(goal.status, GoalDisplayStatus::Active);
 
-    let chip_name = "Goal";
+    // LOCAL: chip 名查表（展示侧）
+    let chip_name = crate::slash::i18n::tr("Goal");
     let goal_text = if is_active {
         let frames = crate::glyphs::dot_spinner_frames();
         let frame = frames[(tick / 4) % frames.len()];

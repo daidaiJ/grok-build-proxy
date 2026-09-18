@@ -9,7 +9,9 @@ use ratatui::style::{Modifier, Style};
 use super::state::DashboardRowId;
 use crate::app::actions::Action;
 use crate::app::agent_view::AgentView;
+// LOCAL(i18n): peek 面板文案中文化；response_type 等存英文串（参与 == "Working" 比较），渲染出口 tr_str
 use crate::render::line_utils::truncate_str;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 
 /// Args for painting a dense bottom-pinned live tail in the peek middle.
@@ -556,10 +558,11 @@ pub fn render_peek_panel(
                     if reply.text().is_empty() {
                         // Permission reject vs. ask-tool "Other" free-text.
                         // Painted manually (not via the widget's unfocused-only placeholder) so the hint stays visible while the caret sits on the row
+                        // LOCAL(i18n): 空态/选项兜底占位符，一次性渲染就地 tr
                         let placeholder_text = if panel.is_ask_question() {
-                            "Other (type your own answer)"
+                            tr("Other (type your own answer)")
                         } else {
-                            "No, reject (type to add feedback)"
+                            tr("No, reject (type to add feedback)")
                         };
                         let placeholder = truncate_str(placeholder_text, avail as usize);
                         buf.set_string(text_x, y, placeholder, theme.dim().bg(theme.bg_base));
@@ -583,7 +586,8 @@ pub fn render_peek_panel(
                     }
                 }
             } else {
-                let opt_line = format!("{marker}{}. {}", i + 1, label);
+                // LOCAL(i18n): 选项 label 出口 tr_str（代理运行时标签未命中则原样透传，"Other" 等固定词命中）
+                let opt_line = format!("{marker}{}. {}", i + 1, tr_str(label));
                 let trunc = truncate_str(&opt_line, inner.width as usize);
                 buf.set_string(inner.x, y, trunc, style);
             }
@@ -619,7 +623,9 @@ pub fn render_peek_panel(
             theme.dim()
         }
         .bg(theme.bg_base);
-        let label_trunc = truncate_str(&panel.response_type, label_avail);
+        // LOCAL(i18n): response_type 存英文（上方 == "Working" 比较键不动），展示侧 tr_str
+        let response_type_disp = tr_str(&panel.response_type);
+        let label_trunc = truncate_str(&response_type_disp, label_avail);
         buf.set_string(inner.x, inner.y, label_trunc, label_style);
         if time_w > 0 && time_w + 1 < inner.width {
             let time_x = inner.x + inner.width - time_w;
@@ -640,7 +646,8 @@ pub fn render_peek_panel(
         if let Some(PeekLiveTailArgs { scrollback }) = live_tail {
             if middle_h > 0 {
                 if scrollback.is_empty() {
-                    if let Some(hint) = empty_hint.or(Some("No activity yet")) {
+                    // LOCAL(i18n): 空滚动回退兜底提示
+                    if let Some(hint) = empty_hint.or(Some(tr("No activity yet"))) {
                         let trunc = truncate_str(hint, inner.width as usize);
                         buf.set_string(inner.x, middle_top, trunc, theme.dim().bg(theme.bg_base));
                     }
@@ -677,7 +684,8 @@ pub fn render_peek_panel(
         vpad_top: 0,
         chrome: false,
         bg: PromptBg::Canvas(theme.bg_base),
-        placeholder_override: Some("reply\u{2026}"),
+        // LOCAL(i18n): 回复输入占位符
+        placeholder_override: Some(tr("reply\u{2026}")),
         image_preview: false,
         ..PromptStyle::default()
     };
@@ -890,15 +898,18 @@ fn block_short_text(block: &crate::scrollback::block::RenderBlock) -> Option<Str
     match block {
         RenderBlock::UserPrompt(b) => Some(format!("\u{2771} {}", first_line_of(&b.text))),
         RenderBlock::AgentMessage(b) => Some(first_line_of(&b.text())),
-        RenderBlock::Thinking(b) => Some(format!("(thinking) {}", first_line_of(&b.text()))),
-        RenderBlock::System(_) => Some("(system event)".to_string()),
-        RenderBlock::SessionEvent(_) => Some("(session event)".to_string()),
-        RenderBlock::ToolCall(_) => Some("(tool call)".to_string()),
-        RenderBlock::BgTask(_) => Some("(background task)".to_string()),
-        RenderBlock::Subagent(_) => Some("(subagent)".to_string()),
-        RenderBlock::Workflow(_) => Some("(workflow)".to_string()),
-        RenderBlock::Btw(_) => Some("(btw)".to_string()),
-        RenderBlock::ContextInfo(_) => Some("(context info)".to_string()),
+        // LOCAL(i18n): 括注类说明词逐个成键，正文（运行时数据）不动
+        RenderBlock::Thinking(b) => {
+            Some(format!("{} {}", tr("(thinking)"), first_line_of(&b.text())))
+        }
+        RenderBlock::System(_) => Some(tr("(system event)").to_string()),
+        RenderBlock::SessionEvent(_) => Some(tr("(session event)").to_string()),
+        RenderBlock::ToolCall(_) => Some(tr("(tool call)").to_string()),
+        RenderBlock::BgTask(_) => Some(tr("(background task)").to_string()),
+        RenderBlock::Subagent(_) => Some(tr("(subagent)").to_string()),
+        RenderBlock::Workflow(_) => Some(tr("(workflow)").to_string()),
+        RenderBlock::Btw(_) => Some(tr("(btw)").to_string()),
+        RenderBlock::ContextInfo(_) => Some(tr("(context info)").to_string()),
         RenderBlock::Stub(_) => None,
     }
 }

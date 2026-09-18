@@ -1,5 +1,8 @@
 //! Dashboard rows: classification, build, filter, sort.
 use super::state::{DashboardRowId, Filter, RowState};
+// LOCAL(i18n): 模板/后缀类文案（"… N more"、计数汇总、worktree 后缀、进行中命令标签）在逐帧重建处成键翻译；
+// 整串状态词（"Working"/"Awaiting input" 等）仍存英文，由 render.rs 渲染出口 tr_str 翻译
+use crate::slash::i18n::tr;
 use crate::acp::tracker::TurnActivity;
 use crate::app::agent::AgentId;
 use crate::app::agent_view::AgentView;
@@ -326,7 +329,8 @@ fn build_local_rows(
                     parent: *id,
                     child_session_id: format!("__more_{}", id.0),
                 },
-                label: format!("\u{2026} {} more", total - keep),
+                // LOCAL(i18n): 计数模板整键进表，数字替换 {} 占位符（复用既有键，同 settings_modal/render.rs 先例）
+                label: tr("\u{2026} {} more").replace("{}", &(total - keep).to_string()),
                 subtitle: None,
                 state: RowState::Idle,
                 activity: None,
@@ -735,7 +739,8 @@ fn top_level_subtitle(agent: &AgentView) -> Option<String> {
         return None;
     }
     if is_worktree {
-        parts.push("worktree".to_string());
+        // LOCAL(i18n): subtitle 仅展示（过滤只匹配 label/cwd_display），逐帧重建处直接译
+        parts.push(tr("worktree").to_string());
     }
     Some(parts.join(" "))
 }
@@ -799,7 +804,8 @@ fn first_nonempty_line(s: &str) -> Option<&str> {
 fn subagent_subtitle(info: &SubagentInfo, cwd: &std::path::Path) -> Option<String> {
     let name = cwd_basename(cwd)?;
     if info.worktree_path.is_some() {
-        Some(format!("{name} worktree"))
+        // LOCAL(i18n): worktree 后缀成键，与 top_level_subtitle 同源
+        Some(format!("{name} {}", tr("worktree")))
     } else {
         Some(name)
     }
@@ -817,10 +823,12 @@ fn top_level_activity(agent: &AgentView, state: RowState) -> Option<String> {
         RowState::NeedsInput => Some("Awaiting your input".to_string()),
         RowState::Working => {
             if let Some(cmd) = agent.session.state.command_in_flight() {
-                Some(format!("{}…", cmd.display_name()))
+                // LOCAL(i18n): 命令进行中标签（"Creating worktree" 等）成键，"…" 固定后缀保留
+                Some(format!("{}…", tr(cmd.display_name())))
             } else if let Some(activity) = agent.resolve_turn_activity() {
                 Some(sanitize(&format_activity_label(&activity)))
             } else if agent.session.loading_replay {
+                // LOCAL(i18n): 整串状态词存英文（键见 render.rs 出口 tr_str 处），此处存英文
                 Some("Loading…".to_string())
             } else if let Some(bg) = background_work_label(agent) {
                 Some(bg)
@@ -862,7 +870,13 @@ fn subagent_activity(info: &SubagentInfo, state: RowState) -> Option<String> {
         let turns = info.attempt.turns.unwrap_or(0);
         let tools = info.attempt.tool_calls.unwrap_or(0);
         let toks = info.attempt.tokens_used.unwrap_or(0);
-        Some(format!("{tools} tools · {toks} tok · {turns} turns"))
+        // LOCAL(i18n): 计数模板整键进表，中文单复数合并
+        Some(
+            tr("{tools} tools · {toks} tok · {turns} turns")
+                .replace("{tools}", &tools.to_string())
+                .replace("{toks}", &toks.to_string())
+                .replace("{turns}", &turns.to_string()),
+        )
     } else {
         None
     }

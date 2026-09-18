@@ -554,3 +554,78 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - "Dropped {n} invalid image(s)." 采用存储期模板键 + replace（渲染侧拿不到计数），/lang
   切换不追溯已存文案；
 - tests 断言的 state 值全部保持英文（测试构建查表整体旁路），tests 模块零改动。
+
+## 十一期补丁（2026-09-18：界面文案中文化 P3 仪表盘与代理面板）
+
+> 方案见 `docs-local/ui-i18n-plan.md`（P3 = 仪表盘与代理面板，5 个模块）。
+> 翻译表 1138 → 1338 组（+200）；施工规约与术语表以方案文档为准。
+> 同键异译仲裁：Failed→失败（dashboard/goal_detail/agent_status 三方统一）、
+> Paused (error)→已暂停（出错）；confirm delete 与 P0 既有键撞键删重。
+
+### xai-grok-pager（P3：dashboard 生产区 / tasks_pane / agent 页脚+agent_status / goal_detail / workflows）
+
+- `src/slash/i18n.rs`：翻译表追加 P3 段 200 组，分节与代码注释一一对应：
+  dashboard chrome/row/render/peek、goal_detail 状态与字段前缀、agent 页脚 hint 词族、
+  agent_status chip、workflows 模板与状态说明、tasks_pane 调度后缀
+- `src/views/dashboard/chrome.rs`：chip 绘制侧 tr(label)（hit-test id 保留英文）、
+  Choose、+ New Agent( in Worktree)、Worktree/Disable Worktree 按钮
+- `src/views/dashboard/row.rs`：逐帧重建处成键（`{tools} tools · {toks} tok ·
+  {turns} turns`、`… {} more` 复用既有键）；整串状态词（Working/Awaiting your
+  input/Loading…/Pending: question）仍存英文由 render.rs 出口 tr_str；
+  AgentCommand::display_name()（app/agent.rs 五值）组合处 tr
+- `src/views/dashboard/render.rs`：**方案文档"生产区仅 1–1103 行"有误**——实际
+  `#[cfg(test)] mod tests` 在 3640 行起（render_tests.rs），1104/1950 只是两个 6 行
+  cfg(test) 辅助函数；本次按真实边界接线整个生产区：banner 复数中文合并、空态/过滤、
+  分组头（Pinned + `tr(rs.group_label())`）、Idle overflow、位置选择器、模式旗标
+  （plan/auto/always-approve）、搜索与派发占位符、`rename: ` 前缀收敛 rename_prefix()
+  保证绘制与宽度计算同源、页脚全部 hint（含 state.rs 的 label()/confirmation_label()/
+  group_label()/focused_action_label() 调用点 tr）、覆盖层兜底与 [Dashboard]
+- `src/views/dashboard/peek.rs`：response_type 存英文比较键（`== "Working"` 不动）→
+  展示出口 tr_str（Thinking/Thought/Response/Read/Edit/… 17 词）；问题选项 label
+  出口 tr_str；block_short_text 9 个括注（(thinking)/(tool call)/…）成键
+- `src/views/dashboard/peek_tail.rs`：核查生产路径无说明性文案，零改动
+- `src/views/goal_detail.rs`：状态行/字段行前缀（尾随空格是键的一部分）/分节头/
+  事件值侧/verdict 标签/页脚接线；事件 match 键（goal_created 等）与 `d != "user"`
+  比较键不动；相对时间族复用 {mins}m/{hours}h/{days}d ago/just now 既有键，新增
+  {months}mo/{years}y ago；active_phase_label 已在 agent_status 出口翻译，本文件
+  仅 tr_str 透传兜底（施工期临时 tr_phase_text 双保险已简化移除）
+- `src/views/agent_status.rs`：goal_phase_label 5 个 pause 分支 tr(pause_label()) +
+  Failed/Interrupted/Budget/Done；active_phase_label 的 `Verifying ({})` 模板键 +
+  replace；goal_status_line 计数整键 replacen（{} tokens/{}/{} tokens）；chip_name
+  = tr("Goal")。pause_label()（app/agent.rs:364）核实纯展示无比较消费，接线安全
+- `src/views/agent.rs`：**零改动**——页脚 hint 集中翻译出口已在 shortcuts_bar.rs
+  （P0 接线），本次只补 10 组表键（hide done/show done/reorder/page/queue/newline/
+  accept suggestion/next/prev/turn/expand thinking）；HintItem label 存英文经
+  ShortcutsBar::render 统一查表，就地再包会双重翻译
+- `src/views/workflows.rs`：页脚 9 快捷键、标题 Workflow Runs、空态两行、Phases
+  分节头；agents_meta() 按 total==1 选英文单复数键、中文合并；plural() 重接整键
+  模板（noun 参数当前恒为 "agent"，`let _ = noun` 注释保留签名）；预算/failed 状态
+  说明 4 条整键（含 {n} 模板）；rail 阶段名与 roster 标题渲染口 tr_str（数据侧
+  phase_hits/selected_phase_name/比较逻辑存英文）；`{used} / {total} context` 模板；
+  run.status.replace('_'," ") 协议词保留英文（tasks_pane 侧对去下划线值 tr_str
+  查表，命中 complete/cancelled/interrupted/paused/budget limited/failed 则译）
+- `src/views/tasks_pane.rs`：分组头 group.label() tr（search_text 过滤匹配键仍
+  英文）；调度后缀整键含前导空格（" (next in {})"（2 处）/" (due now)"/
+  " (running)"/" (starting)"，label 与 styled 同源）；空态三段 Span 两段成键；
+  "Task " 前缀复用 Task 键显式补空格（避免尾随空格近重复键）；`1 agent`/
+  `{n} agents` 复用既有模板键；"killing… " 覆盖层整键
+
+### 仲裁与取舍（P3）
+
+- `[worktree:on]`/`[worktree:off]` 徽标不译：宽度按 ASCII `len()` 预算且
+  `find("on")` 字面定位高亮重绘，译文同时破坏宽度与定位
+- dashboard 行年龄列 format_time_ago（"2m"/"just now"）不译：`{age:>6}` 按字符数
+  填充对齐，CJK 破宽；util 出口跨视图属后续范围
+- 5s/3m/2h 紧凑时长单位保留（agent_status chip 宽度预算）
+- app 层动态串透传英文：format_activity_label（"Running: cargo test"）、
+  format_subagent_label、format_context_badge——整串含运行时数据无法成键，
+  app 层文案如需中文化另行立项
+- tasks_pane 行 label 构造期翻译（entries 每次 sync 重建）：中文模式下行过滤匹配
+  中文片段，与 dashboard/render.rs 同款既定取舍
+- 占位符 `<query>` 随正文意译为 `<查询>`（斜杠命令用法串 [文件] 先例）；
+  "esc close"（小写）与既有 "Esc close" 分键并存，译文风格一致
+- workflows rail 宽度预估按未译 title 计算，中文标题略宽由 truncate_to_width 兜底，
+  布局数学未动
+- tests 断言的 state 值全部保持英文（测试构建查表整体旁路），tests 模块与
+  *_tests.rs 零改动；查重脚本（translations() 全表解析断言无重复键无同键异译）
+  重放时从本文件十期条目描述重建（Python，Rust \u{...} 转义需自行解码）

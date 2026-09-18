@@ -9,6 +9,10 @@
 > usage_modal / mcps_modal / tutorial，翻译表 449 → 917 组），见 PATCHES.md 九期。
 > 已完成（十期补丁 2026-09-18）：P2 集成管理弹窗（extensions_modal + workflows_picker_rows /
 > memory_modal / feedback_modal / import_claude_modal，翻译表 917 → 1138 组），见 PATCHES.md 十期。
+> 已完成（十一期补丁 2026-09-18）：P3 仪表盘与代理面板（dashboard chrome/row/render/peek +
+> tasks_pane + agent 页脚补键 + agent_status + goal_detail + workflows，翻译表 1138 → 1338 组），
+> 见 PATCHES.md 十一期。勘误：render.rs 生产区实际到 3639 行（#[cfg(test)] mod tests 在 3640 起，
+> 1104/1950 只是两个 cfg(test) 辅助函数），本表"仅 1–1103 行"为调研误差，施工已按真实边界完成。
 
 ## 机制与口径
 

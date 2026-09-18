@@ -9,6 +9,8 @@ use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
 use crate::render::line_utils::truncate_line;
+// LOCAL(i18n): 仪表盘 chrome 文案中文化
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::dashboard::row::DashboardRow;
 use crate::views::dashboard::state::{ActionsFocus, DashboardState, RowState, SPINNER_DIVISOR};
@@ -104,7 +106,8 @@ pub(super) fn render_header(
             label,
             Line::from(vec![
                 Span::styled(glyph, bg.fg(color)),
-                Span::styled(format!(" {count} {label}"), bg.fg(theme.gray)),
+                // LOCAL(i18n): 计数模板保持 " {count} {状态词}" 结构，状态词成键翻译；`label` 本身保留英文作 hit-test id
+                Span::styled(format!(" {count} {}", tr(label)), bg.fg(theme.gray)),
             ]),
         );
     }
@@ -154,7 +157,7 @@ pub(super) fn render_header(
     buf.set_line(area.x, area.y, &location, location_w);
 
     let mut choose_hint = hint_line(
-        Span::styled("Choose", dim),
+        Span::styled(tr("Choose"), dim),
         chord_hint(
             theme,
             registry,
@@ -291,9 +294,10 @@ pub(super) fn render_actions_row(
     // When worktree mode is on and the cwd is a git repo (so it can actually take effect), the next session goes in a fresh git worktree
     let worktree_armed = state.worktree_armed();
     let new_agent_label = if worktree_armed {
-        "+ New Agent in Worktree"
+        // LOCAL(i18n): 宽度由 UnicodeWidthStr::width 动态计算，译文保宽无虞
+        tr("+ New Agent in Worktree")
     } else {
-        "+ New Agent"
+        tr("+ New Agent")
     };
     let new_agent_w = (UnicodeWidthStr::width(new_agent_label) as u16).min(area.width);
 
@@ -320,9 +324,9 @@ pub(super) fn render_actions_row(
         };
 
     let worktree_label = if worktree_armed {
-        "Disable Worktree"
+        tr("Disable Worktree")
     } else {
-        "Worktree"
+        tr("Worktree")
     };
     let worktree_hint = hint_line(
         Span::styled(
