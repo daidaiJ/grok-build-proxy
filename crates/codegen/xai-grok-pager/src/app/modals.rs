@@ -14,6 +14,7 @@ use super::actions::Action;
 use super::agent_view::{AgentView, active_contexts_for_pane, apply_settings_outcome};
 use super::app_view::InputOutcome;
 
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::modal::{self, ActiveModal};
 
@@ -316,7 +317,7 @@ impl AgentView {
                 shortcuts_help::modal_footer(*filter_active)
             };
             let chrome_cfg = mw::ModalWindowConfig {
-                title: "Keyboard Shortcuts",
+                title: tr("Keyboard Shortcuts"),
                 tabs: None,
                 shortcuts: &footer,
                 sizing: crate::views::shortcuts_help::modal_sizing(
@@ -2333,7 +2334,7 @@ impl AgentView {
                 let non_sel: Vec<bool> = vec![false; picker_entries.len()];
                 let footer = shortcuts_help::modal_footer(*filter_active);
                 let modal_config = mw::ModalWindowConfig {
-                    title: "Keyboard Shortcuts",
+                    title: tr("Keyboard Shortcuts"),
                     tabs: None,
                     shortcuts: &footer,
                     sizing: shortcuts_help::modal_sizing(compact),

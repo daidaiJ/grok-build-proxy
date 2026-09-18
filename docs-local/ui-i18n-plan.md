@@ -5,6 +5,8 @@
 > 调研快照基于 commit 49f41780（2026-09-17），文中行号仅作定位参考，施工时以文本搜索为准。
 > 已完成（此前提交）：斜杠命令描述/用法/占位符、shortcuts_bar、modal_window 框架、
 > agents_modal、persona_detail。
+> 已完成（九期补丁 2026-09-18）：P1 常用弹窗与帮助（settings_modal / shortcuts_help /
+> usage_modal / mcps_modal / tutorial，翻译表 449 → 917 组），见 PATCHES.md 九期。
 
 ## 机制与口径
 

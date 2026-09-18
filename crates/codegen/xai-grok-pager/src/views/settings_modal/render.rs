@@ -14,6 +14,7 @@ use crate::settings::{
     CodingDataSharingLock, OwnedEnumChoice, SettingKey, SettingKind, SettingMeta, SettingValue,
     StringValidator, dynamic_enum_choices,
 };
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::modal_window::{
     self, ModalContentArea, ModalSizing, ModalWindowConfig, Shortcut,
@@ -53,7 +54,8 @@ pub fn render_settings_modal(
     let breadcrumb_owned: String;
     let title: &str = if let Some(o) = overlay {
         breadcrumb_owned = format!(
-            "{MODAL_TITLE} {} {}",
+            "{} {} {}",
+            tr(MODAL_TITLE),
             crate::glyphs::chevron(),
             o.breadcrumb_suffix
         );
@@ -63,7 +65,7 @@ pub fn render_settings_modal(
             SettingsMode::PickingEnum { key, .. } => {
                 if let Some(meta) = state.registry.find(key) {
                     breadcrumb_owned =
-                        format!("{MODAL_TITLE} {} {}", crate::glyphs::chevron(), meta.label);
+                        format!("{} {} {}", tr(MODAL_TITLE), crate::glyphs::chevron(), tr(meta.label));
                     &breadcrumb_owned
                 } else {
                     MODAL_TITLE
@@ -73,7 +75,7 @@ pub fn render_settings_modal(
             SettingsMode::EditingString { key, .. } | SettingsMode::EditingInt { key, .. } => {
                 if let Some(meta) = state.registry.find(key) {
                     breadcrumb_owned =
-                        format!("{MODAL_TITLE} {} {}", crate::glyphs::chevron(), meta.label);
+                        format!("{} {} {}", tr(MODAL_TITLE), crate::glyphs::chevron(), tr(meta.label));
                     &breadcrumb_owned
                 } else {
                     MODAL_TITLE
@@ -82,7 +84,7 @@ pub fn render_settings_modal(
             SettingsMode::PickingGroup { key, .. } => {
                 if let Some(meta) = state.registry.find(key) {
                     breadcrumb_owned =
-                        format!("{MODAL_TITLE} {} {}", crate::glyphs::chevron(), meta.label);
+                        format!("{} {} {}", tr(MODAL_TITLE), crate::glyphs::chevron(), tr(meta.label));
                     &breadcrumb_owned
                 } else {
                     MODAL_TITLE
@@ -433,7 +435,7 @@ pub(super) fn render_docs_footer(buf: &mut Buffer, area: Rect, theme: &Theme) {
     const LONG: &str =
         "Tip · Ask Grok: \"change theme to grokday\" or \"what does compact mode do?\"";
     const SHORT: &str = "Tip · Ask Grok to change a setting";
-    let text = modal_window::fit_tip_line(&[LONG, SHORT], area.width as usize);
+    let text = modal_window::fit_tip_line(&[tr(LONG), tr(SHORT)], area.width as usize);
     modal_window::render_centered_tip_footer(buf, area, theme, text.as_ref());
 }
 
@@ -466,7 +468,8 @@ pub(super) fn render_rows(
     // Empty filter: show "No matches for <query>"
     if total_visible == 0 {
         if !state.query().is_empty() {
-            let prefix = "No matches for ";
+            // LOCAL: 前缀经 tr 翻译；查询截断预算用实际渲染的前缀宽度（译文/原文各自测量），保持居中不溢出
+            let prefix = tr("No matches for ");
             let suffix_quote_w = 2u16; // surrounding "" chars
             let available_for_query = (area.width as usize)
                 .saturating_sub(prefix.width())
@@ -588,7 +591,8 @@ pub(super) fn render_rows(
 
         match row {
             RowEntry::Header { category } => {
-                let label = category.label();
+                // LOCAL: 分组标题在渲染出口查表翻译
+                let label = tr(category.label());
                 let header_style = Style::default()
                     .fg(theme.gray)
                     .bg(theme.bg_base)
@@ -670,7 +674,7 @@ pub(super) fn render_rows(
                 let show_restart_pill_for_layout = meta.restart_required && is_expanded;
                 let layout_decision = row_layout(
                     area.width,
-                    meta.label,
+                    tr(meta.label),
                     &value_display,
                     show_restart_pill_for_layout,
                 );
@@ -801,7 +805,7 @@ fn compute_filtered_row_heights(state: &SettingsModalState, area_width: u16) -> 
                 let lock = state.row_lock(key);
                 let value_display = value_display(meta, &value, lock);
                 let show_restart_pill = meta.restart_required && is_expanded;
-                let layout = row_layout(area_width, meta.label, &value_display, show_restart_pill);
+                let layout = row_layout(area_width, tr(meta.label), &value_display, show_restart_pill);
                 let mut h: u16 = match layout {
                     RowLayout::OneLine => 1,
                     RowLayout::TwoLine | RowLayout::TwoLineWithLabelTruncation => 2,
@@ -834,7 +838,7 @@ fn wrapped_description_height(
     if wrap_w == 0 {
         return 0;
     }
-    let text = lock_reason.unwrap_or(meta.description);
+    let text = tr(lock_reason.unwrap_or(meta.description));
     let line = Line::from(Span::raw(text));
     let wrapped = crate::render::wrapping::word_wrap_line(&line, wrap_w as usize);
     (wrapped.len() as u16).min(cap)
@@ -860,6 +864,9 @@ fn render_sub_pane_header(
     description: &str,
     min_non_desc_rows: u16,
 ) -> u16 {
+    // LOCAL: 子面板标题/描述在渲染出口查表翻译（meta.label/meta.description 为 registry 动态文案）
+    let title: &str = &tr_str(title);
+    let description: &str = &tr_str(description);
     // ── Row 0: title (truncated with `…`). ────────────────────────
     let title_style = Style::default()
         .fg(theme.text_primary)
@@ -956,6 +963,16 @@ pub(super) fn render_picking_enum(
         }
         _ => return,
     };
+    // LOCAL: registry 动态文案（choice 展示名/描述，含模型目录哨兵项）在渲染出口查表翻译；
+    // 英文原文为键，未命中（如模型名）原样保留
+    let choices: Vec<OwnedEnumChoice> = choices
+        .into_iter()
+        .map(|mut c| {
+            c.display = tr_str(&c.display);
+            c.description = tr_str(&c.description);
+            c
+        })
+        .collect();
 
     if area.width == 0 || area.height == 0 {
         return;
@@ -1185,7 +1202,8 @@ pub(super) fn render_picking_enum(
         let overflow_y = y_cursor;
         if overflow_y < choices_y + max_choices_h as u16 && overflow_y < area.y + area.height {
             let overflow_style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
-            let raw = format!("\u{2026} {more_count} more");
+            // LOCAL: 计数模板整句成键（"… {} more"），渲染时用数字替换 {} 占位符
+            let raw = tr("\u{2026} {} more").replace("{}", &more_count.to_string());
             let overflow_text: std::borrow::Cow<'_, str> = if raw.width() <= area.width as usize {
                 std::borrow::Cow::Owned(raw)
             } else {
@@ -1308,7 +1326,7 @@ fn render_picking_group(
 
         // Value read live from the snapshot (refreshed after each toggle).
         let on = matches!(state.value_for(child_key), Some(SettingValue::Bool(true)));
-        let value_text = if on { "on" } else { "off" };
+        let value_text = if on { tr("on") } else { tr("off") };
         let value_style = if on {
             Style::default().fg(theme.accent_user).bg(bg)
         } else {
@@ -1336,11 +1354,13 @@ fn render_picking_group(
             .saturating_sub(value_w + 1)
             .max(label_x);
         if value_x > label_x {
+            // LOCAL: 子项标签在渲染出口查表翻译
+            let child_label = tr(child_meta.label);
             let label_room = (value_x - label_x).saturating_sub(1) as usize;
-            let label_text: std::borrow::Cow<'_, str> = if child_meta.label.width() <= label_room {
-                std::borrow::Cow::Borrowed(child_meta.label)
+            let label_text: std::borrow::Cow<'_, str> = if child_label.width() <= label_room {
+                std::borrow::Cow::Borrowed(child_label)
             } else {
-                std::borrow::Cow::Owned(truncate_str(child_meta.label, label_room))
+                std::borrow::Cow::Owned(truncate_str(child_label, label_room))
             };
             let label_w = (label_text.width() as u16).min((value_x - label_x).saturating_sub(1));
             buf.set_span(
@@ -1623,9 +1643,10 @@ pub(super) fn render_editing_value(
     if buffer.is_empty() {
         let placeholder = match &meta.kind {
             SettingKind::String { validator, .. } => match validator {
-                StringValidator::KnownModel => "<empty: uses shell default>",
-                StringValidator::NonEmptyToken => "<type a value>",
-                StringValidator::Any => "<type a value>",
+                // LOCAL: 占位符在渲染出口查表翻译
+                StringValidator::KnownModel => tr("<empty: uses shell default>"),
+                StringValidator::NonEmptyToken => tr("<type a value>"),
+                StringValidator::Any => tr("<type a value>"),
             },
             _ => "",
         };
@@ -1680,10 +1701,20 @@ pub(super) fn render_editing_value(
     {
         let err_y = input_y + 1;
         let err_style = Style::default().fg(theme.accent_error).bg(theme.bg_base);
-        let err_text: std::borrow::Cow<'_, str> = if err.width() <= area.width as usize {
-            std::borrow::Cow::Borrowed(err)
+        // LOCAL: 校验错误在渲染出口查表翻译；"Unknown model: \"{name}\"" 模板整句成键，
+        // 用错误串里的模型名替换 {} 占位符（构造处保持英文原文）
+        let err_disp = if let Some(name) = err
+            .strip_prefix("Unknown model: \"")
+            .and_then(|s| s.strip_suffix('"'))
+        {
+            tr("Unknown model: \"{}\"").replace("{}", name)
         } else {
-            std::borrow::Cow::Owned(truncate_str(err, area.width as usize))
+            tr_str(err)
+        };
+        let err_text: std::borrow::Cow<'_, str> = if err_disp.width() <= area.width as usize {
+            std::borrow::Cow::Owned(err_disp)
+        } else {
+            std::borrow::Cow::Owned(truncate_str(&err_disp, area.width as usize))
         };
         let err_w = (err_text.width() as u16).min(area.width);
         buf.set_span(
@@ -1920,7 +1951,7 @@ fn render_preview_block(
     // Title is always plain lowercase `preview`
     // The previous implementation appended ` · clamped to N cols` to the title when the preview clamped to a narrower terminal width
     // The clamp signal now lives in a note row below the content, so the title carries the same shape regardless of clamp state
-    let title_text: &str = "preview";
+    let title_text: &str = tr("preview");
     let title_text_truncated: std::borrow::Cow<'_, str> =
         if title_text.width() <= effective_width as usize {
             std::borrow::Cow::Borrowed(title_text)
@@ -1981,7 +2012,8 @@ fn render_preview_block(
             .saturating_add(1);
         let area_end_y = area.y.saturating_add(area.height);
         if note_y < area_end_y {
-            let note_text = format!("note: clamped at {effective_width} cols");
+            // LOCAL: 计数模板整句成键（"note: clamped at {} cols"），渲染时用数字替换 {} 占位符
+            let note_text = tr("note: clamped at {} cols").replace("{}", &effective_width.to_string());
             let note_text_truncated: std::borrow::Cow<'_, str> =
                 if note_text.width() <= area.width as usize {
                     std::borrow::Cow::Borrowed(note_text.as_str())
@@ -2022,7 +2054,8 @@ fn display_for_enum_canonical<'a>(kind: &'a SettingKind, canonical: &'a str) -> 
     if let SettingKind::Enum { choices, .. } = kind {
         for c in *choices {
             if c.canonical == canonical {
-                return c.display;
+                // LOCAL: choice 展示名在渲染出口查表翻译；canonical 是逻辑键不译
+                return tr(c.display);
             }
         }
     }
@@ -2083,10 +2116,10 @@ pub(super) fn value_display(
         return ROW_ZDR_VALUE.to_string();
     }
     let mut display = match value {
-        SettingValue::Bool(b) => if *b { "on" } else { "off" }.to_string(),
+        SettingValue::Bool(b) => if *b { tr("on") } else { tr("off") }.to_string(),
         SettingValue::String(s) => {
             if s.is_empty() && matches!(meta.kind, SettingKind::DynamicEnum { .. }) {
-                "(no override)".to_string()
+                tr("(no override)").to_string()
             } else {
                 s.clone()
             }
@@ -2095,7 +2128,7 @@ pub(super) fn value_display(
         SettingValue::Int(i) => i.to_string(),
     };
     if lock == Some(CodingDataSharingLock::TeamManaged) {
-        display.push_str(ROW_ADMIN_MANAGED_SUFFIX);
+        display.push_str(tr(ROW_ADMIN_MANAGED_SUFFIX));
     }
     display
 }
@@ -2242,7 +2275,7 @@ pub(super) fn render_setting_row(
 
     // Pill only while expanded: change-time feedback is the toast's job, and a collapsed non-default row would misread as "restart pending" forever
     let show_restart_pill = meta.restart_required && is_expanded;
-    let restart_pill_text = " \u{00B7} restart";
+    let restart_pill_text = tr(" \u{00B7} restart");
     let restart_w = if show_restart_pill {
         restart_pill_text.width() as u16
     } else {
@@ -2262,7 +2295,7 @@ pub(super) fn render_setting_row(
     );
 
     // Fall back to one-line if only 1 line was allocated.
-    let layout_decision = row_layout(area.width, meta.label, value_text, show_restart_pill);
+    let layout_decision = row_layout(area.width, tr(meta.label), value_text, show_restart_pill);
     let layout = if area.height < 2 {
         // Only 1 line is available: collapse to a one-line render and accept that the label might collide with the value column
         RowLayout::OneLine
@@ -2282,7 +2315,7 @@ pub(super) fn render_setting_row(
             let chevron_x = restart_x_line1.saturating_sub(ROW_CHEVRON_COL_W);
             let value_x = chevron_x.saturating_sub(value_w + 1);
 
-            let label_text = format!("{triangle} {}", meta.label);
+            let label_text = format!("{triangle} {}", tr(meta.label));
             let label_w = label_text.width() as u16;
             let label_max_x = area.x.saturating_add(label_w);
             // Cap label end at value_x to never collide with the value column.
@@ -2350,11 +2383,11 @@ pub(super) fn render_setting_row(
                     if label_avail == 0 {
                         ""
                     } else {
-                        label_text_owned = truncate_str(meta.label, label_avail as usize);
+                        label_text_owned = truncate_str(tr(meta.label), label_avail as usize);
                         &label_text_owned
                     }
                 }
-                _ => meta.label,
+                _ => tr(meta.label),
             };
 
             let full_label_text = format!("{triangle} {label_text}");
@@ -2437,7 +2470,7 @@ fn render_expanded_description(
         .fg(theme.gray)
         .bg(theme.bg_base)
         .add_modifier(Modifier::ITALIC);
-    let desc_text = lock_reason.unwrap_or(meta.description);
+    let desc_text = tr(lock_reason.unwrap_or(meta.description));
     // Indent 4 cols to nest under the label.
     let indent = 4u16.min(area.width);
     let wrap_w = area.width.saturating_sub(indent);
@@ -2484,12 +2517,14 @@ fn render_setting_row_no_value(
         .add_modifier(Modifier::BOLD);
 
     let label_max_w = max_label_w;
-    let label_truncated: std::borrow::Cow<'_, str> = if meta.label.width() <= label_max_w as usize {
-        std::borrow::Cow::Borrowed(meta.label)
+    // LOCAL: 标签与错误后缀在渲染出口查表翻译
+    let label_full = tr(meta.label);
+    let label_truncated: std::borrow::Cow<'_, str> = if label_full.width() <= label_max_w as usize {
+        std::borrow::Cow::Borrowed(label_full)
     } else {
-        std::borrow::Cow::Owned(truncate_str(meta.label, label_max_w as usize))
+        std::borrow::Cow::Owned(truncate_str(label_full, label_max_w as usize))
     };
-    let text = format!(" !   {label_truncated} (no read mapping)");
+    let text = format!(" !   {label_truncated} {}", tr("(no read mapping)"));
     let w = text.width() as u16;
     buf.set_span(
         area.x,
@@ -2531,7 +2566,7 @@ fn render_setting_group_row(
 
     // Triangle prefix mirrors normal rows: "▾" expanded, "▸" collapsed (the group's description expands inline via Right/l like other rows)
     let triangle = if is_expanded { "\u{25BE}" } else { "\u{25B8}" };
-    let label_text = format!("{triangle} {}", meta.label);
+    let label_text = format!("{triangle} {}", tr(meta.label));
     let label_cap = chevron_x.saturating_sub(area.x).saturating_sub(1);
     let label_w = (label_text.width() as u16).min(label_cap);
     if label_w > 0 {

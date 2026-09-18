@@ -18,6 +18,7 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Widget};
 
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::tutorial_docs::TUTORIAL_TOPICS;
 use crate::views::modal_window::{
@@ -318,13 +319,14 @@ pub fn render_tutorial(buf: &mut Buffer, area: Rect, st: &mut TutorialState, com
             let Some(topic) = TUTORIAL_TOPICS.get(index) else {
                 return;
             };
+            // LOCAL: 固定前缀/后缀成键翻译，动态标题保留英文原文（标题另经 tr 成键）
             let next_hint = match TUTORIAL_TOPICS.get(index + 1) {
-                Some(next) => format!("\u{2192} next: {}", next.title),
-                None => "\u{2192} done".to_owned(),
+                Some(next) => format!("{}{}", tr("\u{2192} next: "), tr(next.title)),
+                None => tr("\u{2192} done").to_owned(),
             };
             let mut shortcuts = vec![
                 Shortcut {
-                    label: "\u{2191}/\u{2193} scroll",
+                    label: tr("\u{2191}/\u{2193} scroll"),
                     clickable: false,
                     id: 0,
                 },
@@ -336,13 +338,13 @@ pub fn render_tutorial(buf: &mut Buffer, area: Rect, st: &mut TutorialState, com
             ];
             if topic.go_deeper.is_some() {
                 shortcuts.push(Shortcut {
-                    label: "d go deeper",
+                    label: tr("d go deeper"),
                     clickable: false,
                     id: 0,
                 });
             }
             shortcuts.push(Shortcut {
-                label: "Esc list",
+                label: tr("Esc list"),
                 clickable: false,
                 id: 0,
             });
@@ -384,7 +386,10 @@ pub fn render_tutorial(buf: &mut Buffer, area: Rect, st: &mut TutorialState, com
 }
 
 fn render_list(buf: &mut Buffer, area: Rect, st: &mut TutorialState, compact: bool, theme: &Theme) {
-    let progress = format!("{}/{} explored", st.viewed.len(), TUTORIAL_TOPICS.len());
+    // LOCAL: 计数模板整句成键；两个 {} 依次为已浏览主题数、主题总数
+    let progress = tr("{}/{} explored")
+        .replacen("{}", &st.viewed.len().to_string(), 1)
+        .replacen("{}", &TUTORIAL_TOPICS.len().to_string(), 1);
     let shortcuts = [
         Shortcut {
             label: &progress,
@@ -392,17 +397,17 @@ fn render_list(buf: &mut Buffer, area: Rect, st: &mut TutorialState, compact: bo
             id: 0,
         },
         Shortcut {
-            label: "\u{2191}/\u{2193} navigate",
+            label: tr("\u{2191}/\u{2193} navigate"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "Enter open",
+            label: tr("Enter open"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "Esc done",
+            label: tr("Esc done"),
             clickable: false,
             id: 0,
         },
@@ -434,7 +439,7 @@ fn render_list(buf: &mut Buffer, area: Rect, st: &mut TutorialState, compact: bo
         if y >= mca.content.y + mca.content.height {
             break;
         }
-        Paragraph::new(Line::styled(line, intro_style)).render(
+        Paragraph::new(Line::styled(tr(line), intro_style)).render(
             Rect {
                 x: mca.content.x,
                 y,
@@ -460,7 +465,8 @@ fn render_list(buf: &mut Buffer, area: Rect, st: &mut TutorialState, compact: bo
     // Narrow modals can't fit title and blurb on one row; stack the blurb below
     const NARROW_THRESHOLD: u16 = 64;
     let narrow = entries_area.width < NARROW_THRESHOLD;
-    let blurb_slices: Vec<[&str; 1]> = TUTORIAL_TOPICS.iter().map(|t| [t.blurb]).collect();
+    // LOCAL: 列表行的标题/简介是纯展示（本视图搜索已禁用、无 == 匹配），在渲染出口翻译
+    let blurb_slices: Vec<[&str; 1]> = TUTORIAL_TOPICS.iter().map(|t| [tr(t.blurb)]).collect();
 
     let picker_entries: Vec<PickerEntry<'_>> = TUTORIAL_TOPICS
         .iter()
@@ -468,8 +474,8 @@ fn render_list(buf: &mut Buffer, area: Rect, st: &mut TutorialState, compact: bo
         .map(|(i, t)| {
             let viewed = st.viewed.contains(&i);
             PickerEntry::Row(PickerRow {
-                label: t.title,
-                right_label: if narrow { "" } else { t.blurb },
+                label: tr(t.title),
+                right_label: if narrow { "" } else { tr(t.blurb) },
                 selected: i == st.picker.selected,
                 expanded: narrow,
                 fields: &[],

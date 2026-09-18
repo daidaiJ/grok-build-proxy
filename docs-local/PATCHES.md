@@ -465,3 +465,41 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - `src/runner/command.rs`：`gate_outcome` 导入拆分为 `#[cfg(test)] use super::gate_outcome;`
 - `src/runner/command.rs` 测试模块：`make_scoped_ctx` 加 `#[cfg(unix)]`（仅 unix 门控的
   进程组测试使用；Windows 测试构建 dead_code 告警，构建日志不显示但 `--all-targets` 可见）
+
+## 九期补丁（2026-09-18：界面文案中文化 P1 常用弹窗与帮助）
+
+> 方案见 `docs-local/ui-i18n-plan.md`（P1 = 常用弹窗与帮助，5 个模块）。
+> 翻译表 449 → 917 组；施工规约与术语表以方案文档为准。
+
+### xai-grok-pager（P1：设置弹窗/快捷键速查表/用量弹窗/MCP 弹窗/教程）
+- `src/slash/i18n.rs`：翻译表追加 P1 段 430 组，分节与代码注释一一对应：
+  settings 字面量/页脚 rest 键/分组标题、registry meta.label+description、枚举
+  display+description（含 STT 语言名中文化）、shortcuts 分类/页脚/伪行/多行 long_help
+  常量/ActionRegistry short_help+long_help、usage 标签页+页脚 rest 键+allowance+会话
+  信息字段、mcps 分组模板+状态徽章、tutorial 引导语+主题 title/blurb+go_deeper 指南页标题
+- `src/views/settings_modal/render.rs`：面包屑/分组标题/行标签/行值徽章/展开描述与锁定
+  原因/Tip/过滤空态（`tr("No matches for ")` 译文自身参与宽度计算，布局与绘制同源）/
+  编辑器占位符与校验错误（`Unknown model: "{}"` 模板键 strip 前后缀）/枚举选择器
+  display+description 渲染出口统一 tr/tr_str；三处 `row_layout` 标签宽度同步传译文
+- `src/views/shortcuts_help.rs`：ActionRegistry 渲染链路本次接线——`entry_display`
+  （hint 说明+分类标题）、`CheatsheetRows::build`（折叠标题+内联帮助）、`render_detail`
+  （详情页 title/body 渲染出口 tr_str，state 存英文不变）、`render_detail_body` 变灰
+  注记、页脚与 3 处弹窗标题；搜索过滤 `filter_entries` 仍按英文匹配（中文模式下用
+  英文词搜索，如需中文搜索需单独翻译匹配层）；`src/app/modals.rs` 仅 2 处
+  "Keyboard Shortcuts" 标题接线
+- `src/views/usage_modal.rs`：三个标签页标题（modal_window 渲染出口查表）、错误/空态/
+  加载中、allowance 区（`Usage: ${used} / ${cap} per month` 命名占位符 replace）、
+  会话信息字段标签屏显出口 tr；剪贴板复制串拆开保持英文（复制内容偏数据，且 dispatch
+  测试对复制文本有英文断言）
+- `src/views/mcps_modal.rs`：分组标题模板整键（`"Managed by grok.com ({})"` replace
+  计数；插件分组 `"Plugin: "` 前缀键+动态名留 format! 参数）、Managed 说明行、6 个状态
+  徽章 label()（已核实全部消费点为展示，无比较键）
+- `src/views/tutorial.rs`：INTRO_LINES 渲染出口逐条 tr、列表行 title/blurb tr、两页页脚
+  （`{}/{} explored` 双占位 replacen）；`tutorial_docs.rs` 零改动——title/blurb 是
+  static 不进 state 也不被比较，弹窗标题走 docs 查看器中央 tr_str；go_deeper 的
+  `find_doc(title)` 索引键保持英文
+- `src/views/modal.rs`：reset 确认插值补 `tr_str(&meta.label)` 与默认值展示 tr_str
+  （与 settings 弹窗行标签译文对齐）
+- 主题专名（Grok Night/Tokyo Night 等）、"ZDR"、模型名不译（与 `/theme <name>` 用法
+  一致）；settings 页脚图例 "type to filter" 译文呈 "type 以过滤"（shortcut_label_i18n
+  固定保留键位 token，属机制限制，后续如需整句成键要改 modal_window 渲染函数）

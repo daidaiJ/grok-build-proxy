@@ -18,6 +18,7 @@ use std::borrow::Cow;
 
 use crate::actions::{ActionDef, ActionId, ActionRegistry, Category, When};
 use crate::input::key::KeyShortcut;
+use crate::slash::i18n::{tr, tr_str};
 use crate::views::picker::{PickerConfig, PickerOutcome, PickerState, handle_picker_input};
 use crate::views::shortcuts_bar::HintItem;
 
@@ -451,9 +452,11 @@ fn hint_key_pretty(h: &HintItem) -> String {
 /// Get the long description for a hint, falling back to the short label.
 pub fn entry_display(entries: &[ShortcutsHelpEntry], idx: usize) -> (String, String) {
     match entries.get(idx) {
-        Some(ShortcutsHelpEntry::Hint { item: h, .. }) => (hint_description(h), hint_key_pretty(h)),
+        Some(ShortcutsHelpEntry::Hint { item: h, .. }) => {
+            (tr_str(&hint_description(h)), hint_key_pretty(h))
+        }
         Some(ShortcutsHelpEntry::SectionHeader { label, .. }) => {
-            ((*label).to_string(), String::new())
+            (tr(label).to_string(), String::new())
         }
         None => (String::new(), String::new()),
     }
@@ -622,17 +625,17 @@ pub fn modal_footer_detail() -> Vec<crate::views::modal_window::Shortcut<'static
     use crate::views::modal_window::Shortcut;
     vec![
         Shortcut {
-            label: "Esc back",
+            label: tr("Esc back"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "\u{2191}/\u{2193} scroll",
+            label: tr("\u{2191}/\u{2193} scroll"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "Ctrl+./X close",
+            label: tr("Ctrl+./X close"),
             clickable: false,
             id: 0,
         },
@@ -690,7 +693,7 @@ pub fn render_detail_body<'a>(
     if dimmed_note {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "(not active in current context)",
+            tr("(not active in current context)"),
             Style::default().fg(theme.gray_dim),
         )));
     }
@@ -725,9 +728,12 @@ pub fn render_detail(
     else {
         return;
     };
+    // Detail payload is stored in modal state as English originals; translate at the render exit.
+    let title = tr_str(title);
+    let body = tr_str(body);
     let footer = modal_footer_detail();
     let modal_config = mw::ModalWindowConfig {
-        title: "Keyboard Shortcuts",
+        title: tr("Keyboard Shortcuts"),
         tabs: None,
         shortcuts: &footer,
         sizing: modal_sizing(compact),
@@ -737,9 +743,9 @@ pub fn render_detail(
         render_detail_body(
             buf,
             mca.content,
-            title,
+            &title,
             keys_line,
-            body,
+            &body,
             *dimmed_note,
             *scroll,
             theme,
@@ -1037,41 +1043,41 @@ pub fn modal_footer(filter_active: bool) -> Vec<crate::views::modal_window::Shor
     use crate::views::modal_window::Shortcut;
     let mut shortcuts = vec![
         Shortcut {
-            label: "\u{2191}/\u{2193} nav",
+            label: tr("\u{2191}/\u{2193} nav"),
             clickable: false,
             id: 0,
         },
         Shortcut {
             label: if filter_active {
-                "f show all"
+                tr("f show all")
             } else {
-                "f filter"
+                tr("f filter")
             },
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "e/Space/\u{2192} expand",
+            label: tr("e/Space/\u{2192} expand"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "\u{2190} collapse",
+            label: tr("\u{2190} collapse"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "Enter details",
+            label: tr("Enter details"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "/ search",
+            label: tr("/ search"),
             clickable: false,
             id: 0,
         },
         Shortcut {
-            label: "Esc close",
+            label: tr("Esc close"),
             clickable: false,
             id: 0,
         },
@@ -1140,9 +1146,9 @@ impl CheatsheetRows {
                 }) => {
                     let is_collapsed = collapsed_sections.contains(category_idx);
                     let display = if is_collapsed {
-                        format!("{label} ({entry_count})")
+                        format!("{} ({})", tr(label), entry_count)
                     } else {
-                        (*label).to_string()
+                        tr(label).to_string()
                     };
                     row_strs.push((display, String::new()));
                     help_text.push(String::new());
@@ -1152,6 +1158,7 @@ impl CheatsheetRows {
                     row_strs.push(entry_display(entries, i));
                     // Collapse newlines to spaces so the collapsible view shows one wrap-flowed block (no hard breaks).
                     let help = hint_inline_help(entry)
+                        .map(tr_str)
                         .map(|s| s.replace('\n', " "))
                         .unwrap_or_default();
                     help_text.push(help);
@@ -1293,7 +1300,7 @@ pub fn render_modal(
     let non_sel: Vec<bool> = vec![false; picker_entries.len()];
     let footer = modal_footer(filter_active);
     let modal_config = mw::ModalWindowConfig {
-        title: "Keyboard Shortcuts",
+        title: tr("Keyboard Shortcuts"),
         tabs: None,
         shortcuts: &footer,
         sizing: modal_sizing(compact),
@@ -1404,7 +1411,7 @@ pub fn handle_modal_key(
         modal_footer(filter_active)
     };
     let chrome_cfg = mw::ModalWindowConfig {
-        title: "Keyboard Shortcuts",
+        title: tr("Keyboard Shortcuts"),
         tabs: None,
         shortcuts: &footer,
         sizing: modal_sizing(compact),

@@ -730,9 +730,9 @@ pub fn reset_confirm_prompt(modal: &ActiveModal) -> Option<String> {
     Some(format!(
         "{}'{}'{}{}{}",
         tr("Reset "),
-        meta.label,
+        tr_str(&meta.label),
         tr(" to default ("),
-        format_default_for_prompt(&meta.kind, &default),
+        tr_str(&format_default_for_prompt(&meta.kind, &default)),
         tr(")?"),
     ))
 }
@@ -747,7 +747,7 @@ pub fn reset_confirm_breadcrumb(modal: &ActiveModal) -> Option<String> {
         return None;
     };
     let meta = settings_state.registry.find(key)?;
-    Some(tr("Reset '{}'").replace("{}", &meta.label))
+    Some(tr("Reset '{}'").replace("{}", &tr_str(&meta.label)))
 }
 /// Format a `SettingValue` for the prompt's `(<default>)` display.
 fn format_default_for_prompt(

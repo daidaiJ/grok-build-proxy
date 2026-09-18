@@ -17,6 +17,7 @@ use crate::scrollback::text_selection::apply_selection_highlight;
 use crate::scrollback::types::{col_past_grapheme, grapheme_cells_at, slice_display_cols};
 
 use crate::scrollback::blocks::ContextInfoBlock;
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::credit_bar::CreditBalance;
 use crate::views::modal_window::{
@@ -860,16 +861,16 @@ fn context_tab_lines(state: &UsageInfoModalState, theme: &Theme, width: u16) -> 
     if let Some(error) = &state.context_error {
         return vec![muted_line(
             theme,
-            format!("Couldn't load context usage: {error}"),
+            format!("{}: {error}", tr("Couldn't load context usage")),
         )];
     }
     if let Some(block) = &state.context {
         return block.lines_for_width(theme, width);
     }
     if state.ctx.session_id.is_none() {
-        return vec![muted_line(theme, "No active session.")];
+        return vec![muted_line(theme, tr("No active session."))];
     }
-    vec![muted_line(theme, "Loading context usage\u{2026}")]
+    vec![muted_line(theme, tr("Loading context usage\u{2026}"))]
 }
 
 /// Account allowance followed by this session's token/cost totals.
@@ -883,17 +884,26 @@ fn usage_limit_lines(
     if state.ctx.chat_kind {
         // Gateway chat sessions have no Build coding credits to show.
     } else if !state.ctx.usage_visible {
-        lines.push(muted_line(theme, "Usage limits are managed by your team."));
+        lines.push(muted_line(
+            theme,
+            tr("Usage limits are managed by your team."),
+        ));
     } else if let Some(url) = &state.ctx.billing_redirect_url {
-        lines.push(plain(theme, format!("Please check your usage on {url}")));
+        lines.push(plain(
+            theme,
+            tr("Please check your usage on {url}").replace("{url}", url),
+        ));
     } else if let Some(bal) = balance {
         lines.extend(allowance_lines(state, bal, theme));
     } else if let Some(error) = &state.billing_error {
-        lines.push(muted_line(theme, format!("Couldn't load usage: {error}")));
+        lines.push(muted_line(
+            theme,
+            format!("{}: {error}", tr("Couldn't load usage")),
+        ));
     } else if state.billing_loading {
-        lines.push(muted_line(theme, "Loading usage\u{2026}"));
+        lines.push(muted_line(theme, tr("Loading usage\u{2026}")));
     } else {
-        lines.push(muted_line(theme, "No billing data available."));
+        lines.push(muted_line(theme, tr("No billing data available.")));
     }
 
     if let Some(usage_text) = &state.session_usage_text {
@@ -911,7 +921,7 @@ fn usage_limit_lines(
         if !lines.is_empty() {
             lines.push(Line::default());
         }
-        lines.push(muted_line(theme, "Loading session usage\u{2026}"));
+        lines.push(muted_line(theme, tr("Loading session usage\u{2026}")));
     }
     lines
 }
@@ -925,8 +935,8 @@ fn allowance_lines(
 
     // "Weekly limit", "Monthly limit", or "Usage", plus the plan name
     let header = match &state.ctx.subscription_tier {
-        Some(tier) => format!("{} ({tier})", bal.usage_label()),
-        None => bal.usage_label().to_string(),
+        Some(tier) => format!("{} ({tier})", tr(bal.usage_label())),
+        None => tr(bal.usage_label()).to_string(),
     };
     lines.push(Line::styled(header, header_style(theme)));
     lines.push(Line::default());
@@ -951,7 +961,7 @@ fn allowance_lines(
     ]));
 
     if let Some(reset) = &bal.period_end_display {
-        lines.push(muted_line(theme, format!("Resets: {reset}")));
+        lines.push(muted_line(theme, format!("{}: {reset}", tr("Resets"))));
     }
 
     // Prepaid credits (stored as negative cents, an accounting convention)
@@ -959,7 +969,7 @@ fn allowance_lines(
         lines.push(Line::default());
         lines.push(plain(
             theme,
-            format!("Credits: ${:.2}", prepaid as f64 / 100.0),
+            format!("{}: ${:.2}", tr("Credits"), prepaid as f64 / 100.0),
         ));
     }
 
@@ -968,10 +978,15 @@ fn allowance_lines(
         let used = bal.on_demand_used_cents.unwrap_or(0).abs() as f64 / 100.0;
         let cap = bal.on_demand_cap_cents.unwrap_or(0).abs() as f64 / 100.0;
         lines.push(Line::default());
-        lines.push(Line::styled("Pay as you go: Enabled", header_style(theme)));
+        lines.push(Line::styled(
+            tr("Pay as you go: Enabled"),
+            header_style(theme),
+        ));
         lines.push(muted_line(
             theme,
-            format!("Usage: ${used:.2} / ${cap:.2} per month"),
+            tr("Usage: ${used} / ${cap} per month")
+                .replace("{used}", &format!("{used:.2}"))
+                .replace("{cap}", &format!("{cap:.2}")),
         ));
     }
     lines
@@ -981,20 +996,20 @@ fn session_info_content(state: &UsageInfoModalState, theme: &Theme) -> TabConten
     if let Some(error) = &state.session_error {
         return TabContent::from_lines(vec![muted_line(
             theme,
-            format!("Couldn't load session info: {error}"),
+            format!("{}: {error}", tr("Couldn't load session info")),
         )]);
     }
     let Some(fields) = state.session_fields.as_ref().filter(|f| !f.is_empty()) else {
         if state.ctx.session_id.is_none() {
-            return TabContent::from_lines(vec![muted_line(theme, "No active session.")]);
+            return TabContent::from_lines(vec![muted_line(theme, tr("No active session."))]);
         }
-        return TabContent::from_lines(vec![muted_line(theme, "Loading session info\u{2026}")]);
+        return TabContent::from_lines(vec![muted_line(theme, tr("Loading session info\u{2026}"))]);
     };
 
     let mut lines = vec![Line::from(vec![
-        Span::styled("Session info", header_style(theme)),
+        Span::styled(tr("Session info"), header_style(theme)),
         Span::styled(
-            "   click or drag to copy",
+            format!("   {}", tr("click or drag to copy")),
             Style::default().fg(theme.gray_dim),
         ),
     ])];
@@ -1014,7 +1029,8 @@ fn session_info_content(state: &UsageInfoModalState, theme: &Theme) -> TabConten
                 theme.muted()
             };
             lines.push(Line::from(vec![
-                Span::styled(format!("{}: ", field.label), label_style),
+                // 屏显侧翻译；剪贴板复制内容（下方 copy_targets）保持英文
+                Span::styled(format!("{}: ", tr(field.label)), label_style),
                 Span::styled(field.value.clone(), copy_value_style(theme, hovered)),
             ]));
             copy_targets.push(CopyTarget {
@@ -1023,7 +1039,7 @@ fn session_info_content(state: &UsageInfoModalState, theme: &Theme) -> TabConten
             });
         } else {
             lines.push(Line::from(Span::styled(
-                format!("{}:", field.label),
+                format!("{}:", tr(field.label)),
                 theme.muted(),
             )));
             let value_idx = lines.len();
