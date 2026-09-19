@@ -466,8 +466,10 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - `src/runner/command.rs` 测试模块：`make_scoped_ctx` 加 `#[cfg(unix)]`（仅 unix 门控的
   进程组测试使用；Windows 测试构建 dead_code 告警，构建日志不显示但 `--all-targets` 可见）
 
-## Windows 测试环境族：分级屏蔽策略（2026-09-19 定稿）
+## Windows 测试环境族：分级屏蔽策略（2026-09-19 定稿；体系全貌见 docs-local/WIN-TEST-GATE.md）
 
+> 本表 T0–T3 是溢出族的处理细则，已并入 WIN-TEST-GATE 分级体系（T1→L1、T2→L3）；
+> 入口门控/静态扫描/抽样分诊的完整流水线、白名单晋升与 WSL 配方以 WIN-TEST-GATE.md 为准。
 > 背景：上游基线是 Linux CI；本机 Windows 的测试线程默认栈仅 1MB（Linux 8MB），
 > 上游深结构测试（subagent wake 族等）按 `STATUS_STACK_OVERFLOW`（0xc00000fd）
 > 成族崩溃。根因是环境差异，不是产品 bug——按本表分级处理，禁止逐个排查。
@@ -479,8 +481,10 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 | T2 | **代码门控**：个别测试在 T1 下仍溢出（无界递归类）→ 该测试加 `#[cfg(windows)] #[ignore = "win 1MiB test-thread stack; see docs-local/PATCHES.md"]` LOCAL 补丁 | 中 | T1 无效的孤例 |
 | T3 | 改造测试 harness / 构建脚本 | 高 | 目前不需要 |
 
-**标准测试命令**（本机一律用这个形态）：
+**标准测试命令**（本机一律走门控入口；裸跑时才手动带前缀）：
 ```
+scripts-local/ctest.sh -p <pkg> --lib          # 自动注入 RUST_MIN_STACK/TMP 并拼 win-skip.txt
+# 裸跑等价形态：
 TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp' RUST_MIN_STACK=33554432 cargo test -p <pkg> --lib
 ```
 

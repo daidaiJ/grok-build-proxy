@@ -1,0 +1,5 @@
+# Windows 门控 skip 清单（ctest.sh / win_sample.py 自动拼 --skip）
+# 每行一个子串（libtest --skip 语义：匹配测试全名即跳过）；# 后为注释。
+# 登记纪律（阶段 2.5 深排产出）：确认是环境族才登记，注释注明族名/根因/日期；
+# 优先登记模块级后缀（如 some_module::tests::）一族全截，孤例才登记测试名。
+# 首轮为空：溢出族已由 RUST_MIN_STACK 环境级消解，无需登记。
