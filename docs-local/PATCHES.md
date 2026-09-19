@@ -465,3 +465,24 @@ search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往
 - `src/runner/command.rs`：`gate_outcome` 导入拆分为 `#[cfg(test)] use super::gate_outcome;`
 - `src/runner/command.rs` 测试模块：`make_scoped_ctx` 加 `#[cfg(unix)]`（仅 unix 门控的
   进程组测试使用；Windows 测试构建 dead_code 告警，构建日志不显示但 `--all-targets` 可见）
+
+## Windows 测试环境族：分级屏蔽策略（2026-09-19 定稿）
+
+> 背景：上游基线是 Linux CI；本机 Windows 的测试线程默认栈仅 1MB（Linux 8MB），
+> 上游深结构测试（subagent wake 族等）按 `STATUS_STACK_OVERFLOW`（0xc00000fd）
+> 成族崩溃。根因是环境差异，不是产品 bug——按本表分级处理，禁止逐个排查。
+
+| 级 | 手段 | 成本 | 适用 |
+|---|---|---|---|
+| T0 | **单测试 A/B 归因**：`git stash push -- <crate路径>` 只跑疑似溢出的那一个测试对比 HEAD；秒级，不动全量 | 极低 | 判定"我的改动还是既有问题"——必须最先做 |
+| T1 | **`RUST_MIN_STACK=33554432` 抬栈**（32MB）：env 级、零代码改动、零重编译，已验证消掉整个溢出族 | 低 | 一切 `0xc00000fd` 溢出。**默认先行**：标准测试命令统一带此前缀 |
+| T2 | **代码门控**：个别测试在 T1 下仍溢出（无界递归类）→ 该测试加 `#[cfg(windows)] #[ignore = "win 1MiB test-thread stack; see docs-local/PATCHES.md"]` LOCAL 补丁 | 中 | T1 无效的孤例 |
+| T3 | 改造测试 harness / 构建脚本 | 高 | 目前不需要 |
+
+**标准测试命令**（本机一律用这个形态）：
+```
+TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp' RUST_MIN_STACK=33554432 cargo test -p <pkg> --lib
+```
+
+**纪律**：T1 生效就不打 T2 补丁；T2 补丁必须登记本表便于同步重放；禁止在没有 T0 归因前
+直接修产品代码。

@@ -14,19 +14,22 @@
 
 ## 1. 协议接口兼容性（适配性）
 
-### 1.1 reasoning 方言自学习 ⭐ P0
+### 1.1 reasoning 方言自学习 ⭐ P0 ✅ 已落地（本分支）
 - **来源**：kimi-code `packages/kosong/src/providers/reasoning-key.ts`（notes/kimi-code.md §C）——三方言 `reasoning_content`/`reasoning_details`/`reasoning`，入站按优先级扫描，出站**逐端点学习回放**（端点说什么方言就回什么方言），可显式 pin。
 - **为什么**：不硬编码厂商映射，天然兼容任意 OpenAI 兼容网关/vLLM 版本漂移——正是"不做 preset 也要兼容性好"的正解。
 - **落点**：`xai-grok-sampling-types`（reasoning 字段已有）加方言枚举 + sampler 层按 (endpoint,model) 记忆观察结果。
+- **实现**（2026-09-19）：`sampling-types/src/reasoning_dialect.rs`——`ReasoningDialect` 三方言枚举（`wire_key`/`from_wire_key` 可扩展）+ `ReasoningDialectMemory`（按 model 的进程内记忆，宿主为 per-endpoint 的 `SamplingClient`，即 (endpoint, model) 作用域）；`ChatChunkDelta` 增 `reasoning` 入站解析（当前 vLLM 改名后的真实丢失点；`reasoning_details` 数组形态按 kimi 语义跳过）；L2 stream 观察方言，client 在 `conversation_stream`/`conversation` 出站回放（`reasoning_content` → 学到的方言字段）。kimi 的 detect-never-clears / last-write-wins 语义已测试移植。显式 pin 留给 1.4 能力位。
 
-### 1.2 reasoning 回写防 400 + `<think>` 泄漏清洗 ⭐ P0
+### 1.2 reasoning 回写防 400 + `<think>` 泄漏清洗 ⭐ P0 ✅ 已落地（本分支，清洗为实验开关）
 - **来源**：qwen-code `packages/core/src/openaiContentGenerator/converter.ts:817-828`（assistant 消息回写 reasoning 防严格端点 400）、`taggedThinkingParser.ts` 兜底 `<think>` 标签泄漏（有生产事故回放测试）；opencode `provider/transform.ts:303-315` DeepSeek 特判——assistant 必须带 reasoning part，**为空也要补**，interleaved 模型空 reasoning 回传（:329-346）。
 - **落点**：`xai-grok-sampler/src/stream/` collect 层 + chat-state 历史回放路径。
+- **实现**（2026-09-19）：回写防 400 的核心（Reasoning 折叠进 `reasoning_content`、空文本为 `""` 非 null）上游已具备，本分支补齐方言正确性（见 1.1）。`<think>`/`<thinking>` 泄漏清洗：`sampler/src/thinking_scrub.rs` 流式状态机，**qwen 语义 1:1 移植**（大小写不敏感、binary toggle、跨配对、partial tag 跨 chunk 缓冲、final flush），21 个用例自 qwen 测试套件移植；L2 层清洗使 UI token 与持久化历史同时干净。**【实验特性】`experimental.thinking_tag_scrub`，默认关**——toggle-anywhere 会把正文中字面 `<think>` 吞进推理通道（qwen 生产可接受的取舍，但属可见输出变更）。opencode 的"assistant 必须带空 reasoning part"特判依赖模型能力位，**顺延至 1.4 一并做**（无差别补空字段对严格端点本身就有 400 风险）。
 
-### 1.3 协议边界消息合并 ⭐ P0
+### 1.3 协议边界消息合并 ⭐ P0 ✅ 已落地（本分支）
 - **来源**：kimi-code `packages/kosong/src/providers/merge-user-messages.ts`（notes/kimi-code.md B2）——压缩后连续 user 消息在严格 provider 会 400；在协议边界合并连续 user 消息，并保证并行 tool-result 同 turn。
 - **为什么**：grok 的 `replace_history` 压缩/回滚路径随时可能产出非法消息序列，这是埋在压缩功能里的雷。
 - **落点**：`xai-chat-state` replace_history 出口 + sampler 请求构造入口，双保险。
+- **实现**（2026-09-19）：按 kimi 原设计**收敛到协议转换边界单点**（其教训："Keeping the algorithm in one place stops a provider from silently omitting it"；且 chat-state 存储层合并会破坏 `synthetic_reason`/`prompt_index` 等回放依赖的结构标记——原计划的"双保险"改为"边界归一"）：Messages 路径 `merge_consecutive_user_turns`（不对称规则 1:1：tool-result-only 吸收后续、text 不吸收 leading tool-result），ChatCompletions 路径 `merge_consecutive_user_messages`（tool 为独立 role，无需不对称）；两协议合并确定性 ⇒ 前缀字节稳定（有测试锁定）。opencode 的"tool 后必须插 assistant"特判不移植（OpenAI 规范允许 tool→user，属 DeepSeek 专属 quirk）。
 
 ### 1.4 thinking 开关按协议编码 + 能力位挂模型条目（用户自填） 🟡 P1
 - **来源**：kimi-code `kosong/src/catalog.ts:419-429` thinking off 编码按协议区分；qwen-code ModelSpec 的 `capabilities.reasoning{thinking,toggleOnly,disableField}`（`presets/alibaba-coding-plan.ts:22-35`）。
@@ -41,13 +44,16 @@
 ## 2. token 经济学
 
 ### 2.1 前缀缓存四件套 ⭐ P0（本报告最高优先级）
-1. **字节级前缀一致不变量**：MiMo-Code `session/llm-request-prefix.ts`（notes/mimo-code.md ②2）——system+tools+消息序构造收敛为单一纯函数 `buildLLMRequestPrefix`，父循环与 fork 共用，`prebuiltSystem` 冻结 system。**落点**：sampler 请求构造纯函数化 + 单测断言两次构造 byte-equal。这是把缓存命中从"调参运气"变成"工程保证"。
-2. **显式断点注入（按协议门控）**：opencode `packages/llm/src/cache-policy.ts`（notes/opencode.md B5）——auto 策略=三断点（最后 tool 定义/最后 system part/最新 user 消息），仅对支持 inline hint 的协议（Anthropic messages）注入，OpenAI 隐式缓存跳过，成本论证写在注释（1.25x 写 vs 0.1x 读）。kimi-code `kosong/src/providers/anthropic.ts:352-1083` 同款实现可对照。**落点**：Messages 协议流即插即用。
-3. **断裂检测 + 闲置过期提醒**：kimi-code `apps/kimi-code/src/tui/controllers/cache-hint-controller.ts`（notes/kimi-code.md B5）——cache read 环比跌幅 <95% 报 `cache_break_detected`；闲置后 resume/提交时提醒缓存已过期。**落点**：grok 已有 usage 账本（`chat-state/usage.rs` cached_tokens + cache_creation_tokens），只差检测器和 UI 提示。
-4. **cacheReadRatio 上 status line**：minimax-code `tui/application/session-cache-metrics.ts`（notes/minimax-code.md B5）。**落点**：本地补丁已扩过 status line 字段（PATCHES.md），顺手。
+
+**✅ 全部落地（本分支，2026-09-19）**：
+
+1. **字节级前缀一致不变量** ✅ — MiMo-Code `session/llm-request-prefix.ts`（notes/mimo-code.md ②2）——构造收敛为纯函数 + 单测断言。**实现**：三条协议转换（ChatCompletions/Responses/Messages）本就纯函数化，补 `conversation/prefix_invariant_tests.rs`：两次构造 byte-equal（三协议）、跨 turn 消息列表 element-wise 前缀稳定（Messages 剥离滚动的 cache_control 标记）、**mimo fork 前缀不变量移植**（fork 请求保留父前缀至最后一条 user turn，尾部被合并吸收——与合并语义的一致行为有测试锁定）。上游 responses 套件本有 `assert_prefix_stable`，现三协议对齐。
+2. **显式断点注入（按协议门控）** ✅ **上游已带**——`Synced from monorepo` 已含 `build_messages_request` 的 `apply_cache_breakpoints`（system 末块 + 消息 tip + 上一 user，注释明确第 4 槽位留给网关自动缓存、5 个即拒）。opencode 设计中的"最后一个 tool 定义"断点**有意不加**：会占掉上游预留的第 4 槽位（`ToolParam` 无 cache_control 字段，保持现状）。auto/手工策略开关留待有网关需求时再做。
+3. **断裂检测** ✅ — kimi-code `cache-hint-controller.ts` 的 <95% 环比判定已移植：`xai-chat-state/src/usage.rs` `is_cache_break`（prev≥512 token 才参与判定，阈值/比率常量化）+ `UsageLedger.last_cache_read_by_model`（会话态，不序列化）+ `UsageTotals.cache_break_calls`，经 `PromptUsageModel.cache_break_calls` 上 ACP wire（默认关的 LOCAL 字段，仿 cache_miss_calls）。**闲置过期提醒对话框（4.5）未做**——需 resume/提交入口的 UI 时机，随 P1 做。
+4. **cacheReadRatio 上 status line** — 检测数据已就位（cache_break_calls/cache_miss_calls 在账本与 wire 上）；status line 具体展示随 P1 UI 轮做。
 
 ### 2.2 压缩升级
-- **交接文档式摘要 prompt** ⭐ P0：kimi-code `agent/fullCompaction/compaction-instruction.md`（notes/kimi-code.md B5③）——保真最近意图/已运行命令与结果/已决未决/前向计划，跟随会话语言。**纯提示词替换，成本最低收益最直接**，落点 `xai-grok-compaction` 摘要模板。
+- **交接文档式摘要 prompt** ⭐ P0 ✅ 已落地（本分支）：kimi-code `agent/fullCompaction/compaction-instruction.md`（notes/kimi-code.md B5③）——保真最近意图/已运行命令与结果/已决未决/前向计划，跟随会话语言。**实现**（2026-09-19）：`full_replace_summary_prompt.txt` 定向增强——语言跟随 + 命令/结果保真（§4/§8）+ 已决/未决切分（§5）+ handoff-document 定调，全部为纯提示词改动；qwen/kimi 风格差异以最小增量合入，9 段结构与小节名不变（下游测试依赖小节名）。
 - **microcompaction** 🟡 P1：qwen-code `services/microcompaction/microcompact.ts`（notes/qwen-code.md B2）——只清老工具结果内容为占位符、不动对话骨架；opencode 同思路（2000 字符+skill 豁免）。落点 `xai-grok-compaction` history 模块，作为 85% 全量压缩之前的轻量档。
 - **溢出递进压缩 ≤3 次** 🟡 P2：kimi-code `agent/fullCompaction/strategy.ts:19-27`。
 
@@ -101,8 +107,20 @@
 
 三批 P0 全部**不动架构、单 crate 落点**，可独立提交：
 
-1. **第一批（防 400 套装，适配性地基）**：1.2 reasoning 回写/泄漏清洗 + 1.3 协议边界消息合并 + 1.1 方言自学习。
-2. **第二批（token 经济学主菜）**：2.1-1 前缀字节一致不变量 → 2.1-2 Messages 协议断点注入 → 2.1-3 断裂检测 → 2.2 交接文档摘要 prompt（提示词级，随手）。
-3. **第三批（体感）**：3.1 提交边界重试 + 2.3 spill-to-disk（按原 compression-plan 推进）。
+1. **第一批（防 400 套装，适配性地基）** ✅ 已落地：1.2 reasoning 回写/泄漏清洗（清洗为实验开关默认关）+ 1.3 协议边界消息合并（边界归一单点，见 1.3 实现注记）+ 1.1 方言自学习。
+2. **第二批（token 经济学主菜）** ✅ 已落地：2.1-1 前缀不变量测试（含 mimo fork 不变量移植）→ 2.1-2 确认上游已带断点注入（tool 断点有意不加，槽位论证见 2.1-2 注记）→ 2.1-3 断裂检测（检测器+wire 面；闲置过期提醒对话框随 4.5 P1）→ 2.2 交接文档摘要 prompt。
+3. **第三批（体感）** ⏳ 未动：3.1 提交边界重试 + 2.3 spill-to-disk（按原 compression-plan 推进）。
 
 P1/P2 按 §3/§4 表内级别随迭代带入；每项引入后在本文勾选并注明落点 PR/commit。
+
+### 6.1 实验特性 vs 正式特性分类（本批引入）
+
+**直接上正式（默认启用，无需开关）**：
+- 1.1 方言自学习：入站 `reasoning` 解析是纯增益（此前这些端点的 reasoning 整体丢失）；出站回放仅在端点"说过别的方言"后才生效，默认仍 `reasoning_content`，与 kimi 生产语义一致。
+- 1.3 连续 user 合并：只改写本就 400 风险的序列，合并确定性，长端行为等价。
+- 2.1-1/2.1-3/2.2：测试、纯检测器、提示词——无用户可见行为风险。
+- `cache_break_calls` 等 LOCAL 字段：additive wire 字段，默认 `0`，不参与计费。
+
+**实验特性（`experimental` 配置节，默认全关，按模型开启）**：
+- `thinking_tag_scrub`（1.2）：唯一改变可见输出的特性——`<think>` 清洗采用 qwen 的 toggle-anywhere 语义，会把正文字面 `<think>` 吞进推理通道；且 onset 判定在"响应以字面 tag 开头"时误分类。收益（脏输出清洗）与风险（吞正文）都真实存在，交给用户按端点决定。
+- 配置形态：`[model.<id>.experimental] thinking_tag_scrub = true`（ModelEntryConfig → ConfigModelOverride → ModelEntry → SamplerConfig → SamplingConfig 全链路 serde 默认关，子代理/模型切换自动继承）。节内可继续加字段，新实验特性不再扩表结构。

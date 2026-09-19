@@ -20,6 +20,14 @@
    夹具文件名避开保留设备名 `nul/con/aux/com1…`——写入进黑洞还显示"成功"），是环境族的按
    "屏蔽噪声（cfg 门控/播种全局）"处理，真产品 bug 才修。目录身份用 creation_time（mtime
    随子项增删变化），但注意 ~15 秒内同名重建的隧道化会让 creation_time 也骗人。
+   **Windows 测试溢出族（0xc00000fd）按 docs-local/PATCHES.md 的 T0–T3 分级策略处理**：
+   归因用单测试 A/B（秒级），默认解是测试命令带 `RUST_MIN_STACK=33554432` 抬栈（env 级、
+   零改动、族级生效），仅 T1 无效的孤例才打 `#[cfg(windows)] #[ignore]` LOCAL 补丁并登记。
+11. **上游（Grok 同步）测试套件在 Windows 上不可作为回归依据**：约九成用例依赖 Linux 行为
+   （POSIX 路径/权限/线程栈/终端探测），本机跑它是无底洞。LOCAL 改动的验证 = 
+   `cargo check`（编译正确性）+ **本地自有 crate 的 lib 测试**（xai-chat-state/sampler/
+   sampling-types/compaction/pager 等本地主题）；上游 shell 套件只做编译级验证，
+   套件级回归留给 Linux CI 或专用会话批量处理，禁止在本机全量跑上游套件排查。
 5. **临时目录不走 C 盘**：所有 cargo/测试命令带 `TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp'` 前缀
    （目录已存在）。
 6. **上游同步会覆盖同步文件**：`Synced from monorepo` 提交会冲掉同步文件里的本地改动；
