@@ -309,6 +309,11 @@ updates.rs `emit_builtin_notification`、types.rs 活动时间戳静态、agent/
   原样透传）+ `translations()` 静态翻译表（约 90 组：全部内置命令 description/usage/
   arg_placeholder、effort 等级描述、voice/minimal/fullscreen 手写文案）+ `test_sync`
   测试串行锁
+- 2026-09-19 语义扩展（test_context）：`cfg!(test)` 英文旁路升级为 `test_context()` =
+  `cfg!(test) || env CARGO 存在`——集成测试把 pager lib 当普通依赖链接（无 cfg(test)），
+  但 cargo 跑测试时子进程带 `CARGO` 环境变量（生产二进制没有），借此让上游集成测试
+  （settings_e2e 等英文断言）默认英文，否则撞中文渲染。副作用：`cargo run` 开发态
+  也默认英文；显式 `GROK_LANG=zh` 永远优先。三处判定位：`seed_lang`/`tr`/`tr_str`
 - `src/slash/command.rs`：`slash_meta!` 宏的 `description` / `usage` / `arg_placeholder`
   三个生成位包一层 `i18n::tr()`（LOCAL 注释处）；其余字段不动
 - `src/slash/commands/voice.rs`、`screen_mode_switch.rs`：手写 `description()` 两处字面量

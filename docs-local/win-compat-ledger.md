@@ -77,3 +77,21 @@ workspace 三例驱动了扫描器增强）。
 - 跨 crate unix 门控导入检测：收集各 crate 被 `#[cfg(unix)]` 门控的 pub 项，
   匹配 `use <crate>::{...}`（连字符/下划线归一）——pty-harness 族
 - 现在 COMPILE-BREAK 预测 = 10 crate，与实跑编译断完全一致
+
+## 门控测试复测与修复（2026-09-19，按重要性筛选）
+
+**修复成功 —— 族8 i18n（架构级，撤销门控）**：
+- 探针实验证实 cargo 跑测试时子进程带 `CARGO` 环境变量（生产二进制没有）
+- `i18n.rs`：`cfg!(test)` 英文旁路升级为 `test_context()` = `cfg!(test) || CARGO 存在`，
+  三处判定位（seed_lang/tr/tr_str）；副作用仅 `cargo run` 开发态默认英文
+- 验证：settings_e2e 275→**277 全过**；pager lib 9565 过 0 挂；win-skip.txt 撤销族8
+- 意义：解锁的不只是 2 个测试——今后所有上游集成测试的英文 UI 断言都不会再撞中文
+
+**复测结论：不可修（维持门控）—— 族1 doctor fix（14 例）**：
+- 根因不是 `/bin/bash` 写错，而是 `plan_ssh_wrap` 显式 `cfg!(windows) → PlatformUnsupported`
+  （fix.rs:711）——SSH-wrap 修复是产品级平台门控，修复 = 给 Windows 实现 SSH-wrap
+  特性（fork 的 [shell] backend=bash 场景理论上有价值），超出测试修复范畴，留待排期
+
+**其余族维持门控的理由**：flock/sqlite 锁/信号/pidfile 等族根在 POSIX 语义无 Windows
+等价物；scrollback/osc8/git_info 等路径形态族是上游测试按 POSIX 写死夹具，逐个改
+上游测试的同步维护成本高于门控收益，且这些 crate 均不在本机验证面内
