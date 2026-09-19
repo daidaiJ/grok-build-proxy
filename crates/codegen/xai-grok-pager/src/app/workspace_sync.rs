@@ -151,7 +151,10 @@ fn provisional_agent_ids(
 /// Whether `agent` can ever become a workspace member; the session id is checked separately because it binds late.
 fn is_adoptable(agent: &AgentView) -> bool {
     let cwd = agent.session.cwd.to_string_lossy();
-    if agent.conversation_entry || !agent.session.cwd.is_absolute() || cwd.len() > MAX_CWD_BYTES {
+    // LOCAL: Windows 上 `/tmp/x` 这类无盘符 rooted 路径 `is_absolute()` 为 false，
+    // 会被误判为不合格成员——与 dashboard-store 的 cwd 校验同语义，补 `has_root()`。
+    let cwd_rooted = agent.session.cwd.is_absolute() || agent.session.cwd.has_root();
+    if agent.conversation_entry || !cwd_rooted || cwd.len() > MAX_CWD_BYTES {
         return false;
     }
     true

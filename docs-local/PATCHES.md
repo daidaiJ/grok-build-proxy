@@ -495,3 +495,34 @@ TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp' RUST_MIN_STACK=33554432 cargo test -p <pk
 
 **纪律**：T1 生效就不打 T2 补丁；T2 补丁必须登记本表便于同步重放；禁止在没有 T0 归因前
 直接修产品代码。
+
+## 九期补丁（2026-09-19：Windows 路径语义修复——门控测试复测产物）
+
+> 背景：全量测试复测后按"重要性 × 修复成本"处置门控测试。以下四处修改的都是
+> 上游同步文件，上游同步冲掉后按本节重放。Linux 无影响：全部为守卫式修改
+> （MAIN_SEPARATOR/is_absolute≡has_root 于 POSIX 恒等/CARGO env 仅测试进程存在）。
+
+### xai-grok-pager
+- `src/git_info.rs` `collapse_home_path`：分隔符归一从 `~/` 折叠分支扩展到**所有分支**
+  （不在 HOME 下的路径走 `path.display()` 回退会产出 `\`，与 libgit2 的 `/` 混用，
+  dashboard 行/会话存储/测试助手 `collapsed_path_display` 要求可比较）。守卫
+  `MAIN_SEPARATOR == '\'`。解锁 git_info ×2 + dashboard_open_detects_standalone ×1
+- `src/app/workspace_sync.rs` `is_adoptable`：cwd 资格校验 `is_absolute()` 补
+  `has_root()`——Windows 上 `/tmp/x` 无盘符 rooted 路径被误拒。解锁 workspace_sync ×4
+- `src/app/foreign_sessions.rs` 测试闭包：`async_gate_supports_bundled_and_user_skill_locations`
+  的子串匹配前归一分隔符（join 在 Windows 产出 `\`）。解锁 ×1
+- `src/slash/i18n.rs`（LOCAL 文件，无冲突）：`test_context()` = `cfg!(test) || CARGO env`，
+  英文旁路扩展到集成测试构建（见四期段 2026-09-19 语义扩展）。解锁 settings_e2e ×2
+
+### xai-grok-dashboard-store
+- `src/types.rs` `validated`：cwd 校验 `is_absolute()` 补 `has_root()`（同上语义）。
+  解锁本 crate store 测试 ×19（此前在 Linux CI 应为绿的同一批用例）
+
+### 效果
+- pager lib：9566→9583 过（裸跑），门控清单 54→37 条（-17）
+- 门控只留四类"确认不修"：doctor SSH-wrap（产品平台门控+用户决策无感知不修）、
+  Tab 补全（上游 cfg!(not(windows)) 有意禁用）、scrollback 链接扫描（夹具 POSIX
+  假设，Windows 真实场景不受影响）、其余路径散例（中等重要性低于修复线）
+- 已知产品缺口（记录不修）：osc8 自由文本扫描正则仅认 `/` 分隔符
+  （xai-grok-pager-render osc8.rs:216），Windows 反斜杠路径文本不会被链接化——
+  修复涉及上游数百个精确断言，留作将来特性

@@ -282,6 +282,19 @@ fn collapse_home(path: &Path) -> String {
 /// Tilde-collapse with a path-component prefix, so `HOME=/Users/u` does not match `/Users/user/xai`.
 /// Trailing slashes on HOME do not break the join.
 fn collapse_home_path(path: &Path, home: Option<&Path>) -> String {
+    let collapsed = collapse_home_display(path, home);
+    // LOCAL: Windows 下 std 构造的路径 `display()` 产出 `\`，而 libgit2/git 产出 `/`，
+    // 折叠结果的消费方（dashboard 行、会话存储、测试的 collapsed_path_display）要求
+    // 两者可比较/显示一致——所有分支统一成正斜杠。仅在平台分隔符确为 `\` 时替换，
+    // 避免破坏 Unix 上的字面反斜杠文件名。
+    if std::path::MAIN_SEPARATOR == '\\' {
+        collapsed.replace('\\', "/")
+    } else {
+        collapsed
+    }
+}
+
+fn collapse_home_display(path: &Path, home: Option<&Path>) -> String {
     let Some(home) = home else {
         return path.display().to_string();
     };
@@ -295,15 +308,7 @@ fn collapse_home_path(path: &Path, home: Option<&Path>) -> String {
             if rest.as_os_str().is_empty() {
                 "~".to_string()
             } else {
-                // LOCAL: Windows 下 `rest.display()` 产出 `\` 分隔符，折叠后 `~/A\B` 混用分隔符；
-                // 统一成正斜杠。仅在平台分隔符确为 `\` 时替换，避免破坏 Unix 上的字面反斜杠文件名。
-                let rest_str = rest.display().to_string();
-                let rest_str = if std::path::MAIN_SEPARATOR == '\\' {
-                    rest_str.replace('\\', "/")
-                } else {
-                    rest_str
-                };
-                format!("~/{rest_str}")
+                format!("~/{}", rest.display())
             }
         })
         .unwrap_or_else(|_| path.display().to_string())

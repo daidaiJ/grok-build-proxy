@@ -95,3 +95,16 @@ workspace 三例驱动了扫描器增强）。
 **其余族维持门控的理由**：flock/sqlite 锁/信号/pidfile 等族根在 POSIX 语义无 Windows
 等价物；scrollback/osc8/git_info 等路径形态族是上游测试按 POSIX 写死夹具，逐个改
 上游测试的同步维护成本高于门控收益，且这些 crate 均不在本机验证面内
+
+## 复测修复轮（2026-09-19，按"重要性×修复成本"处置）
+
+- **修复 4 处产品代码**（git_info 分隔符归一 / dashboard-store+workspace_sync 的
+  cwd has_root 语义 / i18n test_context / foreign_sessions 测试闭包），净解锁 17 个
+  门控测试（54→37），全部守卫式修改，Linux 语义零变化（MAIN_SEPARATOR 守卫、
+  POSIX 上 is_absolute≡has_root、CARGO env 仅测试进程存在）
+- **复测定案不修（维持门控）**：doctor SSH-wrap（产品 cfg!(windows) 平台门控，
+  用户决策：无感知点不修）、Tab 补全（上游 cfg!(not(windows)) 有意禁用）、
+  scrollback 18（夹具 POSIX 假设）、其余散例 6（中等重要性低于修复线）
+- **附带发现的产品缺口**：osc8 自由文本扫描不认反斜杠路径（已记录，未修）
+- 终态：pager lib 裸跑 9583 过/37 挂（37=四类确认不修）；门控后 9582 过/0 挂；
+  lib+7 集成目标经 ctest 全绿

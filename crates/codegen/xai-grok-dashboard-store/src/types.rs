@@ -310,7 +310,12 @@ impl MemberMetadata {
             return Err(StoreError::CwdRequired);
         }
         if let Some(cwd) = &self.cwd {
-            if !std::path::Path::new(cwd).is_absolute() {
+            // LOCAL: 校验意图是拒绝相对路径；Windows 上 `/tmp/x` 这类无盘符的 rooted 路径
+            // `is_absolute()` 为 false（要求盘符前缀），会被误拒——补 `has_root()` 判定。
+            if !{
+                let p = std::path::Path::new(cwd);
+                p.is_absolute() || p.has_root()
+            } {
                 return Err(StoreError::CwdNotAbsolute);
             }
             if cwd.len() > MAX_CWD_BYTES {

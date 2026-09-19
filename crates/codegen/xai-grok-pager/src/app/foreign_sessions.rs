@@ -616,7 +616,9 @@ mod tests {
     #[tokio::test]
     async fn async_gate_supports_bundled_and_user_skill_locations() {
         let enabled = gated_sources_async_with(compat_all(), Path::new("/grok"), |path| {
-            let path = path.to_string_lossy();
+            // LOCAL: Windows 下 join 产出 `\` 分隔符，子串匹配按 `/` 写死会全部落空；
+            // 产品探测走 Path::exists 分隔符无关，这里归一后匹配。
+            let path = path.to_string_lossy().replace('\\', "/");
             std::future::ready(
                 path.contains("bundled/skills/resume-claude")
                     || path.contains("skills/resume-codex")
