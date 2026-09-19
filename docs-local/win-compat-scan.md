@@ -8,6 +8,9 @@ feature 门控的测试默认构建不编译，不计入 verdict，单列「feat
 
 | crate | 测试文件数 | #test | verdict | 高危家族 | feature 名单 |
 |---|---|---|---|---|---|
+| cli-chat-proxy-types | 7 | 38 | RISK | term-detect | - |
+| dagre_rust | 1 | 1 | CLEAN | - | - |
+| mermaid-to-svg | 5 | 79 | CLEAN | - | - |
 | ptyctl | 3 | 15 | RISK | posix-path | - |
 | xai-acp-lib | 5 | 17 | CLEAN | - | - |
 | xai-agent-lifecycle | 2 | 5 | CLEAN | - | - |
@@ -101,6 +104,19 @@ feature 门控的测试默认构建不编译，不计入 verdict，单列「feat
 | xai-tracing | 3 | 13 | CLEAN | - | - |
 | xai-tty-utils | 8 | 73 | COMPILE-BREAK | signal, posix-path, unix-import | - |
 | xai-workflow | 4 | 61 | RISK | symlink | - |
+
+## cli-chat-proxy-types — RISK
+
+### `prod\mc\cli-chat-proxy-types\src\feedback_types.rs`（9 tests, unix 自门控命中 0）
+- **term-detect** ×1
+  - L619: `/// Raw `TERM` environment variable value.`
+
+
+## dagre_rust — CLEAN
+
+
+## mermaid-to-svg — CLEAN
+
 
 ## ptyctl — RISK
 

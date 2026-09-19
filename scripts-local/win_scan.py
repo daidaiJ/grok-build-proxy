@@ -105,18 +105,32 @@ def main():
     args = ap.parse_args()
     only = {c.strip() for c in args.crates.split(",") if c.strip()} or None
 
+    # 扫描根：crates/（三层分类）+ prod/ 与 third_party/（workspace 成员在 crates 之外）
+    def crate_name(rel):
+        parts = rel.parts
+        if parts[0] == "crates" and len(parts) >= 3:
+            return parts[2]
+        if parts[0] == "prod" and len(parts) >= 3 and parts[1] == "mc":
+            return parts[2]
+        if parts[0] in ("prod", "third_party") and len(parts) >= 2:
+            return parts[1]
+        return None
+
     results = {}  # crate -> {file -> info}
-    for rs in sorted((REPO / "crates").rglob("*.rs")):
-        rel = rs.relative_to(REPO)
-        # 结构固定为 crates/<分类>/<crate>/...，crate 名取第三段
-        if len(rel.parts) < 3 or rel.parts[0] != "crates":
+    for root in ("crates", "prod", "third_party"):
+        base = REPO / root
+        if not base.exists():
             continue
-        cname = rel.parts[2]
-        if only and cname not in only:
-            continue
-        info = scan_file(rs)
-        if info:
-            results.setdefault(cname, {})[str(rel)] = info
+        for rs in sorted(base.rglob("*.rs")):
+            rel = rs.relative_to(REPO)
+            cname = crate_name(rel)
+            if not cname:
+                continue
+            if only and cname not in only:
+                continue
+            info = scan_file(rs)
+            if info:
+                results.setdefault(cname, {})[str(rel)] = info
 
     # ---- 汇总 ----
     def crate_verdict(files):

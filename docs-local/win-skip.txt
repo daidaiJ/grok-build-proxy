@@ -75,3 +75,10 @@ git_info::tests::compute_cwd_git_info_standalone_marker_from_nested_cwd
 headless::tests::worktree_create_opens_session_at_worktree_subdirectory
 views::btw_overlay::tests::done_state_scans_file_paths_like_scrollback
 views::extensions_modal::tests::handle_key_tab_completes_single_field_path
+
+# 族8（2026-09-19 集成测试补跑）LOCAL i18n 行为分歧：tr() 英文旁路只覆盖 cfg!(test) 的
+# lib 单测构建，集成测试目标把 pager lib 当普通依赖链接 → 默认渲染中文，
+# 上游 settings_e2e 的英文断言（reset 确认 prompt）必失败。属七期特性预期行为，
+# 非 bug；若上游集成测试断言英文 UI 的面扩大，考虑给 i18n 增加集成测试旁路。
+reset_confirm_prompt_helper_builds_well_formed_string_for_every_setting
+reset_confirm_overlay_renders_prompt_with_setting_label_and_default
