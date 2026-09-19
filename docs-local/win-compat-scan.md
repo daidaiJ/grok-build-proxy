@@ -23,19 +23,19 @@ feature 门控的测试默认构建不编译，不计入 verdict，单列「feat
 | xai-computer-hub-sdk | 16 | 242 | CLEAN | - | metrics |
 | xai-crash-handler | 6 | 22 | RISK | perm-mode, posix-path, signal | - |
 | xai-dirs | 1 | 5 | RISK | symlink, posix-path | - |
-| xai-fast-worktree | 41 | 575 | COMPILE-BREAK | posix-path, symlink, unix-import | metadata |
+| xai-fast-worktree | 43 | 575 | COMPILE-BREAK | posix-path, symlink, unix-fn-path | metadata |
 | xai-file-utils | 7 | 208 | RISK | posix-path | - |
 | xai-fsnotify | 6 | 115 | RISK | symlink | - |
 | xai-fuzzy-file-search | 1 | 5 | CLEAN | - | - |
 | xai-gix-status | 1 | 9 | CLEAN | - | - |
 | xai-grok-active-sessions | 2 | 6 | RISK | posix-path | - |
-| xai-grok-agent | 20 | 556 | RISK | posix-path, symlink, env-home | - |
+| xai-grok-agent | 21 | 556 | RISK | posix-path, symlink, env-home | - |
 | xai-grok-announcements | 1 | 11 | CLEAN | - | - |
 | xai-grok-auth | 2 | 7 | CLEAN | - | - |
 | xai-grok-bundle | 1 | 39 | RISK | perm-mode | - |
 | xai-grok-compaction | 17 | 133 | CLEAN | - | - |
 | xai-grok-config | 18 | 223 | RISK | posix-path, symlink | - |
-| xai-grok-config-types | 5 | 56 | CLEAN | - | - |
+| xai-grok-config-types | 7 | 56 | CLEAN | - | - |
 | xai-grok-dashboard-store | 5 | 31 | CLEAN | - | - |
 | xai-grok-diag-server | 1 | 21 | CLEAN | - | - |
 | xai-grok-env | 2 | 8 | CLEAN | - | - |
@@ -46,47 +46,47 @@ feature 门控的测试默认构建不编译，不计入 verdict，单列「feat
 | xai-grok-hooks | 12 | 287 | RISK | posix-path, sh-exec | - |
 | xai-grok-http | 1 | 14 | CLEAN | - | - |
 | xai-grok-image | 1 | 40 | CLEAN | - | - |
-| xai-grok-login | 29 | 463 | RISK | posix-path, sh-exec, perm-mode | - |
+| xai-grok-login | 31 | 463 | RISK | posix-path, sh-exec, env-home | - |
 | xai-grok-markdown | 12 | 484 | RISK | term-detect, posix-path | - |
 | xai-grok-markdown-core | 1 | 42 | CLEAN | - | - |
-| xai-grok-mcp | 11 | 226 | RISK | posix-path, perm-mode | - |
-| xai-grok-memory | 19 | 368 | RISK | posix-path, symlink, perm-mode | - |
+| xai-grok-mcp | 12 | 226 | RISK | posix-path, perm-mode | - |
+| xai-grok-memory | 21 | 368 | RISK | posix-path, symlink, perm-mode | - |
 | xai-grok-mermaid | 7 | 60 | RISK | signal | - |
 | xai-grok-otel | 5 | 32 | RISK | term-detect, posix-path | - |
-| xai-grok-pager | 395 | 10093 | RISK | posix-path, term-detect, signal | local-workspace, release-dist |
+| xai-grok-pager | 423 | 10093 | RISK | posix-path, term-detect, signal | local-workspace, release-dist |
 | xai-grok-pager-bin | 1 | 39 | CLEAN | - | - |
 | xai-grok-pager-diff | 1 | 28 | RISK | posix-path | - |
 | xai-grok-pager-minimal | 9 | 82 | RISK | posix-path | - |
-| xai-grok-pager-pty-harness | 242 | 455 | RISK-LIGHT | posix-path, signal, term-detect | - |
-| xai-grok-pager-render | 58 | 1176 | RISK | posix-path, term-detect, env-home | - |
+| xai-grok-pager-pty-harness | 246 | 455 | COMPILE-BREAK | posix-path, signal, term-detect | - |
+| xai-grok-pager-render | 59 | 1176 | RISK | posix-path, term-detect, env-home | - |
 | xai-grok-paths | 1 | 19 | CLEAN | - | - |
 | xai-grok-plugin-marketplace | 10 | 150 | RISK | posix-path, symlink | - |
 | xai-grok-sampler | 26 | 303 | CLEAN | - | - |
 | xai-grok-sampling-types | 12 | 301 | RISK-LIGHT | posix-path | - |
-| xai-grok-sandbox | 14 | 151 | COMPILE-BREAK | symlink, posix-path, unix-import | - |
+| xai-grok-sandbox | 16 | 151 | COMPILE-BREAK | symlink, posix-path, unix-fn-path | - |
 | xai-grok-secrets | 1 | 16 | RISK | env-home | - |
 | xai-grok-session-events | 3 | 16 | CLEAN | - | - |
 | xai-grok-session-search | 5 | 56 | RISK | perm-mode | - |
 | xai-grok-shared | 4 | 140 | RISK | posix-path, symlink | - |
-| xai-grok-shell | 442 | 6811 | COMPILE-BREAK | posix-path, symlink, env-home | dhat-heap, local-workspace, test-support |
+| xai-grok-shell | 503 | 6811 | COMPILE-BREAK | posix-path, symlink, env-home | dhat-heap, local-workspace, test-support |
 | xai-grok-shell-base | 10 | 81 | RISK | signal, perm-mode, sh-exec | - |
 | xai-grok-shell-session-support | 1 | 11 | CLEAN | - | - |
-| xai-grok-shell-terminal | 6 | 79 | RISK | signal, posix-path, pty-fork | - |
+| xai-grok-shell-terminal | 7 | 79 | RISK | signal, posix-path, pty-fork | - |
 | xai-grok-status-line | 2 | 18 | RISK | posix-path | - |
 | xai-grok-subagent-resolution | 6 | 93 | CLEAN | - | - |
-| xai-grok-telemetry | 39 | 284 | RISK | posix-path, symlink, perm-mode | - |
+| xai-grok-telemetry | 43 | 284 | RISK | posix-path, symlink, perm-mode | memory-log |
 | xai-grok-test-support | 8 | 82 | RISK | term-detect, posix-path, env-home | - |
 | xai-grok-tools | 185 | 3295 | COMPILE-BREAK | posix-path, signal, symlink | dhat-heap |
 | xai-grok-tools-api | 4 | 23 | CLEAN | - | - |
-| xai-grok-update | 13 | 281 | COMPILE-BREAK | symlink, posix-path, perm-mode | - |
+| xai-grok-update | 13 | 281 | COMPILE-BREAK | symlink, posix-path, unix-fn-path | - |
 | xai-grok-version | 1 | 2 | CLEAN | - | - |
-| xai-grok-voice | 12 | 53 | COMPILE-BREAK | perm-mode, unix-import, sh-exec | audio |
-| xai-grok-workspace | 77 | 2060 | RISK | posix-path, symlink, env-home | compression |
+| xai-grok-voice | 12 | 53 | COMPILE-BREAK | perm-mode, unix-import, unix-fn-path | audio |
+| xai-grok-workspace | 81 | 2060 | COMPILE-BREAK | posix-path, symlink, signal | compression |
 | xai-grok-workspace-client | 1 | 15 | CLEAN | - | - |
 | xai-grok-workspace-daemon | 2 | 66 | RISK | posix-path, symlink, signal | - |
 | xai-grok-workspace-types | 29 | 134 | RISK | posix-path, symlink | - |
 | xai-hooks-plugins-types | 1 | 20 | RISK | posix-path | - |
-| xai-hunk-tracker | 5 | 184 | RISK | posix-path, symlink | - |
+| xai-hunk-tracker | 5 | 184 | COMPILE-BREAK | posix-path, symlink, unix-fn-path | - |
 | xai-interjection-core | 3 | 16 | CLEAN | - | - |
 | xai-message-delivery-core | 3 | 17 | CLEAN | - | - |
 | xai-mixpanel | 1 | 1 | CLEAN | - | - |
@@ -102,7 +102,7 @@ feature 门控的测试默认构建不编译，不计入 verdict，单列「feat
 | xai-tool-runtime | 13 | 119 | RISK-LIGHT | posix-path | - |
 | xai-tool-types | 5 | 99 | RISK | signal | prompt-render |
 | xai-tracing | 3 | 13 | CLEAN | - | - |
-| xai-tty-utils | 8 | 73 | COMPILE-BREAK | signal, posix-path, unix-import | - |
+| xai-tty-utils | 8 | 73 | COMPILE-BREAK | signal, unix-fn-path, posix-path | - |
 | xai-workflow | 4 | 61 | RISK | symlink | - |
 
 ## cli-chat-proxy-types — RISK
@@ -223,6 +223,10 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
   - L466: `unsafe { libc::kill(child.id() as libc::pid_t, libc::SIGTERM) },`
   - L470: `assert_eq!(result.status.code(), Some(128 + libc::SIGTERM));`
   - L981: `libc::SIGTERM,`
+- **unix-fn-path** ×3
+  - L1016: `use std::os::unix::fs::PermissionsExt;`
+  - L1045: `std::os::unix::fs::symlink("first-target", repo.join("tracked")).unwrap();`
+  - L1048: `std::os::unix::fs::symlink("second-target", repo.join("tracked")).unwrap();`
 - **perm-mode** ×2
   - L1016: `use std::os::unix::fs::PermissionsExt;`
   - L1040: `std::fs::set_permissions(repo.join("tracked"), std::fs::Permissions::from_mode(0o755)).unwrap();`
@@ -257,6 +261,9 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
   - L512: `mount_target: PathBuf::from("/home/user/.grok/worktrees/repo/session/wt-abc"),`
   - L529: `let mount_target = Path::new("/home/user/.grok/worktrees/wt-abc");`
   - L563: `let dest = Path::new("/home/user/.grok/worktrees/repo/session/wt-abc");`
+- **unix-fn-path** ×2
+  - L238: `std::os::unix::fs::symlink(target, dest).with_context(|| {`
+  - L830: `std::os::unix::fs::symlink(&real, &link).unwrap();`
 
 ### `crates\codegen\xai-fast-worktree\src\copy\cow.rs`（4 tests, unix 自门控命中 4）
 - **perm-mode** ×5
@@ -271,6 +278,8 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
   - L34: `fn symlink_to(target: &Path, dst: &Path) -> std::io::Result<()> {`
   - L35: `std::os::windows::fs::symlink_file(target, dst)`
 - **unix-import** ×1
+  - L74: `use std::os::unix::fs::PermissionsExt;`
+- **unix-fn-path** ×1
   - L74: `use std::os::unix::fs::PermissionsExt;`
 
 ### `crates\codegen\xai-fast-worktree\src\copy\engine.rs`（6 tests, unix 自门控命中 8）
@@ -311,6 +320,8 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
   - L171: `std::fs::set_permissions(&at, std::fs::Permissions::from_mode(0o755)).unwrap();`
 - **unix-import** ×1
   - L159: `use std::os::unix::fs::PermissionsExt;`
+- **unix-fn-path** ×1
+  - L159: `use std::os::unix::fs::PermissionsExt;`
 
 ### `crates\codegen\xai-fast-worktree\src\git\safety_tests\working_tree.rs`（13 tests, unix 自门控命中 2）
 - **symlink** ×1
@@ -331,6 +342,12 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
   - L338: `PathBuf::from("/var/lib/repo-fuse/instance/fuse-lower")`
 
 ### `crates\codegen\xai-fast-worktree\src\nfs\client.rs`（24 tests, unix 自门控命中 0）
+- **unix-fn-path** ×6（共 6 处，仅列 5）
+  - L11: `use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};`
+  - L12: `use std::os::unix::ffi::OsStrExt;`
+  - L13: `use std::os::unix::net::UnixStream;`
+  - L747: `let fd = std::os::unix::io::AsRawFd::as_raw_fd(&file);`
+  - L929: `use std::os::unix::net::UnixListener;`
 - **unix-import** ×3
   - L12: `use std::os::unix::ffi::OsStrExt;`
   - L13: `use std::os::unix::net::UnixStream;`
@@ -346,9 +363,13 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
 ### `crates\codegen\xai-fast-worktree\src\nfs\mod.rs`（21 tests, unix 自门控命中 2）
 - **unix-import** ×1
   - L433: `use std::os::unix::net::UnixListener;`
+- **unix-fn-path** ×1
+  - L433: `use std::os::unix::net::UnixListener;`
 
 ### `crates\codegen\xai-fast-worktree\src\nfs\mount_table.rs`（8 tests, unix 自门控命中 5）
 - **unix-import** ×1
+  - L5: `use std::os::unix::ffi::OsStrExt;`
+- **unix-fn-path** ×1
   - L5: `use std::os::unix::ffi::OsStrExt;`
 
 ### `crates\codegen\xai-fast-worktree\src\overlay\snapshot.rs`（5 tests, unix 自门控命中 0）
@@ -665,7 +686,7 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
 - **posix-path** ×1
   - L833: `transcript_path: Some("/tmp/transcript.jsonl".into()),`
 
-### `crates\codegen\xai-grok-hooks\src\runner\command.rs`（58 tests, unix 自门控命中 16）
+### `crates\codegen\xai-grok-hooks\src\runner\command.rs`（58 tests, unix 自门控命中 18）
 - **posix-path** ×2
   - L1951: `Some("/usr/bin/hook"),`
   - L1954: `Some(std::path::PathBuf::from("/usr/bin/hook"))`
@@ -696,6 +717,10 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
 ### `crates\codegen\xai-grok-login\src\flow.rs`（41 tests, unix 自门控命中 2）
 - **sh-exec** ×1
   - L1818: `let cmd = r#"sh -c 'i=0; while [ $i -lt 2000 ]; do printf "%s" "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" >&2; i=$((i+1)); done; printf token'"#;`
+
+### `crates\codegen\xai-grok-login\src\manager.rs`（0 tests, unix 自门控命中 1）
+- **env-home** ×1
+  - L277: `"HOME": std::env::var("HOME").unwrap_or_else(|_| "(unset)".into()),`
 
 ### `crates\codegen\xai-grok-login\src\pre_tui.rs`（6 tests, unix 自门控命中 0）
 - **sh-exec** ×1
@@ -770,6 +795,19 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
 - **posix-path** ×1
   - L11: `Path::new("/home/user/project"),`
 
+### `crates\codegen\xai-grok-memory\src\v2.rs`（0 tests, unix 自门控命中 0）
+- **symlink** ×9（共 9 处，仅列 5）
+  - L116: `reject_symlink(&path, "initialize symlinked v2 memory directory")?;`
+  - L131: `reject_symlink(&state_path, "initialize symlinked v2 state database")?;`
+  - L135: `reject_symlink(&index_path, "initialize symlinked v2 lexical index")?;`
+  - L140: `reject_symlink(&manifest_path, "initialize symlinked v2 manifest")?;`
+  - L223: `reject_symlink(storage_root, "initialize symlinked v2 memory root")?;`
+
+### `crates\codegen\xai-grok-memory\src\v2_access.rs`（0 tests, unix 自门控命中 1）
+- **symlink** ×2
+  - L297: `// containment and symlink components again before opening the tempfile.`
+  - L451: `match std::fs::symlink_metadata(&current) {`
+
 ### `crates\codegen\xai-grok-memory\src\v2_capture_tests.rs`（25 tests, unix 自门控命中 2）
 - **posix-path** ×1
   - L939: `Path::new("/home/test/project"),`
@@ -797,6 +835,10 @@ feature 门控测试（默认构建不跑，抽样不含）：metadata
 ## xai-grok-pager — RISK
 
 feature 门控测试（默认构建不跑，抽样不含）：local-workspace, release-dist
+
+### `crates\codegen\xai-grok-pager\examples\question_view_playground.rs`（0 tests, unix 自门控命中 0）
+- **term-detect** ×1
+  - L271: `terminal::enable_raw_mode()?;`
 
 ### `crates\codegen\xai-grok-pager\src\app\acp_handler\tests\background_tasks.rs`（27 tests, unix 自门控命中 0）
 - **posix-path** ×5
@@ -1145,6 +1187,11 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
   - L1139: `tmux_env: Some("/tmp/tmux-501/default,12345,0".to_owned()),`
   - L2735: `tmux_env: Some("/tmp/tmux-501/default,12345,0".to_owned()),`
 
+### `crates\codegen\xai-grok-pager\src\disk_usage_cmd\display.rs`（0 tests, unix 自门控命中 0）
+- **symlink** ×2
+  - L83: `("symlink to a directory is", "its")`
+  - L85: `("symlinks to directories are", "their")`
+
 ### `crates\codegen\xai-grok-pager\src\disk_usage_cmd\tests.rs`（25 tests, unix 自门控命中 16）
 - **posix-path** ×9（共 9 处，仅列 5）
   - L528: `grok_home: "/home/user/.grok".into(),`
@@ -1160,6 +1207,11 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
 ### `crates\codegen\xai-grok-pager\src\doctor_cmd\tests.rs`（17 tests, unix 自门控命中 0）
 - **posix-path** ×1
   - L47: `Some(std::path::PathBuf::from("/bin/bash")),`
+
+### `crates\codegen\xai-grok-pager\src\fs_size.rs`（0 tests, unix 自门控命中 3）
+- **symlink** ×2
+  - L3: `//! Walks never follow symlinks and stop at [`Volume`] boundaries, since descending into an unresponsive network mount blocks past any timeout.`
+  - L201: `// follow_links(false) makes this symlink_metadata.`
 
 ### `crates\codegen\xai-grok-pager\src\fs_size_tests.rs`（6 tests, unix 自门控命中 6）
 - **symlink** ×1
@@ -1240,6 +1292,12 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
 ### `crates\codegen\xai-grok-pager\src\slash\mod.rs`（85 tests, unix 自门控命中 0）
 - **posix-path** ×1
   - L3001: `"path": "/home/user/.grok/skills/skill-cmd/SKILL.md",`
+
+### `crates\codegen\xai-grok-pager\src\test_util.rs`（0 tests, unix 自门控命中 0）
+- **symlink** ×1
+  - L154: `/// Canonicalized so the summary cwd encoding matches what production path resolution sees (macOS tempdirs are symlinked).`
+- **env-home** ×1
+  - L249: `let home = std::env::var("HOME")`
 
 ### `crates\codegen\xai-grok-pager\src\views\agents_modal.rs`（40 tests, unix 自门控命中 0）
 - **posix-path** ×1
@@ -1381,7 +1439,14 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
   - L591: `cwd: "/tmp/repo".into(),`
 
 
-## xai-grok-pager-pty-harness — RISK-LIGHT
+## xai-grok-pager-pty-harness — COMPILE-BREAK
+
+### `crates\codegen\xai-grok-pager-pty-harness\src\bin\pty_orphan_holder.rs`（0 tests, unix 自门控命中 0）
+- **signal** ×2
+  - L6: `//! (SIGKILL/SIGTERM, so no Drop runs) and asserts the PTY child does not`
+  - L20: `// Ignore SIGHUP so a well-behaved child does not mask the leak; only pdeathsig can reap it.`
+- **posix-path** ×1
+  - L23: `Path::new("/bin/sh"),`
 
 ### `crates\codegen\xai-grok-pager-pty-harness\src\leader.rs`（2 tests, unix 自门控命中 0）
 - **symlink** ×1
@@ -1396,6 +1461,8 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
 - **term-detect** ×2
   - L14: `/// Grace after group SIGTERM before SIGKILL so a responsive child can run TERM cleanup. Wedged children fall through to SIGKILL.`
   - L460: `// one grace period to run its own TERM cleanup before the hard kill.`
+- **unix-gated-import** ×1
+  - L11: `use xai_grok_test_support::{TestProcessTree, TestSandbox, process_has_exited_without_reap};`
 - **pty-fork** ×1
   - L129: `let pair = pty_system.openpty(size)?;`
 
@@ -1504,7 +1571,7 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
 - **signal** ×1
   - L5: `/// Signal-death e2e: SIGTERM delivered to `grok wrap` itself (an external kill, or the HUP a`
 
-### `crates\codegen\xai-grok-pager-pty-harness\tests\pty_e2e\writer_blocked_tty_keeps_loop_alive.rs`（1 tests, unix 自门控命中 0）
+### `crates\codegen\xai-grok-pager-pty-harness\tests\pty_e2e\writer_blocked_tty_keeps_loop_alive.rs`（1 tests, unix 自门控命中 1）
 - **pty-fork** ×2
   - L77: `.openpty(portable_pty::PtySize {`
   - L83: `.expect("openpty");`
@@ -1579,6 +1646,14 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
   - L86: `("NVIM", "/tmp/nvim.12345.0"),`
 - **term-detect** ×1
   - L71: `("TERM", "xterm-256color"),`
+
+### `crates\codegen\xai-grok-pager-render\src\terminal\mod.rs`（0 tests, unix 自门控命中 0）
+- **term-detect** ×10（共 10 处，仅列 5）
+  - L76: `/// foot terminal emulator (Wayland-native, Linux-only), detected via TERM.`
+  - L240: `/// The raw `TERM` environment variable (e.g. `xterm-256color`, `screen`).`
+  - L299: `/// Returns the `TERM` variable value, or `"n/a"` if unset.`
+  - L650: `if let Some(term) = env_get(env, "TERM")`
+  - L660: `if let Some(term) = env_get(env, "TERM")`
 
 ### `crates\codegen\xai-grok-pager-render\src\terminal\term_version.rs`（18 tests, unix 自门控命中 0）
 - **term-detect** ×3
@@ -1681,6 +1756,10 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
 
 ## xai-grok-sandbox — COMPILE-BREAK
 
+### `crates\codegen\xai-grok-sandbox\examples\sandbox_smoke_test.rs`（0 tests, unix 自门控命中 0）
+- **posix-path** ×1
+  - L89: `let tmp_test = Path::new("/tmp/.grok-sandbox-test");`
+
 ### `crates\codegen\xai-grok-sandbox\src\allow_path.rs`（1 tests, unix 自门控命中 0）
 - **posix-path** ×9（共 9 处，仅列 5）
   - L69: `("/home/u/.cargo/cache/**", Some("/home/u/.cargo/cache")),`
@@ -1701,9 +1780,19 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
   - L943: `fn symlinked_nested_root_keeps_its_own_walk() {`
   - L949: `std::os::unix::fs::symlink(&outside, workspace.join("secrets")).unwrap();`
   - L950: `// The workspace walk skips the symlink; the narrow root walks itself.`
+- **unix-fn-path** ×7（共 7 处，仅列 5）
+  - L949: `std::os::unix::fs::symlink(&outside, workspace.join("secrets")).unwrap();`
+  - L968: `std::os::unix::fs::symlink(&outside, &link).unwrap();`
+  - L989: `std::os::unix::fs::symlink(&outside, workspace.join("link")).unwrap();`
+  - L1006: `std::os::unix::fs::symlink(outside.join("real.pem"), workspace.join("link.pem"))`
+  - L1028: `std::os::unix::fs::symlink(outside.join("real.pem"), workspace.join("link.pem"))`
 - **unix-import** ×2
   - L1057: `use std::os::unix::ffi::OsStrExt;`
   - L1069: `use std::os::unix::ffi::OsStrExt;`
+
+### `crates\codegen\xai-grok-sandbox\src\hook_write_deny.rs`（0 tests, unix 自门控命中 11）
+- **symlink** ×1
+  - L72: `/// Captures identity without following symlinks; regular files require `st_nlink == 1`.`
 
 ### `crates\codegen\xai-grok-sandbox\src\hook_write_deny_tests.rs`（6 tests, unix 自门控命中 1）
 - **symlink** ×6（共 6 处，仅列 5）
@@ -1712,6 +1801,8 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
   - L54: `"expected symlink/identity error, got {err:?}"`
   - L73: `std::fs::hard_link(&reg, &alias).unwrap();`
   - L139: `std::fs::hard_link(&active, &alias).unwrap();`
+- **unix-fn-path** ×1
+  - L46: `std::os::unix::fs::symlink(&moved, &hooks).unwrap();`
 
 ### `crates\codegen\xai-grok-sandbox\src\lib.rs`（19 tests, unix 自门控命中 3）
 - **posix-path** ×1
@@ -1728,6 +1819,12 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
   - L126: `let err = verify_exact_read_only_mount(&alias).expect_err("symlink must not be a mountpoint");`
   - L127: `assert!(err.contains("symlink"), "unexpected error: {err}");`
   - L209: `/// A symlink sentinel must be rejected at the `O_NOFOLLOW` open, before the target's filesystem is ever consulted.`
+- **unix-fn-path** ×7（共 7 处，仅列 5）
+  - L67: `let _listener = std::os::unix::net::UnixListener::bind(ws.join("secret.pem")).unwrap();`
+  - L78: `use std::os::unix::fs::PermissionsExt;`
+  - L124: `std::os::unix::fs::symlink(&target, &alias).unwrap();`
+  - L217: `std::os::unix::fs::symlink(&target, &sentinel).unwrap();`
+  - L272: `use std::os::unix::fs::PermissionsExt;`
 - **perm-mode** ×4
   - L78: `use std::os::unix::fs::PermissionsExt;`
   - L82: `std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();`
@@ -1740,12 +1837,17 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
   - L102: `mountpoint: PathBuf::from("/tmp/deny target"),`
   - L259: `deny = [\"/var/run/docker.sock\"]\n",`
 
-### `crates\codegen\xai-grok-sandbox\src\runtime_sockets_tests.rs`（17 tests, unix 自门控命中 18）
+### `crates\codegen\xai-grok-sandbox\src\runtime_sockets_tests.rs`（17 tests, unix 自门控命中 25）
 - **posix-path** ×4
   - L142: `let alias = PathBuf::from("/var/run/docker.sock");`
   - L398: `deny: vec!["/var/run/docker.sock".to_string()],`
   - L410: `.any(|p| p == Path::new("/var/run/docker.sock")),`
   - L416: `vec![PathBuf::from("/var/run/docker.sock")],`
+
+### `crates\codegen\xai-grok-sandbox\tests\child_net_e2e.rs`（3 tests, unix 自门控命中 2）
+- **unix-fn-path** ×2
+  - L63: `let _listener = std::os::unix::net::UnixListener::bind(&sock).expect("bind");`
+  - L102: `let _listener = std::os::unix::net::UnixListener::bind(&sock).expect("bind");`
 
 ### `crates\codegen\xai-grok-sandbox\tests\deny_paths_e2e.rs`（14 tests, unix 自门控命中 12）
 - **symlink** ×3
@@ -1808,6 +1910,10 @@ feature 门控测试（默认构建不跑，抽样不含）：local-workspace, r
 
 feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-workspace, test-support
 
+### `crates\codegen\xai-grok-shell\src\agent\config.rs`（0 tests, unix 自门控命中 0）
+- **sh-exec** ×1
+  - L964: `/// Optional `sh -c` script printing `{"name","email"}` JSON; its fields win over the lists above, with per-field fallback.`
+
 ### `crates\codegen\xai-grok-shell\src\agent\config_tests.rs`（356 tests, unix 自门控命中 0）
 - **posix-path** ×21（共 21 处，仅列 5）
   - L828: `command = "/usr/local/bin/litellm-token"`
@@ -1867,6 +1973,10 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
   - L494: `Some("/tmp/grok-wt/subagent-x")`
   - L771: `Some("/tmp/worktree"),`
   - L895: `Some("/tmp/worktree-1"),`
+
+### `crates\codegen\xai-grok-shell\src\config\mod.rs`（0 tests, unix 自门控命中 2）
+- **symlink** ×1
+  - L1809: `/// Paths are canonicalized (resolving symlinks and `..`) before checking.`
 
 ### `crates\codegen\xai-grok-shell\src\config\reloader.rs`（25 tests, unix 自门控命中 0）
 - **posix-path** ×5
@@ -2033,6 +2143,15 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
   - L243: `let b = path_to_pipe_name(Path::new("/tmp/b.sock"));`
   - L249: `let name = path_to_pipe_name(Path::new("/tmp/test.sock"));`
 
+### `crates\codegen\xai-grok-shell\src\managed_config\store.rs`（0 tests, unix 自门控命中 0）
+- **perm-mode** ×3
+  - L296: `// 0o600: `managed_config` can embed the enforced deployment key.`
+  - L297: `match xai_grok_config::fs_atomic::write_atomically(&path, content, Some(0o600)) {`
+  - L465: `xai_grok_config::fs_atomic::write_atomically(&path, &json, Some(0o600))`
+- **symlink** ×2
+  - L80: `if std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir())`
+  - L89: `let is_dir = std::fs::symlink_metadata(path).is_ok_and(|m| m.is_dir());`
+
 ### `crates\codegen\xai-grok-shell\src\mcp_doctor.rs`（8 tests, unix 自门控命中 0）
 - **posix-path** ×4
   - L855: `"/etc/grok/managed_config.toml".into(),`
@@ -2193,6 +2312,14 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
   - L256: `.add_before_snapshot_for_prompt(0, Path::new("/tmp/b.rs"), cwd, Some("b".into()))`
   - L260: `.add_before_snapshot_for_prompt(1, Path::new("/tmp/c.rs"), cwd, Some("c".into()))`
 
+### `crates\codegen\xai-grok-shell\src\session\acp_session_tests\support.rs`（0 tests, unix 自门控命中 0）
+- **posix-path** ×5
+  - L133: `state_path: std::path::PathBuf::from("/tmp/tool_state.json"),`
+  - L443: `"/tmp/test-session",`
+  - L452: `"/tmp/test-session",`
+  - L761: `serde_json::json!({ "target_file": "/tmp/permission-hook.txt" }).to_string(),`
+  - L767: `search_replace_call_at(id, "/tmp/permission-hook.txt")`
+
 ### `crates\codegen\xai-grok-shell\src\session\compaction_inline_auto_compact_flow_tests.rs`（35 tests, unix 自门控命中 0）
 - **posix-path** ×2
   - L208: `"/tmp/test-session",`
@@ -2214,6 +2341,13 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
   - L1055: `&PathBuf::from("/home/user/.cache/repo/src/main.rs"),`
 - **symlink** ×1
   - L38: `// Spelling mismatch (symlink/relative): retry on canonical roots before giving up; never scan the whole absolute path`
+
+### `crates\codegen\xai-grok-shell\src\session\goal_classifier.rs`（0 tests, unix 自门控命中 0）
+- **symlink** ×2
+  - L53: `/// A world-writable directory would let a local attacker pre-plant a symlink and redirect the harness's writes.`
+  - L265: `/// Checks string structure only; symlink resistance comes from the owner-only (0700) scratch root.`
+- **posix-path** ×1
+  - L1017: `const SCRATCH_MARKERS: &[&str] = &["/tmp/", "/var/folders/", "/private/tmp/"];`
 
 ### `crates\codegen\xai-grok-shell\src\session\goal_classifier\evidence.rs`（46 tests, unix 自门控命中 0）
 - **posix-path** ×7（共 7 处，仅列 5）
@@ -2295,6 +2429,11 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
   - L691: `Some("/home/user/src")`
   - L919: `"/home/alice/repo",`
 
+### `crates\codegen\xai-grok-shell\src\session\persistence.rs`（0 tests, unix 自门控命中 0）
+- **symlink** ×2
+  - L3301: `let metadata = match std::fs::symlink_metadata(&path) {`
+  - L3311: `match std::fs::symlink_metadata(&summary) {`
+
 ### `crates\codegen\xai-grok-shell\src\session\persistence_generated_title_tests.rs`（12 tests, unix 自门控命中 0）
 - **posix-path** ×2
   - L88: `"git_root_dir": "/home/user/myrepo",`
@@ -2324,6 +2463,12 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
   - L2187: `let mut tracker = GoalTracker::new(std::path::PathBuf::from("/tmp/test"));`
   - L2199: `let mut tracker = GoalTracker::new(std::path::PathBuf::from("/tmp/test"));`
 
+### `crates\codegen\xai-grok-shell\src\session\storage\jsonl\mod.rs`（0 tests, unix 自门控命中 0）
+- **symlink** ×3
+  - L805: `match std::fs::symlink_metadata(&workflows_dir) {`
+  - L832: `let Ok(run_meta) = std::fs::symlink_metadata(&run_dir) else {`
+  - L838: `if std::fs::symlink_metadata(run_dir.join("cleared"))`
+
 ### `crates\codegen\xai-grok-shell\src\session\storage\jsonl\tests.rs`（87 tests, unix 自门控命中 17）
 - **posix-path** ×4
   - L1251: `let cwd = crate::util::grok_home::encode_cwd_dirname("/home/user/project");`
@@ -2339,7 +2484,7 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
   - L141: `kinded.source_workspace_dir = Some("/home/user/repo".to_owned());`
   - L312: `kinded.source_workspace_dir = Some("/home/user/repo".to_owned());`
 
-### `crates\codegen\xai-grok-shell\src\session\storage\mod.rs`（56 tests, unix 自门控命中 0）
+### `crates\codegen\xai-grok-shell\src\session\storage\mod.rs`（56 tests, unix 自门控命中 3）
 - **posix-path** ×2
   - L3550: `r#"{"sessionUpdate":"tool_call","toolCallId":"tc1","title":"Read `/tmp/foo.rs`","kind":"read","locations":[{"path":"/tmp/foo.rs"}]}"#,`
   - L3555: `assert!(result.contains(&"/tmp/foo.rs".to_string()));`
@@ -2445,6 +2590,9 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
 - **unix-import** ×2
   - L123: `use std::os::unix::fs::PermissionsExt;`
   - L277: `use std::os::unix::fs::MetadataExt;`
+- **unix-fn-path** ×2
+  - L123: `use std::os::unix::fs::PermissionsExt;`
+  - L277: `use std::os::unix::fs::MetadataExt;`
 - **env-home** ×1
   - L170: `.env("HOME", self._tmp.path().join("home"))`
 
@@ -2454,12 +2602,16 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
   - L49: `std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))`
 - **unix-import** ×1
   - L30: `use std::os::unix::fs::PermissionsExt;`
+- **unix-fn-path** ×1
+  - L30: `use std::os::unix::fs::PermissionsExt;`
 
 ### `crates\codegen\xai-grok-shell\tests\external_auth_expired_credential.rs`（2 tests, unix 自门控命中 0）
 - **perm-mode** ×2
   - L140: `use std::os::unix::fs::PermissionsExt;`
   - L151: `std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))`
 - **unix-import** ×1
+  - L140: `use std::os::unix::fs::PermissionsExt;`
+- **unix-fn-path** ×1
   - L140: `use std::os::unix::fs::PermissionsExt;`
 
 ### `crates\codegen\xai-grok-shell\tests\test_auth_provider_command_e2e.rs`（1 tests, unix 自门控命中 0）
@@ -2541,7 +2693,7 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
 - **signal** ×1
   - L48: `/// A process wedged in uninterruptible kernel I/O (D-state) also holds the pipe open, and not even SIGKILL moves it.`
 
-### `crates\codegen\xai-grok-shell-terminal\src\pty_session.rs`（5 tests, unix 自门控命中 5）
+### `crates\codegen\xai-grok-shell-terminal\src\pty_session.rs`（5 tests, unix 自门控命中 6）
 - **pty-fork** ×1
   - L260: `.openpty(size)`
 - **term-detect** ×1
@@ -2573,6 +2725,8 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap, local-w
 
 
 ## xai-grok-telemetry — RISK
+
+feature 门控测试（默认构建不跑，抽样不含）：memory-log
 
 ### `crates\codegen\xai-grok-telemetry\src\debug_log.rs`（22 tests, unix 自门控命中 20）
 - **posix-path** ×4
@@ -2666,6 +2820,9 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap
 - **unix-import** ×2
   - L642: `use std::os::unix::fs::PermissionsExt;`
   - L714: `use std::os::unix::fs::PermissionsExt;`
+- **unix-fn-path** ×2
+  - L642: `use std::os::unix::fs::PermissionsExt;`
+  - L714: `use std::os::unix::fs::PermissionsExt;`
 
 ### `crates\codegen\xai-grok-tools\src\computer\local\shell_state.rs`（26 tests, unix 自门控命中 0）
 - **posix-path** ×3
@@ -2678,6 +2835,8 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap
 - **term-detect** ×2
   - L47: `("TERM".to_string(), "dumb".to_string()),`
   - L660: `assert_eq!(env.get("TERM").map(String::as_str), Some("dumb"));`
+- **unix-fn-path** ×1
+  - L11: `use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};`
 - **pty-fork** ×1
   - L508: `/// close-on-exec, eliminating the race window between `pipe()` and `fcntl(F_SETFD)` where a concurrent `fork()` could leak fds to an unrelated`
 - **symlink** ×1
@@ -2687,6 +2846,8 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap
 - **unix-import** ×2
   - L12: `use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};`
   - L18: `use nix::libc;`
+- **unix-fn-path** ×1
+  - L12: `use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};`
 - **posix-path** ×1
   - L241: `std::path::Path::new("/bin/bash").exists()`
 
@@ -2992,6 +3153,8 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap
   - L90: `assert!(link.is_symlink(), "{name} must remain a symlink");`
 - **perm-mode** ×1
   - L53: `std::fs::set_permissions(&prev, std::fs::Permissions::from_mode(0o755)).unwrap();`
+- **unix-fn-path** ×1
+  - L59: `std::os::unix::fs::symlink(&rel, &link).unwrap();`
 
 ### `crates\codegen\xai-grok-update\tests\test_concurrent_convergence.rs`（10 tests, unix 自门控命中 1）
 - **symlink** ×13（共 13 处，仅列 5）
@@ -3003,6 +3166,8 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap
 - **perm-mode** ×2
   - L78: `std::fs::set_permissions(`
   - L80: `std::fs::Permissions::from_mode(0o755),`
+- **unix-fn-path** ×1
+  - L83: `std::os::unix::fs::symlink(`
 
 ### `crates\codegen\xai-grok-update\tests\test_downgrade_matrix.rs`（24 tests, unix 自门控命中 0）
 - **symlink** ×9（共 9 处，仅列 5）
@@ -3011,6 +3176,8 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap
   - L112: `let target = std::fs::read_link(&symlink).unwrap();`
   - L115: `"symlink must point to rolled-back version: {target:?}"`
   - L133: `let symlink = test_home().join("bin").join("grok");`
+- **unix-fn-path** ×1
+  - L439: `std::os::unix::fs::symlink(`
 
 ### `crates\codegen\xai-grok-update\tests\test_install_internal.rs`（19 tests, unix 自门控命中 0）
 - **symlink** ×15（共 15 处，仅列 5）
@@ -3019,6 +3186,12 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap
   - L98: `assert!(symlink.is_symlink(), "grok symlink created");`
   - L99: `let target = std::fs::read_link(&symlink).unwrap();`
   - L107: `assert!(agent_link.is_symlink(), "agent symlink created");`
+- **unix-fn-path** ×5
+  - L133: `std::os::unix::fs::symlink(&rel_old, bin_dir.join("grok")).unwrap();`
+  - L134: `std::os::unix::fs::symlink(&rel_old, bin_dir.join("agent")).unwrap();`
+  - L169: `std::os::unix::fs::symlink(&rel_old, bin_dir.join("grok")).unwrap();`
+  - L228: `use std::os::unix::fs::PermissionsExt;`
+  - L262: `std::os::unix::fs::symlink("/tmp/fake-old-pager", &pager_link).unwrap();`
 - **perm-mode** ×2
   - L228: `use std::os::unix::fs::PermissionsExt;`
   - L244: `assert!(mode & 0o111 != 0, "binary must be executable, got {mode:o}");`
@@ -3049,6 +3222,10 @@ feature 门控测试（默认构建不跑，抽样不含）：dhat-heap
   - L101: `std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();`
   - L112: `std::fs::set_permissions(&prev, std::fs::Permissions::from_mode(0o755)).unwrap();`
   - L373: `std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();`
+- **unix-fn-path** ×3
+  - L115: `std::os::unix::fs::symlink(format!("../downloads/grok-{platform}"), &link).unwrap();`
+  - L228: `std::os::unix::fs::symlink(&link_value, &rc_link).unwrap();`
+  - L240: `std::os::unix::fs::symlink(&link_value, &rc_link).unwrap();`
 
 
 ## xai-grok-version — CLEAN
@@ -3064,13 +3241,15 @@ feature 门控测试（默认构建不跑，抽样不含）：audio
   - L136: `.map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)`
 - **unix-import** ×1
   - L129: `use std::os::unix::fs::PermissionsExt;`
+- **unix-fn-path** ×1
+  - L129: `use std::os::unix::fs::PermissionsExt;`
 
 ### `crates\codegen\xai-grok-voice\src\audio\capture_subprocess.rs`（3 tests, unix 自门控命中 0）
 - **sh-exec** ×1
   - L311: `let mut cmd = std::process::Command::new("sh");`
 
 
-## xai-grok-workspace — RISK
+## xai-grok-workspace — COMPILE-BREAK
 
 feature 门控测试（默认构建不跑，抽样不含）：compression
 
@@ -3078,6 +3257,8 @@ feature 门控测试（默认构建不跑，抽样不含）：compression
 - **posix-path** ×2
   - L883: `Args::try_parse_from(["xai-workspace-server", "--ready-file", "/tmp/x.ready"]).unwrap();`
   - L884: `assert_eq!(args.ready_file, Some(PathBuf::from("/tmp/x.ready")));`
+- **unix-gated-import** ×1
+  - L12: `use xai_grok_workspace_daemon::daemonize;`
 
 ### `crates\codegen\xai-grok-workspace\src\config.rs`（47 tests, unix 自门控命中 0）
 - **symlink** ×1
@@ -3085,7 +3266,7 @@ feature 门控测试（默认构建不跑，抽样不含）：compression
 - **posix-path** ×1
   - L997: `"/usr/bin/true",`
 
-### `crates\codegen\xai-grok-workspace\src\envrc.rs`（10 tests, unix 自门控命中 0）
+### `crates\codegen\xai-grok-workspace\src\envrc.rs`（10 tests, unix 自门控命中 1）
 - **posix-path** ×1
   - L271: `let mut bash_cmd = Command::new("/bin/bash");`
 
@@ -3139,6 +3320,22 @@ feature 门控测试（默认构建不跑，抽样不含）：compression
 ### `crates\codegen\xai-grok-workspace\src\git_content_filters.rs`（9 tests, unix 自门控命中 0）
 - **symlink** ×1
   - L49: `// Directories open on Linux, so require a readable regular file after following symlinks.`
+
+### `crates\codegen\xai-grok-workspace\src\handle.rs`（0 tests, unix 自门控命中 0）
+- **symlink** ×10（共 10 处，仅列 5）
+  - L1746: `/// Resolve a caller-provided path against an explicit base and confine it there. If a symlink is created between resolution and I/O, containment is not guarant`
+  - L1783: `let mut symlink_hops = 0usize;`
+  - L1792: `"path resolves outside workspace root (symlink escape): {req_path}"`
+  - L1801: `if let Ok(md) = tokio::fs::symlink_metadata(&check_path).await`
+  - L1804: `if symlink_hops >= MAX_SYMLINK_HOPS {`
+- **signal** ×5
+  - L14: `/// Default SIGTERM drain budget (ms); override via `GROK_WORKSPACE_TERMINATION_GRACE_MS`.`
+  - L1456: `/// Called from the workspace-server SIGTERM handler on graceful shutdown.`
+  - L1509: `/// Shared by the SIGTERM and server-evict triggers so they can't diverge. The preStop drain marker is (re)written at every phase boundary, not just at the star`
+  - L4004: `/// Process received SIGTERM / Ctrl-C (standalone `workspace_server`).`
+  - L4064: `/// The SIGTERM drain budget from `GROK_WORKSPACE_TERMINATION_GRACE_MS` (default [`DEFAULT_TERMINATION_GRACE_MS`]).`
+- **posix-path** ×1
+  - L18: `const DEFAULT_DRAINING_FILE: &str = "/tmp/workspace-server.draining";`
 
 ### `crates\codegen\xai-grok-workspace\src\handle_tests.rs`（224 tests, unix 自门控命中 21）
 - **posix-path** ×6（共 6 处，仅列 5）
@@ -3306,6 +3503,17 @@ feature 门控测试（默认构建不跑，抽样不含）：compression
   - L804: `ToolInput::SearchReplace(sr) if sr.file_path == "/tmp/denied.txt"`
   - L808: `AccessKind::Edit(p) if p == "/tmp/denied.txt"`
 
+### `crates\codegen\xai-grok-workspace\src\restore_fetch.rs`（0 tests, unix 自门控命中 0）
+- **signal** ×8（共 8 处，仅列 5）
+  - L10: `//! The child process group gets SIGTERM, then SIGKILL, then a bounded wait, so a detached `setsid` fetch cannot outlive the restore attempt.`
+  - L445: `errors.push(format!("SIGTERM failed: {err}"));`
+  - L451: `errors.push(format!("wait after SIGTERM: {err}"));`
+  - L458: `errors.push(format!("SIGKILL failed: {err}"));`
+  - L463: `Ok(None) => errors.push("fetch leader still alive after SIGKILL".to_owned()),`
+- **term-detect** ×2
+  - L9: `//! The cap allows for head's wait timeout and TERM/KILL/stderr teardown.`
+  - L37: `/// Wall-clock time `wait_success` may still spend after a timed-out `wait_timeout` (TERM grace + KILL wait + stderr join + scheduling slack).`
+
 ### `crates\codegen\xai-grok-workspace\src\session\checkpoint_store.rs`（10 tests, unix 自门控命中 0）
 - **symlink** ×1
   - L348: `let Ok(meta) = std::fs::symlink_metadata(&from) else {`
@@ -3419,7 +3627,7 @@ feature 门控测试（默认构建不跑，抽样不含）：compression
 
 ## xai-grok-workspace-daemon — RISK
 
-### `crates\codegen\xai-grok-workspace-daemon\src\daemonize.rs`（29 tests, unix 自门控命中 38）
+### `crates\codegen\xai-grok-workspace-daemon\src\daemonize.rs`（29 tests, unix 自门控命中 39）
 - **pty-fork** ×1
   - L200: `/// `fork()`; the parent exits 0, the child returns `Ok(())` to continue.`
 - **symlink** ×1
@@ -3477,12 +3685,14 @@ feature 门控测试（默认构建不跑，抽样不含）：compression
   - L813: `"root": "/tmp/future-plugin",`
 
 
-## xai-hunk-tracker — RISK
+## xai-hunk-tracker — COMPILE-BREAK
 
 ### `crates\codegen\xai-hunk-tracker\src\actor\file_utils.rs`（17 tests, unix 自门控命中 0）
 - **symlink** ×3
   - L96: `// Use symlink_metadata (lstat) to detect symlinks without following them.`
   - L99: `let metadata = match tokio::fs::symlink_metadata(path).await {`
+  - L301: `std::os::unix::fs::symlink(&target, &link).unwrap();`
+- **unix-fn-path** ×1
   - L301: `std::os::unix::fs::symlink(&target, &link).unwrap();`
 
 ### `crates\codegen\xai-hunk-tracker\src\actor\tests.rs`（120 tests, unix 自门控命中 0）
@@ -3596,10 +3806,12 @@ feature 门控测试（默认构建不跑，抽样不含）：prompt-render
 
 ## xai-tty-utils — COMPILE-BREAK
 
-### `crates\codegen\xai-tty-utils\src\lib.rs`（32 tests, unix 自门控命中 39）
+### `crates\codegen\xai-tty-utils\src\lib.rs`（32 tests, unix 自门控命中 46）
 - **signal** ×2
   - L358: `/// SIGTERM (the default) lets the child run its graceful shutdown; pass `libc::SIGKILL` when the child must die even if`
   - L360: `/// because they were unresponsive to the master-close SIGHUP. All caveats of [`kill_on_parent_death_std`] apply.`
+- **unix-fn-path** ×1
+  - L1059: `/// [`OwnedFd`](std::os::unix::io::OwnedFd) for type safety; the [`OnceLock`](std::sync::OnceLock) keeps it alive for the`
 - **posix-path** ×1
   - L1169: `let osrelease = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok();`
 
@@ -3609,6 +3821,8 @@ feature 门控测试（默认构建不跑，抽样不含）：prompt-render
 
 ### `crates\codegen\xai-tty-utils\src\runtime_eagain_tests.rs`（2 tests, unix 自门控命中 0）
 - **unix-import** ×1
+  - L17: `use std::os::unix::process::ExitStatusExt;`
+- **unix-fn-path** ×1
   - L17: `use std::os::unix::process::ExitStatusExt;`
 - **posix-path** ×1
   - L26: `std::fs::read_to_string("/proc/self/status")`

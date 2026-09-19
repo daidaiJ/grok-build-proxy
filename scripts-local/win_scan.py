@@ -23,6 +23,7 @@ OUT = REPO / "docs-local" / "win-compat-scan.md"
 # (家族, 级别, 正则)。级别: compile=编译即断, runtime=运行期风险
 SIGNATURES = [
     ("unix-import", "compile", r"^\s*use\s+(std::os::unix|nix|libc|signal_hook|termios)\b"),
+    ("unix-fn-path", "compile", r"\bstd::os::unix\b|\bstd::os::fd\b"),
     ("posix-path", "runtime", r"""['\"]/(?:usr|tmp|etc|var|home|proc|dev|opt|bin)/"""),
     ("sh-exec", "runtime", r"""Command::new\("(?:sh|bash|dash|zsh)"\)|\bsh\s+-c\b"""),
     ("perm-mode", "runtime", r"PermissionsExt|set_permissions|\.mode\(0o|\b0o[0-7]{3,4}\b"),
@@ -41,6 +42,58 @@ SELF_GATE = re.compile(r"cfg\([^)]*(?:\bunix\b|not\(windows|target_os\s*=\s*\"(?
 FEATURE_GATE = re.compile(r"""cfg\(\s*feature\s*=\s*"([^"]+)\"""")
 TEST_ATTR = re.compile(r"#\[\s*(?:tokio::|async_std::)?test\b")
 UNIQUE = "scan_line_unique"
+USE_RE = re.compile(r"^\s*use\s+([a-zA-Z_][a-zA-Z0-9_]*)::(.+);")
+INNER_GATED = re.compile(r"^#!\[cfg\([^)]*(?:\bunix\b|target_os\s*=\s*\"(?:linux|macos)\")")
+
+
+def collect_unix_pub(roots):
+    """预扫：收集各 crate 中被 #[cfg(unix 族)] 门控的公开项名（pub use / pub fn）。
+    返回 {crate: set(item)}，供跨 crate 导入检测（unix 门控在别的 crate 里时，
+    单文件签名扫不出来——pty-harness 事故族）。"""
+    pub = defaultdict(set)
+    for root in roots:
+        base = REPO / root
+        if not base.exists():
+            continue
+        for rs in base.rglob("*.rs"):
+            try:
+                lines = rs.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                continue
+            for i, line in enumerate(lines):
+                if not line.strip().startswith("#[cfg(") or not SELF_GATE.search(line):
+                    continue
+                for j in range(i + 1, min(i + 3, len(lines))):
+                    nxt = lines[j].strip()
+                    m = re.match(r"pub use\s+[^;]*::\{([^}]*)\}", nxt)
+                    if m:
+                        for item in m.group(1).split(","):
+                            item = item.strip().split(" as ")[0].split("::")[-1].strip()
+                            if item:
+                                pub[crate_label(rs, root)].add(item)
+                        break
+                    m = re.match(r"pub use\s+[^;]*::([A-Za-z_][A-Za-z0-9_]*)", nxt)
+                    if m:
+                        pub[crate_label(rs, root)].add(m.group(1))
+                        break
+                    m = re.match(r"pub fn ([A-Za-z_][A-Za-z0-9_]*)", nxt)
+                    if m:
+                        pub[crate_label(rs, root)].add(m.group(1))
+                        break
+    return pub
+
+
+def crate_label(rs, root):
+    """文件路径 → crate 名（与 main 的 crate_name 规则一致）"""
+    rel = rs.relative_to(REPO)
+    parts = rel.parts
+    if parts[0] == "crates" and len(parts) >= 3:
+        return parts[2]
+    if parts[0] == "prod" and len(parts) >= 3 and parts[1] == "mc":
+        return parts[2]
+    if parts[0] in ("prod", "third_party") and len(parts) >= 2:
+        return parts[1]
+    return None
 
 
 def classify_line(lines, idx):
@@ -68,7 +121,7 @@ def classify_line(lines, idx):
     return hits, gate
 
 
-def scan_file(path):
+def scan_file(path, unix_pub=None):
     """返回 dict: tests, risk(家族->[(行号,行)]), unix_gated, feat_gated(特征->家族->n),
     compile(bool), features(本文件 cfg(feature) 全集)"""
     try:
@@ -76,13 +129,29 @@ def scan_file(path):
     except OSError:
         return None
     lines = text.splitlines()
-    if not TEST_ATTR.search(text):
+    has_tests = bool(TEST_ATTR.search(text))
+    has_gated_import = bool(unix_pub) and any(
+        (m := USE_RE.match(l)) and m.group(1) in unix_pub for l in lines)
+    if not has_tests and not has_gated_import:
         return None
     info = {"tests": len(TEST_ATTR.findall(text)), "risk": defaultdict(list),
             "unix_gated": 0, "feat_gated": defaultdict(int), "compile": False,
             "features": sorted(set(re.findall(r"""cfg\(\s*feature\s*=\s*"([^"]+)\"""", text)))}
+    whole_gated = any(INNER_GATED.search(l) for l in lines[:5])
     for i, _ in enumerate(lines):
         hits, gate = classify_line(lines, i)
+        # 跨 crate 导入 unix 门控公开项 → Windows 编译断（pty-harness 族）
+        if unix_pub and not whole_gated:
+            um = USE_RE.match(lines[i])
+            if um and um.group(1) in unix_pub:
+                seg = um.group(2)
+                inner = re.search(r"\{([^}]*)\}", seg)
+                names = [x.strip().split(" as ")[0].split("::")[-1]
+                         for x in inner.group(1).split(",")] if inner \
+                    else [seg.split("::")[-1].rstrip(";").strip()]
+                for n in names:
+                    if n in unix_pub[um.group(1)]:
+                        hits.append(("unix-gated-import", "compile"))
         if not hits:
             continue
         if gate == "unix":
@@ -117,6 +186,9 @@ def main():
         return None
 
     results = {}  # crate -> {file -> info}
+    # 导入路径用下划线，crate 名用连字符：按 Rust 名建查找表
+    unix_pub = {k.replace("-", "_"): v
+                for k, v in collect_unix_pub(("crates", "prod", "third_party")).items()}
     for root in ("crates", "prod", "third_party"):
         base = REPO / root
         if not base.exists():
@@ -128,7 +200,7 @@ def main():
                 continue
             if only and cname not in only:
                 continue
-            info = scan_file(rs)
+            info = scan_file(rs, unix_pub)
             if info:
                 results.setdefault(cname, {})[str(rel)] = info
 
@@ -136,12 +208,11 @@ def main():
     def crate_verdict(files):
         if any(f["compile"] for f in files.values()):
             return "COMPILE-BREAK"
-        n_risk = sum(1 for f in files.values() if f["risk"])
-        tests = sum(f["tests"] for f in files.values())
+        test_files = [f for f in files.values() if f["tests"]]
+        n_risk = sum(1 for f in test_files if f["risk"])
         if n_risk == 0:
             return "CLEAN"
-        # 风险文件占比 < 10% 视为轻风险
-        return "RISK" if n_risk / max(len(files), 1) > 0.1 else "RISK-LIGHT"
+        return "RISK" if n_risk / max(len(test_files), 1) > 0.1 else "RISK-LIGHT"
 
     now = datetime.date.today().isoformat()
     out = [f"# Windows 兼容性静态扫描报告（生成于 {now}，工具 scripts-local/win_scan.py，勿手改）",
