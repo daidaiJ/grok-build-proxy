@@ -76,6 +76,7 @@ mod tests {
                     role: Some(Role::Assistant),
                     content: Some(text.to_string()),
                     reasoning_content: None,
+                    reasoning: None,
                     tool_calls: vec![],
                     tool_call_id: None,
                 },
@@ -107,7 +108,12 @@ mod tests {
         let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> =
             vec![Ok(text_chunk("hello")), Ok(final_chunk())];
         let raw = stream::iter(chunks).boxed();
-        let events = stream_chat_completions(raw, None, rid(), Duration::from_secs(60));
+        let events = stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            crate::stream::chat_completions::ChatStreamOptions::new(Duration::from_secs(60)),
+        );
 
         let (response, _metrics) = collect_response(events)
             .await
@@ -124,7 +130,12 @@ mod tests {
             Err(SamplingError::EventStreamError("boom".into())),
         ];
         let raw = stream::iter(chunks).boxed();
-        let events = stream_chat_completions(raw, None, rid(), Duration::from_secs(60));
+        let events = stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            crate::stream::chat_completions::ChatStreamOptions::new(Duration::from_secs(60)),
+        );
 
         let err = collect_response(events).await.expect_err("error returned");
         assert!(err.message.contains("boom"));

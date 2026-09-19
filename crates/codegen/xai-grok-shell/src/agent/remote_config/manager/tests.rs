@@ -1043,6 +1043,7 @@ fn apply_refresh_result_only_updates_etag_on_success() {
 
 fn make_model_entry(model_id: &str) -> ModelEntry {
     ModelEntry {
+        experimental: Default::default(),
         info: config::ModelInfo::fallback(model_id),
         mtls_cert_dir: None,
         api_key: None,
@@ -2211,6 +2212,7 @@ fn make_entry_config_with_id(
     name: Option<&str>,
 ) -> config::ModelEntryConfig {
     config::ModelEntryConfig {
+        experimental: Default::default(),
         id: id.map(|s| s.to_owned()),
         model_family: None,
         model: model.to_owned(),

@@ -103,6 +103,30 @@ mod tests {
         assert!(p.contains("faithful, concise summary"));
     }
 
+    /// Handoff-document semantics (ported from kimi-code's compaction-instruction
+    /// intent): language-following, command/result fidelity, and a decided vs.
+    /// undecided split are explicit requirements of the prompt.
+    #[test]
+    fn summary_prompt_requires_handoff_document_properties() {
+        let p = build_summary_prompt(None);
+        assert!(
+            p.contains("same language the conversation has been conducted in"),
+            "summary must follow the conversation's language"
+        );
+        assert!(
+            p.contains("already decided or settled from what is still open or undecided"),
+            "summary must separate decided from undecided"
+        );
+        assert!(
+            p.contains("commands run in the recent turns together with their key results"),
+            "summary must preserve recent commands and their results"
+        );
+        assert!(
+            p.contains("handoff document"),
+            "summary is framed as a handoff document"
+        );
+    }
+
     #[test]
     fn kind_structured_matches_build_summary_prompt() {
         // The Structured kind must be byte-identical to the legacy entry point

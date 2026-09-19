@@ -11,11 +11,15 @@ fn chat_chunk_has_content(chunk: &ChatCompletionChunk) -> bool {
             role: _,
             content,
             reasoning_content,
+            reasoning,
             tool_calls,
             tool_call_id: _,
         } = &choice.delta;
         content.as_deref().is_some_and(|text| !text.is_empty())
             || reasoning_content
+                .as_deref()
+                .is_some_and(|text| !text.is_empty())
+            || reasoning
                 .as_deref()
                 .is_some_and(|text| !text.is_empty())
             || tool_calls.iter().any(|call| {

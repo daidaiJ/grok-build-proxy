@@ -599,3 +599,71 @@ fn upgrade_then_fold_through_conversation_to_chat_messages() {
         "reconstructed sibling folded onto assistant.reasoning_content"
     );
 }
+
+// ── Consecutive-user merge (protocol-boundary 400 protection) ────────────────
+
+#[test]
+fn consecutive_user_messages_merge_into_one_turn() {
+    let msgs = conversation_to_chat_messages(vec![
+        ConversationItem::system("sys"),
+        ConversationItem::user("Fix the bug"),
+        ConversationItem::user_meta("Earlier context: the parser was rewritten."),
+        ConversationItem::system_reminder("<system-reminder>plan mode</system-reminder>"),
+    ]);
+    assert_eq!(msgs.len(), 2, "system + one merged user turn");
+    assert!(matches!(msgs[1].role, Role::User));
+    assert_eq!(
+        msgs[1].text_content(),
+        "Fix the bug\n\nEarlier context: the parser was rewritten.\n\n<system-reminder>plan mode</system-reminder>"
+    );
+}
+
+#[test]
+fn non_adjacent_users_never_merge() {
+    let msgs = conversation_to_chat_messages(vec![
+        ConversationItem::user("first"),
+        ConversationItem::assistant("hi"),
+        ConversationItem::user("second"),
+    ]);
+    assert_eq!(msgs.len(), 3);
+    assert_eq!(msgs[0].text_content(), "first");
+    assert_eq!(msgs[2].text_content(), "second");
+}
+
+#[test]
+fn merged_users_preserve_blocks_and_collapse_single_text() {
+    // Text + image user followed by a text user: blocks concatenate.
+    let mut with_image = ConversationItem::user("look at this");
+    with_image.add_image("data:image/png;base64,QUJD");
+    let msgs = merge_consecutive_user_messages(vec![
+        conversation_item_to_chat_message(with_image),
+        conversation_item_to_chat_message(ConversationItem::user("and this")),
+    ]);
+    assert_eq!(msgs.len(), 1);
+    assert!(matches!(
+        &msgs[0].content,
+        MessageContent::Blocks(blocks) if blocks.len() == 3,
+    ));
+
+    // Two plain users collapse back to plain text, not a one-block list.
+    let msgs = merge_consecutive_user_messages(vec![
+        conversation_item_to_chat_message(ConversationItem::user("a")),
+        conversation_item_to_chat_message(ConversationItem::user("b")),
+    ]);
+    assert_eq!(msgs.len(), 1);
+    assert!(matches!(&msgs[0].content, MessageContent::Text(text) if text == "a\n\nb"));
+}
+
+#[test]
+fn assistant_history_with_reasoning_survives_the_merge() {
+    let msgs = conversation_to_chat_messages(vec![
+        ConversationItem::user("q1"),
+        ConversationItem::Reasoning(synthesized_reasoning_item("thought")),
+        ConversationItem::assistant("a1"),
+        ConversationItem::user("q2"),
+        ConversationItem::user_meta("context"),
+    ]);
+    assert_eq!(msgs.len(), 3);
+    assert_eq!(msgs[1].reasoning_content.as_deref(), Some("thought"));
+    assert_eq!(msgs[2].text_content(), "q2\n\ncontext");
+}

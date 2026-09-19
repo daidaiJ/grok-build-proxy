@@ -2331,6 +2331,7 @@ async fn retry_after_lost_ack_converges_memory_and_disk_to_authoritative_item() 
     let chat = xai_chat_state::ChatStateActor::spawn(
         vec![],
         xai_grok_sampling_types::SamplingConfig {
+            experimental: Default::default(),
             base_url: String::new(),
             mtls_cert_dir: None,
             model: String::new(),

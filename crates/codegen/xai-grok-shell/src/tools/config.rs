@@ -195,6 +195,7 @@ impl ShellToolsetConfig {
     /// Optionally layers sampling credentials onto the web search config.
     pub fn new(base: Option<Self>, sampling_config: Option<SamplerConfig>) -> Self {
         let default_base = SamplerConfig {
+            experimental: Default::default(),
             api_key: None,
             base_url: "https://api.x.ai/v1".to_string(),
             mtls_cert_dir: None,

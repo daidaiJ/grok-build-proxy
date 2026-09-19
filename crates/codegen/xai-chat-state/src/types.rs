@@ -165,6 +165,7 @@ mod tests {
         let snapshot = ChatStateSnapshot {
             conversation: vec![],
             sampling_config: SamplingConfig {
+                experimental: Default::default(),
                 base_url: "https://api.example.com".to_string(),
                 mtls_cert_dir: None,
                 model: "test-model".to_string(),
@@ -219,6 +220,7 @@ mod tests {
                 ConversationItem::assistant("Hi there!"),
             ],
             sampling_config: SamplingConfig {
+                experimental: Default::default(),
                 base_url: "https://api.example.com".to_string(),
                 mtls_cert_dir: None,
                 model: "grok-3".to_string(),

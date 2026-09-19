@@ -674,6 +674,7 @@ pub(crate) fn parse_remote_model_value(
         })
         .unwrap_or_default();
     Some(crate::agent::config::ModelEntryConfig {
+        experimental: Default::default(),
         id,
         model,
         model_family,

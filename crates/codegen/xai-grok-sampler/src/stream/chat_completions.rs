@@ -11,12 +11,38 @@ use futures_util::stream::{BoxStream, Stream};
 
 use xai_grok_sampling_types::{
     AssistantItem, ChatCompletionChunk, ConversationItem, ConversationResponse,
-    ResponseModelMetadata, SamplingError, StopReason, TokenUsage, ToolCall,
+    ReasoningDialect, ReasoningDialectMemory, ResponseModelMetadata, SamplingError, StopReason,
+    TokenUsage, ToolCall,
 };
 
 use crate::events::{SamplingChannel, SamplingErrorInfo, SamplingEvent};
 use crate::metrics::InferenceLatencyStats;
+use crate::thinking_scrub::ThinkingTagScrubber;
 use crate::types::RequestId;
+
+/// Per-transform knobs for the Chat Completions Layer-2 stream. Kept in one
+/// struct so new options don't ripple through every call site.
+#[derive(Debug, Clone, Default)]
+pub struct ChatStreamOptions {
+    /// Per-chunk idle timeout (transport stall and keepalive-only stall guards).
+    pub idle_timeout: Duration,
+    /// Shared per-endpoint memory of which reasoning wire key the peer speaks.
+    /// The transform observes inbound deltas so the client can replay the
+    /// learned dialect on the next request; `None` disables observation.
+    pub reasoning_dialects: Option<std::sync::Arc<ReasoningDialectMemory>>,
+    /// Experimental: route `<think>`/`<thinking>`-tagged spans from the text
+    /// channel into the reasoning channel. See [`crate::thinking_scrub`].
+    pub scrub_thinking_tags: bool,
+}
+
+impl ChatStreamOptions {
+    pub fn new(idle_timeout: Duration) -> Self {
+        Self {
+            idle_timeout,
+            ..Self::default()
+        }
+    }
+}
 
 /// The output stream emits exactly one terminal event per request.
 /// Callers must not consume past the terminal event (the implementation `return`s after yielding it).
@@ -24,9 +50,15 @@ pub fn stream_chat_completions<'a>(
     raw_stream: BoxStream<'a, Result<ChatCompletionChunk, SamplingError>>,
     model_metadata: Option<ResponseModelMetadata>,
     request_id: RequestId,
-    idle_timeout: Duration,
+    options: ChatStreamOptions,
 ) -> impl Stream<Item = SamplingEvent> + Send + 'a {
     async_stream::stream! {
+        let ChatStreamOptions {
+            idle_timeout,
+            reasoning_dialects,
+            scrub_thinking_tags,
+        } = options;
+        let mut scrubber = scrub_thinking_tags.then(ThinkingTagScrubber::new);
         let decode_region = crate::span_timing::Region::from_span(tracing::info_span!(
             "sampling.stream_decode",
             ttft_ms = tracing::field::Empty,
@@ -137,29 +169,70 @@ pub fn stream_chat_completions<'a>(
 
                 let delta = choice.delta;
 
+                // Reasoning wire-key scan (kimi-code reasoning-key parity): any
+                // string value observes the dialect; accumulation uses the
+                // first non-empty value in priority order.
+                let observed_dialect = if delta.reasoning_content.is_some() {
+                    Some(ReasoningDialect::ReasoningContent)
+                } else if delta.reasoning.is_some() {
+                    Some(ReasoningDialect::Reasoning)
+                } else {
+                    None
+                };
+                if let (Some(dialect), Some(memory)) =
+                    (observed_dialect, reasoning_dialects.as_deref())
+                {
+                    memory.observe(&model, dialect);
+                }
+
                 if let Some(text) = delta.content
                     && !text.is_empty()
                 {
-                    if !first_token_emitted {
-                        first_token_emitted = true;
-                        yield SamplingEvent::FirstToken {
+                    // Experimental tag-leak scrub: split the delta into visible
+                    // text and thinking-tagged spans before either is emitted.
+                    let (visible, leaked_thinking) = match scrubber.as_mut() {
+                        Some(scrubber) => scrubber.feed(&text),
+                        None => (text, String::new()),
+                    };
+                    if !leaked_thinking.is_empty() {
+                        if !first_token_emitted {
+                            first_token_emitted = true;
+                            yield SamplingEvent::FirstToken {
+                                request_id: request_id.clone(),
+                            };
+                        }
+                        chunk_has_content = true;
+                        chunk_index += 1;
+                        reasoning_acc.push_str(&leaked_thinking);
+                        yield SamplingEvent::ChannelToken {
                             request_id: request_id.clone(),
+                            channel: SamplingChannel::Reasoning,
+                            text: leaked_thinking,
+                            chunk_index,
                         };
                     }
-                    chunk_has_content = true;
-                    chunk_timestamps.push(Instant::now());
-                    chunk_index += 1;
-                    message_chunk_count += 1;
-                    content_acc.push_str(&text);
-                    yield SamplingEvent::ChannelToken {
-                        request_id: request_id.clone(),
-                        channel: SamplingChannel::Text,
-                        text,
-                        chunk_index,
-                    };
+                    if !visible.is_empty() {
+                        if !first_token_emitted {
+                            first_token_emitted = true;
+                            yield SamplingEvent::FirstToken {
+                                request_id: request_id.clone(),
+                            };
+                        }
+                        chunk_has_content = true;
+                        chunk_timestamps.push(Instant::now());
+                        chunk_index += 1;
+                        message_chunk_count += 1;
+                        content_acc.push_str(&visible);
+                        yield SamplingEvent::ChannelToken {
+                            request_id: request_id.clone(),
+                            channel: SamplingChannel::Text,
+                            text: visible,
+                            chunk_index,
+                        };
+                    }
                 }
 
-                if let Some(thought) = delta.reasoning_content
+                if let Some(thought) = delta.reasoning_content.or(delta.reasoning)
                     && !thought.is_empty()
                 {
                     if !first_token_emitted {
@@ -230,6 +303,33 @@ pub fn stream_chat_completions<'a>(
         }
 
         // ── Build the final response ─────────────────────────────────
+        // Flush the scrubber's held-back tail and emit it so the UI sees the
+        // same content the response carries.
+        if let Some(scrubber) = scrubber.as_mut() {
+            let (visible, leaked_thinking) = scrubber.finish();
+            if !leaked_thinking.is_empty() {
+                chunk_index += 1;
+                reasoning_acc.push_str(&leaked_thinking);
+                yield SamplingEvent::ChannelToken {
+                    request_id: request_id.clone(),
+                    channel: SamplingChannel::Reasoning,
+                    text: leaked_thinking,
+                    chunk_index,
+                };
+            }
+            if !visible.is_empty() {
+                chunk_index += 1;
+                message_chunk_count += 1;
+                content_acc.push_str(&visible);
+                yield SamplingEvent::ChannelToken {
+                    request_id: request_id.clone(),
+                    channel: SamplingChannel::Text,
+                    text: visible,
+                    chunk_index,
+                };
+            }
+        }
+
         let tool_calls: Vec<ToolCall> = tool_call_acc
             .into_values()
             .map(|(id, name, arguments)| ToolCall {
@@ -352,6 +452,7 @@ mod tests {
             role: Some(Role::Assistant),
             content: Some(text.to_string()),
             reasoning_content: None,
+            reasoning: None,
             tool_calls: vec![],
             tool_call_id: None,
         }])
@@ -379,7 +480,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -405,7 +506,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -443,6 +544,7 @@ mod tests {
             role: Some(Role::Assistant),
             content: None,
             reasoning_content: Some("thinking...".into()),
+            reasoning: None,
             tool_calls: vec![],
             tool_call_id: None,
         }]);
@@ -458,7 +560,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -512,7 +614,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -533,6 +635,7 @@ mod tests {
             role: None,
             content: None,
             reasoning_content: None,
+            reasoning: None,
             tool_calls: vec![ChunkToolCallDelta {
                 index: 0,
                 id: Some("call_cut".into()),
@@ -553,7 +656,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -573,6 +676,7 @@ mod tests {
             role: None,
             content: None,
             reasoning_content: None,
+            reasoning: None,
             tool_calls: vec![ChunkToolCallDelta {
                 index: 0,
                 id: Some("call_abc".into()),
@@ -589,6 +693,7 @@ mod tests {
             role: None,
             content: None,
             reasoning_content: None,
+            reasoning: None,
             tool_calls: vec![ChunkToolCallDelta {
                 index: 0,
                 id: None,
@@ -610,7 +715,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -666,7 +771,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -692,7 +797,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_millis(100),
+            ChatStreamOptions::new(Duration::from_millis(100)),
         ))
         .await;
 
@@ -717,7 +822,7 @@ mod tests {
             raw,
             Some(metadata.clone()),
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -753,7 +858,7 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
 
@@ -791,7 +896,7 @@ mod tests {
                 raw,
                 None,
                 rid(),
-                Duration::from_secs(60),
+                ChatStreamOptions::new(Duration::from_secs(60)),
             ))
             .await;
             match events.last().unwrap() {
@@ -834,12 +939,174 @@ mod tests {
             raw,
             None,
             rid(),
-            Duration::from_secs(60),
+            ChatStreamOptions::new(Duration::from_secs(60)),
         ))
         .await;
         match events.last().unwrap() {
             SamplingEvent::Completed { response, .. } => {
                 assert_eq!(response.cost_usd_ticks, Some(99));
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    /// Inbound dialect scan: a delta that speaks only the `reasoning` wire key
+    /// (GPT-OSS / current vLLM) still reaches the reasoning channel.
+    #[tokio::test]
+    async fn reasoning_only_in_reason_field_reaches_reasoning_channel() {
+        let mut chunk = make_chunk(vec![ChatChunkDelta {
+            role: Some(Role::Assistant),
+            content: None,
+            reasoning_content: None,
+            reasoning: Some("vllm thought".into()),
+            tool_calls: vec![],
+            tool_call_id: None,
+        }]);
+        chunk.choices[0].finish_reason = None;
+        let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> =
+            vec![Ok(chunk), Ok(text_chunk("done")), Ok(final_chunk(FinishReason::Stop))];
+        let raw = stream::iter(chunks).boxed();
+        let events = collect(stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            ChatStreamOptions::new(Duration::from_secs(60)),
+        ))
+        .await;
+
+        let reasoning_tokens: Vec<&str> = events
+            .iter()
+            .filter_map(|e| match e {
+                SamplingEvent::ChannelToken {
+                    channel: SamplingChannel::Reasoning,
+                    text,
+                    ..
+                } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(reasoning_tokens, vec!["vllm thought"]);
+
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                let r = response
+                    .reasoning_items()
+                    .next()
+                    .expect("reasoning sibling preserved from `reasoning` field");
+                let rs::SummaryPart::SummaryText(t) = &r.summary[0];
+                assert_eq!(t.text, "vllm thought");
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    /// Observation: reasoning deltas record the dialect the endpoint spoke, in priority order.
+    #[tokio::test]
+    async fn dialect_memory_observes_spoken_key() {
+        let memory = std::sync::Arc::new(
+            xai_grok_sampling_types::ReasoningDialectMemory::new(),
+        );
+        let options = ChatStreamOptions {
+            idle_timeout: Duration::from_secs(60),
+            reasoning_dialects: Some(std::sync::Arc::clone(&memory)),
+            scrub_thinking_tags: false,
+        };
+
+        // A `reasoning`-only stream teaches the memory the alternate dialect.
+        let mut chunk = make_chunk(vec![ChatChunkDelta {
+            role: Some(Role::Assistant),
+            content: None,
+            reasoning_content: None,
+            reasoning: Some("thought".into()),
+            tool_calls: vec![],
+            tool_call_id: None,
+        }]);
+        chunk.choices[0].finish_reason = None;
+        let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> =
+            vec![Ok(chunk), Ok(final_chunk(FinishReason::Stop))];
+        let raw = stream::iter(chunks).boxed();
+        let _ = collect(stream_chat_completions(raw, None, rid(), options)).await;
+        assert_eq!(
+            memory.learned("test-model"),
+            xai_grok_sampling_types::ReasoningDialect::Reasoning,
+        );
+
+        // No memory handle: no observation, no panic.
+        let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> =
+            vec![Ok(text_chunk("hi")), Ok(final_chunk(FinishReason::Stop))];
+        let raw = stream::iter(chunks).boxed();
+        let _ = collect(stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            ChatStreamOptions::new(Duration::from_secs(60)),
+        ))
+        .await;
+    }
+
+    /// Experimental scrub: a `<think>`-wrapped response routes the tagged span
+    /// to the reasoning channel and keeps the remainder as visible text.
+    #[tokio::test]
+    async fn scrub_thinking_tags_routes_leak_to_reasoning_channel() {
+        let options = ChatStreamOptions {
+            idle_timeout: Duration::from_secs(60),
+            reasoning_dialects: None,
+            scrub_thinking_tags: true,
+        };
+        let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> = vec![
+            Ok(text_chunk("<think>secret plan")),
+            Ok(text_chunk("</think>the answer")),
+            Ok(final_chunk(FinishReason::Stop)),
+        ];
+        let raw = stream::iter(chunks).boxed();
+        let events = collect(stream_chat_completions(raw, None, rid(), options)).await;
+
+        let mut reasoning = String::new();
+        let mut text = String::new();
+        for e in &events {
+            if let SamplingEvent::ChannelToken { channel, text: t, .. } = e {
+                match channel {
+                    SamplingChannel::Reasoning => reasoning.push_str(t),
+                    SamplingChannel::Text => text.push_str(t),
+                }
+            }
+        }
+        assert_eq!(reasoning, "secret plan");
+        assert_eq!(text, "the answer");
+
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                assert_eq!(response.assistant_text(), "the answer");
+                assert_eq!(response.message_chunks_emitted, 1);
+                let r = response
+                    .reasoning_items()
+                    .next()
+                    .expect("leaked thinking preserved as reasoning sibling");
+                let rs::SummaryPart::SummaryText(t) = &r.summary[0];
+                assert_eq!(t.text, "secret plan");
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    /// Default: the scrub is off, leak text flows through untouched.
+    #[tokio::test]
+    async fn scrub_disabled_keeps_leak_text_visible() {
+        let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> = vec![
+            Ok(text_chunk("<think>leak</think>answer")),
+            Ok(final_chunk(FinishReason::Stop)),
+        ];
+        let raw = stream::iter(chunks).boxed();
+        let events = collect(stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            ChatStreamOptions::new(Duration::from_secs(60)),
+        ))
+        .await;
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                assert_eq!(response.assistant_text(), "<think>leak</think>answer");
             }
             other => panic!("expected Completed, got {other:?}"),
         }

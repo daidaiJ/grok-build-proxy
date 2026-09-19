@@ -89,6 +89,7 @@ fn test_config(base_url: String, model: &str) -> SamplerConfig {
         rate_limit_retry_threshold: None,
         stream_tool_calls: false,
         idle_timeout_secs: Some(30),
+        experimental: Default::default(),
         reasoning_effort: None,
         origin_client: None,
         client_identifier: None,

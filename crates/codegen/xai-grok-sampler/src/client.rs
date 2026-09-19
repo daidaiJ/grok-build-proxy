@@ -29,9 +29,10 @@ use xai_grok_sampling_types::error::{
 use xai_grok_sampling_types::{
     ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse, ConversationRequest,
     ConversationResponse, CreateResponseWrapper, DEFAULT_EXACT_REPETITION_MIN_TOKENS,
-    DOOM_LOOP_CHECK_HEADER, EXACT_REPETITION_CHECK_HEADER, MessagesRequestWrapper,
-    ResponseModelMetadata, Result, SamplingError, SentCredential, build_messages_request,
-    is_check_event, messages, rs,
+    DOOM_LOOP_CHECK_HEADER, EXACT_REPETITION_CHECK_HEADER, ExperimentalSamplingOptions,
+    MessagesRequestWrapper, ReasoningDialect, ReasoningDialectMemory, ResponseModelMetadata,
+    Result, Role, SamplingError, SentCredential, build_messages_request, is_check_event,
+    messages, rs,
 };
 
 use crate::config::{AuthScheme, OriginClientInfo, SamplerConfig};
@@ -317,6 +318,12 @@ pub struct SamplingClient {
     /// Endpoint URL builder, resolved once from `base_url` and `query_params`.
     endpoint: EndpointTemplate,
     first_use_noted: Arc<AtomicBool>,
+    /// Per-endpoint memory of which reasoning wire key the peer speaks, learned
+    /// from inbound stream deltas and replayed on outbound assistant messages.
+    /// Shared with the Layer-2 transform via `chat_stream_options`.
+    reasoning_dialects: std::sync::Arc<ReasoningDialectMemory>,
+    /// Opt-in experimental features (all default-off), from [`SamplerConfig`].
+    experimental: ExperimentalSamplingOptions,
 }
 
 impl std::fmt::Debug for SamplingClient {
@@ -662,11 +669,46 @@ impl SamplingClient {
             header_injector: config.header_injector,
             endpoint,
             first_use_noted: Arc::new(AtomicBool::new(false)),
+            reasoning_dialects: std::sync::Arc::new(ReasoningDialectMemory::new()),
+            experimental: config.experimental,
         })
     }
 
     pub fn api_backend(&self) -> ApiBackend {
         self.defaults.api_backend.clone()
+    }
+
+    /// Layer-2 transform knobs for the Chat Completions backend: the shared
+    /// dialect memory plus the experimental flags carried by the config.
+    pub fn chat_stream_options(
+        &self,
+        idle_timeout: std::time::Duration,
+    ) -> crate::stream::chat_completions::ChatStreamOptions {
+        crate::stream::chat_completions::ChatStreamOptions {
+            idle_timeout,
+            reasoning_dialects: Some(std::sync::Arc::clone(&self.reasoning_dialects)),
+            scrub_thinking_tags: self.experimental.thinking_tag_scrub,
+        }
+    }
+
+    /// Replay assistant reasoning onto the wire field the endpoint actually
+    /// speaks (learned from inbound deltas; default `reasoning_content`). No-op
+    /// until the Layer-2 stream has observed a dialect.
+    fn apply_reasoning_dialect(&self, request: &mut ChatCompletionRequest) {
+        let model_key = request.model.clone().unwrap_or_default();
+        let dialect = self.reasoning_dialects.learned(&model_key);
+        if dialect == ReasoningDialect::ReasoningContent {
+            return;
+        }
+        for msg in request.messages.iter_mut().filter(|m| m.role == Role::Assistant) {
+            if let Some(reasoning) = msg.reasoning_content.take() {
+                match dialect {
+                    ReasoningDialect::ReasoningContent => unreachable!("early-returned above"),
+                    ReasoningDialect::Reasoning => msg.reasoning = Some(reasoning),
+                    ReasoningDialect::ReasoningDetails => msg.reasoning_details = Some(reasoning),
+                }
+            }
+        }
     }
 
     /// Give the bearer resolver its pre-send hook before [`Self::post`] reads it.
@@ -1909,6 +1951,7 @@ impl SamplingClient {
 
         let trace = request.trace.take();
         let mut chat_request: ChatCompletionRequest = request.into();
+        self.apply_reasoning_dialect(&mut chat_request);
         if let Some(trace) = trace {
             chat_request.trace = Some(trace);
         }
@@ -1925,6 +1968,7 @@ impl SamplingClient {
 
         let trace = request.trace.take();
         let mut chat_request: ChatCompletionRequest = request.into();
+        self.apply_reasoning_dialect(&mut chat_request);
         if let Some(trace) = trace {
             chat_request.trace = Some(trace);
         }
@@ -2100,8 +2144,12 @@ impl SamplingClient {
         let result = match self.api_backend() {
             ApiBackend::ChatCompletions => {
                 let (raw, meta) = self.conversation_stream(request).await?;
-                let events =
-                    crate::stream::stream_chat_completions(raw, meta, request_id, idle_timeout);
+                let events = crate::stream::stream_chat_completions(
+                    raw,
+                    meta,
+                    request_id,
+                    self.chat_stream_options(idle_timeout),
+                );
                 crate::stream::collect_response(events).await
             }
             ApiBackend::Responses => {
@@ -2274,6 +2322,7 @@ mod tests {
             rate_limit_retry_threshold: None,
             stream_tool_calls: false,
             idle_timeout_secs: None,
+            experimental: Default::default(),
             reasoning_effort: None,
             origin_client: None,
             client_identifier: None,

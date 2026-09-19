@@ -109,6 +109,8 @@ pub fn conversation_item_to_chat_message(item: ConversationItem) -> ChatRequestM
                 tool_call_id: None,
                 model_id: None,
                 reasoning_content: None,
+                reasoning: None,
+                reasoning_details: None,
             }
         }
         ConversationItem::Assistant(a) => {
@@ -130,6 +132,8 @@ pub fn conversation_item_to_chat_message(item: ConversationItem) -> ChatRequestM
                 tool_call_id: None,
                 model_id: a.model_id,
                 reasoning_content: None,
+                reasoning: None,
+                reasoning_details: None,
             }
         }
         ConversationItem::ToolResult(t) => {
@@ -156,6 +160,8 @@ pub fn conversation_item_to_chat_message(item: ConversationItem) -> ChatRequestM
                     tool_call_id: Some(t.tool_call_id),
                     model_id: None,
                     reasoning_content: None,
+                    reasoning: None,
+                    reasoning_details: None,
                 }
             }
         }
@@ -169,6 +175,8 @@ pub fn conversation_item_to_chat_message(item: ConversationItem) -> ChatRequestM
             tool_call_id: None,
             model_id: None,
             reasoning_content: None,
+            reasoning: None,
+            reasoning_details: None,
         },
         // The only caller folds `Reasoning` into the following assistant.
         ConversationItem::Reasoning(_) => unreachable!(
@@ -180,6 +188,7 @@ pub fn conversation_item_to_chat_message(item: ConversationItem) -> ChatRequestM
 
 /// The canonical conversion: each run of `Reasoning` siblings folds into the `reasoning_content` of the following `Assistant`.
 /// A `BackendToolCall` in between does not break the fold, any other item clears it, and reasoning with no following assistant is dropped.
+/// Consecutive `User` messages are merged at this protocol boundary (see [`merge_consecutive_user_messages`]).
 pub fn conversation_to_chat_messages(items: Vec<ConversationItem>) -> Vec<ChatRequestMessage> {
     let mut out: Vec<ChatRequestMessage> = Vec::with_capacity(items.len());
     let mut pending_reasoning: Vec<String> = Vec::new();
@@ -211,7 +220,63 @@ pub fn conversation_to_chat_messages(items: Vec<ConversationItem>) -> Vec<ChatRe
         }
     }
 
+    merge_consecutive_user_messages(out)
+}
+
+/// Merge consecutive user-role wire messages into one turn.
+///
+/// Strict OpenAI-compatible deployments (alternation-enforcing chat templates,
+/// hardened gateways) reject consecutive user turns with HTTP 400. They arise
+/// naturally after compaction, whose replaced history is
+/// `[summary carrier, injected reminders, auto-continue]` — all user-role — and
+/// when an injected reminder follows a real prompt. Tool results are separate
+/// `Tool`-role messages on this wire, so the asymmetry the Anthropic Messages
+/// conversion needs (tool-result turns must absorb what follows, text turns
+/// must not absorb a leading tool-result turn) does not apply here: every
+/// consecutive user pair is text-shaped and merges. Lenient endpoints see one
+/// message with the same content instead of several — semantically equivalent,
+/// and the merge is deterministic so the serialized prefix stays stable across
+/// turns.
+pub fn merge_consecutive_user_messages(
+    messages: Vec<ChatRequestMessage>,
+) -> Vec<ChatRequestMessage> {
+    let mut out: Vec<ChatRequestMessage> = Vec::with_capacity(messages.len());
+    for msg in messages {
+        let merged_last = match out.last_mut() {
+            Some(last) if last.role == Role::User && msg.role == Role::User => last,
+            _ => {
+                out.push(msg);
+                continue;
+            }
+        };
+        merge_user_message_content(merged_last, msg);
+    }
     out
+}
+
+/// Append `next`'s content onto `last` (both user-role). Plain text stays plain
+/// (joined with a blank line so distinct turns stay readable); anything with
+/// content blocks concatenates the block lists, collapsing back to plain text
+/// when the result is a single text block.
+fn merge_user_message_content(last: &mut ChatRequestMessage, next: ChatRequestMessage) {
+    match (&mut last.content, &next.content) {
+        (MessageContent::Text(a), MessageContent::Text(b)) => {
+            let joined = match (a.is_empty(), b.is_empty()) {
+                (true, _) => b.clone(),
+                (_, true) => a.clone(),
+                (false, false) => format!("{a}\n\n{b}"),
+            };
+            *a = joined;
+        }
+        (last_content, next_content) => {
+            let mut blocks = last_content.blocks();
+            blocks.extend(next_content.blocks());
+            last.content = match blocks.as_slice() {
+                [ChatContentBlock::Text { text }] => MessageContent::Text(text.clone()),
+                _ => MessageContent::Blocks(blocks),
+            };
+        }
+    }
 }
 
 impl From<ChatResponseMessage> for ConversationItem {

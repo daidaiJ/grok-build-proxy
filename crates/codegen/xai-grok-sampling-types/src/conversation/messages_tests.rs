@@ -383,3 +383,170 @@ fn upgrade_legacy_reasoning_singular_anthropic_no_id() {
     assert_eq!(r.id, "");
     assert_eq!(r.encrypted_content.as_deref(), Some("signature-bytes-here"));
 }
+
+// ── Consecutive user-turn merge (Anthropic roles-must-alternate 400 guard) ───
+
+fn user_msg(text: &str) -> crate::messages::Message {
+    crate::messages::Message {
+        role: crate::messages::MessageRole::User,
+        content: crate::messages::MessageContent::Blocks(vec![crate::messages::ContentBlock::Text {
+            text: text.to_owned(),
+            cache_control: None,
+        }]),
+    }
+}
+
+fn tool_result_msg(id: &str) -> crate::messages::Message {
+    crate::messages::Message {
+        role: crate::messages::MessageRole::User,
+        content: crate::messages::MessageContent::Blocks(vec![crate::messages::ContentBlock::ToolResult {
+            tool_use_id: id.to_owned(),
+            content: crate::messages::ToolResultContent::Text("result".to_owned()),
+            cache_control: None,
+        }]),
+    }
+}
+
+fn count_messages_with_role(msgs: &[crate::messages::Message], role: crate::messages::MessageRole) -> usize {
+    msgs.iter().filter(|m| m.role == role).count()
+}
+
+#[test]
+fn messages_consecutive_user_text_turns_merge() {
+    let mut msgs = vec![user_msg("Fix the bug"), user_msg("Earlier context")];
+    merge_consecutive_user_turns(&mut msgs);
+    assert_eq!(msgs.len(), 1);
+    let crate::messages::MessageContent::Blocks(blocks) = &msgs[0].content else {
+        panic!("blocks");
+    };
+    assert_eq!(blocks.len(), 2);
+}
+
+#[test]
+fn messages_tool_result_turn_absorbs_following_text_turn() {
+    // The leading TEXT turn must not absorb the tool result (a tool result
+    // answers an assistant tool_use, which a text turn is not), but the
+    // tool-result turn absorbs the trailing text turn.
+    let mut msgs = vec![user_msg("prompt"), tool_result_msg("c1"), user_msg("steer")];
+    merge_consecutive_user_turns(&mut msgs);
+    assert_eq!(msgs.len(), 2, "text | [tool_result + text]");
+    let crate::messages::MessageContent::Blocks(merged) = &msgs[1].content else {
+        panic!("blocks");
+    };
+    assert_eq!(merged.len(), 2, "tool_result + text in one turn");
+}
+
+#[test]
+fn messages_text_turn_never_absorbs_leading_tool_result_turn() {
+    let mut msgs = vec![user_msg("text one"), tool_result_msg("c1"), user_msg("text two")];
+    // Same input shape as the absorbing test? No: here the middle turn is a
+    // tool result following a TEXT turn — the text turn must not absorb it, but
+    // the tool-result turn still absorbs the trailing text turn.
+    merge_consecutive_user_turns(&mut msgs);
+    assert_eq!(msgs.len(), 2, "text | [tool_result + text]");
+    assert!(count_messages_with_role(&msgs, crate::messages::MessageRole::User) == 2);
+}
+
+#[test]
+fn messages_parallel_tool_results_share_one_turn() {
+    let mut msgs = vec![tool_result_msg("c1"), tool_result_msg("c2")];
+    merge_consecutive_user_turns(&mut msgs);
+    assert_eq!(msgs.len(), 1);
+}
+
+#[test]
+fn messages_request_normalizes_compaction_shaped_history() {
+    // Compaction replaces history with consecutive user items; the wire request
+    // must not carry consecutive user turns to the strict API.
+    let req = ConversationRequest {
+        items: vec![
+            ConversationItem::system("sys"),
+            ConversationItem::user("real prompt"),
+            ConversationItem::user_meta("summary of earlier context"),
+            ConversationItem::system_reminder("<system-reminder>reminder</system-reminder>"),
+            ConversationItem::assistant_tool_calls(vec![ToolCall {
+                id: "call_1".into(),
+                name: "read_file".to_string(),
+                arguments: "{}".into(),
+            }]),
+            ConversationItem::tool_result("c1", "result"),
+            ConversationItem::user("next"),
+        ],
+        ..messages_test_request(None)
+    };
+    let wire = build_messages_request(&req);
+    let roles: Vec<_> = wire.messages.iter().map(|m| m.role).collect();
+    for pair in roles.windows(2) {
+        assert!(
+            !(pair[0] == crate::messages::MessageRole::User && pair[1] == crate::messages::MessageRole::User),
+            "consecutive user turns reached the wire: {roles:?}"
+        );
+    }
+}
+
+#[test]
+fn messages_tool_result_turn_absorbs_media_text_turn() {
+    // A user turn carrying media (image block) is not tool-result-only, but a
+    // tool-result-only running turn absorbs whatever follows it.
+    let media = crate::messages::Message {
+        role: crate::messages::MessageRole::User,
+        content: crate::messages::MessageContent::Blocks(vec![
+            crate::messages::ContentBlock::Image {
+                source: crate::messages::ImageSource::Url {
+                    url: "https://example.com/x.png".to_owned(),
+                },
+                cache_control: None,
+            },
+        ]),
+    };
+    let mut msgs = vec![tool_result_msg("c1"), media, user_msg("what is this?")];
+    merge_consecutive_user_turns(&mut msgs);
+    assert_eq!(msgs.len(), 1, "tool-result turn absorbs media + text turns");
+    let crate::messages::MessageContent::Blocks(blocks) = &msgs[0].content else {
+        panic!("blocks");
+    };
+    assert_eq!(blocks.len(), 3, "tool_result + image + text");
+}
+
+#[test]
+fn messages_media_text_turn_never_absorbs_leading_tool_result() {
+    // The running turn carries media → not tool-result-only → it must not
+    // absorb a following tool-result turn.
+    let media = crate::messages::Message {
+        role: crate::messages::MessageRole::User,
+        content: crate::messages::MessageContent::Blocks(vec![
+            crate::messages::ContentBlock::Image {
+                source: crate::messages::ImageSource::Url {
+                    url: "https://example.com/x.png".to_owned(),
+                },
+                cache_control: None,
+            },
+        ]),
+    };
+    let mut msgs = vec![media, tool_result_msg("c1")];
+    merge_consecutive_user_turns(&mut msgs);
+    assert_eq!(msgs.len(), 2, "media turn does not absorb a tool-result turn");
+}
+
+#[test]
+fn messages_merge_keeps_block_order_stable() {
+    // Parallel tool results keep their emission order after the merge — the
+    // order is what the API matches tool_use ids against.
+    let mut msgs = vec![tool_result_msg("c1"), tool_result_msg("c2"), user_msg("go on")];
+    merge_consecutive_user_turns(&mut msgs);
+    assert_eq!(msgs.len(), 1);
+    let crate::messages::MessageContent::Blocks(blocks) = &msgs[0].content else {
+        panic!("blocks");
+    };
+    let ids: Vec<&str> = blocks
+        .iter()
+        .filter_map(|b| match b {
+            crate::messages::ContentBlock::ToolResult { tool_use_id, .. } => {
+                Some(tool_use_id.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids, vec!["c1", "c2"]);
+    assert!(matches!(blocks.last(), Some(crate::messages::ContentBlock::Text { .. })));
+}

@@ -555,6 +555,7 @@ pub(crate) async fn spawn_session_actor(
     let chat_state_span = tracing::info_span!("spawn.chat_state_init");
     let chat_state_guard = chat_state_span.enter();
     let chat_state_sampling_config = xai_grok_sampling_types::SamplingConfig {
+        experimental: Default::default(),
         base_url: sampling_config.base_url.clone(),
         mtls_cert_dir: sampling_config.mtls_cert_dir.clone(),
         model: sampling_config.model.clone(),

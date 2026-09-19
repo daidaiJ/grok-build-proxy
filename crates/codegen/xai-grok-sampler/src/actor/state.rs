@@ -87,6 +87,7 @@ mod tests {
             rate_limit_retry_threshold: None,
             stream_tool_calls: false,
             idle_timeout_secs: None,
+            experimental: Default::default(),
             reasoning_effort: None,
             origin_client: None,
             client_identifier: None,

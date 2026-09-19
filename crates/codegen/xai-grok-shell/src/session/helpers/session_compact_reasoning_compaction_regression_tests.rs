@@ -164,6 +164,7 @@ fn assert_preserved_compaction_body(body: &serde_json::Value) {
 
 fn test_config(base_url: &str) -> SamplerConfig {
     SamplerConfig {
+        experimental: Default::default(),
         api_key: Some("test-api-key".to_string()),
         base_url: base_url.to_string(),
         mtls_cert_dir: None,

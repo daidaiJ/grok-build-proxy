@@ -26,6 +26,7 @@ mod shared_http;
 mod span_timing;
 pub mod stream;
 mod stream_classify;
+pub mod thinking_scrub;
 pub mod types;
 
 // Public re-exports: the API consumers see

@@ -232,6 +232,7 @@ fn model_entry_with_rate_limit(
     let mut info = crate::agent::config::ModelInfo::fallback(slug);
     info.subagent_rate_limit_max_attempts = attempts;
     crate::agent::config::ModelEntry {
+        experimental: Default::default(),
         info,
         mtls_cert_dir: None,
         api_key: None,

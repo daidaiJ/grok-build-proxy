@@ -9,11 +9,16 @@ pub mod doom_loop;
 pub mod error;
 pub mod messages;
 pub mod provider_error;
+pub mod reasoning_dialect;
 pub mod serde_helpers;
 pub mod tool_overrides;
 pub mod types;
 
 pub use self::conversation::*;
+pub use self::reasoning_dialect::{
+    DEFAULT_REASONING_DIALECT, KNOWN_REASONING_WIRE_KEYS, ReasoningDialect,
+    ReasoningDialectMemory,
+};
 pub use self::doom_loop::{
     DEFAULT_EXACT_REPETITION_MIN_TOKENS, DOOM_LOOP_CHECK_EVENT_TYPE, DOOM_LOOP_CHECK_HEADER,
     DoomLoopPeek, DoomLoopRecoveryPolicy, DoomLoopSignal, DoomLoopSignalKind,

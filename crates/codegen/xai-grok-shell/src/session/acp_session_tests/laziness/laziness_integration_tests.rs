@@ -28,6 +28,7 @@ fn detector_entry(
         include_reasoning: None,
     };
     crate::agent::config::ModelEntry {
+        experimental: Default::default(),
         info,
         mtls_cert_dir: None,
         api_key: None,

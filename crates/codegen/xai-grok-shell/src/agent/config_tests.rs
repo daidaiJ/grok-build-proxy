@@ -1051,6 +1051,7 @@ fn test_model_entry(
     api_base_url: Option<&str>,
 ) -> ModelEntry {
     ModelEntry {
+        experimental: Default::default(),
         info: ModelInfo {
             user_selectable: true,
             id: None,
@@ -2123,6 +2124,7 @@ fn model_use_concise_defaults_to_false() {
 #[test]
 fn model_info_from_config_propagates_use_concise() {
     let entry = ModelEntryConfig {
+        experimental: Default::default(),
         id: None,
         model_family: None,
         model: "test".to_string(),
@@ -2286,6 +2288,7 @@ fn model_agent_type_defaults_to_grok_build() {
 #[test]
 fn model_info_from_config_propagates_agent_type() {
     let entry = ModelEntryConfig {
+        experimental: Default::default(),
         id: None,
         model_family: None,
         model: "test".to_string(),
@@ -2741,6 +2744,7 @@ fn inference_idle_timeout_secs_absent_defaults_to_none() {
 #[test]
 fn inference_idle_timeout_propagates_to_model_info() {
     let entry = ModelEntryConfig {
+        experimental: Default::default(),
         id: None,
         model_family: None,
         model: "test".to_string(),
@@ -7398,6 +7402,7 @@ fn slug_propagation_noop_when_no_donor() {
 /// Build a minimal `ModelEntry` for testing resolve_model_list.
 fn prefetch_model_entry(slug: &str, context_window: u64, api_backend: ApiBackend) -> ModelEntry {
     ModelEntry {
+        experimental: Default::default(),
         info: ModelInfo {
             user_selectable: true,
             id: None,
