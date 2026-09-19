@@ -20,13 +20,20 @@
    夹具文件名避开保留设备名 `nul/con/aux/com1…`——写入进黑洞还显示"成功"），是环境族的按
    "屏蔽噪声（cfg 门控/播种全局）"处理，真产品 bug 才修。目录身份用 creation_time（mtime
    随子项增删变化），但注意 ~15 秒内同名重建的隧道化会让 creation_time 也骗人。
-   **Windows 测试一律走 docs-local/WIN-TEST-GATE.md 的门控体系（2026-09-19 定稿）**：
-   测试命令入口用 `scripts-local/ctest.sh`（L0 白名单 + L1 自动注入 `RUST_MIN_STACK=32MB`/
-   `TMP=D:\cargo-tmp` + L2 自动拼 `win-skip.txt` 的 `--skip`，逃生门 `GATE_FORCE/GATE_DRYRUN`）；
-   新测试失败先按其流水线分诊——静态特征扫描 `win_scan.py`（零编译）→ 抽样 `win_sample.py`
-   → 只对失败模块深排；溢出族（0xc00000fd）已由 L1 环境级消解，孤例才打
-   `#[cfg(windows)] #[ignore]` LOCAL 补丁并登记 PATCHES.md。上游套件整包回归一律 WSL
-   / Linux CI（L4），禁止在本机逐个排查（见第 11 条）。
+   **Windows 测试门禁（MANDATORY，2026-09-19 定稿）——本机任何 cargo test 一律经门控，
+   禁止裸跑**：
+   - 唯一入口：`scripts-local/ctest.sh -p <pkg> --lib`（L0 白名单拦截非白名单 crate +
+     L1 自动注入 `RUST_MIN_STACK=32MB`/`TMP=D:\cargo-tmp` + L2 自动拼
+     `docs-local/win-skip.txt` 的 `--skip`）。裸 `cargo test` 会把 win-skip 已定案的
+     已知必挂测试（flock/信号/POSIX 路径形态等族）重新放进输出污染结果，
+     视为违反本规则；一次性分析确需裸跑时用 `GATE_FORCE=1` 显式放行并事后恢复。
+   - `win-skip.txt` 是已知必挂测试的唯一台账（每条带根因注释）：新确认的环境族失败
+     先登记再继续跑，不逐个排查；修复某族后从清单撤销并登记 PATCHES.md。
+     处置标准：确认 win 不兼容或不重要的 → 门控；重要且非兼容性问题的 → 评估修复。
+   - 分诊流水线与工具见 docs-local/WIN-TEST-GATE.md：静态扫描 `win_scan.py`（零编译）
+     → 抽样 `win_sample.py` → 只对失败模块深排；溢出族已由 L1 消解，孤例才打
+     `#[cfg(windows)] #[ignore]` LOCAL 补丁并登记 PATCHES.md。
+   - 上游套件整包回归一律 WSL / Linux CI（L4），禁止在本机逐个排查（见第 11 条）。
 11. **上游（Grok 同步）测试套件在 Windows 上不可作为回归依据**：约九成用例依赖 Linux 行为
    （POSIX 路径/权限/线程栈/终端探测），本机跑它是无底洞。LOCAL 改动的验证 = 
    `cargo check`（编译正确性）+ **本地自有 crate 的 lib 测试**（xai-chat-state/sampler/
