@@ -71,7 +71,16 @@ if [ "${GATE_SKIP:-1}" = 1 ] && [ -f "$SKIPFILE" ]; then
   done < "$SKIPFILE"
 fi
 
-final_cmd=(cargo test "${args[@]}" "${skip_args[@]}")
+final_cmd=(cargo test "${args[@]}")
+
+# libtest 参数必须位于 cargo 的 -- 之后；用户没给 -- 时补一个
+has_ddash=0
+for a in "${args[@]}"; do [ "$a" = "--" ] && has_ddash=1; done
+if [ ${#skip_args[@]} -gt 0 ] && [ $has_ddash = 0 ]; then
+  final_cmd+=(--)
+fi
+
+final_cmd=("${final_cmd[@]}" "${skip_args[@]}")
 
 if [ "${GATE_DRYRUN:-0}" = 1 ]; then
   echo "DRY-RUN env: TMP=$TMP TEMP=$TEMP RUST_MIN_STACK=${RUST_MIN_STACK:-unset}"
