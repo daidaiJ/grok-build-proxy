@@ -167,6 +167,7 @@ impl PromptUsage {
     fn is_token_empty(&self) -> bool {
         // Exhaustive destructure: a new token field must decide whether it counts as "billed something" here
         let PromptUsageModel {
+            cache_break_calls: _,
             input_tokens,
             output_tokens,
             total_tokens: _, // derived from input + output
@@ -235,6 +236,11 @@ pub struct PromptUsageModel {
     /// session's first call, which can never hit; additive on the ACP wire.
     #[serde(default)]
     pub cache_miss_calls: u64,
+    /// LOCAL: calls whose cache read dropped below 95% of the previous
+    /// same-model call's — a detected prompt-prefix break (rewritten history,
+    /// model/effort switch). Status-line surface; additive on the ACP wire.
+    #[serde(default)]
+    pub cache_break_calls: u64,
 }
 
 /// One model call's token usage: the four Messages API `message.usage` fields plus `reasoning_tokens`.
@@ -267,6 +273,7 @@ impl From<&xai_chat_state::UsageTotals> for PromptUsageModel {
             model_calls,
             failed_model_calls,
             cache_miss_calls,
+            cache_break_calls,
             api_duration_ms,
             cost_usd_ticks,
             cost_missing_calls,
@@ -281,6 +288,7 @@ impl From<&xai_chat_state::UsageTotals> for PromptUsageModel {
             model_calls,
             failed_model_calls,
             cache_miss_calls,
+            cache_break_calls,
             api_duration_ms,
             cost_usd_ticks,
             cost_is_partial: t.cost_is_partial(),
@@ -341,6 +349,7 @@ pub(crate) fn project_result_usage(result: &mut serde_json::Value, usage: &Promp
         api_duration_ms: _, // dropped: not part of the frozen headless shape
         failed_model_calls: _, // LOCAL: dropped from the frozen headless shape (status-line only)
         cache_miss_calls: _, // LOCAL: dropped from the frozen headless shape (status-line only)
+        cache_break_calls: _, // LOCAL: dropped likewise (status-line only, detector surface)
         cost_usd_ticks,
         cost_is_partial,
         cost_missing_calls: _, // internal partiality count; the flag suffices
@@ -372,6 +381,7 @@ pub(crate) fn project_result_usage(result: &mut serde_json::Value, usage: &Promp
         let mut model_usage = serde_json::Map::new();
         for (name, m) in &usage.model_usage {
             let PromptUsageModel {
+                cache_break_calls: _,
                 input_tokens,
                 output_tokens,
                 total_tokens: _, // derivable per row

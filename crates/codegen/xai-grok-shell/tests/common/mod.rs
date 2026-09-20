@@ -377,6 +377,7 @@ pub fn test_sampler_config(
 ) -> SamplerConfig {
     // Shell `Client` is `xai_grok_sampler::SamplingClient`, which takes a `SamplerConfig` directly
     SamplerConfig {
+        experimental: Default::default(),
         api_key: Some("test-api-key".to_string()),
         base_url: base_url.to_string(),
         mtls_cert_dir: None,

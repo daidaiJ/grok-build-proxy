@@ -54,6 +54,7 @@ mod tests {
 
     use crate::events::SamplingChannel;
     use crate::stream::stream_chat_completions;
+    use crate::stream::ChatStreamOptions;
     use crate::types::RequestId;
     use std::time::Duration;
     use xai_grok_sampling_types::{
@@ -110,7 +111,12 @@ mod tests {
         let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> =
             vec![Ok(text_chunk("hello")), Ok(final_chunk())];
         let raw = stream::iter(chunks).boxed();
-        let events = stream_chat_completions(raw, None, rid(), Duration::from_secs(60));
+        let events = stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            ChatStreamOptions::new(Duration::from_secs(60)),
+        );
 
         let (response, _metrics) = collect_response(events)
             .await
@@ -127,7 +133,12 @@ mod tests {
             Err(SamplingError::EventStreamError("boom".into())),
         ];
         let raw = stream::iter(chunks).boxed();
-        let events = stream_chat_completions(raw, None, rid(), Duration::from_secs(60));
+        let events = stream_chat_completions(
+            raw,
+            None,
+            rid(),
+            ChatStreamOptions::new(Duration::from_secs(60)),
+        );
 
         let err = collect_response(events).await.expect_err("error returned");
         assert!(err.message.contains("boom"));

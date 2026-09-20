@@ -15,9 +15,9 @@ use xai_grok_agent::prompt::skills::SkillsConfig;
 use xai_grok_login::{AuthManager, GrokComConfig, OidcAuthConfig};
 use xai_grok_sampler::{AuthScheme, SamplerConfig};
 use xai_grok_sampling_types::{
-    CompactionAtTokens, CompactionsRemaining, REASONING_EFFORT_META_KEY,
-    REASONING_EFFORTS_META_KEY, ReasoningEffort, ReasoningEffortOption,
-    reasoning_effort_meta_value, reasoning_efforts_meta_value,
+    CompactionAtTokens, CompactionsRemaining, ExperimentalSamplingOptions,
+    REASONING_EFFORT_META_KEY, REASONING_EFFORTS_META_KEY, ReasoningEffort,
+    ReasoningEffortOption, reasoning_effort_meta_value, reasoning_efforts_meta_value,
 };
 use xai_grok_tools::types::compat::{
     COMPAT_CELLS, CompatConfig, CompatConfigToml, CompatRemoteKey, CompatSurface, CompatVendor,
@@ -3739,7 +3739,8 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 show_model_fingerprint: m.show_model_fingerprint,
                 stream_tool_calls: None,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
-            };
+                experimental: None,
+    };
             (key, config)
         })
         .collect()
@@ -3857,6 +3858,11 @@ pub struct ModelEntryConfig {
     /// Per-model opt-in: BYOK endpoints that don't understand the flag should leave this unset to avoid request errors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_tool_calls: Option<bool>,
+    /// Opt-in experimental sampling features (every field default-off; see
+    /// [`ExperimentalSamplingOptions`]). Per-model section:
+    /// `[model.<id>.experimental] thinking_tag_scrub = true`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experimental: Option<ExperimentalSamplingOptions>,
     /// Per-model Layer-3 LazinessDetector configuration.
     /// Defaults to the all-disabled state via `#[serde(default)]`.
     #[serde(default, skip_serializing_if = "is_default_laziness_detector")]
@@ -3925,6 +3931,9 @@ pub struct ConfigModelOverride {
     pub compaction_at_tokens: Option<CompactionAtTokens>,
     pub show_model_fingerprint: Option<bool>,
     pub stream_tool_calls: Option<bool>,
+    /// Remote override for the experimental sampling feature set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experimental: Option<ExperimentalSamplingOptions>,
 }
 impl ConfigModelOverride {
     pub(crate) fn apply(
@@ -4030,6 +4039,9 @@ impl ConfigModelOverride {
         }
         if self.stream_tool_calls.is_some() {
             entry.info.stream_tool_calls = self.stream_tool_calls;
+        }
+        if self.experimental.is_some() {
+            entry.experimental = self.experimental.clone();
         }
         if self.api_key.is_some() {
             entry.api_key.clone_from(&self.api_key);
@@ -4277,6 +4289,10 @@ pub struct ModelEntry {
     pub auth_provider: Option<xai_grok_login::AuthProviderRef>,
     /// When set, `base_url` is used for session auth, `api_base_url` for API-key auth.
     pub api_base_url: Option<String>,
+    /// Opt-in experimental sampling features carried to the sampler config;
+    /// `None` keeps every experimental feature off. See [`ModelEntryConfig::experimental`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experimental: Option<ExperimentalSamplingOptions>,
 }
 impl ModelEntry {
     /// Minimal fallback entry for an unknown model slug.
@@ -4290,6 +4306,7 @@ impl ModelEntry {
             env_key: None,
             auth_provider: None,
             api_base_url: None,
+            experimental: None,
         }
     }
     pub fn info(&self) -> &ModelInfo {
@@ -4303,6 +4320,7 @@ impl ModelEntry {
             env_key: entry.env_key.clone(),
             auth_provider: None,
             api_base_url: entry.api_base_url.clone(),
+            experimental: entry.experimental.clone(),
         }
     }
     /// Non-empty `api_key`, else first non-empty resolved `env_key`.
@@ -4913,6 +4931,7 @@ pub(crate) fn resolve_aux_model_sampling_config(
             env_key: None,
             auth_provider: None,
             api_base_url: None,
+            experimental: None,
         };
         let credentials = resolve_credentials_enforced(&entry, session_key, disable_api_key_auth);
         let sampler = sampling_config_for_model(
@@ -5047,6 +5066,7 @@ pub(crate) fn sampling_config_for_model(
         max_retries: info.max_retries,
         rate_limit_retry_threshold: info.rate_limit_retry_threshold,
         stream_tool_calls: info.stream_tool_calls.unwrap_or(false),
+        experimental: model.experimental.clone().unwrap_or_default(),
         idle_timeout_secs: None,
         client_identifier: None,
         deployment_id,
@@ -5135,6 +5155,7 @@ fn resolve_hidden_default_web_search_sampling_config(
         env_key: None,
         auth_provider: None,
         api_base_url: None,
+        experimental: None,
     };
     let credentials = resolve_credentials_enforced(&entry, session_key, disable_api_key_auth);
     sampling_config_for_model(

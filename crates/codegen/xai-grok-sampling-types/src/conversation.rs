@@ -7,8 +7,11 @@ mod chat_completions;
 mod messages;
 mod responses;
 
-pub use chat_completions::{conversation_item_to_chat_message, conversation_to_chat_messages};
-pub use messages::build_messages_request;
+pub use chat_completions::{
+    conversation_item_to_chat_message, conversation_to_chat_messages,
+    merge_consecutive_user_messages,
+};
+pub use messages::{build_messages_request, merge_consecutive_user_turns};
 pub use responses::{
     extra_tool_entries, patch_reasoning_text_types, response_to_conversation_items,
 };
@@ -2177,6 +2180,10 @@ mod test_support;
 #[cfg(test)]
 #[path = "conversation/chat_completions_tests.rs"]
 mod chat_completions_tests;
+
+#[cfg(test)]
+#[path = "conversation/prefix_invariant_tests.rs"]
+mod prefix_invariant_tests;
 
 #[cfg(test)]
 #[path = "conversation/responses_tests.rs"]

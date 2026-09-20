@@ -432,6 +432,7 @@ mod tests {
         let _ = ChatStateCommand::IncrementPromptIndex;
         let _ = ChatStateCommand::UpdateSamplingConfig {
             config: Box::new(SamplingConfig {
+                experimental: Default::default(),
                 base_url: String::new(),
                 mtls_cert_dir: None,
                 model: String::new(),

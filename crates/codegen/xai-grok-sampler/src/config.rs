@@ -61,6 +61,10 @@ pub struct SamplerConfig {
     pub rate_limit_retry_threshold: Option<u32>,
     pub stream_tool_calls: bool,
     pub idle_timeout_secs: Option<u64>,
+    /// Opt-in experimental features (all default-off). See
+    /// [`ExperimentalSamplingOptions`](xai_grok_sampling_types::ExperimentalSamplingOptions).
+    #[serde(default)]
+    pub experimental: xai_grok_sampling_types::ExperimentalSamplingOptions,
 
     // Reasoning effort
     pub reasoning_effort: Option<ReasoningEffort>,
@@ -129,6 +133,7 @@ impl Default for SamplerConfig {
             rate_limit_retry_threshold: None,
             stream_tool_calls: false,
             idle_timeout_secs: None,
+            experimental: xai_grok_sampling_types::ExperimentalSamplingOptions::default(),
             reasoning_effort: None,
             origin_client: None,
             client_identifier: None,

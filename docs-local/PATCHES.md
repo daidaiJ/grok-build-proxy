@@ -1,106 +1,106 @@
-﻿# LOCAL 琛ヤ竵娓呭崟锛堜笂娓稿悓姝?rebase 鐢級
+# LOCAL 补丁清单（上游同步 rebase 用）
 
-> 绾﹀畾锛氭墍鏈夋湰鍦版彃鍏ヨ甯?`// LOCAL:` 娉ㄩ噴锛涙柊閰嶇疆瀛楁涓€寰?`#[serde(default)]` 涓旇拷鍔犲湪
-> struct 灏鹃儴锛涗笉鏂板 workspace member銆傛瘡娆′笂娓稿悓姝ュ悗鎸夋湰琛ㄩ€愭潯鏍稿鍐茬獊銆?
-> 鏈枃浠舵湰韬湪 `docs-local/`锛堜笂娓镐笉瀛樺湪姝ょ洰褰曪紝姘镐笉鍐茬獊锛夈€?
+> 约定：所有本地插入行带 `// LOCAL:` 注释；新配置字段一律 `#[serde(default)]` 且追加在
+> struct 尾部；不新增 workspace member。每次上游同步后按本表逐条核对冲突。
+> 本文件本身在 `docs-local/`（上游不存在此目录，永不冲突）。
 
-## 璁捐绾︽潫鏉ユ簮锛堝閮ㄤ簨鏁呭鐩橈級
+## 设计约束来源（外部事故复盘）
 
-| 鏉ユ簮 | 浜嬫晠 | 鏈湴璁捐瀵瑰簲 |
+| 来源 | 事故 | 本地设计对应 |
 |---|---|---|
-| headroom #746锛坈losed锛宖ix #753锛?| Claude Code 瀵归潪瀹樻柟 base_url 鍏抽棴宸ュ叿寤惰繜鍔犺浇锛?25K 鍩虹嚎 | 鍘嬬缉涓嶇宸ュ叿 schema锛沺roxy 涓嶅仛澶栨寕浠ｇ悊褰㈡€?|
-| headroom #2186锛坈losed锛?| CCR 涓诲姩鍥炴敞鏃ф憳瑕侊紝token 鍙嶆定 | 鍘嬬缉妫€绱㈢函 pull 寮忥紙瑙勫垝鏂囨。锛?|
-| headroom #1869 / #987锛坥pen锛?| wrap 瀵?opencode 闆惰妭鐪?/ 鎸夊崗璁紡鍘?| 杩涚▼鍐呫€佺粨鏋滃眰鍘嬬缉 |
-| qwen-code PR #10995 | `${session_id}` 妯℃澘澶?| 鍚屾妯℃澘璇硶杩?extra_headers |
-| 鏈満 rtk 瀹炴祴 | 鍘嬬缉灞傝鎶ユ瀯寤烘垚鍔?| 鏃犳崯瀛楁鐧藉悕鍗?|
+| headroom #746（closed，fix #753） | Claude Code 对非官方 base_url 关闭工具延迟加载，+25K 基线 | 压缩不碰工具 schema；proxy 不做外挂代理形态 |
+| headroom #2186（closed） | CCR 主动回注旧摘要，token 反涨 | 压缩检索纯 pull 式（规划文档） |
+| headroom #1869 / #987（open） | wrap 对 opencode 零节省 / 按协议漏压 | 进程内、结果层压缩 |
+| qwen-code PR #10995 | `${session_id}` 模板头 | 同款模板语法进 extra_headers |
+| 本机 rtk 实测 | 压缩层误报构建成功 | 无损字段白名单 |
 
-## 涓€鏈熻ˉ涓侊紙鎸?crate锛?
+## 一期补丁（按 crate）
 
-### xai-chat-state锛堝け璐ヨ鏁拌处鏈摼锛?
-- `src/usage.rs`锛歚UsageTotals.failed_model_calls` 瀛楁 + fold + `UsageLedger::record_main_loop_failure`
-- `src/commands.rs`锛歚RecordModelCallFailure` 鍙樹綋锛坄// LOCAL:` 娉ㄩ噴澶勶級
-- `src/handle.rs`锛歚record_model_call_failure()`
-- `src/actor/mod.rs`锛氬搴?match 鑷?
-- `src/actor/mutations.rs`锛歚record_model_call_failure()`锛堝彧璁?session 璐︽湰锛?
+### xai-chat-state（失败计数账本链）
+- `src/usage.rs`：`UsageTotals.failed_model_calls` 字段 + fold + `UsageLedger::record_main_loop_failure`
+- `src/commands.rs`：`RecordModelCallFailure` 变体（`// LOCAL:` 注释处）
+- `src/handle.rs`：`record_model_call_failure()`
+- `src/actor/mod.rs`：对应 match 臂
+- `src/actor/mutations.rs`：`record_model_call_failure()`（只记 session 账本）
 
-### xai-grok-status-line锛坧ayload 鎵╁睍锛屽叏閮?additive + serde default锛?
-- `src/context.rs`锛歚StatusLineSessionUsage.reasoning_tokens`锛涙柊 `StatusLineApiCalls`銆?
-  `StatusLineTurnPerf`锛沗StatusLineContext.api_calls` / `.perf`
-- 娉ㄦ剰锛氫笂娓告枃妗?25-status-line.md 涓庣被鍨嬫湁 doc-sync 娴嬭瘯锛岃嫢涓婃父鏀规鏂囦欢闇€鍚屾琛ヨ〃琛?
-
-### xai-grok-shell
-- `src/extensions/notification.rs`锛歚PromptUsageModel.failed_model_calls` +
-  `From<&UsageTotals>` 绌峰敖瑙ｆ瀯鎺ョ嚎锛堣澶勪笂娓告敞閲婃湰灏辫姹傛柊瀛楁鏄惧紡鎺ョ嚎锛夛紱
-  `is_token_empty` / headless 鎶曞奖 / per-model 琛屼笁澶勭┓灏借В鏋勮ˉ `failed_model_calls: _`
-- `src/session/acp_session.rs`锛歚SessionActor.last_turn_api_duration_ms`锛圓tomicU64锛?
-  LOCAL锛氫笂涓€璋冪敤 API 鏃堕暱锛屼緵 TPS 鍒嗘瘝锛屼笉鍔?chat-state 鍗忚锛?
-- `src/session/acp_session_impl/spawn.rs`锛氫笂杩板瓧娈靛垵濮嬪寲
-- `src/session/acp_session_impl/status_line.rs`锛?
-  - `build_context_window` 濉?`reasoning_tokens`
-  - `build_status_context` 濉?`api_calls` / `perf`
-  - 鏂?`build_turn_perf()`锛坰ignals 浼氳瘽鍧?TTFT + actor 涓婄殑 last api 鏃堕暱 鈫?TPS锛岄浂鏂板煁鐐癸級
-- `src/session/acp_session_impl/sampler_turn.rs`锛?
-  - `expand_session_header_templates()` + 3 涓崟娴嬶紱鍦?`reconstruct` 鐨?
-    `inject_url_derived_headers` 涔嬪悗灞曞紑 `${session_id}`
-  - `log_terminal_failure()` 寮€澶存寕 `record_model_call_failure(None)`锛堟墍鏈夌粓鎬佸け璐ョ殑鍗曚竴鏀跺彛锛?
-  - `record_response_token_usage()` 鍐欏叆 `last_turn_api_duration_ms`
-- `src/agent/config.rs`锛氭柊 `NetworkConfig`锛坄[network]` 琛級+ `Config.network` 瀛楁 +
-  `Config::default()` 琛ュ瓧娈?+ `resolve_runtime_fields` 寮€澶磋皟 `set_process_proxy`锛堥厤缃姞杞芥椂涓€娆＄畻濂斤級
-
-### xai-grok-config锛圵indows shell 鍚庣鍙€夛級
-- `src/shell.rs` LOCAL 娈碉細`SHELL_OVERRIDE` OnceLock + `set_windows_shell_override()`锛?
-  `detect_windows_shell` 鐨勬樉寮忚鐩栬鍙栭『搴忔敼涓?config 瑕嗙洊 鈫?`GROK_SHELL` 鈫?鑷姩绾ц仈
-- 榛樿绾ц仈涓嶅彉锛歱wsh 鈫?powershell.exe 鈫?Git Bash 鈫?powershell.exe
+### xai-grok-status-line（payload 扩展，全部 additive + serde default）
+- `src/context.rs`：`StatusLineSessionUsage.reasoning_tokens`；新 `StatusLineApiCalls`、
+  `StatusLineTurnPerf`；`StatusLineContext.api_calls` / `.perf`
+- 注意：上游文档 25-status-line.md 与类型有 doc-sync 测试，若上游改此文件需同步补表行
 
 ### xai-grok-shell
-- `src/agent/config.rs`锛氭柊 `ShellBackendConfig`锛坄[shell] backend` 琛紝鍊硷細
-  `pwsh` | `powershell` | `bash`(=gitbash) | `cmd`锛? `Config.shell` 瀛楁 +
-  Default 琛ュ瓧娈?+ `resolve_runtime_fields` 閲?`set_windows_shell_override`
-  锛坄#[cfg(windows)]`锛岄厤缃姞杞芥椂涓€娆＄畻濂斤級
+- `src/extensions/notification.rs`：`PromptUsageModel.failed_model_calls` +
+  `From<&UsageTotals>` 穷尽解构接线（该处上游注释本就要求新字段显式接线）；
+  `is_token_empty` / headless 投影 / per-model 行三处穷尽解构补 `failed_model_calls: _`
+- `src/session/acp_session.rs`：`SessionActor.last_turn_api_duration_ms`（AtomicU64，
+  LOCAL：上一调用 API 时长，供 TPS 分母，不动 chat-state 协议）
+- `src/session/acp_session_impl/spawn.rs`：上述字段初始化
+- `src/session/acp_session_impl/status_line.rs`：
+  - `build_context_window` 填 `reasoning_tokens`
+  - `build_status_context` 填 `api_calls` / `perf`
+  - 新 `build_turn_perf()`（signals 会话均 TTFT + actor 上的 last api 时长 → TPS，零新埋点）
+- `src/session/acp_session_impl/sampler_turn.rs`：
+  - `expand_session_header_templates()` + 3 个单测；在 `reconstruct` 的
+    `inject_url_derived_headers` 之后展开 `${session_id}`
+  - `log_terminal_failure()` 开头挂 `record_model_call_failure(None)`（所有终态失败的单一收口）
+  - `record_response_token_usage()` 写入 `last_turn_api_duration_ms`
+- `src/agent/config.rs`：新 `NetworkConfig`（`[network]` 表）+ `Config.network` 字段 +
+  `Config::default()` 补字段 + `resolve_runtime_fields` 开头调 `set_process_proxy`（配置加载时一次算好）
 
-### xai-grok-extra-ca锛堣繘绋嬬骇鍑哄彛浠ｇ悊锛?
-- `src/lib.rs` LOCAL 娈碉細`ProcessProxyRule` + `set_process_proxy` / `process_proxy_rule`
-  锛坋nv 鍥為€€ `GROK_PROXY`銆乣GROK_PROXY_HOSTS`锛? `apply_process_proxy` /
-  `apply_process_proxy_blocking`锛坄Proxy::custom` 鎸?host 鍚庣紑鐧藉悕鍗曡矾鐢憋紝loopback
-  姘歌繙鐩磋繛锛? `process_proxy_tests`锛? 涓崟娴嬶級
-- 榛樿鐧藉悕鍗?`["x.ai", "grok.com"]`锛沗proxy_hosts = []` = 鍏ㄩ儴 host
+### xai-grok-config（Windows shell 后端可选）
+- `src/shell.rs` LOCAL 段：`SHELL_OVERRIDE` OnceLock + `set_windows_shell_override()`；
+  `detect_windows_shell` 的显式覆盖读取顺序改为 config 覆盖 → `GROK_SHELL` → 自动级联
+- 默认级联不变：pwsh → powershell.exe → Git Bash → powershell.exe
 
-### xai-proto-build锛圵indows 鏋勫缓淇锛宖ork 蹇呴渶锛?
-- `src/lib.rs` `emit_rerun_if_changed`锛歚--dependency_out=/dev/stdout` 涓?
-  `--descriptor_set_out=/dev/null` 鏄?Unix 璺緞锛學indows 涓?protoc 鐩存帴 panic銆?
-  LOCAL 淇锛歐indows 涓嬭蛋涓存椂鏂囦欢 + `NUL`锛屼緷璧栬鍥炶鍚屼竴鏉¤В鏋愯矾寰勶紱
-  鍙嶆枩鏉犺矾寰勫綊涓€鍖栧悗鍐嶅仛 well-known-include 杩囨护
-- 閰嶅鐜锛氭湰鏈烘棤 DotSlash锛宍bin/protoc` 鏄崰浣嶈剼鏈€備笅杞界湡瀹?protoc 鍒?
-  `D:\data\tools\protoc\bin`锛岀紪璇戞椂鍔?`PATH="/d/data/tools/protoc/bin:$PATH"`
+### xai-grok-shell
+- `src/agent/config.rs`：新 `ShellBackendConfig`（`[shell] backend` 表，值：
+  `pwsh` | `powershell` | `bash`(=gitbash) | `cmd`）+ `Config.shell` 字段 +
+  Default 补字段 + `resolve_runtime_fields` 里 `set_windows_shell_override`
+  （`#[cfg(windows)]`，配置加载时一次算好）
 
-## 宸茬煡闂锛堝揩鐓ц嚜甯︼紝闈炴湰鍦拌ˉ涓佸紩鍏ワ級
+### xai-grok-extra-ca（进程级出口代理）
+- `src/lib.rs` LOCAL 段：`ProcessProxyRule` + `set_process_proxy` / `process_proxy_rule`
+  （env 回退 `GROK_PROXY`、`GROK_PROXY_HOSTS`）+ `apply_process_proxy` /
+  `apply_process_proxy_blocking`（`Proxy::custom` 按 host 后缀白名单路由，loopback
+  永远直连）+ `process_proxy_tests`（4 个单测）
+- 默认白名单 `["x.ai", "grok.com"]`；`proxy_hosts = []` = 全部 host
 
-`cargo test -p xai-grok-shell`锛堟祴璇?profile锛夊瓨鍦ㄤ笂娓稿揩鐓ц嚜甯︾殑缂栬瘧閿欒锛?
-`cargo check`锛坙ib 鏈綋锛変笉鍙楀奖鍝嶏紝鍏ㄩ儴閫氳繃锛?
+### xai-proto-build（Windows 构建修复，fork 必需）
+- `src/lib.rs` `emit_rerun_if_changed`：`--dependency_out=/dev/stdout` 与
+  `--descriptor_set_out=/dev/null` 是 Unix 路径，Windows 上 protoc 直接 panic。
+  LOCAL 修复：Windows 下走临时文件 + `NUL`，依赖行回读同一条解析路径；
+  反斜杠路径归一化后再做 well-known-include 过滤
+- 配套环境：本机无 DotSlash，`bin/protoc` 是占位脚本。下载真实 protoc 到
+  `D:\data\tools\protoc\bin`，编译时加 `PATH="/d/data/tools/protoc/bin:$PATH"`
 
-- `src/leader/transport.rs:256`锛歚String + &String` 鍐欐硶涓庡綋鍓?toolchain 涓嶅吋瀹?
-- `src/session/acp_session_tests/tool_layer_images_bridge_tests.rs:15`锛歜ase64 crate API 婕傜Щ
-- `tests/common/mod.rs` 绛夛細寮曠敤蹇収涓笉瀛樺湪鐨?`reset_startup_settings_for_tests` 绛夊嚱鏁?
-- `xai-grok-tools` `src/computer/local/terminal.rs:4884`锛歚parse_login_env_capture` 缂哄け锛?
-  闃诲 tools 鐨?lib test 缂栬瘧锛堟晠 CI 瀵?tools 鍙?check 涓嶈窇娴嬭瘯锛?
+## 已知问题（快照自带，非本地补丁引入）
 
-杩欎簺闃诲浜?shell 鍐呰仈鍗曟祴锛堝惈 `${session_id}` 妯℃澘娴嬭瘯锛夌殑杩愯锛沜hat-state锛?62锛夈€?
-status-line锛?7锛夈€乪xtra-ca锛?5+锛夊崟娴嬪叏閮ㄩ€氳繃銆?
+`cargo test -p xai-grok-shell`（测试 profile）存在上游快照自带的编译错误，
+`cargo check`（lib 本体）不受影响，全部通过：
 
-## 鐢ㄦ埛渚ч厤缃ず渚嬶紙config.toml锛?
+- `src/leader/transport.rs:256`：`String + &String` 写法与当前 toolchain 不兼容
+- `src/session/acp_session_tests/tool_layer_images_bridge_tests.rs:15`：base64 crate API 漂移
+- `tests/common/mod.rs` 等：引用快照中不存在的 `reset_startup_settings_for_tests` 等函数
+- `xai-grok-tools` `src/computer/local/terminal.rs:4884`：`parse_login_env_capture` 缺失，
+  阻塞 tools 的 lib test 编译（故 CI 对 tools 只 check 不跑测试）
+
+这些阻塞了 shell 内联单测（含 `${session_id}` 模板测试）的运行；chat-state（362）、
+status-line（17）、extra-ca（15+）单测全部通过。
+
+## 用户侧配置示例（config.toml）
 
 ```toml
 [network]
 proxy = "http://127.0.0.1:7897"
-# proxy_hosts = ["x.ai", "grok.com"]   # 缂虹渷鍗虫鍊硷紱[] = 鍏ㄩ儴 host
+# proxy_hosts = ["x.ai", "grok.com"]   # 缺省即此值；[] = 全部 host
 
 [shell]
-backend = "bash"   # pwsh | powershell | bash(=gitbash) | cmd锛涚己鐪佽嚜鍔ㄧ骇鑱旓紙pwsh 浼樺厛锛?
+backend = "bash"   # pwsh | powershell | bash(=gitbash) | cmd；缺省自动级联（pwsh 优先）
 ```
 
-鐜鍙橀噺绛変环鐗╋細`GROK_SHELL=bash`锛坈onfig 瑕嗙洊浼樺厛浜?env锛夈€?
+环境变量等价物：`GROK_SHELL=bash`（config 覆盖优先于 env）。
 
-妯″瀷渚э紙opencode Go 浼氳瘽浜插拰澶寸ず渚嬶級锛?
+模型侧（opencode Go 会话亲和头示例）：
 
 ```toml
 [model_providers.ocgo]
@@ -108,864 +108,931 @@ base_url = "https://opencode.ai/zen/go/v1"
 extra_headers = { "x-opencode-session" = "${session_id}" }
 ```
 
-## 浜屾湡琛ヤ竵锛堝凡瀹屾垚锛?
+## 二期补丁（已完成）
 
-### xai-grok-status-line锛堢姸鎬佽 item 鎵╁睍锛屽叏閮?additive锛?
-- `src/config.rs`锛歚StatusLineItem` 鏂板 `ApiCalls` / `Perf` 鍙樹綋锛坘ebab-case锛歚api-calls`銆乣perf`锛夛紱
-  涓よ€?`varies_mid_turn() == true`锛堝洖鍚堝唴璁℃暟涓?TPS 浼氬彉锛岃闇€ tick 鍒锋柊锛?
-- `src/context.rs`锛歚StatusLineApiCalls` 琛?`Copy`锛坈ompose 娑堣垂鐢級
+### xai-grok-status-line（状态行 item 扩展，全部 additive）
+- `src/config.rs`：`StatusLineItem` 新增 `ApiCalls` / `Perf` 变体（kebab-case：`api-calls`、`perf`）；
+  两者 `varies_mid_turn() == true`（回合内计数与 TPS 会变，行需 tick 刷新）
+- `src/context.rs`：`StatusLineApiCalls` 补 `Copy`（compose 消费用）
 
-### xai-grok-pager锛堝唴缃姸鎬佽娓叉煋 + stats 瀛愬懡浠わ級
-- `src/views/status_line/segments.rs`锛歚compose_builtin` 娓叉煋涓や釜鏂版鈥斺€?
-  `鉁?n`锛堟湁澶辫触杩藉姞 `鉁?m` 涓旀暣娈?Warn 鑹茶皟锛夈€乣ttft {ms}ms 路 {tps:.1} tok/s`锛堢己鍝鐪佸摢娈碉級锛?
-  瀛楀舰璧?`xai_grok_pager_render::glyphs::{check_mark, ballot_x}`锛堟棫鎺у埗鍙板洖閫€锛?
-- `src/views/status_line/segments_tests.rs`锛氫袱涓柊娈电殑鍗曟祴
-- `docs/user-guide/25-status-line.md`锛歋et up 琛ㄨˉ `api-calls` / `perf` 琛岋紙doc-sync 娴嬭瘯瑕佹眰锛?
-- 鏂?`src/stats_cmd/`锛坄grok stats`锛孴3 鐙珛 CLI锛屽彧璇伙級锛歚--json`銆乣--days N`銆乣--limit N`銆?
-  `--model <text>`锛堟ā鍨?id 澶у皬鍐欎笉鏁忔劅瀛愪覆杩囨护锛岃繃婊ゅ悗鏃犲尮閰嶆ā鍨嬬殑浼氳瘽鏁磋娑堝け锛夛紱
-  閬嶅巻 `<grok-home>/sessions/**/usage.json`锛堚墹4 灞傦級锛屾寜浼氳瘽 / 鏈湴鏃ワ紙`%Y-%m-%d`锛?
-  ISO 鍛紙`%G-W%V`锛夎仛鍚?turns锛坄ended_at` RFC3339锛夛紱涓夎鍥鹃兘甯︽寜妯″瀷鎷嗗垎
-  锛圝SON `models` 鏁扮粍 + 浜虹被杈撳嚭 `By model` 琛紝鏈€蹇欐ā鍨嬩紭鍏堬級锛?
-  鎴愭湰姹傚拰閬囩己鎶?`+` 灏炬爣锛涢」鐩悕缁?`xai_grok_config::decode_cwd_from_dirname` 杩樺師
-- `src/app/cli.rs` + `src/lib.rs` + pager-bin `src/main.rs`锛歚Command::Stats` 鎺ョ嚎
-  锛堜袱澶勫懡浠ゅ垎绫诲潡 + 鍒嗗彂鑷傦級
+### xai-grok-pager（内置状态行渲染 + stats 子命令）
+- `src/views/status_line/segments.rs`：`compose_builtin` 渲染两个新段——
+  `✓ n`（有失败追加 `✗ m` 且整段 Warn 色调）、`ttft {ms}ms · {tps:.1} tok/s`（缺哪段省哪段）；
+  字形走 `xai_grok_pager_render::glyphs::{check_mark, ballot_x}`（旧控制台回退）
+- `src/views/status_line/segments_tests.rs`：两个新段的单测
+- `docs/user-guide/25-status-line.md`：Set up 表补 `api-calls` / `perf` 行（doc-sync 测试要求）
+- 新 `src/stats_cmd/`（`grok stats`，T3 独立 CLI，只读）：`--json`、`--days N`、`--limit N`、
+  `--model <text>`（模型 id 大小写不敏感子串过滤，过滤后无匹配模型的会话整行消失）；
+  遍历 `<grok-home>/sessions/**/usage.json`（≤4 层），按会话 / 本地日（`%Y-%m-%d`）/
+  ISO 周（`%G-W%V`）聚合 turns（`ended_at` RFC3339）；三视图都带按模型拆分
+  （JSON `models` 数组 + 人类输出 `By model` 表，最忙模型优先）；
+  成本求和遇缺报 `+` 尾标；项目名经 `xai_grok_config::decode_cwd_from_dirname` 还原
+- `src/app/cli.rs` + `src/lib.rs` + pager-bin `src/main.rs`：`Command::Stats` 接线
+  （两处命令分类块 + 分发臂）
 
-### xai-grok-pager锛堟杩庡睆鍝佺墝瀹氬埗锛氱唺鐚ご logo + 褰╄泲鍓爣棰橈級
-- `assets/logo/logo07.txt`锛坒ull tier锛?3x7锛? `logo05.txt`锛坈ompact tier锛? 琛岋級锛?
-  Grok 瀛楁爣鎹㈡垚鐔婄尗澶寸洸鏂囩偣闃碉紱`.gitattributes` 寮哄埗 `assets/logo/*.txt` LF
-  锛坄include_str!` 鍘熸牱宓屽叆锛孋RLF 浼氭妸 `\r` 甯﹁繘浜岃繘鍒舵覆鏌撴垚鏉傚瓧褰級
-- `src/views/welcome/hero_box.rs`锛歚HERO_SUBTITLE` 鏀逛负
-  `"Code together, cola together 鈥?thanks for pairing with Panda! (/feedback)"`
-  锛堝垵鐗堟帾杈?"Share code & cola" 璇昏捣鏉ュ儚鏇垮埆浜哄浠戒唬鐮侊紝宸叉寜鎰忓浘鏀逛负缁撳鍏卞啓锛?
-- `src/app/mod.rs`锛氶€€鍑哄熬閮紙缁堢鎭㈠鍚庛€乣Ok(false)` 鍓嶏級杩藉姞 `FAREWELL`
-  甯搁噺鎵撳嵃锛坰tderr锛夆€斺€攈ero 鍓爣棰樹細琚?changelog/鍏憡鎸ゆ帀锛岄€€鍑哄憡鍒蹇呮墦鍗帮紝
-  褰╄泲绋冲畾灞曠ず锛沗quit_for_update` / 妯″紡 relaunch 璺緞鍏堜簬鎵撳嵃 return锛屼笉浼氭薄鏌?
-- `tools/gen_panda_logo.py`锛氬儚绱犫啋鐩叉枃杞崲鑴氭湰锛?x4 鐐?鏍硷紝U+2800 绌虹櫧鏍硷級锛?
-  鐢熸垚涓ゆ。 art 骞朵繚璇?LF锛岀暀浣滀粬浜哄畾鍒跺弬鑰?
-- `docs/user-guide/28-welcome-branding.md`锛氭柊澧炲唴缃紩瀵兼枃妗ｏ紙`src/docs.rs`
-  `USER_GUIDE` 娉ㄥ唽锛夛紝闈㈠悜 AI agent 鐨?logo/鍓爣棰樺畾鍒堕厤鏂光€斺€斿惎鍔ㄦ椂浼氳В鍖呭埌
-  `<grok_home>/docs/user-guide/`锛屽埆浜虹殑 AI 鍙鍒板苟鑷姩澶嶅埢鍚岀被瀹氬埗
-- `docs/user-guide/29-local-enhancements.md`锛氭柊澧炲唴缃紩瀵兼枃妗ｏ紝鎶婃湰鍦板寮?
-  锛坄[network]` 鍑哄彛浠ｇ悊銆乣[shell]` 鍚庣銆佺姸鎬佽 `api-calls`/`perf`銆?
-  `${session_id}` 浼氳瘽浜插拰澶淬€丏eepSeek/GLM `reasoning_content` 鎬濊€冨洖浼狅級
-  鍐欐垚"浣滅敤 + 浣曟椂涓诲姩閰嶇疆 + 绀轰緥"鐨?AI 寮曞琛紝鍚俊鍙封啋閰嶇疆瀵圭収琛紱
-  渚?AI 瑙ｅ寘鍚庤鍒板苟涓诲姩甯敤鎴烽厤缃?
+### xai-grok-pager（欢迎屏品牌定制：熊猫头 logo + 彩蛋副标题）
+- `assets/logo/logo07.txt`（full tier，23x7）/ `logo05.txt`（compact tier，5 行）：
+  Grok 字标换成熊猫头盲文点阵；`.gitattributes` 强制 `assets/logo/*.txt` LF
+  （`include_str!` 原样嵌入，CRLF 会把 `\r` 带进二进制渲染成杂字形）
+- `src/views/welcome/hero_box.rs`：`HERO_SUBTITLE` 改为
+  `"Code together, cola together — thanks for pairing with Panda! (/feedback)"`
+  （初版措辞 "Share code & cola" 读起来像替别人备份代码，已按意图改为结对共写）
+- `src/app/mod.rs`：退出尾部（终端恢复后、`Ok(false)` 前）追加 `FAREWELL`
+  常量打印（stderr）——hero 副标题会被 changelog/公告挤掉，退出告别语必打印，
+  彩蛋稳定展示；`quit_for_update` / 模式 relaunch 路径先于打印 return，不会污染
+- `tools/gen_panda_logo.py`：像素→盲文转换脚本（2x4 点/格，U+2800 空白格），
+  生成两档 art 并保证 LF，留作他人定制参考
+- `docs/user-guide/28-welcome-branding.md`：新增内置引导文档（`src/docs.rs`
+  `USER_GUIDE` 注册），面向 AI agent 的 logo/副标题定制配方——启动时会解包到
+  `<grok_home>/docs/user-guide/`，别人的 AI 可读到并自动复刻同类定制
+- `docs/user-guide/29-local-enhancements.md`：新增内置引导文档，把本地增强
+  （`[network]` 出口代理、`[shell]` 后端、状态行 `api-calls`/`perf`、
+  `${session_id}` 会话亲和头、DeepSeek/GLM `reasoning_content` 思考回传）
+  写成"作用 + 何时主动配置 + 示例"的 AI 引导表，含信号→配置对照表；
+  供 AI 解包后读到并主动帮用户配置
 
-### 鐘舵€佽鍘熺敓榛樿锛堣剼鏈€€褰癸細`tokens` / `cache` / `think` item + 榛樿寮€鍚級
-- `xai-grok-status-line/src/config.rs`锛歚StatusLineItem` 鏂板 `Tokens` / `Cache` /
-  `Think`锛坘ebab-case锛歚tokens`銆乣cache`銆乣think`锛宍varies_mid_turn` 鍧?true锛夛紱
-  `StatusLineType` 鐨?`#[default]` 浠?`Disabled` 缈诲埌 `Builtin`鈥斺€旂己鐪?section 鍗冲嚭琛岋紱
-  `DEFAULT_ITEMS` 鎹㈡垚鏈湴鎸囨爣闆?`[model, api-calls, tokens, cache, think, perf]`
-  锛堝榻愬師 `~/.grok/statusline.py` 鐨勬寚鏍囬泦鍚堬紱model 姘歌繙鍙緱锛屾斁鏈€宸﹀仛琛岄閿氱偣锛?
-  閬垮厤寮€灞€琛岄鏄┖娈佃烦杩囩殑瑙嗚鎶栧姩锛?
-- `xai-grok-status-line/src/context.rs`锛歚StatusLineSessionUsage` 琛?`Copy, Eq`
-- `xai-grok-pager/src/views/status_line/segments.rs`锛氫笁涓柊娈碘€斺€?
-  `in 47k out 3.2k`锛堢獥鍙ｆ€婚噺缂虹渷鍥為€€ usage 涓夋《鍜岋紝k/M 涓€浣嶅皬鏁板幓灏鹃浂锛夈€?
-  `cache 95.7%`锛坈ache_read / 浼氳瘽杈撳叆鎬婚噺锛夈€乣think 28.1%`锛坮easoning / 浼氳瘽杈撳嚭锛夛紱
-  鎷夸笉鍒板€兼暣娈甸殣钘忥紙鏂颁細璇濆彧鐢?model锛屼笉鐢诲崰浣嶇锛?
-- 娑堣垂鏂硅涔夌炕杞悗鐨勬祴璇曞悓姝ワ細`config_tests.rs`锛坥rphan/off 鏂█鏀规樉寮?Disabled銆?
-  鏃?type 杞借嵎鏀?鐢婚粯璁よ + 浠嶆姤瀛ゅ効閿?锛夈€乣metrics_tests.rs`锛坲nset 璁?true銆?
-  涓嶅彲鐢昏鏀?Disabled锛夈€乨ispatch `status_line.rs`锛堝悓锛夛紱鏂板
-  `token_segments_mirror...` / `a_fresh_session_shows_only...` 鍗曟祴锛?
-  `docs/user-guide/25-status-line.md` Set up 琛ㄤ笌榛樿鍊煎悓姝ワ紙doc-sync 娴嬭瘯寮哄埗锛?
-- 鐢ㄦ埛鑴氭湰 `~/.grok/statusline.py` 閫€褰瑰彲閫夛細淇濈暀鍗宠鐩栭粯璁わ紙command 浼樺厛锛?
+### 状态行原生默认（脚本退役：`tokens` / `cache` / `think` item + 默认开启）
+- `xai-grok-status-line/src/config.rs`：`StatusLineItem` 新增 `Tokens` / `Cache` /
+  `Think`（kebab-case：`tokens`、`cache`、`think`，`varies_mid_turn` 均 true）；
+  `StatusLineType` 的 `#[default]` 从 `Disabled` 翻到 `Builtin`——缺省 section 即出行；
+  `DEFAULT_ITEMS` 换成本地指标集 `[model, api-calls, tokens, cache, think, perf]`
+  （对齐原 `~/.grok/statusline.py` 的指标集合；model 永远可得，放最左做行首锚点，
+  避免开局行首是空段跳过的视觉抖动）
+- `xai-grok-status-line/src/context.rs`：`StatusLineSessionUsage` 补 `Copy, Eq`
+- `xai-grok-pager/src/views/status_line/segments.rs`：三个新段——
+  `in 47k out 3.2k`（窗口总量缺省回退 usage 三桶和，k/M 一位小数去尾零）、
+  `cache 95.7%`（cache_read / 会话输入总量）、`think 28.1%`（reasoning / 会话输出）；
+  拿不到值整段隐藏（新会话只画 model，不画占位符）
+- 消费方语义翻转后的测试同步：`config_tests.rs`（orphan/off 断言改显式 Disabled、
+  无 type 载荷改"画默认行 + 仍报孤儿键"）、`metrics_tests.rs`（unset 记 true、
+  不可画行改 Disabled）、dispatch `status_line.rs`（同）；新增
+  `token_segments_mirror...` / `a_fresh_session_shows_only...` 单测；
+  `docs/user-guide/25-status-line.md` Set up 表与默认值同步（doc-sync 测试强制）
+- 用户脚本 `~/.grok/statusline.py` 退役可选：保留即覆盖默认（command 优先）
 
-### xai-grok-tools锛圠SP 璇婃柇鍚堝苟鍘绘姈锛?
-- `src/implementations/lsp/mod.rs`锛氭柊 `DIAGNOSTICS_QUIET_WINDOW`锛?50ms锛?
-- `src/implementations/lsp/manager.rs`锛歚take_answered_diagnostics` 鈫?`take_answered_items`
-  锛堣繑鍥?per-file items锛屾牸寮忓寲鏀跺彛鍒版柊 `summary_from`锛夛紱drain 寰幆鏀逛负鎶婂鎵硅鍐?
-  绱Н杩涗竴涓?`CollectedDiagnostics`鈥斺€攑ending 鏈竻鍓嶇户缁瓑鏁存壒锛屽叏绛斿畬鍚庢寔 150ms
-  闈欓粯绐楀悎骞惰繜鍒扮殑鎺ㄩ€侊紱瓒呮椂/闈欓粯鏀惧純鏃跺凡鏀堕泦鐨勭収鏍峰彂锛堝師鏉ヤ涪寮冿級
-- `src/reminders/lsp_diagnostics.rs`锛氭敞鍏ョ骇鍘绘姈鈥斺€擿DrainDebounce{last_inject}` 瀛?
-  `SharedResources`锛屾敞鍏ュ悗 750ms 鍐呯殑缂栬緫璺宠繃 drain锛堜笅涓€杞?drain 涓€娆℃姤瀹屾暣鎵癸級锛?
-  娑堥櫎杩炵画蹇€熺紪杈戠殑閲嶅娉ㄥ叆涓庨噸澶嶉樆濉?
-- 娴嬭瘯锛歚a_drain_merges_staggered_pushes_into_one_summary`锛堥敊宄?200ms 鍙屾帹閫佸悎骞讹級銆?
-  `edits_inside_the_debounce_window_share_one_drain`锛團akeBackend 璁℃暟锛?
+### xai-grok-tools（LSP 诊断合并去抖）
+- `src/implementations/lsp/mod.rs`：新 `DIAGNOSTICS_QUIET_WINDOW`（150ms）
+- `src/implementations/lsp/manager.rs`：`take_answered_diagnostics` → `take_answered_items`
+  （返回 per-file items，格式化收口到新 `summary_from`）；drain 循环改为把多批裁决
+  累积进一个 `CollectedDiagnostics`——pending 未清前继续等整批，全答完后持 150ms
+  静默窗合并迟到的推送；超时/静默放弃时已收集的照样发（原来丢弃）
+- `src/reminders/lsp_diagnostics.rs`：注入级去抖——`DrainDebounce{last_inject}` 存
+  `SharedResources`，注入后 750ms 内的编辑跳过 drain（下一轮 drain 一次报完整批），
+  消除连续快速编辑的重复注入与重复阻塞
+- 测试：`a_drain_merges_staggered_pushes_into_one_summary`（错峰 200ms 双推送合并）、
+  `edits_inside_the_debounce_window_share_one_drain`（FakeBackend 计数）
 
-### xai-grok-pager锛圡CP 鍛藉悕鏍煎紡鏂囨。寮哄寲锛?
-- `docs/user-guide/07-mcp-servers.md`锛堜笂娓告枃浠讹紝4 澶勬彃鍏ワ紝鍧囨湁 `<!-- LOCAL: -->` 鎴栧彴璐﹁褰曪級锛?
-  - Tool Naming 鏂板 "Server Name Format Requirements" 灏忚妭锛歚<server>__<tool>` 鍏ㄥ悕椤诲尮閰?
-    `^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$`锛坄xai-grok-mcp/src/servers.rs` `validate_tool_name`锛夆€斺€?
-    server 鍚嶆暟瀛楀紑澶达紙`7zip`锛変細闈欓粯涓㈠厜宸ュ叿锛屽彧鐣?`Skipping MCP tool with invalid name` 鏃ュ織锛?
-    `grok mcp add` 鍙煡瀛楃闆嗕笉鏌ラ瀛楃锛屾槸鍧戠殑闅愯斀鐐?
-  - Troubleshooting 鏂板 "Server Connects but Its Tools Are Missing" 鐥囩姸鏉＄洰
-  - Configuration 寮€澶翠笌 CLI Management breaking-changes 鍙ュ悇琛ヤ竴鍙ヨ鍛?+ `#tool-naming` 浜ゅ弶寮曠敤
-- 鑳屾櫙锛氫笂娓搁暅鍍忥紙xai-org/grok-build锛夊叧浜?issue 鍖猴紝姝?bug 鏃犱汉鎶ヨ繃锛涙枃妗ｅ厛琛岋紝浠ｇ爜鏀惧寰呬笂娓?
+### xai-grok-pager（MCP 命名格式文档强化）
+- `docs/user-guide/07-mcp-servers.md`（上游文件，4 处插入，均有 `<!-- LOCAL: -->` 或台账记录）：
+  - Tool Naming 新增 "Server Name Format Requirements" 小节：`<server>__<tool>` 全名须匹配
+    `^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$`（`xai-grok-mcp/src/servers.rs` `validate_tool_name`）——
+    server 名数字开头（`7zip`）会静默丢光工具，只留 `Skipping MCP tool with invalid name` 日志；
+    `grok mcp add` 只查字符集不查首字符，是坑的隐蔽点
+  - Troubleshooting 新增 "Server Connects but Its Tools Are Missing" 症状条目
+  - Configuration 开头与 CLI Management breaking-changes 句各补一句警告 + `#tool-naming` 交叉引用
+- 背景：上游镜像（xai-org/grok-build）关了 issue 区，此 bug 无人报过；文档先行，代码放宽待上游
 
-### xai-grok-pager锛坅gents 寮圭獥灞曠ず鍏ㄩ儴鍐呯疆鍙樹綋 + 闅愯棌妯″瀷/鏉€寮€鍏虫枃妗ｏ級
-- `src/views/agents_modal.rs`锛氬垹 `user_visible_builtins()` 绛栧睍闅愯棌鍚嶅崟锛宍build_agent_list`
-  鏀逛负閬嶅巻鍏ㄩ儴 `BuiltinAgentName::iter()`銆傝儗鏅細`[agent].name` / `GROK_AGENT` 鍙€変换鎰?
-  鍐呯疆鍙樹綋锛堝惈 `grok-build-concise`锛夛紝浣嗗脊绐楀彧灞曠ず 5 涓€斺€擿/agents` 閲屾寜 `s` 浼氭妸閫変腑
-  鐨?`grok-build` 鍐欏洖 `[agent].name`锛岄潤榛樿鍐欑敤鎴烽厤缃笖鏃?UI 鍙锛堝疄闄呰俯鍧戜簨鏁咃級銆?
-  鍥炲綊娴嬭瘯 `build_agent_list_lists_every_builtin_variant` 闃叉柊鍙樹綋鍐嶈钘?
-- `docs/user-guide/26-config-reference.md`锛?
-  - features 琛ㄨˉ `turn_transient_retry` 琛岋紙涓婃父婕忔枃妗ｇ殑鍥炲悎鐬椂閲嶈瘯鏉€寮€鍏筹級
-  - models 琛ㄥ悗琛?"Hidden vs disabled" 鏁ｆ枃娈碉細hidden 妯″瀷 `-m` 鍙敤銆佸彧鏈?
-    `disabled_models` 鎵嶇Щ鍑虹洰褰曘€佸唴缃?plumbing 妯″瀷锛坵eb_search/image_description/
-    瀛愪唬鐞?娆¤妯″瀷锛夋寜璁捐闅愯棌
+### xai-grok-pager（agents 弹窗展示全部内置变体 + 隐藏模型/杀开关文档）
+- `src/views/agents_modal.rs`：删 `user_visible_builtins()` 策展隐藏名单，`build_agent_list`
+  改为遍历全部 `BuiltinAgentName::iter()`。背景：`[agent].name` / `GROK_AGENT` 可选任意
+  内置变体（含 `grok-build-concise`），但弹窗只展示 5 个——`/agents` 里按 `s` 会把选中
+  的 `grok-build` 写回 `[agent].name`，静默覆写用户配置且无 UI 可见（实际踩坑事故）。
+  回归测试 `build_agent_list_lists_every_builtin_variant` 防新变体再被藏
+- `docs/user-guide/26-config-reference.md`：
+  - features 表补 `turn_transient_retry` 行（上游漏文档的回合瞬时重试杀开关）
+  - models 表后补 "Hidden vs disabled" 散文段：hidden 模型 `-m` 可用、只有
+    `disabled_models` 才移出目录、内置 plumbing 模型（web_search/image_description/
+    子代理/次要模型）按设计隐藏
 
-## 鍙戝竷
+## 发布
 
-- `.github/workflows/release.yml`锛氭帹 `v*` tag 瑙﹀彂锛屾瀯寤?`xai-grok-pager`锛坓rok CLI锛?
-  release 浜岃繘鍒讹紝浠?linux-amd64锛坱ar.gz锛変笌 windows-amd64锛坺ip锛夛紝闄?sha256銆?
-- CI 缂撳瓨浜嬫晠涓庢渶缁堟柟妗堬紙job 鍚嶆挒杞?鈫?sccache GHA 纰庣墖鎾戠垎 10 GB 鈫?鏀瑰洖闅旂鐨?rust-cache锛夛細
-  瑙?`ci-cache-incident.md`銆?
-## 寰呭姙锛堜笅涓€鏈燂級
+- `.github/workflows/release.yml`：推 `v*` tag 触发，构建 `xai-grok-pager`（grok CLI）
+  release 二进制，仅 linux-amd64（tar.gz）与 windows-amd64（zip），附 sha256。
+- CI 缓存事故与最终方案（job 名撞车 → sccache GHA 碎片撑爆 10 GB → 改回隔离的 rust-cache）：
+  见 `ci-cache-incident.md`。
+## 待办（下一期）
 
-- 宸ュ叿杈撳嚭鍘嬬缉锛氫竴鏈熷凡钀藉湴锛堢畝鍖?headroom 绛栫暐锛岃 `tool-output-compression-plan.md`锛夛紱
-  浜屾湡浣庢崯/鏃犳崯缁勫悎宸插畾绋匡紙2026-09-17锛岃鍚屾枃妗ｃ€屼簩鏈熸柟鍚戙€嶈妭锛夛紱only-cc-lite git
-  渚濊禆涓?embedding 妫€绱粛涓嶅仛
-- 鎺掗槦鏃堕棿鎴?/ wait 璁＄畻锛坄acp_session_impl/prompt_queue.rs`锛夛細宸蹭粠璁″垝鍒犻櫎
-- 鎺掗槦鍗¤瑙夊尯鍒嗭細宸插簾寮?
-- T3 stats 鍚庣画鍙€夐」锛氭妸浼氳瘽琛屾帴 `list_summaries` 鎷挎爣棰樸€乣--project` 杩囨护
-- `/stats` 鏂滄潬鍛戒护宸茶惤鍦帮紙鍘嬬缉姝ｅ悜/璐熷悜鏀剁泭 + CCR I/O 寤惰繜锛沗grok stats` 鍚屾灞曠ず锛?
+- 工具输出压缩：一期已落地（简化 headroom 策略，见 `tool-output-compression-plan.md`）；
+  二期低损/无损组合已定稿（2026-09-17，见同文档「二期方向」节）；only-cc-lite git
+  依赖与 embedding 检索仍不做
+- 排队时间戳 / wait 计算（`acp_session_impl/prompt_queue.rs`）：已从计划删除
+- 排队卡视觉区分：已废弃
+- T3 stats 后续可选项：把会话行接 `list_summaries` 拿标题、`--project` 过滤
+- `/stats` 斜杠命令已落地（压缩正向/负向收益 + CCR I/O 延迟；`grok stats` 同步展示）
 
-## 涓夋湡琛ヤ竵锛堝凡瀹屾垚锛?026-09-15锛?
+## 三期补丁（已完成，2026-09-15）
 
-> 閫氱敤鍓嶇疆锛堝欢缁級锛氬疄鐜板墠鏍告煡涓婃父鏄惁宸叉湁鐩镐豢/鍐茬獊鏈哄埗锛屾湁鍒欎笉鍋氾紱
-> 鍏ㄩ儴鍙厤缃惎鐢?鍋滅敤锛岄粯璁や笉鏀瑰彉涓婃父琛屼负銆?
-> 2026-09-15 鏍告煡锛歁CP 鎳掑姞杞戒笂娓稿凡鍐呯疆涓斿己鍒堕粯璁わ紙瑙佸鐓ц〃锛夛紝涓嶅仛銆?
-> 鑼冨洿锛氭瀬绠€ primary agent + BeforeModelCall hook + PostCompact 閲嶆敞鍏?+ 閫氱煡寮€绠便€?
-> 璇存槑锛歅reCompact/PostCompact 浜嬩欢涓婃父鏈氨瀛樺湪锛坈ompaction.rs 瑙﹀彂锛孫bserve 鍨嬶級锛?
-> 涓夋湡琛ョ殑鏄?PostCompact 鐨?additionalContext 閲嶆敞鍏ラ€氶亾銆?
+> 通用前置（延续）：实现前核查上游是否已有相仿/冲突机制，有则不做；
+> 全部可配置启用/停用，默认不改变上游行为。
+> 2026-09-15 核查：MCP 懒加载上游已内置且强制默认（见对照表），不做。
+> 范围：极简 primary agent + BeforeModelCall hook + PostCompact 重注入 + 通知开箱。
+> 说明：PreCompact/PostCompact 事件上游本就存在（compaction.rs 触发，Observe 型），
+> 三期补的是 PostCompact 的 additionalContext 重注入通道。
 
-### 宸茶惤鍦?
+### 已落地
 
-- `BeforeModelCall` 娑堟伅鍙樻崲 hook锛氭瘡娆?LLM 璇锋眰缁勮瀹屾垚鍚庛€佸彂閫佸墠鏀瑰啓娑堟伅鍒楄〃
-  锛堝嚭鍘昏劚鏁?鍥炴潵杩樺師锛屽弻鍚戯級锛宻ession 璁板綍姘镐笉淇敼鈥斺€旇鍓?鑴辨晱/鍘嬬缉绫绘墿灞曠殑
-  澶村彿渚濊禆闈紙DCP 4.2k鈽呫€乿ibeguard 鍧囧缓绔嬪湪姝?hook 涓婏級銆傛帴鍏ラ敋鐐癸細
-  `acp_session_impl/sampler_turn.rs` 璇锋眰缁勮杈圭晫锛坮econstruct 涔嬪悗銆侀噰鏍疯皟鐢ㄤ箣鍓嶏紝
-  fork 鐨?`${session_id}` 妯℃澘灞曞紑宸插湪鍚屼竴 seam锛夛紱浜嬩欢娉ㄥ唽璧?`hook_dispatch.rs`銆?
-  瀹冩槸銆屽緟鍔烇紙涓嬩竴鏈燂級銆嶅伐鍏疯緭鍑哄帇缂╃殑鍓嶇疆娑堣垂鑰咃紝鎺掓湡鏃朵竴璧疯瘎浼?
-- 鏋佺畝妯″紡 primary agent锛堝鐢ㄧ幇鎴愯浇浣擄紝涓嶆柊澧炶緭鍑洪鏍煎瓙绯荤粺锛夛細涓婃父宸插唴缃?
-  concise 鍙樹綋鈥斺€擿BuiltinAgentName::GrokBuildConcise`锛坄xai-grok-agent/src/config.rs`
-  `grok_build_concise()`锛歚COMPACT_SYSTEM_PROMPT` + 绮剧畝宸ュ叿鎻忚堪闆?
-  `grok_build_concise_toolset` + `agents_md:false`锛夛紝`--agent-profile
-  grok-build-concise` / `agent.name` / `/config-agents` 鍧囧彲閫変负涓讳細璇?agent锛?
-  浣嗗叾鎻愮ず璇嶅彧鏈変袱鍙ヨ瘽銆侀浂杈撳嚭椋庢牸瑙勫垯銆俧ork 鏀归€?= 缁?concise 杞戒綋杩藉姞 LOCAL
-  鏋佺畝瑙勫垯鑺傦細鏀?`xai-grok-agent/src/agent.rs` `system_prompt()` 鐨?concise 鍒嗘敮
-  锛坄COMPACT_SYSTEM_PROMPT` 鍚庢嫾鎺?`LOCAL_CONCISE_RULES` 甯搁噺锛夛紝浼氳瘽涓垏鎹㈣矾寰?
-  `acp_session_impl/model_switch.rs` 鍚屾鎷兼帴銆傝鍒欒瀺鍚堜笁婧愶細
-  qwen Concise锛堢瓟妗堝厛琛屻€侀浂鏃佺櫧闆跺鐩橀浂瀵掓殑銆佺敤鎴疯瑙ｉ噴鏃剁粰鍏ㄦ枃銆佹纭€?鏋佺畝銆?
-  鍐茬獊鏃舵湰鑺傝儨鍑猴級+ caveman锛堝幓鍐犺瘝/濉厖璇?瀹㈠璇?瀵瑰啿銆佺煭鍚屼箟璇嶃€佺澶磋〃鍥犳灉銆?
-  鐗囨鍙ュ彲鐢ㄣ€佹妧鏈瘝绮剧‘銆佷唬鐮佸潡涓庢姤閿欏師鏂囦笉鍔ㄣ€佸畨鍏ㄨ鍛?涓嶅彲閫嗘搷浣滀复鏃舵仮澶?
-  瀹屾暣琛ㄨ揪锛? i-have-adhd 46k鈽咃紙棣栬鍗充笅涓€姝ヨ鍔ㄣ€佸姝ョ紪鍙蜂笖姝ユ暟鏈€灏戙€佹瘡鍥炲悎
-  閲嶈堪杩涘害鐘舵€併€佺粨灏捐嚦澶氫竴涓袱鍒嗛挓鍐呭彲鍋氱殑 next action銆侀敊璇钩閾虹洿鍙?
-  cause+fix銆佸睍绀哄垪琛ㄢ墹5 鏉′笖鍒嗘瀽瀹屾暣鎬т笉鍙楅檺銆佸畬鎴愮殑浜嬭娓?鐜板湪鑳界敤浠€涔?锛夈€?
-  浜屾壒鍊欓€夛細Learning 绫讳氦浜掗鏍笺€乹wen 寮?`keep-coding-instructions` 鍩虹鎻愮ず鍒嗚妭
+- `BeforeModelCall` 消息变换 hook：每次 LLM 请求组装完成后、发送前改写消息列表
+  （出去脱敏/回来还原，双向），session 记录永不修改——裁剪/脱敏/压缩类扩展的
+  头号依赖面（DCP 4.2k★、vibeguard 均建立在此 hook 上）。接入锚点：
+  `acp_session_impl/sampler_turn.rs` 请求组装边界（reconstruct 之后、采样调用之前，
+  fork 的 `${session_id}` 模板展开已在同一 seam）；事件注册走 `hook_dispatch.rs`。
+  它是「待办（下一期）」工具输出压缩的前置消费者，排期时一起评估
+- 极简模式 primary agent（复用现成载体，不新增输出风格子系统）：上游已内置
+  concise 变体——`BuiltinAgentName::GrokBuildConcise`（`xai-grok-agent/src/config.rs`
+  `grok_build_concise()`：`COMPACT_SYSTEM_PROMPT` + 精简工具描述集
+  `grok_build_concise_toolset` + `agents_md:false`），`--agent-profile
+  grok-build-concise` / `agent.name` / `/config-agents` 均可选为主会话 agent，
+  但其提示词只有两句话、零输出风格规则。fork 改造 = 给 concise 载体追加 LOCAL
+  极简规则节：改 `xai-grok-agent/src/agent.rs` `system_prompt()` 的 concise 分支
+  （`COMPACT_SYSTEM_PROMPT` 后拼接 `LOCAL_CONCISE_RULES` 常量），会话中切换路径
+  `acp_session_impl/model_switch.rs` 同步拼接。规则融合三源：
+  qwen Concise（答案先行、零旁白零复盘零寒暄、用户要解释时给全文、正确性>极简、
+  冲突时本节胜出）+ caveman（去冠词/填充语/客套话/对冲、短同义词、箭头表因果、
+  片段句可用、技术词精确、代码块与报错原文不动、安全警告/不可逆操作临时恢复
+  完整表达）+ i-have-adhd 46k★（首行即下一步行动、多步编号且步数最少、每回合
+  重述进度状态、结尾至多一个两分钟内可做的 next action、错误平铺直叙
+  cause+fix、展示列表≤5 条且分析完整性不受限、完成的事说清"现在能用什么"）。
+  二批候选：Learning 类交互风格、qwen 式 `keep-coding-instructions` 基础提示分节
 
-- `PostCompact` 閲嶆敞鍏ワ紙宸茶惤鍦帮級锛氫笂娓镐簨浠舵湰灏卞瓨鍦紙Observe 鍨嬶紝payload 浠?
-  `{source}`锛夛紱涓夋湡琛?`additionalContext` 鍝嶅簲閫氶亾鈥斺€旀敹闆嗘枃鏈湪鍘嬬缉閲嶇疆鍚庝互
-  鍗曟潯 system item 閲嶆敞鍏ワ紙`dispatch_post_compact_context` +
-  `dispatch_post_compact_collect_context`锛夛紝浠诲姟鍒楄〃/璁板繂绫绘墿灞曠殑
-  鐘舵€佹仮澶嶉€氶亾锛坮piv-todo 鏈堜笅杞?14.8 涓囩殑鏍稿績鍗栫偣锛?
-- 閫氱煡寮€绠卞寲锛堝凡钀藉湴锛夛細`[notifications]` 閰嶇疆鑺傦紙`desktop`/`sound`/
-  `min-interval-secs`/`suppress-after-user-input-secs`锛屽叏閮?opt-in 榛樿鍏筹級锛?
-  鍙戝皠璧扮粓绔?OSC 9 + OSC 777 + BEL锛堥浂渚濊禆锛學indows Terminal/iTerm2/kitty/WezTerm锛夛紱
-  鑱氱劍鎶戝埗涓哄惎鍙戝紡鈥斺€旂敤鎴锋渶杩?N 绉掓湁杈撳叆鍒欒烦杩囷紱鎸傚湪 `dispatch_notification_hook`
-  鍏ュ彛锛屼笌 hooks 瀹屽叏鐙珛
+- `PostCompact` 重注入（已落地）：上游事件本就存在（Observe 型，payload 仅
+  `{source}`）；三期补 `additionalContext` 响应通道——收集文本在压缩重置后以
+  单条 system item 重注入（`dispatch_post_compact_context` +
+  `dispatch_post_compact_collect_context`），任务列表/记忆类扩展的
+  状态恢复通道（rpiv-todo 月下载 14.8 万的核心卖点）
+- 通知开箱化（已落地）：`[notifications]` 配置节（`desktop`/`sound`/
+  `min-interval-secs`/`suppress-after-user-input-secs`，全部 opt-in 默认关）；
+  发射走终端 OSC 9 + OSC 777 + BEL（零依赖，Windows Terminal/iTerm2/kitty/WezTerm）；
+  聚焦抑制为启发式——用户最近 N 秒有输入则跳过；挂在 `dispatch_notification_hook`
+  入口，与 hooks 完全独立
 
-**琛屼负鍙樺寲锛坮ebase 鐢級**锛歡rok-build-concise 鐜颁负 strict harness锛堝畾鍒舵彁绀?+
-绮鹃€夊伐鍏烽泦锛夆€斺€斿鎴风 `_meta.agentProfile` 涓嶈兘瑕嗙洊瀹冿紙涓?codex 鍚岀瓥鐣ワ級锛?
-`harnesses_are_compatible` 瑙嗗叾浠呬笌鑷韩鍏煎锛屽垏鎹㈠埌瀹冮渶閲嶅缓 harness锛堥噸寤鸿矾寰?
-`model_switch.rs` 浼氬啓鍏?compact+瑙勫垯鎻愮ず锛岃涔変竴鑷达級銆傜浉鍏充笂娓告祴璇曞凡鎸夋鏇存柊锛?
-mvp_agent/tests.rs锛堝吋瀹圭煩闃?+ ACP profile 瑙ｆ瀽锛夈€亁ai-grok-agent config.rs
-锛坄expected_strict_harness` / 鎸夊悕鍒嗙被锛夈€?
+**行为变化（rebase 用）**：grok-build-concise 现为 strict harness（定制提示 +
+精选工具集）——客户端 `_meta.agentProfile` 不能覆盖它（与 codex 同策略）；
+`harnesses_are_compatible` 视其仅与自身兼容，切换到它需重建 harness（重建路径
+`model_switch.rs` 会写入 compact+规则提示，语义一致）。相关上游测试已按此更新：
+mvp_agent/tests.rs（兼容矩阵 + ACP profile 解析）、xai-grok-agent config.rs
+（`expected_strict_harness` / 按名分类）。
 
-**瀹炵幇閿氱偣锛坮ebase 鐢級**锛歚xai-grok-hooks`锛坋vent.rs 浜嬩欢/GateKind::ModelCall/payload銆?
-runner/mod.rs `resolve_rewrites`+`gate_outcome(gate)`銆乨ispatcher.rs
-`MessageRewrite`/`dispatch_before_model_call`/`dispatch_post_compact_context`銆?
-config.rs ModelCall 瓒呮椂锛夛紱`xai-grok-agent`锛坱emplate.rs `LOCAL_CONCISE_RULES`銆?
-config.rs `grok_build_concise()` Custom 妯℃澘锛夛紱`xai-hooks-plugins-types`
-锛圚ookEvent::BeforeModelCall锛夛紱`xai-grok-shell`锛坱urn.rs 閲囨牱鍓?seam + 澶辫触褰掑洜銆?
+**实现锚点（rebase 用）**：`xai-grok-hooks`（event.rs 事件/GateKind::ModelCall/payload、
+runner/mod.rs `resolve_rewrites`+`gate_outcome(gate)`、dispatcher.rs
+`MessageRewrite`/`dispatch_before_model_call`/`dispatch_post_compact_context`、
+config.rs ModelCall 超时）；`xai-grok-agent`（template.rs `LOCAL_CONCISE_RULES`、
+config.rs `grok_build_concise()` Custom 模板）；`xai-hooks-plugins-types`
+（HookEvent::BeforeModelCall）；`xai-grok-shell`（turn.rs 采样前 seam + 失败归因、
 hook_dispatch.rs `apply_before_model_call_hooks`/`trip_before_model_call_breaker`
-(闃堝€?3)/`dispatch_post_compact_collect_context`銆乵odel_switch.rs 瑙勫垯鎷兼帴銆?
-updates.rs `emit_builtin_notification`銆乼ypes.rs 娲诲姩鏃堕棿鎴抽潤鎬併€乤gent/config.rs
-`NotificationsConfig`銆乧ompaction.rs PostCompact 閲嶆敞鍏ワ級銆?
+(阈值 3)/`dispatch_post_compact_collect_context`、model_switch.rs 规则拼接、
+updates.rs `emit_builtin_notification`、types.rs 活动时间戳静态、agent/config.rs
+`NotificationsConfig`、compaction.rs PostCompact 重注入）。
 
-## 涓婃父宸叉湁鑳藉姏瀵圭収锛堢ぞ鍖哄懠澹?鈫?鍕块噸澶嶅疄鐜帮級
+## 上游已有能力对照（社区呼声 → 勿重复实现）
 
-| 绀惧尯鍛煎０锛堥珮 reaction/楂樻槦锛?| 涓婃父 grok 鐜扮姸 |
+| 社区呼声（高 reaction/高星） | 上游 grok 现状 |
 |---|---|
-| `/context` 涓婁笅鏂囧垎瑙?| 宸叉湁锛堢粏鍒嗗埌 tool defs / skills / MCP 鎴愭湰锛?|
-| `/goal` 鎸佷箙鐩爣 + token 棰勭畻 | 宸叉湁锛坄--budget` + 瀵规姉楠岃瘉锛?|
-| `/btw` 渚ч棶娴眰 | 宸叉湁锛坄/aside`锛屽惈 minimal 闈㈡澘锛?|
-| 缁撴瀯鍖栨彁闂伐鍏?| 宸叉湁锛堝唴缃?`ask_user_question`锛?|
-| LSP 璇婃柇鍥炲杺 | 宸叉湁锛坮epo 绾?server + 鎻掍欢 LSP + `lsp` 宸ュ叿锛涙湰鍦板凡鍋氬悎骞跺幓鎶栧寮猴級 |
-| subagent 缂栨帓 | 宸叉湁锛坧ersonas + `send_subagent_message` + monitor/kill_task锛?|
-| worktree 闅旂 | 宸叉湁锛堝唴缃級 |
-| 鏉冮檺鐭╅樀 / sandbox / headless / memory / hooks | 鍧囨湁锛坔ooks 鍚?`updatedInput` 鏀瑰弬銆乣updatedToolOutput` 鏇挎崲銆乺ecord 涓?model 鍒嗙锛?|
-| 浜や簰寮忓悗鍙拌繘绋?| 宸叉湁锛坆ackground tasks + ptyctl锛?|
-| 閫氱煡 | 浜嬩欢宸叉湁锛岀己寮€绠卞疄鐜帮紙宸插垪涓夋湡 P1锛?|
-| MCP 鎳掑姞杞斤紙pi-mcp-adapter 鏈堜笅杞?94 涓囷級 | 宸叉湁涓斿己鍒堕粯璁わ細璇锋眰 tools 鏁扮粍鍙惈鍐呯疆宸ュ叿锛坄sampler_turn.rs` `prepare_tool_definitions_inner` 鈫?`tool_definitions_builtins_only`锛屾敞閲?"tool search is always enabled"锛夛紝MCP 宸ュ叿璧?`search_tool`锛圔M25 绱㈠紩锛夆啋 `use_tool` 涓ゆ寮忥紱announcement 鏄彉鏇存椂澧為噺 `<system-reminder>`锛堟寚绾规寔涔呭寲 `announcement_state.json`锛宍MCP_REMINDER_MODE`=delta/full锛夛紝涓嶅仛鍏ㄩ噺 schema 甯搁┗ |
-| opencode primary 鑷畾涔?agent锛圱ab 鍒囨崲 build/plan锛?| 宸叉湁锛歛gent 瀹氫箟 `.grok/agents/*.md` / `~/.grok/agents/`锛堜綔鐢ㄥ煙鍚富浼氳瘽锛歮odel/tools/prompt body/skills锛夛紝`/config-agents` 璁鹃粯璁?+ 浼氳瘽涓垏鎹㈡縺娲伙紝鍚姩渚?`--agent-profile` / `GROK_AGENT` / `agent.name`锛沺ersonas 鏄?subagent 涓撳睘琛屼负鍙犲姞灞?|
-| 杈撳嚭椋庢牸鏋佺畝/璇︾粏锛坬wen `/output-style` 澶氶鏍奸€夋嫨鍣級 | 涓嶇収鎼紙鐢ㄦ埛鍐崇瓥锛氬彧鍋氭瀬绠€涓€绉嶏級銆傛瀬绠€涓?agent 涓婃父宸叉湁杞戒綋锛氬唴缃?`grok-build-concise`锛坄--agent-profile`/`agent.name`/`/config-agents` 鍙€夛紝`COMPACT_SYSTEM_PROMPT` + 绮剧畝宸ュ叿闆嗭級锛屼絾鎻愮ず璇嶆棤椋庢牸瑙勫垯 鈫?fork 娉ㄥ叆涓夋簮铻嶅悎瑙勫垯鑺傦紝宸插垪涓夋湡 P0 |
+| `/context` 上下文分解 | 已有（细分到 tool defs / skills / MCP 成本） |
+| `/goal` 持久目标 + token 预算 | 已有（`--budget` + 对抗验证） |
+| `/btw` 侧问浮层 | 已有（`/aside`，含 minimal 面板） |
+| 结构化提问工具 | 已有（内置 `ask_user_question`） |
+| LSP 诊断回喂 | 已有（repo 级 server + 插件 LSP + `lsp` 工具；本地已做合并去抖增强） |
+| subagent 编排 | 已有（personas + `send_subagent_message` + monitor/kill_task） |
+| worktree 隔离 | 已有（内置） |
+| 权限矩阵 / sandbox / headless / memory / hooks | 均有（hooks 含 `updatedInput` 改参、`updatedToolOutput` 替换、record 与 model 分离） |
+| 交互式后台进程 | 已有（background tasks + ptyctl） |
+| 通知 | 事件已有，缺开箱实现（已列三期 P1） |
+| MCP 懒加载（pi-mcp-adapter 月下载 94 万） | 已有且强制默认：请求 tools 数组只含内置工具（`sampler_turn.rs` `prepare_tool_definitions_inner` → `tool_definitions_builtins_only`，注释 "tool search is always enabled"），MCP 工具走 `search_tool`（BM25 索引）→ `use_tool` 两段式；announcement 是变更时增量 `<system-reminder>`（指纹持久化 `announcement_state.json`，`MCP_REMINDER_MODE`=delta/full），不做全量 schema 常驻 |
+| opencode primary 自定义 agent（Tab 切换 build/plan） | 已有：agent 定义 `.grok/agents/*.md` / `~/.grok/agents/`（作用域含主会话：model/tools/prompt body/skills），`/config-agents` 设默认 + 会话中切换激活，启动侧 `--agent-profile` / `GROK_AGENT` / `agent.name`；personas 是 subagent 专属行为叠加层 |
+| 输出风格极简/详细（qwen `/output-style` 多风格选择器） | 不照搬（用户决策：只做极简一种）。极简主 agent 上游已有载体：内置 `grok-build-concise`（`--agent-profile`/`agent.name`/`/config-agents` 可选，`COMPACT_SYSTEM_PROMPT` + 精简工具集），但提示词无风格规则 → fork 注入三源融合规则节，已列三期 P0 |
 
-## 鍥涙湡琛ヤ竵锛圱UI 鐣岄潰鏂囨鍙岃锛?
+## 四期补丁（TUI 界面文案双语）
 
-### xai-grok-pager锛堟枩鏉犲懡浠ゆ弿杩?鐢ㄦ硶涓嫳鍒囨崲锛岄粯璁や腑鏂囷級
-- `src/slash/i18n.rs`锛堟柊鏂囦欢锛夛細`Lang`锛圸h 榛樿 / En锛? 杩涚▼绾?`AtomicU8` 鍏ㄥ眬鐘舵€?
-  锛堥璇绘椂 `GROK_LANG=en` 鍙敼榛樿锛? `tr()`锛堣嫳鏂囧師鏂?鈫?涓枃璇戞枃鏌ヨ〃锛屾棤璇戞枃/鑻辨枃妯″紡
-  鍘熸牱閫忎紶锛? `translations()` 闈欐€佺炕璇戣〃锛堢害 90 缁勶細鍏ㄩ儴鍐呯疆鍛戒护 description/usage/
-  arg_placeholder銆乪ffort 绛夌骇鎻忚堪銆乿oice/minimal/fullscreen 鎵嬪啓鏂囨锛? `test_sync`
-  娴嬭瘯涓茶閿?
-- `src/slash/command.rs`锛歚slash_meta!` 瀹忕殑 `description` / `usage` / `arg_placeholder`
-  涓変釜鐢熸垚浣嶅寘涓€灞?`i18n::tr()`锛圠OCAL 娉ㄩ噴澶勶級锛涘叾浣欏瓧娈典笉鍔?
-- `src/slash/commands/voice.rs`銆乣screen_mode_switch.rs`锛氭墜鍐?`description()` 涓ゅ瀛楅潰閲?
-  杩?`tr()`锛沗effort_levels.rs` `effort_description()` 鍚勫垎鏀繃 `tr()`
-- `src/slash/commands/lang.rs`锛堟柊鍛戒护 `/lang`锛夛細鏃犲弬鏁板湪涓嫳闂村垏鎹紝`zh|en|涓枃|english`
-  鏄惧紡鎸囧畾锛屾湭鐭ュ弬鏁版姤閿欙紱鍒囨崲鍚庤繑鍥炵‘璁ゆ秷鎭€傚凡娉ㄥ唽杩?`commands/mod.rs` `builtin_commands()`
-- `src/slash/registry.rs`锛氭柊澧?`pub refresh_trigger_text()`锛堣浆鍙戠鏈?`rebuild_triggers()`锛?
-- `src/app/dispatch/prompt.rs` + `dashboard.rs`锛氫袱澶勫懡浠ゅ垎鍙戠偣鍦ㄦ墽琛屽墠璁板綍璇█銆佹墽琛屽悗
-  鑻ヨ瑷€鍙樺寲鍒欏鍚勮嚜 slash_controller 鐨?registry 璋?`refresh_trigger_text()`锛?
-  浣挎枩鏉犺彍鍗?鍛戒护闈㈡澘/ghost 琛ュ叏鐨勬弿杩版枃鏈珛鍗虫崲璇█
-- 杈圭晫锛欰CP/鎶€鑳界瓑杩愯鏃舵枃妗堜笉缈昏瘧锛堣〃澶栭€忎紶锛夛紱璇█涓嶆寔涔呭寲鍒?config.toml锛?
-  浼氳瘽鍐呮湁鏁堬紝`GROK_LANG=en` 鍙浐瀹氳嫳鏂?
-- 娴嬭瘯璇箟锛歚cfg!(test)` 鏋勫缓涓?tr() 榛樿鑻辨枃锛堜笂娓告棦鏈夋祴璇曟寜鑻辨枃鏂囨鏂█锛夛紝
-  鐢熶骇榛樿涓枃锛沗xai-grok-shell` `slash_commands.rs` `PAGER_COMMAND_KEYS` 杩藉姞
-  `"lang"` 鍗犱綅锛堥槻鎶€鑳藉悓鍚嶉伄钄斤紝娴嬭瘯 `pager_builtin_triggers_are_reserved_in_shell` 寮哄埗锛?
+### xai-grok-pager（斜杠命令描述/用法中英切换，默认中文）
+- `src/slash/i18n.rs`（新文件）：`Lang`（Zh 默认 / En）+ 进程级 `AtomicU8` 全局状态
+  （首读时 `GROK_LANG=en` 可改默认）+ `tr()`（英文原文 → 中文译文查表，无译文/英文模式
+  原样透传）+ `translations()` 静态翻译表（约 90 组：全部内置命令 description/usage/
+  arg_placeholder、effort 等级描述、voice/minimal/fullscreen 手写文案）+ `test_sync`
+  测试串行锁
+- 2026-09-19 语义扩展（test_context）：`cfg!(test)` 英文旁路升级为 `test_context()` =
+  `cfg!(test) || env CARGO 存在`——集成测试把 pager lib 当普通依赖链接（无 cfg(test)），
+  但 cargo 跑测试时子进程带 `CARGO` 环境变量（生产二进制没有），借此让上游集成测试
+  （settings_e2e 等英文断言）默认英文，否则撞中文渲染。副作用：`cargo run` 开发态
+  也默认英文；显式 `GROK_LANG=zh` 永远优先。三处判定位：`seed_lang`/`tr`/`tr_str`
+- `src/slash/command.rs`：`slash_meta!` 宏的 `description` / `usage` / `arg_placeholder`
+  三个生成位包一层 `i18n::tr()`（LOCAL 注释处）；其余字段不动
+- `src/slash/commands/voice.rs`、`screen_mode_switch.rs`：手写 `description()` 两处字面量
+  过 `tr()`；`effort_levels.rs` `effort_description()` 各分支过 `tr()`
+- `src/slash/commands/lang.rs`（新命令 `/lang`）：无参数在中英间切换，`zh|en|中文|english`
+  显式指定，未知参数报错；切换后返回确认消息。已注册进 `commands/mod.rs` `builtin_commands()`
+- `src/slash/registry.rs`：新增 `pub refresh_trigger_text()`（转发私有 `rebuild_triggers()`）
+- `src/app/dispatch/prompt.rs` + `dashboard.rs`：两处命令分发点在执行前记录语言、执行后
+  若语言变化则对各自 slash_controller 的 registry 调 `refresh_trigger_text()`，
+  使斜杠菜单/命令面板/ghost 补全的描述文本立即换语言
+- 边界：ACP/技能等运行时文案不翻译（表外透传）；语言不持久化到 config.toml，
+  会话内有效，`GROK_LANG=en` 可固定英文
+- 测试语义：`cfg!(test)` 构建下 tr() 默认英文（上游既有测试按英文文案断言），
+  生产默认中文；`xai-grok-shell` `slash_commands.rs` `PAGER_COMMAND_KEYS` 追加
+  `"lang"` 占位（防技能同名遮蔽，测试 `pager_builtin_triggers_are_reserved_in_shell` 强制）
 
-## 浜旀湡琛ヤ竵锛?026-09-17锛氱姸鎬佽鏁版嵁淇 + i18n 瑕嗙洊鎵╁睍 + 鑷姩鏇存柊榛樿鍏筹級
+## 五期补丁（2026-09-17：状态行数据修复 + i18n 覆盖扩展 + 自动更新默认关）
 
-### xai-grok-shell锛堢姸鎬佽 in 0 out 0 淇锛?
-- `src/session/acp_session_impl/status_line.rs`锛氱┖璐︽湰锛坄model_calls == 0`锛夋姇褰卞嚭鐨?
-  `UsageTotals` 鍏ㄩ浂锛宍session_input_tokens = Some(0)` 浣?tokens 娈典粠浼氳瘽涓€寮€濮嬪氨鐢诲嚭
-  `in 0 out 0`锛堜笌"鏁版嵁瀛樺湪鎵嶇粯鍒?鐨勮璁＄浉鎮栵級銆備慨澶嶏細`build_status_context` 閲岀粰
-  `build_context_window` 浼?`window_totals = totals.filter(|t| t.model_calls > 0)`锛?
-  鏃犺皟鐢ㄦ椂 token 绐楀彛鏁翠綋缂哄腑锛岃鍙敾 model锛沗api_calls`/`cost` 浠嶇敤鍘熷 totals
-  锛堝墠鑰呰嚜甯?`model_calls > 0 || failed > 0` 杩囨护锛?
-- `src/session/acp_session_impl/sampler_turn.rs`锛歚record_response_token_usage` 璁拌处鍚?
-  杩藉姞 `emit_status_snapshot_detached()`锛圠OCAL锛夛紝姣忔妯″瀷鍝嶅簲绔嬪嵆鍒锋柊鐘舵€佽锛?
-  涓嶅啀鍙瓑 turn-end 蹇収
+### xai-grok-shell（状态行 in 0 out 0 修复）
+- `src/session/acp_session_impl/status_line.rs`：空账本（`model_calls == 0`）投影出的
+  `UsageTotals` 全零，`session_input_tokens = Some(0)` 使 tokens 段从会话一开始就画出
+  `in 0 out 0`（与"数据存在才绘制"的设计相悖）。修复：`build_status_context` 里给
+  `build_context_window` 传 `window_totals = totals.filter(|t| t.model_calls > 0)`，
+  无调用时 token 窗口整体缺席，行只画 model；`api_calls`/`cost` 仍用原始 totals
+  （前者自带 `model_calls > 0 || failed > 0` 过滤）
+- `src/session/acp_session_impl/sampler_turn.rs`：`record_response_token_usage` 记账后
+  追加 `emit_status_snapshot_detached()`（LOCAL），每次模型响应立即刷新状态行，
+  不再只等 turn-end 快照
 
-### xai-grok-pager锛坕18n 瑕嗙洊鎵╁睍锛氬揩鎹烽敭鏍?+ shell ACP 鍛戒护锛?
-- `src/slash/i18n.rs`锛氭柊澧?`tr_str(&str) -> String`锛堝姩鎬佸瓧绗︿覆鏌ヨ〃锛涜嫳鏂囨ā寮?琛ㄥ
-  鍘熸牱杩斿洖锛夛紱缈昏瘧琛ㄨ拷鍔狅細蹇嵎閿彁绀烘爮鍏ㄩ儴鏍囩锛坰end/cancel/copy plan 绛夌害 75 缁勶紝
-  娓叉煋鏃舵煡琛級+ "press again to" 鍓嶇紑 + shell 鍐呯疆鍛戒护鎻忚堪/鍗犱綅绗︼紙/memory /flush
-  /dream /context /hooks-* /session-info /deep-research /goal /plugins 绛夌害 30 缁勶級
-- `src/views/shortcuts_bar.rs`锛歜ar 娓叉煋澶勬爣绛句笌 "press again to {label}" 鍓嶇紑缁?
-  `tr_str`/`tr` 鏌ヨ〃锛屽搴︽寜璇戞枃璁?
-- `src/slash/acp_command.rs`锛歚AcpSlashCommand::from` 鏋勯€犳椂瀵?ACP 涓嬪彂鐨?
-  description / arg_hint 杩?`tr_str`锛堣鐩?shell 绔懡浠ゅ湪鏂滄潬鑿滃崟閲岀殑涓枃鏄剧ず锛?
+### xai-grok-pager（i18n 覆盖扩展：快捷键栏 + shell ACP 命令）
+- `src/slash/i18n.rs`：新增 `tr_str(&str) -> String`（动态字符串查表；英文模式/表外
+  原样返回）；翻译表追加：快捷键提示栏全部标签（send/cancel/copy plan 等约 75 组，
+  渲染时查表）+ "press again to" 前缀 + shell 内置命令描述/占位符（/memory /flush
+  /dream /context /hooks-* /session-info /deep-research /goal /plugins 等约 30 组）
+- `src/views/shortcuts_bar.rs`：bar 渲染处标签与 "press again to {label}" 前缀经
+  `tr_str`/`tr` 查表，宽度按译文计
+- `src/slash/acp_command.rs`：`AcpSlashCommand::from` 构造时对 ACP 下发的
+  description / arg_hint 过 `tr_str`（覆盖 shell 端命令在斜杠菜单里的中文显示）
 
-### xai-grok-update + xai-grok-pager-bin锛堣嚜鍔ㄦ洿鏂伴粯璁ゅ叧闂級
-- 鑳屾櫙锛氬畼鏂瑰畨瑁呭櫒鑷姩鍗囩骇浼氭妸 fork 鏋勫缓瑕嗙洊涓哄畼鏂逛簩杩涘埗锛?026-09-17 瀹炶瘉锛氭湰鍦?
-  fork 1.0.29 琚鐩栦负瀹樻柟 1.0.34锛?
-- `src/auto_update.rs`锛歚check_update_background` / `run_update_if_available` 鐨?
-  auto_update 闂ㄤ粠 `== Some(false)` 鎷︽埅鏀逛负 `!= Some(true)` 鎷︽埅锛圢one 榛樿鍏筹級锛?
-  鍒犻櫎棣栧啓 `Some(true)` 鐨勬寔涔呭寲锛沗UserCommand` 瑙﹀彂锛堟墜鍔?`grok update`锛変笉鍙楅棬闄?
-- `xai-grok-pager-bin/src/main.rs`锛歭eader 姣忓皬鏃?converge 鐨?auto_update 妫€鏌ュ悓姝?
-  鏀逛负 `!= Some(true)` 鎷︽埅
-- 鎭㈠鑷姩鏇存柊锛歝onfig.toml 鍐?`[cli] auto_update = true`
+### xai-grok-update + xai-grok-pager-bin（自动更新默认关闭）
+- 背景：官方安装器自动升级会把 fork 构建覆盖为官方二进制（2026-09-17 实证：本地
+  fork 1.0.29 被覆盖为官方 1.0.34）
+- `src/auto_update.rs`：`check_update_background` / `run_update_if_available` 的
+  auto_update 门从 `== Some(false)` 拦截改为 `!= Some(true)` 拦截（None 默认关）；
+  删除首写 `Some(true)` 的持久化；`UserCommand` 触发（手动 `grok update`）不受门限
+- `xai-grok-pager-bin/src/main.rs`：leader 每小时 converge 的 auto_update 检查同步
+  改为 `!= Some(true)` 拦截
+- 恢复自动更新：config.toml 写 `[cli] auto_update = true`
 
-## 鍏湡琛ヤ竵锛堝疄楠屾€у伐鍏疯緭鍑哄帇缂╋級
+## 六期补丁（实验性工具输出压缩）
 
-> 榛樿鍏筹紱`[tool_output_compression] enabled = true` 鎵嶆敼琛屼负銆傛湭寮曞叆
-> `only-cc-lite` git 渚濊禆锛岀瓥鐣ユ寜 headroom 绠€鍖栵細json / logs / search / diff /
-> generic head+tail銆俙exit_code`/`stderr` 涓?bash `exit: N` 澶存棤鎹熴€?
-> 浼氳瘽鍚姩鏃舵妸閰嶇疆閽夎繘 SharedResources锛涘凡鍐欏叆瀵硅瘽鐨?tool_result 姘镐笉鍥炲啓锛?
-> 鎻愮ず缂撳瓨鍓嶇紑鍦ㄦ暣娈典細璇濆唴瀛楄妭绋冲畾銆傛敼閰嶇疆鍙奖鍝嶄笅涓€涓柊浼氳瘽銆?
+> 默认关；`[tool_output_compression] enabled = true` 才改行为。未引入
+> `only-cc-lite` git 依赖，策略按 headroom 简化：json / logs / search / diff /
+> generic head+tail。`exit_code`/`stderr` 与 bash `exit: N` 头无损。
+> 会话启动时把配置钉进 SharedResources；已写入对话的 tool_result 永不回写，
+> 提示缓存前缀在整段会话内字节稳定。改配置只影响下一个新会话。
 
-### 浜屾湡鏂瑰悜瀹氱锛?026-09-17锛屾憳瑕侊紱鍏ㄦ枃瑙?`tool-output-compression-plan.md`銆屼簩鏈熸柟鍚戙€嶏級
+### 二期方向定稿（2026-09-17，摘要；全文见 `tool-output-compression-plan.md`「二期方向」）
 
-鐩爣鍗囩骇涓?*浣庢崯/鏃犳崯**锛岀粍鍚堜负涓夌骇鐎戝竷锛氭棤鎹熷眰锛堥噸澶嶈鎶樺彔 xN銆丣SON 绮剧‘鍘婚噸銆?
-search 鏍囬鍖栦繚鍏ㄨ銆乨iff index 鍓ョ銆丄NSI 鍓ョ锛涘叏閮ㄥ彲閫?+ 寰€杩旇嚜鏍￠獙澶辫触閫€鍥?
-鍘熸枃锛夆啋 浣庢崯灞傦紙鏃ュ織閲嶈鎬ф墦鍒嗛檺棰勭畻銆丣SON 鑶濈偣 adaptive-k锛夆啋 鏈夋崯鍏滃簳
-锛坓eneric head/tail锛屾柊澧?`max_lossy_ratio = 0.25` 涓婇檺锛屾埅鏂繀鍐?CCR marker锛夈€?
+目标升级为**低损/无损**，组合为三级瀑布：无损层（重复行折叠 xN、JSON 精确去重、
+search 标题化保全行、diff index 剥离、ANSI 剥离；全部可逆 + 往返自校验失败退回
+原文）→ 低损层（日志重要性打分限预算、JSON 膝点 adaptive-k）→ 有损兜底
+（generic head/tail，新增 `max_lossy_ratio = 0.25` 上限，截断必写 CCR marker）。
 
-浜嬪疄渚濇嵁锛堟湰鍦版秷铻?`mech_ablation_report` 娴嬭瘯 + 鍥涘绀惧尯椋庤瘎锛夛細
+事实依据（本地消融 `mech_ablation_report` 测试 + 四家社区风评）：
 
-- 鏈湴娑堣瀺锛氶噸澶嶅瀷 JSON 涓€鏈熷熀绾跨渷 92.7% 浣?*涓腑闂村敮涓€椤?*锛岀簿纭幓閲?91.3% 闆朵涪澶憋紱
-  鏃ュ織妯℃澘鎶樺彔鐪?93.1% vs 鍩虹嚎 78.8% 涓斿叧閿鍏ㄤ繚鐣欙紱search 姣忔枃浠?3 鏉′笂闄?
-  涓㈠熬閮ㄥ懡涓紙涓€鏈熼殣钘忔崯澶憋級锛涘敮涓€鍨嬪唴瀹?浣庢崯=浣庣渷"鏄墿鐞嗘瀬闄愶紙鍏ㄤ繚鐣欎粎鐪?23-25%锛夈€?
-- headroom 涓俊鎭姇璇夛細#3545 search 琛岀啍鎺?鈫?琛屽彿鈫斿唴瀹瑰亣閰嶅锛?3580 浠ｇ爜琚?ML
-  閫氶亾鍒犺瘝锛?3590 灏忕粨鏋勫寲杈撳嚭鍘嬫畫锛?3625 鎴柇鏈啓 marker锛?3544/#3560 鏈?marker
-  鏃?retrieve锛?3587 1886 璇锋眰闆舵妫€绱紙marker 鎴愭湰鐧戒粯锛夈€傛棤鎹熸瑙ｅ湪瀹冪殑
-  `lossless_compaction.py`锛堝彲閫?+ 鑷牎楠岋級銆?
-- 瀹炴祴缁忔祹璐︼細閲嶅啓鍘嗗彶 鈫?cache bust 123 vs 14锛屽噣鐪?鈮?锛坆randonbarker.me 瀵圭収
-  瀹為獙锛夛紱headroom 鑷姤 savings ~1.9x 楂樹及锛?stats 鏁板瓧鍙綋鐩稿鎸囨爣锛夛紱
-  tsheadroom 淇濆畧妗ｅ疄娴嬩粎 ~40%锛坴s 瀹ｄ紶 60-95%锛夈€?
-- DCP锛堟ā鍨嬩富鍔ㄥ帇缂╋級涓嶉噰鐢細鎽樿鑶ㄨ儉鍙嶇儳 738k token锛?573锛夈€侀潤榛樹涪鏁版嵁锛?534锛夈€?
-  鍘熷湴鏇挎崲鐮?cache锛?604锛夈€佷繚鎶ょ櫧鍚嶅崟 Windows 璺緞鍒嗛殧绗︿粠鏈尮閰嶏紙#592锛夈€?
-- context-mode锛堜簨鍓嶆矙绠憋級涓嶉噰鐢細MCP 鐩插尯 + FTS5 鍙洖渚濊禆妯″瀷鍐欏鑴氭湰 +
-  evict 鎺掑簭 bug锛涙湰 fork 璇ュ満鏅敱 rtk hook 瑕嗙洊銆?
+- 本地消融：重复型 JSON 一期基线省 92.7% 但**丢中间唯一项**，精确去重 91.3% 零丢失；
+  日志模板折叠省 93.1% vs 基线 78.8% 且关键行全保留；search 每文件 3 条上限
+  丢尾部命中（一期隐藏损失）；唯一型内容"低损=低省"是物理极限（全保留仅省 23-25%）。
+- headroom 丢信息投诉：#3545 search 行熔接 → 行号↔内容假配对；#3580 代码被 ML
+  通道删词；#3590 小结构化输出压残；#3625 截断未写 marker；#3544/#3560 有 marker
+  无 retrieve；#3587 1886 请求零次检索（marker 成本白付）。无损正解在它的
+  `lossless_compaction.py`（可逆 + 自校验）。
+- 实测经济账：重写历史 → cache bust 123 vs 14，净省 ≈0（brandonbarker.me 对照
+  实验）；headroom 自报 savings ~1.9x 高估（/stats 数字只当相对指标）；
+  tsheadroom 保守档实测仅 ~40%（vs 宣传 60-95%）。
+- DCP（模型主动压缩）不采用：摘要膨胀反烧 738k token（#573）、静默丢数据（#534）、
+  原地替换破 cache（#604）、保护白名单 Windows 路径分隔符从未匹配（#592）。
+- context-mode（事前沙箱）不采用：MCP 盲区 + FTS5 召回依赖模型写对脚本 +
+  evict 排序 bug；本 fork 该场景由 rtk hook 覆盖。
 
 ### xai-grok-tools
-- 鏂版ā鍧?`implementations/output_compression/`锛氭娴嬨€佸帇缂┿€丆CR 鏂囦欢搴撱€?
-  `expand_output` 宸ュ叿銆佽繘绋嬬骇 ledger
-- `registry/types.rs` `finalize_output`锛歱rompt 鏂囨湰鍘嬬缉锛堟彁閱掍箣鍓嶏級
-- `ToolRegistryBuilder::new` 娉ㄥ唽 `expand_output`锛坉ispatch锛夛紱骞垮憡闈㈢敱
-  AgentBuilder 鍦?CCR 寮€鍚椂娉ㄥ叆
+- 新模块 `implementations/output_compression/`：检测、压缩、CCR 文件库、
+  `expand_output` 工具、进程级 ledger
+- `registry/types.rs` `finalize_output`：prompt 文本压缩（提醒之前）
+- `ToolRegistryBuilder::new` 注册 `expand_output`（dispatch）；广告面由
+  AgentBuilder 在 CCR 开启时注入
 
 ### xai-grok-shell
-- `Config.tool_output_compression`锛坰erde default锛宻truct 灏鹃儴锛?
-- `resolve_runtime_fields` 璋冪敤 `set_runtime`
+- `Config.tool_output_compression`（serde default，struct 尾部）
+- `resolve_runtime_fields` 调用 `set_runtime`
 
 ### xai-grok-agent
-- `builder.rs`锛欳CR 寮€鍚椂鎶?`expand_output` 娉ㄥ叆 toolset
+- `builder.rs`：CCR 开启时把 `expand_output` 注入 toolset
 
 ### xai-grok-pager
-- `/stats` 鏂滄潬鍛戒护 + `grok stats` 娈碉細姝ｅ悜 saved tokens/%锛岃礋鍚?expanded +
-  retrieve 鍥炵亴 tokens锛孋CR 棰濆 I/O ops/ms
-- `docs/user-guide/29-local-enhancements.md` 閰嶇疆璇存槑
+- `/stats` 斜杠命令 + `grok stats` 段：正向 saved tokens/%，负向 expanded +
+  retrieve 回灌 tokens，CCR 额外 I/O ops/ms
+- `docs/user-guide/29-local-enhancements.md` 配置说明
 
-## 涓冩湡琛ヤ竵锛?026-09-18锛氱晫闈㈡枃妗堜腑鏂囧寲 P0 浜や簰蹇呯粡锛?
+## 七期补丁（2026-09-18：界面文案中文化 P0 交互必经）
 
-> 鏂规瑙?`docs-local/ui-i18n-plan.md`锛圥0 = 姣忎釜浼氳瘽閮芥挒涓婄殑浜や簰璺緞锛? 涓鍥撅級銆?
-> 缈昏瘧琛?280 鈫?449 缁勶紱鏂藉伐瑙勭害涓庢湳璇〃浠ユ柟妗堟枃妗ｄ负鍑嗭紙鐘舵€佸瓨鑻辨枃閿覆鏌撳嚭鍙ｇ炕璇戙€?
-> 姣旇緝/鍖归厤閿笉鍖呯炕璇戙€佹祴璇曟瀯寤烘煡琛ㄦ梺璺笉鍙橈級銆?
+> 方案见 `docs-local/ui-i18n-plan.md`（P0 = 每个会话都撞上的交互路径，8 个视图）。
+> 翻译表 280 → 449 组；施工规约与术语表以方案文档为准（状态存英文键渲染出口翻译、
+> 比较/匹配键不包翻译、测试构建查表旁路不变）。
 
-### xai-grok-pager锛圥0锛氬懡浠ら潰鏉?鍚姩灞?闅愮妯箙/浼氳瘽閫夋嫨/寮曞閲囬泦/鏉冮檺路鎻愰棶路璁″垝瀹℃壒锛?
-- `src/slash/i18n.rs`锛氱炕璇戣〃杩藉姞 P0 娈?169 缁勶紙鍛戒护闈㈡澘鏉＄洰鍚嶄笌鎸夐挳銆佸惎鍔ㄥ睆淇′换纭/
-  璁よ瘉娴佺▼/鑿滃崟/鐩稿鏃堕棿璇嶆棌銆侀殣绉佹í骞呭垎娈垫枃妗堛€佷細璇濋€夋嫨杩囨护寰界珷涓庡姞杞藉ご銆佸紩瀵奸噰闆?
-  鏍囩涓?URL 鏍￠獙閿欒銆佹潈闄愭ā寮忕紪杈戦瑙堜笌椤佃剼銆佹彁闂崰浣嶇銆佽鍒掑鎵圭姸鎬佹爣绛句笌绌鸿鍒?
-  鍗犱綅娈电瓑锛?
-- `src/views/modal.rs`锛?6 鏉″懡浠ら潰鏉挎潯鐩湪 `default_palette_entries` 鏋勯€犲 tr锛堟覆鏌?
-  鍑哄彛鍦?app/modals.rs锛屽睘鍚庣画鎵规锛涘凡鏍稿疄 label 鏃犳瘮杈冪偣锛屼腑鏂囨ā寮忎笅鎸?shortcut 鍒?
-  浠嶅彲鑻辨枃妫€绱級锛涙寜閽?label()/闈㈡澘鏍囬闂彞/reset 纭鎷嗙墖娈?docs 閫夋嫨鍣ㄤ笌鏌ョ湅鍣ㄩ〉鑴?
-  鍥句緥绛夌害 14 缁?
-- `src/views/welcome/mod.rs`锛歵rust 纭閫愯鎴愰敭銆佽璇佹祦绋嬪父閲忥紙AUTH_HEADER 绛夋覆鏌撳
-  鏌ヨ〃锛夈€佽彍鍗曢」銆乊es/No 纭銆乬ate 灞忋€佹洿鏂伴€氱煡妯℃澘銆佺浉瀵规椂闂存棌锛?just now" 淇濈暀
-  鑻辨枃閿紝goal_detail.rs 鐨?`ago == "just now"` 姣旇緝涓嶅彈褰卞搷锛夛紱3 澶勫懡涓煩褰?鎹㈣
-  浼扮畻 `.len()` 鈫?`.width()`锛堟祴璇曟瀯寤鸿蛋鑻辨枃鏃佽矾锛孉SCII 瀹藉害涓嶅彉锛屾柇瑷€涓嶅彈褰卞搷锛?
-- `src/views/privacy_banner.rs`锛氭爣棰?璇存槑娈垫暣娈垫垚閿紱LEGAL 閾炬帴閫愭鎴愰敭淇濆垎娈垫暟锛?
-  鐑尯瀹藉害鏀规寜璇戞枃 `shown.width()` 璁★紙涓夊彉浣撲腑鏂囨覆鏌撳搴﹀潎 鈮?鑻辨枃锛岄€夋。涓嶅彉閲忎繚鎸侊級
-- `src/views/session_picker.rs`锛歚SourceFilter::label()` 鍏釜杩囨护寰界珷銆?(no prompt)"/
-  "(no summary)"銆佸姞杞藉ご锛坰pinner 鏀?`"{} {}"` 鎷兼帴锛岃嫳鏂囪緭鍑洪€愬瓧涓嶅彉锛夈€乭idden 澶栭儴
-  浼氳瘽璁℃暟妯℃澘鏁撮敭锛沗session_picker_surface.rs` 闆舵敼鍔紙"Open session" 鏍囬缁?
-  modal_window 娓叉煋鍑哄彛 tr_str 鍛戒腑锛屽浘渚?nav/select/close/search 閿凡鍦ㄨ〃锛?
-- `src/views/elicitation_view/{render,state}.rs`锛氭爣绛?鎸夐挳/绛夊緟/婊氬姩鏍囪 render 澶?
-  tr锛? 涓爣棰樻ā鏉夸笌 4 鏉?URL 鏍￠獙閿欒鏋勯€犲 tr 鍚?replace 鍗犱綅锛堥敭鍚?{} 鍗犱綅绗︼級
-- `src/views/permission_view.rs` + `question_view.rs` + `plan_approval_view.rs`锛氭ā寮?
-  缂栬緫 5 鎬侀瑙堣/椤佃剼鍔ㄤ綔璇?`"all tools from {}"` 鎷嗙墖娈碉紱鎻愰棶鍗犱綅绗︿笌鎴柇鎻愮ず
-  锛坬uestion_view:834 "Other" 鏄?ACP 绾夸笂鍗忚涓诧紝涓嶈瘧锛涘彲瑙佽鏍囩鍦?dashboard/peek.rs
-  灞?P3锛夛紱`plan_approval_status_label` 绾睍绀哄嚭鍙?tr
-- `src/app/agent_view/plan.rs`锛氱┖璁″垝鍗犱綅娈垫覆鏌撳嚭鍙?`tr_str(EMPTY_PLAN_PLACEHOLDER)`
-  锛堝父閲忔湰浣撲繚鎸佽嫳鏂囷紝trim 鍒ょ┖閫昏緫涓嶅姩锛?
-- 閬楃暀锛堝悗缁壒娆″鐞嗭級锛歴ession_picker 灞曞紑鍗″瓧娈垫爣绛?ID/CWD/Created/鈥?鍥?picker.rs
-  鐢?`{:<12}` 瀛楃琛ラ綈 + `.len()` 甯冨眬鏆備笉璇戯紝闇€鍏堟妸璇ュ鏀?unicode_width锛涘懡浠ら潰鏉?
-  娓叉煋鍑哄彛 app/modals.rs銆乸eek.rs "Other" 琛屾爣绛惧湪 P3
+### xai-grok-pager（P0：命令面板/启动屏/隐私横幅/会话选择/引导采集/权限·提问·计划审批）
+- `src/slash/i18n.rs`：翻译表追加 P0 段 169 组（命令面板条目名与按钮、启动屏信任确认/
+  认证流程/菜单/相对时间词族、隐私横幅分段文案、会话选择过滤徽章与加载头、引导采集
+  标签与 URL 校验错误、权限模式编辑预览与页脚、提问占位符、计划审批状态标签与空计划
+  占位段等）
+- `src/views/modal.rs`：36 条命令面板条目在 `default_palette_entries` 构造处 tr（渲染
+  出口在 app/modals.rs，属后续批次；已核实 label 无比较点，中文模式下按 shortcut 列
+  仍可英文检索）；按钮 label()/面板标题问句/reset 确认拆片段/docs 选择器与查看器页脚
+  图例等约 14 组
+- `src/views/welcome/mod.rs`：trust 确认逐行成键、认证流程常量（AUTH_HEADER 等渲染处
+  查表）、菜单项、Yes/No 确认、gate 屏、更新通知模板、相对时间族（"just now" 保留
+  英文键，goal_detail.rs 的 `ago == "just now"` 比较不受影响）；3 处命中矩形/换行
+  估算 `.len()` → `.width()`（测试构建走英文旁路，ASCII 宽度不变，断言不受影响）
+- `src/views/privacy_banner.rs`：标题/说明段整段成键；LEGAL 链接逐段成键保分段数，
+  热区宽度改按译文 `shown.width()` 计（三变体中文渲染宽度均 ≤ 英文，选档不变量保持）
+- `src/views/session_picker.rs`：`SourceFilter::label()` 六个过滤徽章、"(no prompt)"/
+  "(no summary)"、加载头（spinner 改 `"{} {}"` 拼接，英文输出逐字不变）、hidden 外部
+  会话计数模板整键；`session_picker_surface.rs` 零改动（"Open session" 标题经
+  modal_window 渲染出口 tr_str 命中，图例 nav/select/close/search 键已在表）
+- `src/views/elicitation_view/{render,state}.rs`：标签/按钮/等待/滚动标记 render 处
+  tr；3 个标题模板与 4 条 URL 校验错误构造处 tr 后 replace 占位（键含 {} 占位符）
+- `src/views/permission_view.rs` + `question_view.rs` + `plan_approval_view.rs`：模式
+  编辑 5 态预览行/页脚动作词/`"all tools from {}"` 拆片段；提问占位符与截断提示
+  （question_view:834 "Other" 是 ACP 线上协议串，不译；可见行标签在 dashboard/peek.rs
+  属 P3）；`plan_approval_status_label` 纯展示出口 tr
+- `src/app/agent_view/plan.rs`：空计划占位段渲染出口 `tr_str(EMPTY_PLAN_PLACEHOLDER)`
+  （常量本体保持英文，trim 判空逻辑不动）
+- 遗留（后续批次处理）：session_picker 展开卡字段标签 ID/CWD/Created/… 因 picker.rs
+  用 `{:<12}` 字符补齐 + `.len()` 布局暂不译，需先把该处改 unicode_width；命令面板
+  渲染出口 app/modals.rs、peek.rs "Other" 行标签在 P3
 
-## 鍏湡琛ヤ竵锛?026-09-18锛歳elease 鏋勫缓鍛婅娓呯悊锛?
+## 八期补丁（2026-09-18：release 构建告警清理）
 
-> v1.0.31 win/linux release 鏋勫缓鏃ュ織涓殑 rustc 鍛婅娓呴浂锛屾棤琛屼负鍙樻洿锛涗笂娓稿悓姝ュ啿鎺夊悗鎸夋湰鏉￠噸鏀俱€?
+> v1.0.31 win/linux release 构建日志中的 rustc 告警清零，无行为变更；上游同步冲掉后按本条重放。
 
 ### xai-grok-shared
-- `src/clipboard.rs` `get_text`/`get_image`锛歚arboard_error` 鐢?鍏堝垵濮嬪寲 None 鍐?match 璧嬪€?
-  鏀逛负鎸?match 鑷傜洿鎺ヤ骇鍑轰笉鍙彉缁戝畾锛圵indows 涓?Ok(None) 鎻愬墠杩斿洖瀵艰嚧鍒濆鍖栧€兼案涓嶈璇伙紝
-  `unused_assignments` 鍛婅 脳2锛夛紱閿欒鍦ㄥ熬閮ㄧ殑 `if let Some(error)` 缁熶竴涓婃姏锛岃涔変笉鍙?
+- `src/clipboard.rs` `get_text`/`get_image`：`arboard_error` 由"先初始化 None 再 match 赋值"
+  改为按 match 臂直接产出不可变绑定（Windows 下 Ok(None) 提前返回导致初始化值永不被读，
+  `unused_assignments` 告警 ×2）；错误在尾部的 `if let Some(error)` 统一上抛，语义不变
 
 ### xai-grok-pager-render
-- `src/terminal/probe.rs`锛歚use std::time::Duration` 鍔?`#[cfg(unix)]`锛堜粎 unix 闂ㄦ帶鐨?
-  `LATE_REPLY_GRACE`/`read_tty_reply` 浣跨敤锛學indows 渚?unused import锛?
+- `src/terminal/probe.rs`：`use std::time::Duration` 加 `#[cfg(unix)]`（仅 unix 门控的
+  `LATE_REPLY_GRACE`/`read_tty_reply` 使用，Windows 侧 unused import）
 
 ### xai-grok-hooks
-- `src/runner/mod.rs`锛歚gate_outcome`锛堟枃妗ｆ敞鏄?legacy test surface锛夊姞 `#[cfg(test)]`锛?
-  release 鏋勫缓涓嶅啀缂栬瘧锛坲nused fn 鍛婅锛?
-- `src/runner/command.rs`锛歚gate_outcome` 瀵煎叆鎷嗗垎涓?`#[cfg(test)] use super::gate_outcome;`
-- `src/runner/command.rs` 娴嬭瘯妯″潡锛歚make_scoped_ctx` 鍔?`#[cfg(unix)]`锛堜粎 unix 闂ㄦ帶鐨?
-  杩涚▼缁勬祴璇曚娇鐢紱Windows 娴嬭瘯鏋勫缓 dead_code 鍛婅锛屾瀯寤烘棩蹇椾笉鏄剧ず浣?`--all-targets` 鍙锛?
+- `src/runner/mod.rs`：`gate_outcome`（文档注明 legacy test surface）加 `#[cfg(test)]`，
+  release 构建不再编译（unused fn 告警）
+- `src/runner/command.rs`：`gate_outcome` 导入拆分为 `#[cfg(test)] use super::gate_outcome;`
+- `src/runner/command.rs` 测试模块：`make_scoped_ctx` 加 `#[cfg(unix)]`（仅 unix 门控的
+  进程组测试使用；Windows 测试构建 dead_code 告警，构建日志不显示但 `--all-targets` 可见）
 
-## 涔濇湡琛ヤ竵锛?026-09-18锛氱晫闈㈡枃妗堜腑鏂囧寲 P1 甯哥敤寮圭獥涓庡府鍔╋級
+## Windows 测试环境族：分级屏蔽策略（2026-09-19 定稿；体系全貌见 docs-local/WIN-TEST-GATE.md）
 
-> 鏂规瑙?`docs-local/ui-i18n-plan.md`锛圥1 = 甯哥敤寮圭獥涓庡府鍔╋紝5 涓ā鍧楋級銆?
-> 缈昏瘧琛?449 鈫?917 缁勶紱鏂藉伐瑙勭害涓庢湳璇〃浠ユ柟妗堟枃妗ｄ负鍑嗐€?
+> 本表 T0–T3 是溢出族的处理细则，已并入 WIN-TEST-GATE 分级体系（T1→L1、T2→L3）；
+> 入口门控/静态扫描/抽样分诊的完整流水线、白名单晋升与 WSL 配方以 WIN-TEST-GATE.md 为准。
+> 背景：上游基线是 Linux CI；本机 Windows 的测试线程默认栈仅 1MB（Linux 8MB），
+> 上游深结构测试（subagent wake 族等）按 `STATUS_STACK_OVERFLOW`（0xc00000fd）
+> 成族崩溃。根因是环境差异，不是产品 bug——按本表分级处理，禁止逐个排查。
 
-### xai-grok-pager锛圥1锛氳缃脊绐?蹇嵎閿€熸煡琛?鐢ㄩ噺寮圭獥/MCP 寮圭獥/鏁欑▼锛?
-- `src/slash/i18n.rs`锛氱炕璇戣〃杩藉姞 P1 娈?430 缁勶紝鍒嗚妭涓庝唬鐮佹敞閲婁竴涓€瀵瑰簲锛?
-  settings 瀛楅潰閲?椤佃剼 rest 閿?鍒嗙粍鏍囬銆乺egistry meta.label+description銆佹灇涓?
-  display+description锛堝惈 STT 璇█鍚嶄腑鏂囧寲锛夈€乻hortcuts 鍒嗙被/椤佃剼/浼/澶氳 long_help
-  甯搁噺/ActionRegistry short_help+long_help銆乽sage 鏍囩椤?椤佃剼 rest 閿?allowance+浼氳瘽
-  淇℃伅瀛楁銆乵cps 鍒嗙粍妯℃澘+鐘舵€佸窘绔犮€乼utorial 寮曞璇?涓婚 title/blurb+go_deeper 鎸囧崡椤垫爣棰?
-- `src/views/settings_modal/render.rs`锛氶潰鍖呭睉/鍒嗙粍鏍囬/琛屾爣绛?琛屽€煎窘绔?灞曞紑鎻忚堪涓庨攣瀹?
-  鍘熷洜/Tip/杩囨护绌烘€侊紙`tr("No matches for ")` 璇戞枃鑷韩鍙備笌瀹藉害璁＄畻锛屽竷灞€涓庣粯鍒跺悓婧愶級/
-  缂栬緫鍣ㄥ崰浣嶇涓庢牎楠岄敊璇紙`Unknown model: "{}"` 妯℃澘閿?strip 鍓嶅悗缂€锛?鏋氫妇閫夋嫨鍣?
-  display+description 娓叉煋鍑哄彛缁熶竴 tr/tr_str锛涗笁澶?`row_layout` 鏍囩瀹藉害鍚屾浼犺瘧鏂?
-- `src/views/shortcuts_help.rs`锛欰ctionRegistry 娓叉煋閾捐矾鏈鎺ョ嚎鈥斺€擿entry_display`
-  锛坔int 璇存槑+鍒嗙被鏍囬锛夈€乣CheatsheetRows::build`锛堟姌鍙犳爣棰?鍐呰仈甯姪锛夈€乣render_detail`
-  锛堣鎯呴〉 title/body 娓叉煋鍑哄彛 tr_str锛宻tate 瀛樿嫳鏂囦笉鍙橈級銆乣render_detail_body` 鍙樼伆
-  娉ㄨ銆侀〉鑴氫笌 3 澶勫脊绐楁爣棰橈紱鎼滅储杩囨护 `filter_entries` 浠嶆寜鑻辨枃鍖归厤锛堜腑鏂囨ā寮忎笅鐢?
-  鑻辨枃璇嶆悳绱紝濡傞渶涓枃鎼滅储闇€鍗曠嫭缈昏瘧鍖归厤灞傦級锛沗src/app/modals.rs` 浠?2 澶?
-  "Keyboard Shortcuts" 鏍囬鎺ョ嚎
-- `src/views/usage_modal.rs`锛氫笁涓爣绛鹃〉鏍囬锛坢odal_window 娓叉煋鍑哄彛鏌ヨ〃锛夈€侀敊璇?绌烘€?
-  鍔犺浇涓€乤llowance 鍖猴紙`Usage: ${used} / ${cap} per month` 鍛藉悕鍗犱綅绗?replace锛夈€?
-  浼氳瘽淇℃伅瀛楁鏍囩灞忔樉鍑哄彛 tr锛涘壀璐存澘澶嶅埗涓叉媶寮€淇濇寔鑻辨枃锛堝鍒跺唴瀹瑰亸鏁版嵁锛屼笖 dispatch
-  娴嬭瘯瀵瑰鍒舵枃鏈湁鑻辨枃鏂█锛?
-- `src/views/mcps_modal.rs`锛氬垎缁勬爣棰樻ā鏉挎暣閿紙`"Managed by grok.com ({})"` replace
-  璁℃暟锛涙彃浠跺垎缁?`"Plugin: "` 鍓嶇紑閿?鍔ㄦ€佸悕鐣?format! 鍙傛暟锛夈€丮anaged 璇存槑琛屻€? 涓姸鎬?
-  寰界珷 label()锛堝凡鏍稿疄鍏ㄩ儴娑堣垂鐐逛负灞曠ず锛屾棤姣旇緝閿級
-- `src/views/tutorial.rs`锛欼NTRO_LINES 娓叉煋鍑哄彛閫愭潯 tr銆佸垪琛ㄨ title/blurb tr銆佷袱椤甸〉鑴?
-  锛坄{}/{} explored` 鍙屽崰浣?replacen锛夛紱`tutorial_docs.rs` 闆舵敼鍔ㄢ€斺€攖itle/blurb 鏄?
-  static 涓嶈繘 state 涔熶笉琚瘮杈冿紝寮圭獥鏍囬璧?docs 鏌ョ湅鍣ㄤ腑澶?tr_str锛沢o_deeper 鐨?
-  `find_doc(title)` 绱㈠紩閿繚鎸佽嫳鏂?
-- `src/views/modal.rs`锛歳eset 纭鎻掑€艰ˉ `tr_str(&meta.label)` 涓庨粯璁ゅ€煎睍绀?tr_str
-  锛堜笌 settings 寮圭獥琛屾爣绛捐瘧鏂囧榻愶級
-- 涓婚涓撳悕锛圙rok Night/Tokyo Night 绛夛級銆?ZDR"銆佹ā鍨嬪悕涓嶈瘧锛堜笌 `/theme <name>` 鐢ㄦ硶
-  涓€鑷达級锛泂ettings 椤佃剼鍥句緥 "type to filter" 璇戞枃鍛?"type 浠ヨ繃婊?锛坰hortcut_label_i18n
-  鍥哄畾淇濈暀閿綅 token锛屽睘鏈哄埗闄愬埗锛屽悗缁闇€鏁村彞鎴愰敭瑕佹敼 modal_window 娓叉煋鍑芥暟锛?
+| 级 | 手段 | 成本 | 适用 |
+|---|---|---|---|
+| T0 | **单测试 A/B 归因**：`git stash push -- <crate路径>` 只跑疑似溢出的那一个测试对比 HEAD；秒级，不动全量 | 极低 | 判定"我的改动还是既有问题"——必须最先做 |
+| T1 | **`RUST_MIN_STACK=33554432` 抬栈**（32MB）：env 级、零代码改动、零重编译，已验证消掉整个溢出族 | 低 | 一切 `0xc00000fd` 溢出。**默认先行**：标准测试命令统一带此前缀 |
+| T2 | **代码门控**：个别测试在 T1 下仍溢出（无界递归类）→ 该测试加 `#[cfg(windows)] #[ignore = "win 1MiB test-thread stack; see docs-local/PATCHES.md"]` LOCAL 补丁 | 中 | T1 无效的孤例 |
+| T3 | 改造测试 harness / 构建脚本 | 高 | 目前不需要 |
 
-## 鍗佹湡琛ヤ竵锛?026-09-18锛氱晫闈㈡枃妗堜腑鏂囧寲 P2 闆嗘垚绠＄悊寮圭獥锛?
+**标准测试命令**（本机一律走门控入口；裸跑时才手动带前缀）：
+```
+scripts-local/ctest.sh -p <pkg> --lib          # 自动注入 RUST_MIN_STACK/TMP 并拼 win-skip.txt
+# 裸跑等价形态：
+TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp' RUST_MIN_STACK=33554432 cargo test -p <pkg> --lib
+```
 
-> 鏂规瑙?`docs-local/ui-i18n-plan.md`锛圥2 = 闆嗘垚绠＄悊寮圭獥锛? 涓ā鍧楋級銆?
-> 缈昏瘧琛?917 鈫?1138 缁勶紙+221锛夛紱鏂藉伐瑙勭害涓庢湳璇〃浠ユ柟妗堟枃妗ｄ负鍑嗐€?
+**纪律**：T1 生效就不打 T2 补丁；T2 补丁必须登记本表便于同步重放；禁止在没有 T0 归因前
+直接修产品代码。
 
-### xai-grok-pager锛圥2锛氭墿灞?璁板繂/鍙嶉/瀵煎叆 Claude 浜斿脊绐楋級
+## 九期补丁（2026-09-19：Windows 路径语义修复——门控测试复测产物）
 
-- `src/slash/i18n.rs`锛氱炕璇戣〃杩藉姞 P2 娈靛叡 221 缁勶紝鍒嗚妭涓庝唬鐮佹敞閲婁竴涓€瀵瑰簲锛?
-  import_claude锛堟爣棰?绫诲瀷鍒嗙粍澶?鑼冨洿澶?Enter 纭妯℃澘/椤佃剼 rest 閿級銆乵emory锛堣妭澶?鍗犱綅绗?
-  绌烘€?椤佃剼/鐩稿鏃堕棿锛夈€乫eedback锛堢Щ鍑洪€氱煡/trace 闂彞/鏍囩琛?绌烘€?瀛樺偍闀垮彞/taxonomy 鏋氫妇
-  label/鏍囬鏍囩椤碉級銆乪xtensions锛堝垎缁勫ご/寰界珷/璁℃暟妯℃澘/琛ㄥ崟/椤佃剼鍔ㄤ綔璇嶏級銆乵odals.rs 渚?
-  锛堢‘璁ら棶鍙ュ墠缂€/鍚庣紑閿笌闈欐€佹彁绀猴級銆傚悎骞舵椂 "Name"/" cancel"/"Hooks"/"navigate"/"toggle"/
-  "cancel"/"search"/"Import Claude settings" 绛変笌鏃㈡湁鏉＄洰鍚岄敭鍚岃瘧锛屾寜鏃㈡湁鏉＄洰鍘婚噸锛?
-  鏌ラ噸鑴氭湰鎸?translations() 鍏ㄨ〃瑙ｆ瀽鏂█鏃犻噸澶嶉敭锛堜節鏈熺殑涓存椂鑴氭湰宸叉竻鐞嗭紝閲嶆斁鏃舵寜鏈潯
-  鎻忚堪閲嶅缓鍗冲彲锛?
-- `src/views/extensions_modal.rs` + `extensions_modal/workflows_picker_rows.rs`锛?
-  6 涓爣绛鹃〉鍚嶆覆鏌撳嚭鍙?tr锛涘垎缁勫ご鏂板 `tr_group_label`锛坄Plugin: {name}`/`Custom: {path}`
-  杩愯鏃舵嫾鎺ヤ覆鎸夋棦鏈?`Plugin: ` 鍓嶇紑閿媶鍒嗭紝鍏朵綑鏁翠覆 tr_str锛涘垎缁勮嫳鏂囨爣绛炬槸鎶樺彔 state 閿?
-  淇濇寔鑻辨枃锛夛紱璁℃暟妯℃澘鏁撮敭 + replace锛坄{n} plugins`/`{n} skills`/`{n} tools ({m} enabled)`
-  绛夛紝鍗曞鏁颁腑鏂囧悎骞讹級锛沗post_select_row_hint` 鏁村彞妯℃澘閿?+ `{noun}`(tr_str)/`{verb}`(tr)
-  娉ㄥ叆锛坉isable/enable 鎴愬锛夛紱寰界珷 [policy]/[disabled]/[installed]/[error]/[update available]锛?
-  灞曞紑瀛楁鏍囩锛沗Error: {msg}` 鎷嗕负 `format!("{}: {msg}", tr("Error"))`锛沵odal_message
-  娓叉煋鍑哄彛 tr_str锛堢被鍨?`(&str, Color)` 鈫?`(String, Color)`锛夛紱result_notice/pending 寰界珷/
-  琛ㄥ崟鏍囩涓庡崰浣嶇娓叉煋鍑哄彛 tr_str锛沬nstall_status 灞忔樉鍊艰ˉ `not_installed`/`update_available`
-- `src/views/memory_modal.rs`锛氳妭澶?Global/Workspace/Sessions 瀛?state 鑻辨枃锛坈ompute_filtered
-  鍋?contains 杩囨护锛夆啋 娓叉煋鍑哄彛 tr_str锛涢〉鑴?13 鏉?tr锛沠ormat_modified 鐩稿鏃堕棿妯℃澘閿?
-  锛坄{mins}m ago` 澶嶇敤鏃㈡湁閿紝`{hours}h`/`{days}d` 鏂板锛夛紱鍒犻櫎纭琛屽唴鎻愮ず閿惈鍓嶅绌烘牸锛?
-  瀵归綈瀹藉害 `len()` 鈫?`width()`锛堣嫳鏂囪涓轰笉鍙橈紝涓枃璇戞枃淇鍙冲榻愶級
-- `src/views/feedback_modal/{mod,render,enum_picker}.rs`锛坉rafts.rs 闆舵敼鍔紝鍏跺瓧绗︿覆鍏ㄩ儴
-  鏄瓨 state 鐨勮嫳鏂囬敭锛夛細7 鏉＄Щ鍑洪€氱煡 notice() tr锛泃race 閫夐」/纭闂彞/绌烘€?鍒犻櫎纭/
-  composer 鍗犱綅绗?tr锛沞rror 娓叉煋鍑哄彛 3 澶?tr_str 瑕嗙洊 drafts.rs 鍏ㄩ儴瀛樺偍閿紙澶氭潯澶氳闀垮彞
-  鏁存鎴愰敭锛屼笌婧愮爜閫愬瓧绗︽牳瀵瑰惈鍒嗗彿涓?U+2026锛夛紱enum_picker 琛?`tr(labels[variant])`锛?
-  type-to-filter 杩囨护姣旇緝閿繚鎸佽嫳鏂囷紱xai_grok_feedback taxonomy 鏋氫妇 label 娓叉煋鍑哄彛鏌ヨ〃
-  骞惰ˉ 25 閿紙Bug/Shell 淇濈暀鑻辨枃涓嶅叆琛級
-- `src/views/import_claude_modal.rs`锛氱被鍨嬪垎缁勫ご `tr(kind.label())`锛汫lobal 鑼冨洿澶存暣閿瓨
-  state 鈫?render_header_line 鍑哄彛 tr_str锛汸roject 鑼冨洿澶?`tr("Project  ")` 鍓嶇紑閿繚瀹斤紱
-  `"Enter import {}"` 妯℃澘閿?+ replace锛坰hortcut_label_i18n 鍐嶆媶鏃惰瘧鏂囬€忎紶锛夛紱椤佃剼
-  navigate/toggle/fold/all/none/cancel/search 璧?rest 閿満鍒讹紙閮ㄥ垎 P0/P1 宸插叆琛級
-- `src/app/agent_view/modals.rs`锛歠eedback 绉诲嚭閫氱煡閰嶅涓ゅ彞 tr锛堜笌 notice() 鍚屼竴鏉＄郴缁?
-  閫氱煡锛夛紱extensions 纭闂彞甯﹀姩鎬佸悕鐨勭敤鍓嶇紑閿紙`format!("{}\"{name}\"?",
-  tr("Remove MCP server "))` 寮忥紝鑻辨枃杈撳嚭涓庡師 format! 閫愬瓧涓€鑷达紝娴嬭瘯鏋勫缓鏃佽矾涓嶅彈褰卞搷锛夛紱
-  pending_action 闈欐€佸€硷紙Reloading.../Processing.../adding.../Adding source.../
-  Uninstalling.../Installing...锛夊彧琛ヨ〃锛屾覆鏌撳嚭鍙ｅ凡鎺?tr_str
+> 背景：全量测试复测后按"重要性 × 修复成本"处置门控测试。以下四处修改的都是
+> 上游同步文件，上游同步冲掉后按本节重放。Linux 无影响：全部为守卫式修改
+> （MAIN_SEPARATOR/is_absolute≡has_root 于 POSIX 恒等/CARGO env 仅测试进程存在）。
 
-### 宸茬煡浣欑暀
+### xai-grok-pager
+- `src/git_info.rs` `collapse_home_path`：分隔符归一从 `~/` 折叠分支扩展到**所有分支**
+  （不在 HOME 下的路径走 `path.display()` 回退会产出 `\`，与 libgit2 的 `/` 混用，
+  dashboard 行/会话存储/测试助手 `collapsed_path_display` 要求可比较）。守卫
+  `MAIN_SEPARATOR == '\'`。解锁 git_info ×2 + dashboard_open_detects_standalone ×1
+- `src/app/workspace_sync.rs` `is_adoptable`：cwd 资格校验 `is_absolute()` 补
+  `has_root()`——Windows 上 `/tmp/x` 无盘符 rooted 路径被误拒。解锁 workspace_sync ×4
+- `src/app/foreign_sessions.rs` 测试闭包：`async_gate_supports_bundled_and_user_skill_locations`
+  的子串匹配前归一分隔符（join 在 Windows 产出 `\`）。解锁 ×1
+- `src/slash/i18n.rs`（LOCAL 文件，无冲突）：`test_context()` = `cfg!(test) || CARGO env`，
+  英文旁路扩展到集成测试构建（见四期段 2026-09-19 语义扩展）。解锁 settings_e2e ×2
 
-- `Authenticating {server}...`锛坢odals.rs 瀛樺偍鏈熸彃鍊硷級鏃犳覆鏌撲晶妯℃澘鍙媶锛屼腑鏂囨ā寮忔樉绀鸿嫳鏂囷紱
-- "Dropped {n} invalid image(s)." 閲囩敤瀛樺偍鏈熸ā鏉块敭 + replace锛堟覆鏌撲晶鎷夸笉鍒拌鏁帮級锛?lang
-  鍒囨崲涓嶈拷婧凡瀛樻枃妗堬紱
-- tests 鏂█鐨?state 鍊煎叏閮ㄤ繚鎸佽嫳鏂囷紙娴嬭瘯鏋勫缓鏌ヨ〃鏁翠綋鏃佽矾锛夛紝tests 妯″潡闆舵敼鍔ㄣ€?
+### xai-grok-dashboard-store
+- `src/types.rs` `validated`：cwd 校验 `is_absolute()` 补 `has_root()`（同上语义）。
+  解锁本 crate store 测试 ×19（此前在 Linux CI 应为绿的同一批用例）
 
-## 鍗佷竴鏈熻ˉ涓侊紙2026-09-18锛氱晫闈㈡枃妗堜腑鏂囧寲 P3 浠〃鐩樹笌浠ｇ悊闈㈡澘锛?
+### 效果
+- pager lib：9566→9583 过（裸跑），门控清单 54→37 条（-17）
+- 门控只留四类"确认不修"：doctor SSH-wrap（产品平台门控+用户决策无感知不修）、
+  Tab 补全（上游 cfg!(not(windows)) 有意禁用）、scrollback 链接扫描（夹具 POSIX
+  假设，Windows 真实场景不受影响）、其余路径散例（中等重要性低于修复线）
+- 已知产品缺口（记录不修）：osc8 自由文本扫描正则仅认 `/` 分隔符
+  （xai-grok-pager-render osc8.rs:216），Windows 反斜杠路径文本不会被链接化——
+  修复涉及上游数百个精确断言，留作将来特性
+## 九期补丁（2026-09-18：界面文案中文化 P1 常用弹窗与帮助）
 
-> 鏂规瑙?`docs-local/ui-i18n-plan.md`锛圥3 = 浠〃鐩樹笌浠ｇ悊闈㈡澘锛? 涓ā鍧楋級銆?
-> 缈昏瘧琛?1138 鈫?1338 缁勶紙+200锛夛紱鏂藉伐瑙勭害涓庢湳璇〃浠ユ柟妗堟枃妗ｄ负鍑嗐€?
-> 鍚岄敭寮傝瘧浠茶锛欶ailed鈫掑け璐ワ紙dashboard/goal_detail/agent_status 涓夋柟缁熶竴锛夈€?
-> Paused (error)鈫掑凡鏆傚仠锛堝嚭閿欙級锛沜onfirm delete 涓?P0 鏃㈡湁閿挒閿垹閲嶃€?
+> 方案见 `docs-local/ui-i18n-plan.md`（P1 = 常用弹窗与帮助，5 个模块）。
+> 翻译表 449 → 917 组；施工规约与术语表以方案文档为准。
 
-### xai-grok-pager锛圥3锛歞ashboard 鐢熶骇鍖?/ tasks_pane / agent 椤佃剼+agent_status / goal_detail / workflows锛?
+### xai-grok-pager（P1：设置弹窗/快捷键速查表/用量弹窗/MCP 弹窗/教程）
+- `src/slash/i18n.rs`：翻译表追加 P1 段 430 组，分节与代码注释一一对应：
+  settings 字面量/页脚 rest 键/分组标题、registry meta.label+description、枚举
+  display+description（含 STT 语言名中文化）、shortcuts 分类/页脚/伪行/多行 long_help
+  常量/ActionRegistry short_help+long_help、usage 标签页+页脚 rest 键+allowance+会话
+  信息字段、mcps 分组模板+状态徽章、tutorial 引导语+主题 title/blurb+go_deeper 指南页标题
+- `src/views/settings_modal/render.rs`：面包屑/分组标题/行标签/行值徽章/展开描述与锁定
+  原因/Tip/过滤空态（`tr("No matches for ")` 译文自身参与宽度计算，布局与绘制同源）/
+  编辑器占位符与校验错误（`Unknown model: "{}"` 模板键 strip 前后缀）/枚举选择器
+  display+description 渲染出口统一 tr/tr_str；三处 `row_layout` 标签宽度同步传译文
+- `src/views/shortcuts_help.rs`：ActionRegistry 渲染链路本次接线——`entry_display`
+  （hint 说明+分类标题）、`CheatsheetRows::build`（折叠标题+内联帮助）、`render_detail`
+  （详情页 title/body 渲染出口 tr_str，state 存英文不变）、`render_detail_body` 变灰
+  注记、页脚与 3 处弹窗标题；搜索过滤 `filter_entries` 仍按英文匹配（中文模式下用
+  英文词搜索，如需中文搜索需单独翻译匹配层）；`src/app/modals.rs` 仅 2 处
+  "Keyboard Shortcuts" 标题接线
+- `src/views/usage_modal.rs`：三个标签页标题（modal_window 渲染出口查表）、错误/空态/
+  加载中、allowance 区（`Usage: ${used} / ${cap} per month` 命名占位符 replace）、
+  会话信息字段标签屏显出口 tr；剪贴板复制串拆开保持英文（复制内容偏数据，且 dispatch
+  测试对复制文本有英文断言）
+- `src/views/mcps_modal.rs`：分组标题模板整键（`"Managed by grok.com ({})"` replace
+  计数；插件分组 `"Plugin: "` 前缀键+动态名留 format! 参数）、Managed 说明行、6 个状态
+  徽章 label()（已核实全部消费点为展示，无比较键）
+- `src/views/tutorial.rs`：INTRO_LINES 渲染出口逐条 tr、列表行 title/blurb tr、两页页脚
+  （`{}/{} explored` 双占位 replacen）；`tutorial_docs.rs` 零改动——title/blurb 是
+  static 不进 state 也不被比较，弹窗标题走 docs 查看器中央 tr_str；go_deeper 的
+  `find_doc(title)` 索引键保持英文
+- `src/views/modal.rs`：reset 确认插值补 `tr_str(&meta.label)` 与默认值展示 tr_str
+  （与 settings 弹窗行标签译文对齐）
+- 主题专名（Grok Night/Tokyo Night 等）、"ZDR"、模型名不译（与 `/theme <name>` 用法
+  一致）；settings 页脚图例 "type to filter" 译文呈 "type 以过滤"（shortcut_label_i18n
+  固定保留键位 token，属机制限制，后续如需整句成键要改 modal_window 渲染函数）
 
-- `src/slash/i18n.rs`锛氱炕璇戣〃杩藉姞 P3 娈?200 缁勶紝鍒嗚妭涓庝唬鐮佹敞閲婁竴涓€瀵瑰簲锛?
-  dashboard chrome/row/render/peek銆乬oal_detail 鐘舵€佷笌瀛楁鍓嶇紑銆乤gent 椤佃剼 hint 璇嶆棌銆?
-  agent_status chip銆亀orkflows 妯℃澘涓庣姸鎬佽鏄庛€乼asks_pane 璋冨害鍚庣紑
-- `src/views/dashboard/chrome.rs`锛歝hip 缁樺埗渚?tr(label)锛坔it-test id 淇濈暀鑻辨枃锛夈€?
-  Choose銆? New Agent( in Worktree)銆乄orktree/Disable Worktree 鎸夐挳
-- `src/views/dashboard/row.rs`锛氶€愬抚閲嶅缓澶勬垚閿紙`{tools} tools 路 {toks} tok 路
-  {turns} turns`銆乣鈥?{} more` 澶嶇敤鏃㈡湁閿級锛涙暣涓茬姸鎬佽瘝锛圵orking/Awaiting your
-  input/Loading鈥?Pending: question锛変粛瀛樿嫳鏂囩敱 render.rs 鍑哄彛 tr_str锛?
-  AgentCommand::display_name()锛坅pp/agent.rs 浜斿€硷級缁勫悎澶?tr
-- `src/views/dashboard/render.rs`锛?*鏂规鏂囨。"鐢熶骇鍖轰粎 1鈥?103 琛?鏈夎**鈥斺€斿疄闄?
-  `#[cfg(test)] mod tests` 鍦?3640 琛岃捣锛坮ender_tests.rs锛夛紝1104/1950 鍙槸涓や釜 6 琛?
-  cfg(test) 杈呭姪鍑芥暟锛涙湰娆℃寜鐪熷疄杈圭晫鎺ョ嚎鏁翠釜鐢熶骇鍖猴細banner 澶嶆暟涓枃鍚堝苟銆佺┖鎬?杩囨护銆?
-  鍒嗙粍澶达紙Pinned + `tr(rs.group_label())`锛夈€両dle overflow銆佷綅缃€夋嫨鍣ㄣ€佹ā寮忔棗鏍?
-  锛坧lan/auto/always-approve锛夈€佹悳绱笌娲惧彂鍗犱綅绗︺€乣rename: ` 鍓嶇紑鏀舵暃 rename_prefix()
-  淇濊瘉缁樺埗涓庡搴﹁绠楀悓婧愩€侀〉鑴氬叏閮?hint锛堝惈 state.rs 鐨?label()/confirmation_label()/
-  group_label()/focused_action_label() 璋冪敤鐐?tr锛夈€佽鐩栧眰鍏滃簳涓?[Dashboard]
-- `src/views/dashboard/peek.rs`锛歳esponse_type 瀛樿嫳鏂囨瘮杈冮敭锛坄== "Working"` 涓嶅姩锛夆啋
-  灞曠ず鍑哄彛 tr_str锛圱hinking/Thought/Response/Read/Edit/鈥?17 璇嶏級锛涢棶棰橀€夐」 label
-  鍑哄彛 tr_str锛沚lock_short_text 9 涓嫭娉紙(thinking)/(tool call)/鈥︼級鎴愰敭
-- `src/views/dashboard/peek_tail.rs`锛氭牳鏌ョ敓浜ц矾寰勬棤璇存槑鎬ф枃妗堬紝闆舵敼鍔?
-- `src/views/goal_detail.rs`锛氱姸鎬佽/瀛楁琛屽墠缂€锛堝熬闅忕┖鏍兼槸閿殑涓€閮ㄥ垎锛?鍒嗚妭澶?
-  浜嬩欢鍊间晶/verdict 鏍囩/椤佃剼鎺ョ嚎锛涗簨浠?match 閿紙goal_created 绛夛級涓?`d != "user"`
-  姣旇緝閿笉鍔紱鐩稿鏃堕棿鏃忓鐢?{mins}m/{hours}h/{days}d ago/just now 鏃㈡湁閿紝鏂板
-  {months}mo/{years}y ago锛沘ctive_phase_label 宸插湪 agent_status 鍑哄彛缈昏瘧锛屾湰鏂囦欢
-  浠?tr_str 閫忎紶鍏滃簳锛堟柦宸ユ湡涓存椂 tr_phase_text 鍙屼繚闄╁凡绠€鍖栫Щ闄わ級
-- `src/views/agent_status.rs`锛歡oal_phase_label 5 涓?pause 鍒嗘敮 tr(pause_label()) +
-  Failed/Interrupted/Budget/Done锛沘ctive_phase_label 鐨?`Verifying ({})` 妯℃澘閿?+
-  replace锛沢oal_status_line 璁℃暟鏁撮敭 replacen锛坽} tokens/{}/{} tokens锛夛紱chip_name
-  = tr("Goal")銆俻ause_label()锛坅pp/agent.rs:364锛夋牳瀹炵函灞曠ず鏃犳瘮杈冩秷璐癸紝鎺ョ嚎瀹夊叏
-- `src/views/agent.rs`锛?*闆舵敼鍔?*鈥斺€旈〉鑴?hint 闆嗕腑缈昏瘧鍑哄彛宸插湪 shortcuts_bar.rs
-  锛圥0 鎺ョ嚎锛夛紝鏈鍙ˉ 10 缁勮〃閿紙hide done/show done/reorder/page/queue/newline/
-  accept suggestion/next/prev/turn/expand thinking锛夛紱HintItem label 瀛樿嫳鏂囩粡
-  ShortcutsBar::render 缁熶竴鏌ヨ〃锛屽氨鍦板啀鍖呬細鍙岄噸缈昏瘧
-- `src/views/workflows.rs`锛氶〉鑴?9 蹇嵎閿€佹爣棰?Workflow Runs銆佺┖鎬佷袱琛屻€丳hases
-  鍒嗚妭澶达紱agents_meta() 鎸?total==1 閫夎嫳鏂囧崟澶嶆暟閿€佷腑鏂囧悎骞讹紱plural() 閲嶆帴鏁撮敭
-  妯℃澘锛坣oun 鍙傛暟褰撳墠鎭掍负 "agent"锛宍let _ = noun` 娉ㄩ噴淇濈暀绛惧悕锛夛紱棰勭畻/failed 鐘舵€?
-  璇存槑 4 鏉℃暣閿紙鍚?{n} 妯℃澘锛夛紱rail 闃舵鍚嶄笌 roster 鏍囬娓叉煋鍙?tr_str锛堟暟鎹晶
-  phase_hits/selected_phase_name/姣旇緝閫昏緫瀛樿嫳鏂囷級锛沗{used} / {total} context` 妯℃澘锛?
-  run.status.replace('_'," ") 鍗忚璇嶄繚鐣欒嫳鏂囷紙tasks_pane 渚у鍘讳笅鍒掔嚎鍊?tr_str
-  鏌ヨ〃锛屽懡涓?complete/cancelled/interrupted/paused/budget limited/failed 鍒欒瘧锛?
-- `src/views/tasks_pane.rs`锛氬垎缁勫ご group.label() tr锛坰earch_text 杩囨护鍖归厤閿粛
-  鑻辨枃锛夛紱璋冨害鍚庣紑鏁撮敭鍚墠瀵肩┖鏍硷紙" (next in {})"锛? 澶勶級/" (due now)"/
-  " (running)"/" (starting)"锛宭abel 涓?styled 鍚屾簮锛夛紱绌烘€佷笁娈?Span 涓ゆ鎴愰敭锛?
-  "Task " 鍓嶇紑澶嶇敤 Task 閿樉寮忚ˉ绌烘牸锛堥伩鍏嶅熬闅忕┖鏍艰繎閲嶅閿級锛沗1 agent`/
-  `{n} agents` 澶嶇敤鏃㈡湁妯℃澘閿紱"killing鈥?" 瑕嗙洊灞傛暣閿?
+## 十期补丁（2026-09-18：界面文案中文化 P2 集成管理弹窗）
 
-### 浠茶涓庡彇鑸嶏紙P3锛?
+> 方案见 `docs-local/ui-i18n-plan.md`（P2 = 集成管理弹窗，5 个模块）。
+> 翻译表 917 → 1138 组（+221）；施工规约与术语表以方案文档为准。
 
-- `[worktree:on]`/`[worktree:off]` 寰芥爣涓嶈瘧锛氬搴︽寜 ASCII `len()` 棰勭畻涓?
-  `find("on")` 瀛楅潰瀹氫綅楂樹寒閲嶇粯锛岃瘧鏂囧悓鏃剁牬鍧忓搴︿笌瀹氫綅
-- dashboard 琛屽勾榫勫垪 format_time_ago锛?2m"/"just now"锛変笉璇戯細`{age:>6}` 鎸夊瓧绗︽暟
-  濉厖瀵归綈锛孋JK 鐮村锛泆til 鍑哄彛璺ㄨ鍥惧睘鍚庣画鑼冨洿
-- 5s/3m/2h 绱у噾鏃堕暱鍗曚綅淇濈暀锛坅gent_status chip 瀹藉害棰勭畻锛?
-- app 灞傚姩鎬佷覆閫忎紶鑻辨枃锛歠ormat_activity_label锛?Running: cargo test"锛夈€?
-  format_subagent_label銆乫ormat_context_badge鈥斺€旀暣涓插惈杩愯鏃舵暟鎹棤娉曟垚閿紝
-  app 灞傛枃妗堝闇€涓枃鍖栧彟琛岀珛椤?
-- tasks_pane 琛?label 鏋勯€犳湡缈昏瘧锛坋ntries 姣忔 sync 閲嶅缓锛夛細涓枃妯″紡涓嬭杩囨护鍖归厤
-  涓枃鐗囨锛屼笌 dashboard/render.rs 鍚屾鏃㈠畾鍙栬垗
-- 鍗犱綅绗?`<query>` 闅忔鏂囨剰璇戜负 `<鏌ヨ>`锛堟枩鏉犲懡浠ょ敤娉曚覆 [鏂囦欢] 鍏堜緥锛夛紱
-  "esc close"锛堝皬鍐欙級涓庢棦鏈?"Esc close" 鍒嗛敭骞跺瓨锛岃瘧鏂囬鏍间竴鑷?
-- workflows rail 瀹藉害棰勪及鎸夋湭璇?title 璁＄畻锛屼腑鏂囨爣棰樼暐瀹界敱 truncate_to_width 鍏滃簳锛?
-  甯冨眬鏁板鏈姩
-- tests 鏂█鐨?state 鍊煎叏閮ㄤ繚鎸佽嫳鏂囷紙娴嬭瘯鏋勫缓鏌ヨ〃鏁翠綋鏃佽矾锛夛紝tests 妯″潡涓?
-  *_tests.rs 闆舵敼鍔紱鏌ラ噸鑴氭湰锛坱ranslations() 鍏ㄨ〃瑙ｆ瀽鏂█鏃犻噸澶嶉敭鏃犲悓閿紓璇戯級
-  閲嶆斁鏃朵粠鏈枃浠跺崄鏈熸潯鐩弿杩伴噸寤猴紙Python锛孯ust \u{...} 杞箟闇€鑷瑙ｇ爜锛?
+### xai-grok-pager（P2：扩展/记忆/反馈/导入 Claude 五弹窗）
 
-## 鍗佷簩鏈熻ˉ涓侊紙2026-09-18锛氱晫闈㈡枃妗堜腑鏂囧寲 P4 浣庢劅鐭ユ壂灏撅紝i18n 璁″垝鍏ㄩ儴瀹屽伐锛?
+- `src/slash/i18n.rs`：翻译表追加 P2 段共 221 组，分节与代码注释一一对应：
+  import_claude（标题/类型分组头/范围头/Enter 确认模板/页脚 rest 键）、memory（节头/占位符/
+  空态/页脚/相对时间）、feedback（移出通知/trace 问句/标签行/空态/存储长句/taxonomy 枚举
+  label/标题标签页）、extensions（分组头/徽章/计数模板/表单/页脚动作词）、modals.rs 侧
+  （确认问句前缀/后缀键与静态提示）。合并时 "Name"/" cancel"/"Hooks"/"navigate"/"toggle"/
+  "cancel"/"search"/"Import Claude settings" 等与既有条目同键同译，按既有条目去重；
+  查重脚本按 translations() 全表解析断言无重复键（九期的临时脚本已清理，重放时按本条
+  描述重建即可）
+- `src/views/extensions_modal.rs` + `extensions_modal/workflows_picker_rows.rs`：
+  6 个标签页名渲染出口 tr；分组头新增 `tr_group_label`（`Plugin: {name}`/`Custom: {path}`
+  运行时拼接串按既有 `Plugin: ` 前缀键拆分，其余整串 tr_str；分组英文标签是折叠 state 键
+  保持英文）；计数模板整键 + replace（`{n} plugins`/`{n} skills`/`{n} tools ({m} enabled)`
+  等，单复数中文合并）；`post_select_row_hint` 整句模板键 + `{noun}`(tr_str)/`{verb}`(tr)
+  注入（disable/enable 成对）；徽章 [policy]/[disabled]/[installed]/[error]/[update available]；
+  展开字段标签；`Error: {msg}` 拆为 `format!("{}: {msg}", tr("Error"))`；modal_message
+  渲染出口 tr_str（类型 `(&str, Color)` → `(String, Color)`）；result_notice/pending 徽章/
+  表单标签与占位符渲染出口 tr_str；install_status 屏显值补 `not_installed`/`update_available`
+- `src/views/memory_modal.rs`：节头 Global/Workspace/Sessions 存 state 英文（compute_filtered
+  做 contains 过滤）→ 渲染出口 tr_str；页脚 13 条 tr；format_modified 相对时间模板键
+  （`{mins}m ago` 复用既有键，`{hours}h`/`{days}d` 新增）；删除确认行内提示键含前导空格，
+  对齐宽度 `len()` → `width()`（英文行为不变，中文译文修正右对齐）
+- `src/views/feedback_modal/{mod,render,enum_picker}.rs`（drafts.rs 零改动，其字符串全部
+  是存 state 的英文键）：7 条移出通知 notice() tr；trace 选项/确认问句/空态/删除确认/
+  composer 占位符 tr；error 渲染出口 3 处 tr_str 覆盖 drafts.rs 全部存储键（多条多行长句
+  整段成键，与源码逐字符核对含分号与 U+2026）；enum_picker 行 `tr(labels[variant])`，
+  type-to-filter 过滤比较键保持英文；xai_grok_feedback taxonomy 枚举 label 渲染出口查表
+  并补 25 键（Bug/Shell 保留英文不入表）
+- `src/views/import_claude_modal.rs`：类型分组头 `tr(kind.label())`；Global 范围头整键存
+  state → render_header_line 出口 tr_str；Project 范围头 `tr("Project  ")` 前缀键保宽；
+  `"Enter import {}"` 模板键 + replace（shortcut_label_i18n 再拆时译文透传）；页脚
+  navigate/toggle/fold/all/none/cancel/search 走 rest 键机制（部分 P0/P1 已入表）
+- `src/app/agent_view/modals.rs`：feedback 移出通知配套两句 tr（与 notice() 同一条系统
+  通知）；extensions 确认问句带动态名的用前缀键（`format!("{}\"{name}\"?",
+  tr("Remove MCP server "))` 式，英文输出与原 format! 逐字一致，测试构建旁路不受影响）；
+  pending_action 静态值（Reloading.../Processing.../adding.../Adding source.../
+  Uninstalling.../Installing...）只补表，渲染出口已接 tr_str
 
-> 鏂规瑙?`docs-local/ui-i18n-plan.md`锛圥4 = 浣庢劅鐭ユ壂灏撅紝绾?20 涓皬鏂囦欢锛夈€?
-> 缈昏瘧琛?1338 鈫?1417 缁勶紙+79锛夛紱鏂藉伐瑙勭害涓庢湳璇〃浠ユ柟妗堟枃妗ｄ负鍑嗐€?
-> 鏂藉伐鏂瑰紡锛? 涓苟鍙戝瓙浠ｇ悊鍒嗘壒鎺ョ嚎锛堥潰鏉挎诞灞?/ 寮圭獥 dock 鐘舵€佹潯 / 鍒楄〃鍛戒护灞傦級锛?
-> 涓讳細璇濆悎骞堕敭鍊?+ 琛?rewind.rs 涓ゅ娓呭崟澶栨紡缃戙€?
+### 已知余留
 
-### xai-grok-pager锛圥4锛歫ump/queue/todo/subagent_catalog/btw/location/session_title/
+- `Authenticating {server}...`（modals.rs 存储期插值）无渲染侧模板可拆，中文模式显示英文；
+- "Dropped {n} invalid image(s)." 采用存储期模板键 + replace（渲染侧拿不到计数），/lang
+  切换不追溯已存文案；
+- tests 断言的 state 值全部保持英文（测试构建查表整体旁路），tests 模块零改动。
+
+## 十一期补丁（2026-09-18：界面文案中文化 P3 仪表盘与代理面板）
+
+> 方案见 `docs-local/ui-i18n-plan.md`（P3 = 仪表盘与代理面板，5 个模块）。
+> 翻译表 1138 → 1338 组（+200）；施工规约与术语表以方案文档为准。
+> 同键异译仲裁：Failed→失败（dashboard/goal_detail/agent_status 三方统一）、
+> Paused (error)→已暂停（出错）；confirm delete 与 P0 既有键撞键删重。
+
+### xai-grok-pager（P3：dashboard 生产区 / tasks_pane / agent 页脚+agent_status / goal_detail / workflows）
+
+- `src/slash/i18n.rs`：翻译表追加 P3 段 200 组，分节与代码注释一一对应：
+  dashboard chrome/row/render/peek、goal_detail 状态与字段前缀、agent 页脚 hint 词族、
+  agent_status chip、workflows 模板与状态说明、tasks_pane 调度后缀
+- `src/views/dashboard/chrome.rs`：chip 绘制侧 tr(label)（hit-test id 保留英文）、
+  Choose、+ New Agent( in Worktree)、Worktree/Disable Worktree 按钮
+- `src/views/dashboard/row.rs`：逐帧重建处成键（`{tools} tools · {toks} tok ·
+  {turns} turns`、`… {} more` 复用既有键）；整串状态词（Working/Awaiting your
+  input/Loading…/Pending: question）仍存英文由 render.rs 出口 tr_str；
+  AgentCommand::display_name()（app/agent.rs 五值）组合处 tr
+- `src/views/dashboard/render.rs`：**方案文档"生产区仅 1–1103 行"有误**——实际
+  `#[cfg(test)] mod tests` 在 3640 行起（render_tests.rs），1104/1950 只是两个 6 行
+  cfg(test) 辅助函数；本次按真实边界接线整个生产区：banner 复数中文合并、空态/过滤、
+  分组头（Pinned + `tr(rs.group_label())`）、Idle overflow、位置选择器、模式旗标
+  （plan/auto/always-approve）、搜索与派发占位符、`rename: ` 前缀收敛 rename_prefix()
+  保证绘制与宽度计算同源、页脚全部 hint（含 state.rs 的 label()/confirmation_label()/
+  group_label()/focused_action_label() 调用点 tr）、覆盖层兜底与 [Dashboard]
+- `src/views/dashboard/peek.rs`：response_type 存英文比较键（`== "Working"` 不动）→
+  展示出口 tr_str（Thinking/Thought/Response/Read/Edit/… 17 词）；问题选项 label
+  出口 tr_str；block_short_text 9 个括注（(thinking)/(tool call)/…）成键
+- `src/views/dashboard/peek_tail.rs`：核查生产路径无说明性文案，零改动
+- `src/views/goal_detail.rs`：状态行/字段行前缀（尾随空格是键的一部分）/分节头/
+  事件值侧/verdict 标签/页脚接线；事件 match 键（goal_created 等）与 `d != "user"`
+  比较键不动；相对时间族复用 {mins}m/{hours}h/{days}d ago/just now 既有键，新增
+  {months}mo/{years}y ago；active_phase_label 已在 agent_status 出口翻译，本文件
+  仅 tr_str 透传兜底（施工期临时 tr_phase_text 双保险已简化移除）
+- `src/views/agent_status.rs`：goal_phase_label 5 个 pause 分支 tr(pause_label()) +
+  Failed/Interrupted/Budget/Done；active_phase_label 的 `Verifying ({})` 模板键 +
+  replace；goal_status_line 计数整键 replacen（{} tokens/{}/{} tokens）；chip_name
+  = tr("Goal")。pause_label()（app/agent.rs:364）核实纯展示无比较消费，接线安全
+- `src/views/agent.rs`：**零改动**——页脚 hint 集中翻译出口已在 shortcuts_bar.rs
+  （P0 接线），本次只补 10 组表键（hide done/show done/reorder/page/queue/newline/
+  accept suggestion/next/prev/turn/expand thinking）；HintItem label 存英文经
+  ShortcutsBar::render 统一查表，就地再包会双重翻译
+- `src/views/workflows.rs`：页脚 9 快捷键、标题 Workflow Runs、空态两行、Phases
+  分节头；agents_meta() 按 total==1 选英文单复数键、中文合并；plural() 重接整键
+  模板（noun 参数当前恒为 "agent"，`let _ = noun` 注释保留签名）；预算/failed 状态
+  说明 4 条整键（含 {n} 模板）；rail 阶段名与 roster 标题渲染口 tr_str（数据侧
+  phase_hits/selected_phase_name/比较逻辑存英文）；`{used} / {total} context` 模板；
+  run.status.replace('_'," ") 协议词保留英文（tasks_pane 侧对去下划线值 tr_str
+  查表，命中 complete/cancelled/interrupted/paused/budget limited/failed 则译）
+- `src/views/tasks_pane.rs`：分组头 group.label() tr（search_text 过滤匹配键仍
+  英文）；调度后缀整键含前导空格（" (next in {})"（2 处）/" (due now)"/
+  " (running)"/" (starting)"，label 与 styled 同源）；空态三段 Span 两段成键；
+  "Task " 前缀复用 Task 键显式补空格（避免尾随空格近重复键）；`1 agent`/
+  `{n} agents` 复用既有模板键；"killing… " 覆盖层整键
+
+### 仲裁与取舍（P3）
+
+- `[worktree:on]`/`[worktree:off]` 徽标不译：宽度按 ASCII `len()` 预算且
+  `find("on")` 字面定位高亮重绘，译文同时破坏宽度与定位
+- dashboard 行年龄列 format_time_ago（"2m"/"just now"）不译：`{age:>6}` 按字符数
+  填充对齐，CJK 破宽；util 出口跨视图属后续范围
+- 5s/3m/2h 紧凑时长单位保留（agent_status chip 宽度预算）
+- app 层动态串透传英文：format_activity_label（"Running: cargo test"）、
+  format_subagent_label、format_context_badge——整串含运行时数据无法成键，
+  app 层文案如需中文化另行立项
+- tasks_pane 行 label 构造期翻译（entries 每次 sync 重建）：中文模式下行过滤匹配
+  中文片段，与 dashboard/render.rs 同款既定取舍
+- 占位符 `<query>` 随正文意译为 `<查询>`（斜杠命令用法串 [文件] 先例）；
+  "esc close"（小写）与既有 "Esc close" 分键并存，译文风格一致
+- workflows rail 宽度预估按未译 title 计算，中文标题略宽由 truncate_to_width 兜底，
+  布局数学未动
+- tests 断言的 state 值全部保持英文（测试构建查表整体旁路），tests 模块与
+  *_tests.rs 零改动；查重脚本（translations() 全表解析断言无重复键无同键异译）
+  重放时从本文件十期条目描述重建（Python，Rust \u{...} 转义需自行解码）
+
+## 十二期补丁（2026-09-18：界面文案中文化 P4 低感知扫尾，i18n 计划全部完工）
+
+> 方案见 `docs-local/ui-i18n-plan.md`（P4 = 低感知扫尾，约 20 个小文件）。
+> 翻译表 1338 → 1417 组（+79）；施工规约与术语表以方案文档为准。
+> 施工方式：3 个并发子代理分批接线（面板浮层 / 弹窗 dock 状态条 / 列表命令层），
+> 主会话合并键值 + 补 rewind.rs 两处清单外漏网。
+
+### xai-grok-pager（P4：jump/queue/todo/subagent_catalog/btw/location/session_title/
 ### new_worktree/managed_connectors_wait/hero_box/workspace_mode/dock/credit_bar/
-### list_pane/block_viewer/picker/theme/debug/mode_support + rewind 琛ユ紡锛?
+### list_pane/block_viewer/picker/theme/debug/mode_support + rewind 补漏）
 
-- `src/slash/i18n.rs`锛氱炕璇戣〃杩藉姞 P4 娈?79 缁勶紝鍒嗚妭涓庢枃浠朵竴涓€瀵瑰簲锛坖ump/rewind銆?
-  queue/todo/subagent_catalog銆乥tw/location/session_title銆乶ew_worktree/
-  managed_connectors銆乭ero/workspace_mode銆乨ock銆乧redit_bar銆乴ist_pane銆?
-  block_viewer/picker銆乼heme/debug銆乵ode_support 鎷掔粷妯℃澘锛?
-- `src/views/jump.rs`锛氭诞灞傛爣棰?"Jump to which turn?"銆?(no preview)" 鍏滃簳 tr
-- `src/views/rewind.rs`锛堟竻鍗曞琛ユ紡锛屼笌 jump 鍏辩敤閿級锛氭爣棰?"Rewind to which
-  turn?"銆?Loading rewind points..."銆?(no preview)" 涓夊 tr
-- `src/views/queue_pane.rs`锛氬琛屽悗缂€ " (+1 line)"/" (+{n} lines)" 鏁撮敭锛堝搴︽寜
-  瀹為檯璇戞枃鍔ㄦ€佺畻锛屾棤瀵归綈鐮村潖锛?
-- `src/views/todo_pane.rs`锛氱┖鎬?瀹屾垚鎬?4 鏉★紙鍚?{c}/{d} 璁℃暟妯℃澘鏁撮敭 + replace锛?
-- `src/views/subagent_catalog_pane.rs`锛氬垎缁勫ご tr_str(owned_name)锛堟瀯閫犳湡鑻辨枃銆?
-  鏄剧ず鍑哄彛缈昏瘧锛宻earch_text 杩囨护閿笉鍔級銆佺┖鎬侊紱"Roles" 鏂伴敭锛孭ersonas/Agents
-  澶嶇敤鏃㈡湁閿?
-- `src/views/btw_overlay.rs`锛歀oading 鎬?"Answering鈥?锛堥敭鍚?U+2026锛?
-- `src/views/location.rs`锛歞etached鈫掑垎绂诲ご鎸囬拡銆? (worktree of {repo})" 鍓嶅绌烘牸
-  鏁撮敭锛堟祴璇曟瀯寤鸿嫳鏂囪緭鍑洪€愬瓧鑺備笉鍙橈級
-- `src/views/session_title.rs`锛氬悎鎴愬洖閫€鏍囬 "session {id}"銆?loading..."銆佺浉瀵?
-  鏃堕棿 "now"/"{secs}s ago"锛坽mins}m/{hours}h/{days}d ago 澶嶇敤鏃㈡湁閿彧鎺ョ嚎锛?
-- `src/views/new_worktree_dialog.rs`锛氭爣棰?Esc 鎻愮ず/瀛楁鍓嶇紑锛堝熬闅忕┖鏍煎湪閿唴锛?
-  " = create   "/" = cancel"锛屽搴﹁绠椾笌娓叉煋鍚屾簮锛坱r(LABEL_PREFIX).width()锛?
-- `src/views/managed_connectors_wait.rs`锛歔copied]/[copy the url] 鎸夐挳锛堝懡涓煩褰?
-  鐢卞疄闄呯粯鍒朵覆瀹藉害鎺ㄥ锛? 涓よ璇存槑
-- `src/views/welcome/hero_box.rs`锛欻ERO_SUBTITLE 鏁存涓€閿紙璇戞枃 57 鍒楃煭浜庡師鏂?
-  74 鍒椾笉鎾戠垎鍙虫爮锛夛紱Changelog 澶嶇敤鏃㈡湁閿?
-- `src/views/welcome/workspace_mode.rs`锛歴tatus_label() 涓夊垎鏀?tr锛堝敮涓€鐢熶骇鍑哄彛
-  鏄姸鎬佹潯缁樺埗锛屾棤姣旇緝娑堣垂锛夛紱"Workspace  " 鍓嶈繘閲忕敱纭紪鐮?11 鏀规樉绀哄搴︼紙鑻辨枃
-  绛夊€硷級锛涢€夐」 label() 鍦ㄦ覆鏌撳 tr锛堟柟娉曟湰韬繘鏃ュ織/娴嬭瘯涓嶅姩锛夛紱trailing 鍙冲榻?
-  鐢卞瓧鑺?len 鏀规樉绀哄搴︼紙涓枃鎸?3 瀛楄妭浼氶敊浣嶇殑蹇呰浼撮殢淇锛?
-- `src/views/dock/mod.rs`锛氬垎缁勮〃澶?tr(section.label())銆?show {n} more" 鏁撮敭銆?
-  tab_hint() 涓?kill_label()锛圼stop]锛夊湪鏂规硶鍐呭寘 tr锛堝懡涓煩褰㈢敱缁樺埗涓插搴︽帹瀵硷級锛?
-  灏忓啓 subagents/tasks/watchers/queued 鍒嗛敭锛沴ayout.rs 鏃犳枃妗堥浂鏀瑰姩
-- `src/views/context_bar.rs`锛?*闆舵敼鍔?*鈥斺€?MAX %" 鏈?PCT_WIDTH=5 鍥哄畾瀹藉害濂戠害
-  锛坔over 杩涘害鏉″搴︾敱瀹冨弽鎺?+ 娴嬭瘯鏂█ len==5锛夛紝鏃犵瓑瀹戒腑鏂囩瓑浠风墿锛岃眮鍏?
-- `src/views/credit_bar.rs`锛歶sage_label() 鍑哄彛 tr銆佹爣绛惧啋鍙峰墠缂€鍏ㄩ儴閲嶆瀯涓?
-  "{}: {}"锛堣嫳鏂囬€愬瓧鑺備笉鍙橈級銆丳AYG 鍙屾彃鍊兼ā鏉?${used}/${cap} 鏁撮敭銆?
-  tr_str(&format!("{label} left")) 鍔ㄦ€侀敭涓夋€併€備簨瀹炵粨璁猴細credit_bar_line 绯诲垪
-  鐢熶骇鏃犺皟鐢ㄧ偣锛堢姸鎬佹潯涓嶆覆鏌撳畠锛岀湡姝ｅ湪鐢ㄧ殑鏄?usage_warning/format_usage_summary锛夛紝
-  閿叆琛ㄥ鐢?
-- `src/views/list_pane/render.rs`锛? Copied!" toast锛堥摵鍐欐敼 set_string + 閫愭牸杩樺師
-  bg锛屽瀛楃涓嶉敊浣嶏紱浣嶇疆 min() 闃茶秺鐣岋級銆佽緭鍏ユ潯 4 鍓嶇紑銆乵atcher 妯″紡璇嶅鐢ㄦ棦鏈夐敭锛?
-  3 澶勫搴︾敱 len 鏀?UnicodeWidthStr::width
-- `src/views/block_viewer/mod.rs`锛歴hortcuts_hints 12 澶?hint 鏍囩绾帴绾匡紙閿潎鍦?
-  琛級銆?limit: "銆乺esult 璁℃暟涓ゆ潯锛堝崟澶嶆暟鎷嗛敭锛夈€?Sources ({})"
-- `src/views/picker.rs`锛歋EARCH_BAR_LABEL 鍥涘鍑哄彛 tr锛堝竷灞€瀹藉害鏀规樉绀哄垪瀹斤級銆?
-  " / to search"銆?Loading鈥?銆?No matches"锛沺icker_shortcuts 绛?hint 绾帴绾匡紱
-  娉ㄦ剰 picker_shortcuts 鏄?LazyLock鈥斺€旇瘧鏂囬娆¤皟鐢ㄥ浐鍖栵紝璇█闅忓惎鍔ㄥ浐瀹氭晠鏃犲奖鍝?
-- `src/slash/commands/theme.rs`锛歴uggest_args 鐨?"auto (follow system)" 涓?
-  " (active)" 鍚庣紑 tr锛坉escription/usage 鐢?slash_meta! 瀹忕粺涓€鍖?tr 鏃犻渶閲嶅锛?
-- `src/slash/commands/debug.rs`锛歴uggest_args 鍑哄彛 tr_str锛涗袱鏉℃柊閿紝绗笁鏉?
-  scroll-diagnostics 宸插湪琛ㄧ函鎺ョ嚎
-- `src/slash/mode_support.rs`锛歳efusal() 涓変釜妯℃澘鏁撮敭 + {why}/{instead} 鎻掑€煎
-  tr锛? 鏉?why锛堝畾涔夊垎鏁ｅ湪 jump/dashboard/theme/find/timeline/tutorial 鍚勫懡浠?
-  鏂囦欢锛変笌 1 鏉?instead 鍦ㄦ秷璐圭偣缁熶竴鏌ヨ〃锛屽悇瀹氫箟鏂囦欢闆舵敼鍔?
+- `src/slash/i18n.rs`：翻译表追加 P4 段 79 组，分节与文件一一对应（jump/rewind、
+  queue/todo/subagent_catalog、btw/location/session_title、new_worktree/
+  managed_connectors、hero/workspace_mode、dock、credit_bar、list_pane、
+  block_viewer/picker、theme/debug、mode_support 拒绝模板）
+- `src/views/jump.rs`：浮层标题 "Jump to which turn?"、"(no preview)" 兜底 tr
+- `src/views/rewind.rs`（清单外补漏，与 jump 共用键）：标题 "Rewind to which
+  turn?"、"Loading rewind points..."、"(no preview)" 三处 tr
+- `src/views/queue_pane.rs`：多行后缀 " (+1 line)"/" (+{n} lines)" 整键（宽度按
+  实际译文动态算，无对齐破坏）
+- `src/views/todo_pane.rs`：空态/完成态 4 条（含 {c}/{d} 计数模板整键 + replace）
+- `src/views/subagent_catalog_pane.rs`：分组头 tr_str(owned_name)（构造期英文、
+  显示出口翻译，search_text 过滤键不动）、空态；"Roles" 新键，Personas/Agents
+  复用既有键
+- `src/views/btw_overlay.rs`：Loading 态 "Answering…"（键含 U+2026）
+- `src/views/location.rs`：detached→分离头指针、" (worktree of {repo})" 前导空格
+  整键（测试构建英文输出逐字节不变）
+- `src/views/session_title.rs`：合成回退标题 "session {id}"、"loading..."、相对
+  时间 "now"/"{secs}s ago"（{mins}m/{hours}h/{days}d ago 复用既有键只接线）
+- `src/views/new_worktree_dialog.rs`：标题/Esc 提示/字段前缀（尾随空格在键内）/
+  " = create   "/" = cancel"，宽度计算与渲染同源（tr(LABEL_PREFIX).width()）
+- `src/views/managed_connectors_wait.rs`：[copied]/[copy the url] 按钮（命中矩形
+  由实际绘制串宽度推导）+ 两行说明
+- `src/views/welcome/hero_box.rs`：HERO_SUBTITLE 整段一键（译文 57 列短于原文
+  74 列不撑爆右栏）；Changelog 复用既有键
+- `src/views/welcome/workspace_mode.rs`：status_label() 三分支 tr（唯一生产出口
+  是状态条绘制，无比较消费）；"Workspace  " 前进量由硬编码 11 改显示宽度（英文
+  等值）；选项 label() 在渲染处 tr（方法本身进日志/测试不动）；trailing 右对齐
+  由字节 len 改显示宽度（中文按 3 字节会错位的必要伴随修正）
+- `src/views/dock/mod.rs`：分组表头 tr(section.label())、"show {n} more" 整键、
+  tab_hint() 与 kill_label()（[stop]）在方法内包 tr（命中矩形由绘制串宽度推导）；
+  小写 subagents/tasks/watchers/queued 分键；layout.rs 无文案零改动
+- `src/views/context_bar.rs`：**零改动**——"MAX %" 有 PCT_WIDTH=5 固定宽度契约
+  （hover 进度条宽度由它反推 + 测试断言 len==5），无等宽中文等价物，豁免
+- `src/views/credit_bar.rs`：usage_label() 出口 tr、标签冒号前缀全部重构为
+  "{}: {}"（英文逐字节不变）、PAYG 双插值模板 ${used}/${cap} 整键、
+  tr_str(&format!("{label} left")) 动态键三态。事实结论：credit_bar_line 系列
+  生产无调用点（状态条不渲染它，真正在用的是 usage_warning/format_usage_summary），
+  键入表备用
+- `src/views/list_pane/render.rs`：" Copied!" toast（铺写改 set_string + 逐格还原
+  bg，宽字符不错位；位置 min() 防越界）、输入条 4 前缀、matcher 模式词复用既有键；
+  3 处宽度由 len 改 UnicodeWidthStr::width
+- `src/views/block_viewer/mod.rs`：shortcuts_hints 12 处 hint 标签纯接线（键均在
+  表）、"limit: "、result 计数两条（单复数拆键）、"Sources ({})"
+- `src/views/picker.rs`：SEARCH_BAR_LABEL 四处出口 tr（布局宽度改显示列宽）、
+  " / to search"、"Loading…"、"No matches"；picker_shortcuts 等 hint 纯接线；
+  注意 picker_shortcuts 是 LazyLock——译文首次调用固化，语言随启动固定故无影响
+- `src/slash/commands/theme.rs`：suggest_args 的 "auto (follow system)" 与
+  " (active)" 后缀 tr（description/usage 由 slash_meta! 宏统一包 tr 无需重复）
+- `src/slash/commands/debug.rs`：suggest_args 出口 tr_str；两条新键，第三条
+  scroll-diagnostics 已在表纯接线
+- `src/slash/mode_support.rs`：refusal() 三个模板整键 + {why}/{instead} 插值处
+  tr；6 条 why（定义分散在 jump/dashboard/theme/find/timeline/tutorial 各命令
+  文件）与 1 条 instead 在消费点统一查表，各定义文件零改动
 
-### 浠茶涓庡彇鑸嶏紙P4锛?
+### 仲裁与取舍（P4）
 
-- `[cancel]`/`[Send now]`/`[edit]`锛坬ueue_pane 鎸夐挳缁勶級涓嶈瘧锛氬搴︽寜 ASCII
-  `label.len()` 棰勭畻锛屼笁鎸夐挳 flush 閾句笌绐勯潰鏉夸涪鎸夐挳椤哄簭琚祴璇曟寜 ASCII 瀹芥柇瑷€
-- `worktree ` 寰芥爣锛坙ocation.rs锛変笉璇戯細鐘舵€佹爮瀛敓瀹炵幇锛坅gent_view/render.rs锛?
-  鎸?`"worktree ".width()` 棰勭畻璺緞鐑尯鍋忕Щ锛屼袱渚у繀椤诲悓杩涢€€
-- `[Esc]`锛坆tw_overlay锛変笉璇戯細閿悕寰芥爣锛屽弬涓庡彸瀵归綈瀹藉害棰勭暀/鍛戒腑鐭╁舰
-- 杩戦噸澶嶉敭骞跺瓨锛歚"New Worktree"`锛堟湰鏂囦欢鍘熸枃澶у啓锛変笌鏃㈡湁 `"New worktree"` 鍒嗛敭
-  锛堝師鏂囦笉鍙敼锛夛紱`" search: "`锛坧icker 甯冨眬 pad锛変笌 `"search: "`锛坙ist_pane
-  杈撳叆鏉★級鍒嗛敭锛沗"queued"` 灏忓啓涓?P3 `"Queued"` 鍒嗛敭
-- 瀹藉害璇箟浼撮殢淇锛堣嫳鏂囬€愬€间笉鍙橈紝涓枃鎵嶇敓鏁堬級锛歭ist_pane toast/杈撳叆鏉?status銆?
-  picker 鎼滅储鏉°€亀orkspace_mode trailing/Workspace 鍓嶈繘閲忓叡 6+ 澶?byte len 鈫?
-  UnicodeWidthStr::width锛屽睘"璇戞枃淇濆"閾佸緥鐨勬垚瀵硅皟鏁?
-- 妯″紡鍚?minimal/fullscreen锛坮efusal 妯℃澘 {current} 杩愯鏃跺€硷級鏈瘧锛氭ā寮?鍛戒护
-  鏍囪瘑绗︼紝涓庢棦鏈夎〃姝ｆ枃鐢ㄦ瀬绠€/鍏ㄥ睆銆佸懡浠ゅ悕淇濈暀鍘熸枃鐨勮瘧娉曞苟瀛?
-- screen_mode_switch.rs 闆舵敼鍔細璁″垝鎵€璁?婕忚瘧涓€鏉?鍓嶆彁涓嶆垚绔嬶紙涓ら敭鍧囧湪琛ㄤ笖宸插寘
-  tr锛夛紱expand.rs 闆舵敼鍔細UseInstead 鎻愮ず鍦?mode_support 娑堣垂鐐圭粺涓€鏌ヨ〃
-- credit_bar 缁撹鎬ц眮鍏嶈褰曪細鐘舵€佹潯娓叉煋璺緞褰撳墠鏈帴锛堟浠ｇ爜锛夛紝閿叆琛ㄥ鐢紝
-  鏈潵鎺ョ嚎鍗崇敓鏁?
+- `[cancel]`/`[Send now]`/`[edit]`（queue_pane 按钮组）不译：宽度按 ASCII
+  `label.len()` 预算，三按钮 flush 链与窄面板丢按钮顺序被测试按 ASCII 宽断言
+- `worktree ` 徽标（location.rs）不译：状态栏孪生实现（agent_view/render.rs）
+  按 `"worktree ".width()` 预算路径热区偏移，两侧必须同进退
+- `[Esc]`（btw_overlay）不译：键名徽标，参与右对齐宽度预留/命中矩形
+- 近重复键并存：`"New Worktree"`（本文件原文大写）与既有 `"New worktree"` 分键
+  （原文不可改）；`" search: "`（picker 布局 pad）与 `"search: "`（list_pane
+  输入条）分键；`"queued"` 小写与 P3 `"Queued"` 分键
+- 宽度语义伴随修正（英文逐值不变，中文才生效）：list_pane toast/输入条/status、
+  picker 搜索条、workspace_mode trailing/Workspace 前进量共 6+ 处 byte len →
+  UnicodeWidthStr::width，属"译文保宽"铁律的成对调整
+- 模式名 minimal/fullscreen（refusal 模板 {current} 运行时值）未译：模式/命令
+  标识符，与既有表正文用极简/全屏、命令名保留原文的译法并存
+- screen_mode_switch.rs 零改动：计划所记"漏译一条"前提不成立（两键均在表且已包
+  tr）；expand.rs 零改动：UseInstead 提示在 mode_support 消费点统一查表
+- credit_bar 结论性豁免记录：状态条渲染路径当前未接（死代码），键入表备用，
+  未来接线即生效
 
-### 宸茬煡 Windows 鐜鏃忔祴璇曞け璐ワ紙涓?P4 鏃犲叧锛孉/B 瀹氳矗鐣欐。锛?
+### 已知 Windows 环境族测试失败（与 P4 无关，A/B 定责留档）
 
-P4 鍚庤窇 `cargo test --lib views::` 涓?2766 閫氳繃 / 2 澶辫触锛涗袱澶辫触鍦?main 鍩虹嚎
-锛?878bc8d锛孭4 涔嬪墠锛夊悓鏍峰け璐ワ紝涓?git -S 鑰冨彜纭缂洪櫡閫昏緫鍧囨潵鑷笂娓告彁浜?
-锛坈68e39f6 棣栧彂 / a5589e95 鍚屾锛夛紝LOCAL 鍚勬湡鏈Е纰帮細
+P4 后跑 `cargo test --lib views::` 为 2766 通过 / 2 失败；两失败在 main 基线
+（0878bc8d，P4 之前）同样失败，且 git -S 考古确认缺陷逻辑均来自上游提交
+（c68e39f6 首发 / a5589e95 同步），LOCAL 各期未触碰：
 
-- `views::extensions_modal::tests::handle_key_tab_completes_single_field_path`锛?
-  `tab_complete_path()`锛坋xtensions_modal.rs ~1620锛夌埗鐩綍鍥炴嫾鍙 `/`
-  锛坄expanded.contains('/')` 鈫?`rsplit_once('/')`锛夛紝Windows 璺緞鏄?`\` 鍒嗛殧锛?
-  parent_str 寰楃┖涓?鈫?Tab 琛ュ叏鍙墿鍩哄悕銆備笂娓?Linux CI 涓嶆挒鐨?Windows 鐪熺己闄?
-  锛堝悓姝ユ枃浠讹紝淇椤荤櫥璁伴噸鏀撅級锛屽彟琛岀珛椤?
-- `views::btw_overlay::tests::done_state_scans_file_paths_like_scrollback`锛?
-  娴嬭瘯鐢?POSIX 璺緞 `/Users/...`锛屾壂鎻忎笌瑙ｆ瀽閾捐矾锛坥sc8.rs pass 2 鈫?
-  resolve_tool_path_target锛夊叏閫氾紝鏈€鍚?`file_path_to_url` 鐨?
-  `Url::from_file_path` 鍦?Windows 鎷掔粷鏃犵洏绗﹁矾寰?鈫?鏃?osc8_url銆侾OSIX 璇箟
-  鍋囪鐨勫钩鍙板樊寮傦紝闈炰骇鍝佺己闄凤紙Windows 鐪熷疄璺緞甯︾洏绗︼紝璧?Prefix 鍒嗘敮姝ｅ父锛?
+- `views::extensions_modal::tests::handle_key_tab_completes_single_field_path`：
+  `tab_complete_path()`（extensions_modal.rs ~1620）父目录回拼只认 `/`
+  （`expanded.contains('/')` → `rsplit_once('/')`），Windows 路径是 `\` 分隔，
+  parent_str 得空串 → Tab 补全只剩基名。上游 Linux CI 不撞的 Windows 真缺陷
+  （同步文件，修复须登记重放），另行立项
+- `views::btw_overlay::tests::done_state_scans_file_paths_like_scrollback`：
+  测试用 POSIX 路径 `/Users/...`，扫描与解析链路（osc8.rs pass 2 →
+  resolve_tool_path_target）全通，最后 `file_path_to_url` 的
+  `Url::from_file_path` 在 Windows 拒绝无盘符路径 → 无 osc8_url。POSIX 语义
+  假设的平台差异，非产品缺陷（Windows 真实路径带盘符，走 Prefix 分支正常）
 
-## 鍗佷簩鏈熷悗锛歩18n 鍒嗙骇鏂藉伐璁″垝锛圥0鈥揚4锛夊叏閮ㄥ畬宸?
+## 十二期后：i18n 分级施工计划（P0–P4）全部完工
 
-鍚庣画鏂板 UI 鏂囨闅忓啓闅忚ˉ閿嵆鍙紱doctor 璇婃柇涓?tips 闈㈡澘銆乵arkdown 姝ｆ枃浠嶆槸
-鑼冨洿澶栵紙瑙佹柟妗堟枃妗?鐮嶆帀/鍐崇瓥椤?锛夈€?
+后续新增 UI 文案随写随补键即可；doctor 诊断与 tips 面板、markdown 正文仍是
+范围外（见方案文档"砍掉/决策项"）。
 
-## 鍗佷笁鏈熻ˉ涓侊紙2026-09-18锛氫細璇濋粯璁?agent 灏婇噸 `[agent] name` 閰嶇疆锛?
+## 十三期补丁（2026-09-18：会话默认 agent 尊重 `[agent] name` 配置）
 
-### 闂
+### 问题
 
-涓婃父榛樿 `plan_mode`/`ask_user`/`subagents` 鍏ㄥ紑锛坄app.plan_mode = !args.no_plan`锛?
-event_loop.rs:1241-1243锛屾棤姝ｅ悜 `--plan` 鏃楁爣銆佹棤娉曡〃杈?鐢ㄦ埛鏄惧紡閫夋嫨"锛夛紝TUI 鍒涘缓
-浼氳瘽鏃?`SessionFlags::agent_profile()`锛坅pp/effects/helpers.rs锛夋寜鏃楁爣鍚堟垚
-`_meta.agentProfile = "grok-build-plan"`銆俿hell 瑙ｆ瀽閾撅紙xai-grok-shell
-agent_ops.rs `resolve_agent_definition`锛変腑 ACP agentProfile锛堢 2 姝ワ級浼樺厛绾?
-楂樹簬 config `[agent] name`锛堢 5 姝ワ級鈫?鐢ㄦ埛閰嶇疆鐨勯粯璁?agent 琚潤榛樿鐩栵紝
-鏂颁細璇濇案杩滄槸 grok-build-plan銆?
+上游默认 `plan_mode`/`ask_user`/`subagents` 全开（`app.plan_mode = !args.no_plan`，
+event_loop.rs:1241-1243，无正向 `--plan` 旗标、无法表达"用户显式选择"），TUI 创建
+会话时 `SessionFlags::agent_profile()`（app/effects/helpers.rs）按旗标合成
+`_meta.agentProfile = "grok-build-plan"`。shell 解析链（xai-grok-shell
+agent_ops.rs `resolve_agent_definition`）中 ACP agentProfile（第 2 步）优先级
+高于 config `[agent] name`（第 5 步）→ 用户配置的默认 agent 被静默覆盖，
+新会话永远是 grok-build-plan。
 
-### 鏀瑰姩锛坮espect_config_agent 闂搁棬锛?
+### 改动（respect_config_agent 闸门）
 
-- `src/app/effects/helpers.rs`锛歚SessionFlags` 澧?`respect_config_agent: bool`锛?
-  鏂板鍏宠仈鍑芥暟 `config_default_agent_name()`锛堣鐢熸晥閰嶇疆鐨?`[agent] name`锛夛紱
-  `to_meta()` 鐨?agentProfile 鍚堟垚鍒嗘敮鍔?`!respect_config_agent` 鍓嶇疆鏉′欢
-- `src/app/event_loop.rs`锛歚session_flags_for_effects` 鏋勯€犵偣锛?
+- `src/app/effects/helpers.rs`：`SessionFlags` 增 `respect_config_agent: bool`；
+  新增关联函数 `config_default_agent_name()`（读生效配置的 `[agent] name`）；
+  `to_meta()` 的 agentProfile 合成分支加 `!respect_config_agent` 前置条件
+- `src/app/event_loop.rs`：`session_flags_for_effects` 构造点：
   `respect_config_agent = app.agent_override.is_none() && config_default_agent_name().is_some()`
-- `src/app/effects/tests.rs`锛氭柊澧?
-  `respect_config_agent_suppresses_synthesized_profile`锛堥椄闂ㄥ彧鎶戝埗 profile锛?
-  涓嶅奖鍝?yoloMode 绛夊叾浣?meta锛?
+- `src/app/effects/tests.rs`：新增
+  `respect_config_agent_suppresses_synthesized_profile`（闸门只抑制 profile，
+  不影响 yoloMode 等其余 meta）
 
-### 琛屼负鐭╅樀
+### 行为矩阵
 
-- 閰嶇疆鏃?`[agent] name`锛氳涓轰笌涓婃父涓€鑷达紙鍚堟垚 profile锛?
-- 閰嶇疆鏈?`[agent] name` 涓旀棤 `--agent`/`GROK_AGENT`锛氫笉鍙?agentProfile 鈫?
-  閰嶇疆 agent锛坓rok-build-concise锛夌敓鏁堬紱plan/ask-user 鍏朵綑 meta 涓嶅彈褰卞搷
-- `--agent` / `GROK_AGENT`锛氭樉寮忛€夋嫨锛屼紭鍏堢骇鐓ф棫锛岄椄闂ㄨ嚜鍔ㄨ浣?
-- 姣忔 create-session 璇讳竴娆￠厤缃紙鐢ㄦ埛鎵嬪姩瑙﹀彂锛岄潪鐑矾寰勶級
+- 配置无 `[agent] name`：行为与上游一致（合成 profile）
+- 配置有 `[agent] name` 且无 `--agent`/`GROK_AGENT`：不发 agentProfile →
+  配置 agent（grok-build-concise）生效；plan/ask-user 其余 meta 不受影响
+- `--agent` / `GROK_AGENT`：显式选择，优先级照旧，闸门自动让位
+- 每次 create-session 读一次配置（用户手动触发，非热路径）
 
-### 閲嶆斁娉ㄦ剰
+### 重放注意
 
-- 涓夊鍧囦负鍚屾鏂囦欢锛涢椄闂ㄦ槸绾墠缃潯浠讹紝涓嶆敼鍙?agent_profile() 鏈韩鐨勬槧灏勮〃
-- 宸茬煡杈圭晫锛氶厤缃?agent 鍚?plan 妯″紡涓嶅啀鑷姩甯?plan 宸ュ叿闆嗭紙enter/exit_plan_mode
-  闅?plan 瀹氫箟璧帮級鈥斺€旈渶瑕?plan 宸ヤ綔娴佹椂鏄惧紡 `grok2 --agent grok-build-plan`
+- 三处均为同步文件；闸门是纯前置条件，不改变 agent_profile() 本身的映射表
+- 已知边界：配置 agent 后 plan 模式不再自动带 plan 工具集（enter/exit_plan_mode
+  随 plan 定义走）——需要 plan 工作流时显式 `grok2 --agent grok-build-plan`
 
-## 鍗佷簲鏈熻ˉ涓侊紙2026-09-18锛氭瀬绠€椋庢牸涓?agent 鍙樹綋瑙ｈ€︼紝`/style` 姝ｄ氦瑕嗙洊灞傦級
+## 十五期补丁（2026-09-18：极简风格与 agent 变体解耦，`/style` 正交覆盖层）
 
-> 鑳屾櫙锛氬崄涓夋湡鐨勬瀬绠€妯″紡鎶婇鏍艰鍒欑粦姝诲湪 `grok-build-concise` 鍙樹綋閲岋紙鎹㈣浇浣?鎹㈠伐鍏?
-> 闆?涓?AGENTS.md/MCP/瀛愪唬鐞嗭級锛岀敤鎴疯鐨勬槸"椋庢牸绾︽潫鍙犲姞鍒颁换浣?agent"銆?
-> 鏈湡鎶婁袱鑰呮浜ゅ寲锛氶鏍?= 鍙寔涔呭寲寮€鍏崇殑瑕嗙洊灞傦紱concise 鍙樹綋鍥炲綊涓婃父鏈箟
-> 锛堢槮宸ュ叿闆?+ COMPACT_SYSTEM_PROMPT + agents_md:false锛屼笉鍐嶅唴宓岃鍒欙級銆?
+> 背景：十三期的极简模式把风格规则绑死在 `grok-build-concise` 变体里（换载体=换工具
+> 集+丢 AGENTS.md/MCP/子代理），用户要的是"风格约束叠加到任何 agent"。
+> 本期把两者正交化：风格 = 可持久化开关的覆盖层；concise 变体回归上游本义
+> （瘦工具集 + COMPACT_SYSTEM_PROMPT + agents_md:false，不再内嵌规则）。
 
-### 璇箟锛堢敤鎴峰畾涔夛級
+### 语义（用户定义）
 
-- `/style`锛堟棤鍙傛暟锛? 鍦ㄥ紑/鍏抽棿鍒囨崲锛沗/style minimal` 寮哄埗寮€锛沗/style default`
-  寮哄埗鍏?
-- 鍒囨崲**鎸佷箙鍖?*锛坄<grok_home>/output_style.json`锛屽閿欒В鏋愶細缂烘枃浠?鎹熷潖=鍏筹級
-- 姣忔 session spawn锛堜富浼氳瘽涓庡瓙浠ｇ悊鍚屼竴鏉¤矾寰勶級璇讳竴娆℃寔涔呭寲鐘舵€侊紝鎶婅鍒欏彔鍔犲埌
-  绯荤粺鎻愮ず 鈫?涓嬩竴娆′細璇濆惎鍔ㄥ繀鐒剁敓鏁?
-- **棣栨妯″瀷璋冪敤鍓?*鍒囨崲锛氬悓鏃舵敼鍐欏綋鍓嶄細璇濈殑 System 澶达紙`replace_system_head`锛?
-  骞舵洿鏂?actor 涓婄殑 live 鏍囧織 鈫?鏈細璇濈珛鍗崇敓鏁?
-- 棣栨妯″瀷璋冪敤鍚庡垏鎹細鍙寔涔呭寲锛?*褰撳墠浼氳瘽鎻愮ず璇嶄笉鍔?*锛堜笉鏀瑰啓宸插缓绔嬬殑浼氳瘽鍘嗗彶锛?
-  鏃犵紦瀛樻姈鍔級锛沴ive 鏍囧織涓嶅啀缈昏浆
-- 鍒ゅ畾闂搁棬 = actor 鐨?`first_model_call_done`锛坰ampler_turn 鐨?
-  `record_response_token_usage` 涓?`log_terminal_failure` 涓や釜鏀跺彛缃綅鈥斺€旀垚鍔熶笌
-  缁堟€佸け璐ラ兘绠?鍙戠敓杩囨ā鍨嬭姹?锛?
-- agent/model 鍒囨崲閲嶅缓鎻愮ず璇嶆椂鎸?live 鏍囧織閲嶆斁瑕嗙洊灞傦紙骞傜瓑 strip+append锛夛紝椋庢牸
-  璺ㄨ浇浣撳垏鎹繚鎸?
+- `/style`（无参数）= 在开/关间切换；`/style minimal` 强制开；`/style default`
+  强制关
+- 切换**持久化**（`<grok_home>/output_style.json`，容错解析：缺文件/损坏=关）
+- 每次 session spawn（主会话与子代理同一条路径）读一次持久化状态，把规则叠加到
+  系统提示 → 下一次会话启动必然生效
+- **首次模型调用前**切换：同时改写当前会话的 System 头（`replace_system_head`）
+  并更新 actor 上的 live 标志 → 本会话立即生效
+- 首次模型调用后切换：只持久化，**当前会话提示词不动**（不改写已建立的会话历史，
+  无缓存抖动）；live 标志不再翻转
+- 判定闸门 = actor 的 `first_model_call_done`（sampler_turn 的
+  `record_response_token_usage` 与 `log_terminal_failure` 两个收口置位——成功与
+  终态失败都算"发生过模型请求"）
+- agent/model 切换重建提示词时按 live 标志重放覆盖层（幂等 strip+append），风格
+  跨载体切换保持
 
-### 鏀瑰姩锛堟寜 crate锛?
+### 改动（按 crate）
 
-- `xai-grok-agent/src/prompt/template.rs`锛歚LOCAL_CONCISE_RULES` 鏇村悕
-  `LOCAL_MINIMAL_STYLE_RULES`锛涙柊 `apply_minimal_style(base, enabled)`锛堟寜
-  `# Output style: minimal` 澶存埅鏂墺绂?+ 灏鹃儴杩藉姞锛屽弻鍚戝箓绛夛級+ 鍗曟祴
-- `xai-grok-agent/src/config.rs`锛歚grok_build_concise()` 鐨?system_prompt 鍥炲綊
-  绾?`COMPACT_SYSTEM_PROMPT`锛堣鍒欐敞鍏ョЩ闄わ級
-- `xai-grok-shell/src/agent/output_style.rs`锛堟柊锛夛細鎸佷箙鍖栬/鍐?
-  `<grok_home>/output_style.json`锛坄grok_home()` 鍚屾璺緞锛涘閿欒В鏋愶級+ 鍗曟祴
-- `xai-grok-shell/src/session/acp_session.rs`锛歋essionActor 鏂板
-  `output_style_applied: AtomicBool`锛坙ive 鏍囧織锛変笌 `first_model_call_done:
+- `xai-grok-agent/src/prompt/template.rs`：`LOCAL_CONCISE_RULES` 更名
+  `LOCAL_MINIMAL_STYLE_RULES`；新 `apply_minimal_style(base, enabled)`（按
+  `# Output style: minimal` 头截断剥离 + 尾部追加，双向幂等）+ 单测
+- `xai-grok-agent/src/config.rs`：`grok_build_concise()` 的 system_prompt 回归
+  纯 `COMPACT_SYSTEM_PROMPT`（规则注入移除）
+- `xai-grok-shell/src/agent/output_style.rs`（新）：持久化读/写
+  `<grok_home>/output_style.json`（`grok_home()` 同款路径；容错解析）+ 单测
+- `xai-grok-shell/src/session/acp_session.rs`：SessionActor 新增
+  `output_style_applied: AtomicBool`（live 标志）与 `first_model_call_done:
   AtomicBool`
-- `xai-grok-shell/src/session/acp_session_impl/spawn.rs`锛歜ootstrap 澶?
-  `apply_minimal_style(agent.system_prompt(), 鎸佷箙鍖栫姸鎬?`锛堜富/瀛愪唬鐞嗗叡浜矾寰勶紝
-  鍏?agent 瑕嗙洊锛夛紱actor 鍒濆鍖栦袱涓瓧娈?
-- `xai-grok-shell/src/session/acp_session_impl/sampler_turn.rs`锛氫袱涓敹鍙ｇ偣缃綅
+- `xai-grok-shell/src/session/acp_session_impl/spawn.rs`：bootstrap 处
+  `apply_minimal_style(agent.system_prompt(), 持久化状态)`（主/子代理共享路径，
+  全 agent 覆盖）；actor 初始化两个字段
+- `xai-grok-shell/src/session/acp_session_impl/sampler_turn.rs`：两个收口点置位
   `first_model_call_done`
-- `xai-grok-shell/src/session/acp_session_impl/model_switch.rs`锛?
-  `handle_set_session_model` 鐨?concise 鐗逛緥鍒嗘敮鍒犻櫎锛坄use_concise` 鍙傛暟閫€鍖栦负
-  `_use_concise`锛夛紝鏀瑰啓缁熶竴璧?`apply_minimal_style(agent.system_prompt(),
-  output_style_applied)`锛沗handle_rebuild_agent_for_definition` 閲嶅缓鎻愮ず璇嶅悓鏍?
-  鎸?live 鏍囧織閲嶆斁
-- `xai-grok-shell/src/session/slash_commands.rs`锛歚BuiltinCommand "style"` 娉ㄥ唽
-  锛坄BuiltinGate::AlwaysOn` 鑷姩杩涗繚鐣欏悕鍗曪級+ `BuiltinAction::SetMinimalStyle
-  { enabled: Option<bool> }`锛圢one=鍒囨崲锛? `command_name`/`args_provided` 鑷?
-- `xai-grok-shell/src/session/acp_session_impl/slash_exec.rs`锛氭墽琛屽櫒锛堟寔涔呭寲 +
-  棣栨璋冪敤鍓?`replace_system_head` 閲嶅啓 + 缈昏浆 live 鏍囧織锛涘け璐ヤ粎鍛婅涓嶅洖婊氾級
-- `xai-grok-pager/src/slash/i18n.rs`锛氬懡浠ゆ弿杩颁腑鏂囬敭 1 缁勶紙鎻忚堪缁?
-  acp_command 鐨?tr_str 閫氶亾鑷姩缈昏瘧锛沘rgument_hint 涓?always-approve 鐨?
-  "on|off" 鍚屼緥涓嶈瘧锛?
+- `xai-grok-shell/src/session/acp_session_impl/model_switch.rs`：
+  `handle_set_session_model` 的 concise 特例分支删除（`use_concise` 参数退化为
+  `_use_concise`），改写统一走 `apply_minimal_style(agent.system_prompt(),
+  output_style_applied)`；`handle_rebuild_agent_for_definition` 重建提示词同样
+  按 live 标志重放
+- `xai-grok-shell/src/session/slash_commands.rs`：`BuiltinCommand "style"` 注册
+  （`BuiltinGate::AlwaysOn` 自动进保留名单）+ `BuiltinAction::SetMinimalStyle
+  { enabled: Option<bool> }`（None=切换）+ `command_name`/`args_provided` 臂
+- `xai-grok-shell/src/session/acp_session_impl/slash_exec.rs`：执行器（持久化 +
+  首次调用前 `replace_system_head` 重写 + 翻转 live 标志；失败仅告警不回滚）
+- `xai-grok-pager/src/slash/i18n.rs`：命令描述中文键 1 组（描述经
+  acp_command 的 tr_str 通道自动翻译；argument_hint 与 always-approve 的
+  "on|off" 同例不译）
 
-### 鍐崇瓥璁板綍 / 閲嶆斁娉ㄦ剰
+### 决策记录 / 重放注意
 
-- 瑕嗙洊灞傛槸**鏇挎崲寮?*锛坰trip 澶存埅鏂?+ append锛夛細鑻ヨ嚜瀹氫箟 agent 鎻愮ず璇嶆鏂囨伆濂藉惈
-  `# Output style: minimal` 澶翠細琚埅鏂€斺€旇嚜瀹氫箟鎻愮ず璇嶉伩鍏嶄娇鐢ㄨ澶?
-- 鎸佷箙鍖栨槸杩涚▼澶栨枃浠惰€岄潪 config.toml锛氶伩鍏嶇▼搴忓寲鏀瑰啓鐢ㄦ埛鎵嬬紪閰嶇疆锛涗笌
-  announcements.json 鍚屾灏忕姸鎬佹枃浠舵ā寮?
-- 鍘嬬缉涓嶉噸寤虹郴缁熷ご锛坄COMPACT_SYSTEM_PROMPT` 浠?concise 瀹氫箟涓?
-  `compact_system_prompt()` 璁块棶鍣ㄧ敤锛屽悗鑰呮棤鐢熶骇璋冪敤鏂癸級鈥斺€斿帇缂╁悗椋庢牸淇濇寔锛屾棤闇€
-  棰濆鎺ョ偣
-- 鍗佷笁鏈熺殑"concise = compact 鍩哄骇 + 瑙勫垯鑺?璇箟鐢辨湰鏈熷彇浠ｏ細涓よ€呯幇鍦ㄥ彲鐙珛缁勫悎
-  锛坈oncise 杞戒綋 + `/style` 寮€ = 绛変环鏃ц涓猴紱榛樿杞戒綋 + `/style` 寮€ = 鍏ㄥ伐鍏烽泦
-  鏋佺畝椋庢牸锛孧CP/瀛愪唬鐞?AGENTS.md 涓嶅彈褰卞搷锛?
-- 娴嬭瘯PROFILE 娉ㄦ剰锛歺ai-grok-shell 娴嬭瘯 profile 鏈変笂娓歌嚜甯︾紪璇戦敊璇紙瑙?宸茬煡
-  闂"锛夛紝鏈湡 shell 渚ч獙璇佷互 `cargo check` 涓哄噯锛屽崟娴嬭鐩栨斁鍦?
-  xai-grok-agent锛坅pply_minimal_style锛変笌 output_style.rs 妯″潡鍐?
+- 覆盖层是**替换式**（strip 头截断 + append）：若自定义 agent 提示词正文恰好含
+  `# Output style: minimal` 头会被截断——自定义提示词避免使用该头
+- 持久化是进程外文件而非 config.toml：避免程序化改写用户手编配置；与
+  announcements.json 同款小状态文件模式
+- 压缩不重建系统头（`COMPACT_SYSTEM_PROMPT` 仅 concise 定义与
+  `compact_system_prompt()` 访问器用，后者无生产调用方）——压缩后风格保持，无需
+  额外接点
+- 十三期的"concise = compact 基座 + 规则节"语义由本期取代：两者现在可独立组合
+  （concise 载体 + `/style` 开 = 等价旧行为；默认载体 + `/style` 开 = 全工具集
+  极简风格，MCP/子代理/AGENTS.md 不受影响）
+- 测试PROFILE 注意：xai-grok-shell 测试 profile 有上游自带编译错误（见"已知
+  问题"），本期 shell 侧验证以 `cargo check` 为准，单测覆盖放在
+  xai-grok-agent（apply_minimal_style）与 output_style.rs 模块内
 
-### agent crate 娴嬭瘯鍩虹嚎褰掑洜锛圓/B 闈欐€佽瘉鏄庯紝涓庢湰鏈熸棤鍏筹級
+### agent crate 测试基线归因（A/B 静态证明，与本期无关）
 
-`cargo test -p xai-grok-agent --lib` 10 澶辫触锛屽叏閮ㄤ笌鏈湡 diff 闆舵枃浠朵氦闆嗭紙diff
-浠呰Е鍙?template.rs/config.rs + shell/pager 10 鏂囦欢锛屽け璐ユ祴璇曠殑杈撳叆鍦ㄥ垎鏀笌
-main 閫愬瓧鑺傜浉鍚岋紝灞?main 鏃㈡湁 Windows 鐜鏃忥級锛?
+`cargo test -p xai-grok-agent --lib` 10 失败，全部与本期 diff 零文件交集（diff
+仅触及 template.rs/config.rs + shell/pager 10 文件，失败测试的输入在分支与
+main 逐字节相同，属 main 既有 Windows 环境族）：
 
-- `prompt::template::test_encrypted_templates_not_stale`锛歚.gitattributes` 瀵?
-  `templates/` 鏃?LF 瑙勫垯锛學indows CRLF checkout 浣?include_bytes! 璇诲埌 CRLF锛?
-  涓?LF 鐢熸垚鐨勫姞瀵嗗父閲忎笉鍖归厤锛堜笂娓?`Synced from monorepo` 鑷甫锛?
-- plugins::local_refresh / install_registry 7 渚嬶細symlink / 鏂囦欢閿?/ 涓存椂璺緞
-  瀹舵棌
-- prompt::skills 2 渚嬶細鐩綍鎵弿瀹舵棌
+- `prompt::template::test_encrypted_templates_not_stale`：`.gitattributes` 对
+  `templates/` 无 LF 规则，Windows CRLF checkout 使 include_bytes! 读到 CRLF，
+  与 LF 生成的加密常量不匹配（上游 `Synced from monorepo` 自带）
+- plugins::local_refresh / install_registry 7 例：symlink / 文件锁 / 临时路径
+  家族
+- prompt::skills 2 例：目录扫描家族
 
-鏈湡瑙﹀強闈㈠叏閮ㄩ€氳繃锛歚minimal_style_overlay_appends_strips_and_is_idempotent`銆?
-`test_mid_session_switch_concise_to_full`銆乼emplate 缁?31/32锛堝敮涓€澶辫触鍗充笂杩?
-鏃㈡湁椤癸級銆?
+本期触及面全部通过：`minimal_style_overlay_appends_strips_and_is_idempotent`、
+`test_mid_session_switch_concise_to_full`、template 组 31/32（唯一失败即上述
+既有项）。
 
-## 鍗佸洓鏈熻ˉ涓侊紙2026-09-18锛氬浗妯￠€傞厤鈥斺€攖hink 鏍囪娉勬紡 + ChatCompletions 缃戝叧 quirk锛?
+## 十四期补丁（2026-09-18：国模适配——think 标记泄漏 + ChatCompletions 网关 quirk）
 
-> 鑳屾櫙锛欴eepSeek V4 Flash 缁?OpenAI 鍏煎绔偣鎺ュ叆鏃讹紝`</think>` 缁撴潫鏍囪琚綋浣滄鏂?
-> 娉勬紡鍒?UI锛堟帹鐞嗘湰浣撹蛋 `reasoning_content` 瀛楁锛岀綉鍏冲湪 reasoning鈫掓鏂囪竟鐣屾妸瀛ょ珛鐨?
-> `</think>` 浣滀负鍗曠嫭 content chunk 涓嬪彂锛沷pencode issue #34126 鍚屾娴佸舰鎬侊級銆?
-> 璋冪爺缁撹锛坥pencode #1325/#34698/#15389銆乿ercel/ai extractReasoningMiddleware銆?
-> qwen-code taggedThinkingParser.ts銆乧rush/fantasy銆乿LLM ReasoningParser锛夛細鏈寸礌
-> 瀛楃涓叉浛鎹㈠繀璐ヤ簬璺?chunk 鎷嗗垎锛圠iteLLM ollama 鍙嶉潰鏁欐潗锛夛紝姝ｇ‘鍋氭硶鏄法 chunk
-> 娴佸紡鐘舵€佹満锛涘瓨鍌ㄥ眰淇濇寔"姝ｆ枃宸插墺绂?+ reasoning 鍗曠嫭鎴愰」"锛坥pencode 淇濈暀鍘熸枃鐨?
-> 鍝插琚惁锛歡rok 鐨?content_acc 浼氬師鏍峰洖浼犱笅涓€杞紝鏍囪蹇呴』涓嶈繘瀛樺偍姝ｆ枃锛夈€?
+> 背景：DeepSeek V4 Flash 经 OpenAI 兼容端点接入时，`</think>` 结束标记被当作正文
+> 泄漏到 UI（推理本体走 `reasoning_content` 字段，网关在 reasoning→正文边界把孤立的
+> `</think>` 作为单独 content chunk 下发；opencode issue #34126 同款流形态）。
+> 调研结论（opencode #1325/#34698/#15389、vercel/ai extractReasoningMiddleware、
+> qwen-code taggedThinkingParser.ts、crush/fantasy、vLLM ReasoningParser）：朴素
+> 字符串替换必败于跨 chunk 拆分（LiteLLM ollama 反面教材），正确做法是跨 chunk
+> 流式状态机；存储层保持"正文已剥离 + reasoning 单独成项"（opencode 保留原文的
+> 哲学被否：grok 的 content_acc 会原样回传下一轮，标记必须不进存储正文）。
 
 ### xai-grok-sampler
-- 鏂?`src/stream/think_split.rs`锛歚ThinkTagSplitter` 涓ょ浉鐘舵€佹満锛坱ext/think锛夛紝
-  鍠?content delta 浜у嚭 (text, reasoning) 浜屽厓缁勩€傝鐐癸細
-  - 鍙屾爣璁伴泦 `<think>|<thinking>` / `</think>|</thinking>`锛坬wen-code 鍚屾锛夛紱
-  - 璺?chunk holdback锛歜uffer 鏁翠綋鎴栨渶闀垮悗缂€鏄换涓€鏍囪鐨勭湡鍓嶇紑鏃舵墸鐣?
-    锛坴ercel/ai getPotentialStartIndex 鍚屾锛涗笂闄?11 瀛楄妭锛夛紱
-  - 杈圭晫瀛ゅ効鏍囪锛氬瓧娈?reasoning 宸茶 + 姝ｆ枃鏈紑濮嬶紙绾┖鐧戒笉绠楋級鏃讹紝瀛ょ珛鎴?
-    鍓嶅 `</think>` 涓㈠純鈥斺€旀鏂囧紑濮嬪悗鍚屼覆鍘熸牱淇濈暀锛坥pencode #34698 鐨?
-    绐勮涔?+ no-regression 涓ゆ潯娴嬭瘯鍚屾锛夛紱
-  - EOF flush 涓嶄涪瀛楄妭锛氭湭闂悎 think 鍧楀綊 reasoning锛屾墸鐣欑殑鍗婃埅鏍囪褰掓鏂?
-    锛坬wen-code `final` 璇箟锛屼慨 vercel/ai TransformStream 鏃?flush 鐨勫潙锛夛紱
-  - 17 涓崟娴嬶紙鍚?#34126 娴佸舰鎬併€佽法 chunk 鎷嗗垎銆乣<think></think>` 绌哄潡銆?
-    鍏堟鏂囧悗 think銆佸 think 鍧椼€乣value < than` 璇姤淇濇姢绛夛級銆?
-- `src/stream/mod.rs`锛歚mod think_split;`锛圠OCAL 娉ㄩ噴澶勶級
-- `src/stream/chat_completions.rs`锛?
-  - reasoning 鍒嗘敮鎻愬埌 content 鍒嗘敮鍓嶏紙娣峰悎 delta 鏃跺厛姝﹁杈圭晫瑙勫垯锛夛紝
-    `reasoning_content.or(reasoning).or(reasoning_text)` 褰掍竴鍖栵紙GLM/vLLM 鐨?
-    `reasoning`銆並imi 鐨?`reasoning_text` 鍒悕瀛楁涓婂悓涓€閫氶亾锛夛紱
-  - content 鍒嗘敮杩?`think_splitter.feed()`锛宺easoning 浜у嚭涓庡瓧娈典骇鍑哄悓璺細
-    FirstToken/chunk_index/reasoning_acc/ChannelToken::Reasoning锛泃ext 浜у嚭鐓ф棫
-    锛堟棤鏍囪娴侀€愬瓧鑺備笉鍙橈紝瀛橀噺娴嬭瘯闆舵敼鍔ㄩ€氳繃锛夛紱
-  - 娴佸熬 `finish()` flush 灏惧反锛圥artial marker/鏈棴鍚堝潡锛夛紱
-  - 宸ュ叿璋冪敤 id 缂哄け鏃跺悎鎴?`call_{index}`锛堥儴鍒嗙綉鍏充粠涓嶅彂 id锛岀粨鏋滄棤娉曢厤瀵癸級锛?
-  - 娴嬭瘯杩藉姞 6 涓細#34126 杈圭晫娴佸舰鎬侊紙鏂█闆?Text token锛夈€佸唴鑱?think 璺?chunk銆?
-    鍒悕瀛楁銆佹湭鐭?finish_reason serde銆丏eepSeek 缂撳瓨 token銆佺┖宸ュ叿 id 鍚堟垚銆?
-- `src/stream_classify.rs`锛歚chat_chunk_has_content` 瑙ｆ瀯琛?`reasoning`/`reasoning_text`
-  骞惰鍏?content 鍒ゅ畾锛圱TFT 闂ㄦ帶瀵瑰埆鍚嶅瓧娈典笉澶辨晥锛?
+- 新 `src/stream/think_split.rs`：`ThinkTagSplitter` 两相状态机（text/think），
+  喂 content delta 产出 (text, reasoning) 二元组。要点：
+  - 双标记集 `<think>|<thinking>` / `</think>|</thinking>`（qwen-code 同款）；
+  - 跨 chunk holdback：buffer 整体或最长后缀是任一标记的真前缀时扣留
+    （vercel/ai getPotentialStartIndex 同款；上限 11 字节）；
+  - 边界孤儿标记：字段 reasoning 已见 + 正文未开始（纯空白不算）时，孤立或
+    前导 `</think>` 丢弃——正文开始后同串原样保留（opencode #34698 的
+    窄语义 + no-regression 两条测试同款）；
+  - EOF flush 不丢字节：未闭合 think 块归 reasoning，扣留的半截标记归正文
+    （qwen-code `final` 语义，修 vercel/ai TransformStream 无 flush 的坑）；
+  - 17 个单测（含 #34126 流形态、跨 chunk 拆分、`<think></think>` 空块、
+    先正文后 think、多 think 块、`value < than` 误报保护等）。
+- `src/stream/mod.rs`：`mod think_split;`（LOCAL 注释处）
+- `src/stream/chat_completions.rs`：
+  - reasoning 分支提到 content 分支前（混合 delta 时先武装边界规则），
+    `reasoning_content.or(reasoning).or(reasoning_text)` 归一化（GLM/vLLM 的
+    `reasoning`、Kimi 的 `reasoning_text` 别名字段上同一通道）；
+  - content 分支过 `think_splitter.feed()`，reasoning 产出与字段产出同路：
+    FirstToken/chunk_index/reasoning_acc/ChannelToken::Reasoning；text 产出照旧
+    （无标记流逐字节不变，存量测试零改动通过）；
+  - 流尾 `finish()` flush 尾巴（Partial marker/未闭合块）；
+  - 工具调用 id 缺失时合成 `call_{index}`（部分网关从不发 id，结果无法配对）；
+  - 测试追加 6 个：#34126 边界流形态（断言零 Text token）、内联 think 跨 chunk、
+    别名字段、未知 finish_reason serde、DeepSeek 缓存 token、空工具 id 合成。
+- `src/stream_classify.rs`：`chat_chunk_has_content` 解构补 `reasoning`/`reasoning_text`
+  并计入 content 判定（TTFT 门控对别名字段不失效）
 
 ### xai-grok-sampling-types
-- `src/types.rs`锛?
-  - `ChatChunkDelta` 灏鹃儴杩藉姞 `reasoning: Option<String>` /
-    `reasoning_text: Option<String>`锛坰erde default + skip_serializing_if锛?
-  - `FinishReason` 杩藉姞 `#[serde(other)] Other` 鍙樹綋鈥斺€擠eepSeek 涓撴湁
-    `insufficient_system_resources` 绛夋湭鐭?finish_reason 浼氳鏁翠釜 chunk 鍙嶅簭鍒楀寲
-    澶辫触鏉€鎺夋暣鏉℃祦锛屾鍙樹綋鍏滀綇
-  - `Usage` 灏鹃儴杩藉姞 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`
-    锛圖eepSeek 鎶婄紦瀛樺懡涓姤鎴愭墎骞?usage 瀛楁鑰岄潪
-    `prompt_tokens_details.cached_tokens`锛?
-- `src/conversation.rs`锛?
-  - `From<FinishReason> for StopReason`锛歚Other => StopReason::Stop`锛堟渶璇氬疄鐨?
-    杩戜技鏄犲皠锛?
-  - `From<Usage> for TokenUsage`锛歚cached_prompt_tokens` 鍙?
-    `details.cached_tokens.max(prompt_cache_hit_tokens)`锛堜袱濂楀瓧娈靛苟瀛樻椂鍙栧ぇ锛?
+- `src/types.rs`：
+  - `ChatChunkDelta` 尾部追加 `reasoning: Option<String>` /
+    `reasoning_text: Option<String>`（serde default + skip_serializing_if）
+  - `FinishReason` 追加 `#[serde(other)] Other` 变体——DeepSeek 专有
+    `insufficient_system_resources` 等未知 finish_reason 会让整个 chunk 反序列化
+    失败杀掉整条流，此变体兜住
+  - `Usage` 尾部追加 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`
+    （DeepSeek 把缓存命中报成扁平 usage 字段而非
+    `prompt_tokens_details.cached_tokens`）
+- `src/conversation.rs`：
+  - `From<FinishReason> for StopReason`：`Other => StopReason::Stop`（最诚实的
+    近似映射）
+  - `From<Usage> for TokenUsage`：`cached_prompt_tokens` 取
+    `details.cached_tokens.max(prompt_cache_hit_tokens)`（两套字段并存时取大）
 
-### 鍐崇瓥璁板綍
-- Messages锛圓nthropic 鍏煎锛夊悗绔笉鏀癸細鎬濊€冭蛋缁撴瀯鍖?thinking block
-  锛坄ThinkingDelta` 宸插鐞嗭級锛孌eepSeek Anthropic 绔偣涓嶄細鍐呰仈鏍囪杩?text
-- Responses 鍚庣涓嶆敼锛氱粨鏋勫寲 reasoning item锛屽悓鐞嗗厤鐤紙opencode PR #34698
-  鎻忚堪涓悓鏍风粨璁猴級
-- 澶氳疆鍥炰紶涓嶉澶栧墺鍘嗗彶锛氭祦灞備慨澶嶅悗鏂?content 涓嶅啀鍚爣璁帮紱瀛橀噺浼氳瘽鍚爣璁扮殑
-  鎸?opencode 浜夎鍐崇瓥淇濈暀鍘熸牱锛堟敼鍔ㄩ潰澶с€佹敹鐩婁笉纭畾锛?
-- 涓嶅姞閰嶇疆寮€鍏筹細鏃犳爣璁版祦閫愬瓧鑺傜洿閫氾紙浠呭熬閮?`<` 绫诲墠缂€鐨勮法 chunk 鎵ｇ暀锛屼笅涓€
-  chunk 鎴?EOF 蹇呯劧褰掕繕锛夛紝甯稿紑闆堕闄?
-- 鐗堟湰锛歷1.0.35
+### 决策记录
+- Messages（Anthropic 兼容）后端不改：思考走结构化 thinking block
+  （`ThinkingDelta` 已处理），DeepSeek Anthropic 端点不会内联标记进 text
+- Responses 后端不改：结构化 reasoning item，同理免疫（opencode PR #34698
+  描述中同样结论）
+- 多轮回传不额外剥历史：流层修复后新 content 不再含标记；存量会话含标记的
+  按 opencode 争议决策保留原样（改动面大、收益不确定）
+- 不加配置开关：无标记流逐字节直通（仅尾部 `<` 类前缀的跨 chunk 扣留，下一
+  chunk 或 EOF 必然归还），常开零风险
+- 版本：v1.0.35
 
-## 瓒ｅ懗绛夊緟鏂囨锛坵itty loading phrases锛?026-09-20锛?
+## 趣味等待文案（witty loading phrases，2026-09-20）
 
-绉绘 qwen-code 绛夊緟妯″瀷鍝嶅簲鏃剁殑闅忔満瓒ｅ懗鏂囨锛圓pache-2.0锛涜瘝琛ㄤ笌杞崲鏈哄埗瑙?
-`packages/cli/src/ui/hooks/usePhraseCycler.ts`銆乣packages/web-shell/client/constants/loadingPhrases.ts`銆?
-`packages/cli/src/i18n/locales/zh.js` 鐨?`WITTY_LOADING_PHRASES`锛夈€傚垎鏀?
-`feat/local-witty-loading-phrases`銆?
+移植 qwen-code 等待模型响应时的随机趣味文案（Apache-2.0；词表与轮换机制见
+`packages/cli/src/ui/hooks/usePhraseCycler.ts`、`packages/web-shell/client/constants/loadingPhrases.ts`、
+`packages/cli/src/i18n/locales/zh.js` 的 `WITTY_LOADING_PHRASES`）。分支
+`feat/local-witty-loading-phrases`。
 
 ### xai-grok-pager
-- `src/views/witty_phrases.rs`锛堟柊澧烇級锛欵N/ZH 鍏ㄩ噺璇嶈〃鍘熸枃杩佸叆 +
-  `witty_phrase(turn_elapsed)`鈥斺€旀寜銆屾湰杞凡杩涜绉掓暟 / 15銆嶆椂闂存《 + 杩涚▼绉嶅瓙
-  FNV-1a 鍙栬瘝锛堢‘瀹氭€т吉闅忔満锛屾棤 RNG 渚濊禆锛夛紝璇█鍙?`slash::i18n::current_lang()`
-- `src/views/mod.rs`锛氭敞鍐?`witty_phrases` 妯″潡
-- `src/views/turn_status.rs`锛歚compute_activity` 澧炲弬 `turn_elapsed`锛?
-  `Thinking` / `Responding` 涓よ噦鐨勭姸鎬佽鏂囨浠庡浐瀹?"Thinking鈥? / "Responding鈥?
-  鏀逛负瓒ｅ懗杞崲璇嶏紱鍏朵綑锛堝伐鍏疯繍琛?閲嶈瘯/Compacting/Waiting 瀹舵棌锛変笉鍔?
-  锛坄Waiting(Model)` 鐨?"Waiting for response鈥? 鏈?pty e2e 渚濊禆锛屼繚鐣欙級
-- 娴嬭瘯锛歚views::witty_phrases` 4 涓函鍗曟祴 + `turn_status` 鏃㈡湁鐢ㄤ緥鏀逛负鏂█璇嶈〃鎴愬憳
-## /stats 妯″瀷鐢ㄩ噺鑱氬悎锛坢odel usage ledger锛?026-09-20锛?
+- `src/views/witty_phrases.rs`（新增）：EN/ZH 全量词表原文迁入 +
+  `witty_phrase(turn_elapsed)`——按「本轮已进行秒数 / 15」时间桶 + 进程种子
+  FNV-1a 取词（确定性伪随机，无 RNG 依赖），语言取 `slash::i18n::current_lang()`
+- `src/views/mod.rs`：注册 `witty_phrases` 模块
+- `src/views/turn_status.rs`：`compute_activity` 增参 `turn_elapsed`；
+  `Thinking` / `Responding` 两臂的状态行文案从固定 "Thinking…" / "Responding…"
+  改为趣味轮换词；其余（工具运行/重试/Compacting/Waiting 家族）不动
+  （`Waiting(Model)` 的 "Waiting for response…" 有 pty e2e 依赖，保留）
+- 测试：`views::witty_phrases` 4 个纯单测 + `turn_status` 既有用例改为断言词表成员
+## /stats 模型用量聚合（model usage ledger，2026-09-20）
 
-`/stats` 鏂板鎸?5h/涓€鍛?涓€鏈?脳 model id 鑱氬悎鐨勭敤閲?鎬ц兘鎶ヨ〃锛堢疮璁¤緭鍏?杈撳嚭/缂撳瓨璇?
-缂撳瓨鍐?token銆佸钩鍧囩紦瀛樺懡涓巼銆乀TFT 涓?TPS 鐨?p50/p90锛夛紝鍘嬬缉璐︽湰娈典繚鐣欏湪鍏跺悗銆?
-鍒嗘敮 `feat/local-model-usage-stats`銆?
+`/stats` 新增按 5h/一周/一月 × model id 聚合的用量/性能报表（累计输入/输出/缓存读/
+缓存写 token、平均缓存命中率、TTFT 与 TPS 的 p50/p90），压缩账本段保留在其后。
+分支 `feat/local-model-usage-stats`。
 
 ### xai-grok-tools
-- `src/model_usage_ledger.rs`锛堟柊澧烇級锛氳皟鐢ㄧ矑搴?JSONL 璐︽湰
-  `grok_home/cache/model-usage.jsonl`鈥斺€攕hell 姣忔鎴愬姛鎺ㄧ悊杩藉姞涓€鏉￠噰鏍?
-  锛坱s/model_id/鍥涚被 token/ttft/tps/duration锛夛紝鏂囦欢瓒?2MB 鎸変繚鐣欑獥鍙ｏ紙35 澶╋級閲嶅啓鍓锛?
-  `aggregate(samples, window_ms, now)` 绾嚱鏁拌仛鍚?+ 鏈€杩戦偦绉╃櫨鍒嗕綅
+- `src/model_usage_ledger.rs`（新增）：调用粒度 JSONL 账本
+  `grok_home/cache/model-usage.jsonl`——shell 每次成功推理追加一条采样
+  （ts/model_id/四类 token/ttft/tps/duration），文件超 2MB 按保留窗口（35 天）重写剪裁；
+  `aggregate(samples, window_ms, now)` 纯函数聚合 + 最近邻秩百分位
 
 ### xai-grok-shell
-- `src/session/acp_session_impl/turn.rs`锛歚ModelResponseReceived` 浜嬩欢钀界洏鍚?
-  杩藉姞涓€鏉?`model_usage_ledger` 閲囨牱锛坢odel_id 鏀逛负 clone 浼犲叆锛?
+- `src/session/acp_session_impl/turn.rs`：`ModelResponseReceived` 事件落盘后
+  追加一条 `model_usage_ledger` 采样（model_id 改为 clone 传入）
 
 ### xai-grok-pager
-- `src/slash/commands/stats.rs`锛氶噸鍐欎负銆岀敤閲忚仛鍚堟姤琛?+ 鍘嬬缉璐︽湰銆嶅弻娈碉紱
-  `format_usage_report(samples, now)` 绾嚱鏁板彲娴?
-- `src/slash/i18n.rs`锛氬懡浠ゆ弿杩版崲閿?+ 13 涓姤琛ㄨ瘝鏉?
+- `src/slash/commands/stats.rs`：重写为「用量聚合报表 + 压缩账本」双段；
+  `format_usage_report(samples, now)` 纯函数可测
+- `src/slash/i18n.rs`：命令描述换键 + 13 个报表词条
 
-### 宸茬煡杈圭晫
-- 閲囨牱鍙鐩栦富寰幆鎺ㄧ悊璺緞锛坰ubagent 鐨勬ā鍨嬭皟鐢ㄤ笉缁?turn.rs锛屾殏涓嶈鍏ワ級
-- 鍘嗗彶鏁版嵁涓嶅洖濉細璐︽湰浠庡悎鍏ュ悗鏂颁骇鐢熺殑璋冪敤寮€濮嬬疮绉?
+### 已知边界
+- 采样只覆盖主循环推理路径（subagent 的模型调用不经 turn.rs，暂不计入）
+- 历史数据不回填：账本从合入后新产生的调用开始累积
+
+## 本文件修复记录（2026-09-20）
+- 此前一次合并冲突解决经 PowerShell 默认编码往返，本文件中文被按 GBK 误读再编码，
+  随 16f167b7 推送损坏；本次重建为 research/main 两侧账本的无损并集。
+- 研究分支（research/agent-cli-tracking）的流层实现（thinking_scrub/实验开关）与
+  main 的 deepseek-compat（think_split 常开）取并集：保留 think_split 常开语义与
+  dialect 学习/回放，移除实验开关 `thinking_tag_scrub`（行为由 think_split 全量承载）。

@@ -1,0 +1,51 @@
+# Windows 门控 skip 清单（ctest.sh / win_sample.py 自动拼 --skip）
+# 每行一个子串（libtest --skip 语义：匹配测试全名即跳过）；# 后为注释。
+# 2026-09-19 重写：pager 全量复跑后按最终处置定稿。已修复撤销的门控：族2 dashboard
+# worktree(10)、族5 workspace_sync(4)、族7 git_info(2)【产品修复：collapse_home 分隔符
+# 归一 + cwd 校验 has_root 语义，见 PATCHES.md】、族8 i18n(2)【test_context 扩展】。
+# 本机 pager lib 现状：9583 过 / 37 挂，37 全部登记如下，均有明确不修依据。
+
+# 族A doctor SSH-wrap —— 产品级平台门控 + 用户决策无感知不修
+app::dispatch::tests::prompt::doctor_fix_all_cancel_keys_restore_prompt_without_effect
+app::dispatch::tests::prompt::doctor_fix_background_confirm_keeps_original_target
+app::dispatch::tests::prompt::doctor_fix_cancel_routes_to_initiator_then_fallbacks
+app::dispatch::tests::prompt::doctor_fix_confirm_rejects_changed_session_or_cwd
+app::dispatch::tests::prompt::doctor_fix_none_target_rejects_cwd_change
+app::dispatch::tests::prompt::doctor_fix_modal_stashes_prompt_and_confirms_exactly_one_apply
+app::dispatch::tests::prompt::doctor_fix_promoted_target_allows_confirm_and_apply
+app::dispatch::tests::task_result::doctor_planning_promotes_initial_session_binding
+app::dispatch::tests::task_result::doctor_planning_rejects_bind_replace_and_unbind_rebind
+app::dispatch::tests::task_result::doctor_planning_opens_refuses_remote_and_rejects_stale_identity
+app::dispatch::tests::task_result::doctor_planning_displaces_feedback_before_opening_question
+
+# 族B Tab 补全 fetch —— 上游 cfg!(not(windows)) 有意禁用（tokenizer 仅 POSIX）
+app::dispatch::tests::prompt::tab_fetch_landing_opens_dropdown_for_ambiguous_set_always_on
+app::dispatch::tests::prompt::tab_fetch_landing_insta_accepts_single_candidate_always_on
+
+# 族C scrollback 链接扫描 —— 测试夹具 POSIX 路径形态假设，Windows 真实场景不受影响
+scrollback::blocks::tool::edit::tests::expanded_shows_relative_when_under_cwd_preamble_absolute
+scrollback::blocks::tool::edit::tests::header_link_target_is_absolute_file_for_all_surfaces
+scrollback::blocks::tool::edit::tests::test_edit_block_header
+scrollback::blocks::tool::edit::tests::workflow_script_header_hides_rhai_path
+scrollback::blocks::tool::memory_search::tests::shorten_memory_path
+scrollback::blocks::tool::read::tests::expanded_header_selection_matches_relative_path
+scrollback::blocks::tool::read::tests::expanded_shows_relative_when_under_cwd_preamble_absolute
+scrollback::blocks::tool::read::tests::header_link_target_is_absolute_file_for_collapsed_and_expanded
+scrollback::link_map::tests::file_target_provenance_survives_overlay_to_visible_map
+scrollback::render::tests::basename_headers_stay_grok_owned_for_duplicate_and_outside_targets
+scrollback::render::tests::collapsed_block_header_file_path_is_scanned
+scrollback::render::tests::collapse_header_entry_does_not_leak_links_but_visible_group_entries_do
+scrollback::render::tests::long_read_header_link_is_clipped_to_offset_content_area
+scrollback::render::tests::markdown_wrapped_project_media_path_fully_linkified
+scrollback::render::tests::official_vscode_remote_delegates_scanned_absolute_path
+scrollback::render::tests::official_vscode_remote_tool_headers_delegate_only_self_resolving_paint
+scrollback::render::tests::explicit_tool_link_clips_before_u16_conversion
+scrollback::render::tests::tool_header_link_target_overlay_covers_path_after_bullet
+
+# 族D 其余路径形态散例 —— 中等重要性，低于修复线（用户决策）
+app::agent_view::paste::paste_key_tests::agent_completion_inserts_unreadable_file_url_as_path_text
+app::agent_view::selection::tests::active_child_copy_uses_child_scrollback_cwd
+headless::tests::worktree_create_opens_session_at_worktree_subdirectory
+disk_usage_cmd::tests::collect_report_joins_registry_and_flags_untracked
+views::btw_overlay::tests::done_state_scans_file_paths_like_scrollback
+views::extensions_modal::tests::handle_key_tab_completes_single_field_path

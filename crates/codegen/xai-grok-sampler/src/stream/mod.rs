@@ -11,7 +11,7 @@ pub mod responses;
 // LOCAL(deepseek-compat)
 mod think_split;
 
-pub use chat_completions::stream_chat_completions;
+pub use chat_completions::{ChatStreamOptions, stream_chat_completions};
 pub use collect::collect_response;
 pub use messages::stream_messages;
 pub use responses::stream_responses;

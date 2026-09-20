@@ -23,6 +23,7 @@ pub(crate) fn build_prefetched_map(
             env_key: None,
             auth_provider: None,
             api_base_url: m.api_base_url.clone().or(api_base_url_override.clone()),
+            experimental: None,
         };
         map.insert(key, entry);
     }

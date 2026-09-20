@@ -1,0 +1,11 @@
+# Windows 本机测试白名单（ctest.sh L0 门控依据）
+# 每行一个 crate 名；# 后为注释。
+# 晋升规则：阶段 2 抽样 PASS + 阶段 3 速读通过，登记台账后加一行（见 docs-local/WIN-TEST-GATE.md）。
+# 本地自有主题 crate（历史已验证 lib 测试全过）：
+xai-chat-state
+xai-grok-sampler
+xai-grok-sampling-types
+xai-compaction-transcript
+xai-grok-extra-ca
+xai-grok-status-line
+xai-grok-pager

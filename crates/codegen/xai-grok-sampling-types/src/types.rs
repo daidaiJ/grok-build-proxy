@@ -234,6 +234,16 @@ pub struct ChatRequestMessage {
     /// The reasoning/thinking content from the model (for models that support extended thinking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
+    /// Alternate reasoning wire key (`reasoning`), used when replaying history
+    /// to an endpoint whose dialect is [`ReasoningDialect::Reasoning`](crate::reasoning_dialect::ReasoningDialect::Reasoning).
+    /// The conversion fills exactly one of the dialect fields per assistant
+    /// message; endpoints ignore the field they don't speak.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
+    /// OpenRouter's `reasoning_details` dialect, same replay semantics as
+    /// `reasoning`. Serialized as a plain string (kimi-code parity).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<String>,
 }
 
 impl ChatRequestMessage {
@@ -246,6 +256,8 @@ impl ChatRequestMessage {
             tool_call_id: None,
             model_id: None,
             reasoning_content: None,
+            reasoning: None,
+            reasoning_details: None,
         }
     }
 
@@ -258,6 +270,8 @@ impl ChatRequestMessage {
             tool_call_id: None,
             model_id: None,
             reasoning_content: None,
+            reasoning: None,
+            reasoning_details: None,
         }
     }
 
@@ -274,6 +288,8 @@ impl ChatRequestMessage {
             tool_call_id: None,
             model_id: Some(model_id.into()),
             reasoning_content,
+            reasoning: None,
+            reasoning_details: None,
         }
     }
 
@@ -286,6 +302,8 @@ impl ChatRequestMessage {
             tool_call_id: None,
             model_id: None,
             reasoning_content: None,
+            reasoning: None,
+            reasoning_details: None,
         }
     }
 
@@ -298,6 +316,8 @@ impl ChatRequestMessage {
             tool_call_id: Some(tool_call_id.into()),
             model_id: None,
             reasoning_content: None,
+            reasoning: None,
+            reasoning_details: None,
         }
     }
 
@@ -631,8 +651,12 @@ pub struct ChatChunkDelta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     pub reasoning_content: Option<String>,
-    // LOCAL(deepseek-compat) start
-    /// GLM/vLLM-style `reasoning` delta — same meaning as `reasoning_content`.
+    // LOCAL(deepseek-compat) start — merged with research's reasoning-dialect doc
+    /// Alternate reasoning wire key (`reasoning`, spoken by GPT-OSS and
+    /// current vLLM). The stream layer scans it as the fallback after
+    /// `reasoning_content`; see [`crate::reasoning_dialect`].
+    /// OpenRouter's array-shaped `reasoning_details` is deliberately not
+    /// modeled here: like kimi-code, the scan skips non-string values.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
     /// Kimi-style `reasoning_text` delta — same meaning as `reasoning_content`.
@@ -1094,6 +1118,24 @@ pub struct SamplingConfig {
     /// When true, inject `stream_tool_calls: true` into the Responses API request body so the upstream emits per-chunk argument deltas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_tool_calls: Option<bool>,
+    /// Opt-in experimental features (every field default-off; see the struct
+    /// doc). Rides the sampling config so inherited configs (subagents,
+    /// model switches) carry the choice with them.
+    #[serde(default)]
+    pub experimental: ExperimentalSamplingOptions,
+}
+
+/// Experimental sampling features, all default-off. Each one changes visible
+/// model output or request shape in ways that carry UX risk, so they stay
+/// behind this opt-in section instead of shipping enabled.
+/// Carried by the sampler's `SamplerConfig` (the per-endpoint client scope);
+/// user-facing configs set it through the per-model `experimental` entry.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExperimentalSamplingOptions {
+    // LOCAL(deepseek-compat): `<think>` 标签清洗已由 sampler 的 think_split
+    // 常开承载（含边界伪影丢弃规则），无需实验开关；本结构保留作后续
+    // 实验特性的扩展点。历史配置里的 `thinking_tag_scrub` 键会被 serde 静默忽略。
 }
 
 // ============ Responses API wrapper ============

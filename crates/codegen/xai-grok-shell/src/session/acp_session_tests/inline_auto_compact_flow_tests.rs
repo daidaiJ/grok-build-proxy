@@ -51,6 +51,7 @@ async fn create_test_actor(
     let chat_state_handle = xai_chat_state::ChatStateActor::spawn(
         vec![],
         xai_grok_sampling_types::SamplingConfig {
+            experimental: Default::default(),
             base_url: "http://localhost".to_string(),
             mtls_cert_dir: None,
             model: "test".to_string(),
@@ -483,6 +484,7 @@ async fn create_test_actor_with_memory(
     let chat_state_handle = xai_chat_state::ChatStateActor::spawn(
         vec![],
         xai_grok_sampling_types::SamplingConfig {
+            experimental: Default::default(),
             base_url: "http://localhost".to_string(),
             mtls_cert_dir: None,
             model: "test".to_string(),

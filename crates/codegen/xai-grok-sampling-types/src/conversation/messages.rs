@@ -1,5 +1,87 @@
 use super::*;
 
+/// Collapse consecutive user-role wire turns into one.
+///
+/// The Anthropic Messages API rejects consecutive user turns with HTTP 400
+/// ("roles must alternate"). They arise naturally: after compaction, whose
+/// replaced history is `[summary carrier, injected reminders, auto-continue]` —
+/// all user-role — and when a real prompt or injected reminder directly follows
+/// the user-role turn that carries tool results. Tool results only become
+/// visible as user-role turns at this conversion boundary, which is why the
+/// merge runs here rather than on the protocol-agnostic `ConversationItem` list
+/// (whose structure replay/spawn-idempotence logic depends on).
+///
+/// The merge is asymmetric, keyed on whether the running turn is tool-result-only:
+/// - a tool-result-only running turn absorbs whatever follows — another
+///   tool-result-only turn (parallel tool results must share one user turn) or
+///   a following text turn, yielding a valid `[tool_result, …, text]` turn;
+/// - a text running turn absorbs only a following text turn, never a leading
+///   tool-result turn (a tool result must answer the immediately preceding
+///   assistant `tool_use`, which a text turn is not — though in well-formed
+///   transcripts this ordering never arises).
+pub fn merge_consecutive_user_turns(messages: &mut Vec<crate::messages::Message>) {
+    use crate::messages::MessageRole;
+
+    let mut out: Vec<crate::messages::Message> = Vec::with_capacity(messages.len());
+    for msg in messages.drain(..) {
+        let merged_last = match out.last_mut() {
+            Some(last)
+                if last.role == MessageRole::User
+                    && msg.role == MessageRole::User
+                    && (is_tool_result_only(last) || !is_tool_result_only(&msg)) =>
+            {
+                last
+            }
+            _ => {
+                out.push(msg);
+                continue;
+            }
+        };
+        merge_message_content(&mut merged_last.content, msg.content);
+    }
+    *messages = out;
+}
+
+/// Whether a user-role turn carries only tool results (no plain text/media).
+fn is_tool_result_only(msg: &crate::messages::Message) -> bool {
+    matches!(&msg.content, crate::messages::MessageContent::Blocks(blocks) if
+        blocks.iter().all(|b| matches!(b, crate::messages::ContentBlock::ToolResult { .. })))
+}
+
+/// Append `next`'s content onto `last`. Block lists concatenate; plain text
+/// stays plain (joined with a blank line so distinct turns stay readable).
+fn merge_message_content(
+    last: &mut crate::messages::MessageContent,
+    next: crate::messages::MessageContent,
+) {
+    use crate::messages::{ContentBlock, MessageContent};
+    match (&mut *last, next) {
+        (MessageContent::Blocks(a), MessageContent::Blocks(b)) => a.extend(b),
+        (MessageContent::Blocks(a), MessageContent::Text(text)) => {
+            a.push(ContentBlock::Text {
+                text,
+                cache_control: None,
+            });
+        }
+        (MessageContent::Text(text), MessageContent::Blocks(b)) => {
+            let mut blocks = vec![ContentBlock::Text {
+                text: std::mem::take(text),
+                cache_control: None,
+            }];
+            blocks.extend(b);
+            *last = MessageContent::Blocks(blocks);
+        }
+        (MessageContent::Text(a), MessageContent::Text(b)) => {
+            let joined = match (a.is_empty(), b.is_empty()) {
+                (true, _) => b,
+                (_, true) => std::mem::take(a),
+                (false, false) => format!("{a}\n\n{b}"),
+            };
+            *last = MessageContent::Text(joined);
+        }
+    }
+}
+
 /// Marks the last block that can carry one, scanning back past `Thinking`, which the API rejects a breakpoint on.
 fn mark_message_cache_breakpoint(msg: &mut crate::messages::Message) -> bool {
     use crate::messages::{CacheControl, ContentBlock, MessageContent};
@@ -269,6 +351,10 @@ pub fn build_messages_request(req: &ConversationRequest) -> crate::messages::Mes
 
     flush_assistant(&mut pending_assistant, &mut messages);
     flush_tool_results(&mut pending_tool_results, &mut messages);
+
+    // Normalize for the strict roles-must-alternate rule before breakpoints are
+    // placed, so their positions refer to the merged (final) message list.
+    merge_consecutive_user_turns(&mut messages);
 
     apply_cache_breakpoints(&mut system_blocks, &mut messages);
 

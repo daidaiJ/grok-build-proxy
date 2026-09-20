@@ -57,6 +57,7 @@ impl SessionActor {
         );
         self.chat_state_handle
             .update_sampling_config(xai_grok_sampling_types::SamplingConfig {
+                experimental: Default::default(),
                 base_url: sampling_config.base_url.clone(),
                 mtls_cert_dir: sampling_config.mtls_cert_dir.clone(),
                 model: sampling_config.model.clone(),

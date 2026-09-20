@@ -4,3 +4,9 @@ crates/codegen/xai-grok-pager/assets/logo/*.txt text eol=lf
 
 # Guide docs are embedded verbatim via include_str!: force LF like the logo assets.
 crates/codegen/xai-grok-pager/docs/user-guide/*.md text eol=lf
+
+# LOCAL: these sources are include_str!-embedded by source-text-scanning tests
+# (agent::config guard tests match "\n}\n" struct bodies); a CRLF checkout
+# (core.autocrlf=true) makes those scans fail. Same rationale as the assets above.
+crates/codegen/xai-grok-shell/src/agent/config.rs text eol=lf
+crates/codegen/xai-grok-shell/src/agent/mvp_agent/mod.rs text eol=lf

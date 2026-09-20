@@ -103,6 +103,7 @@ async fn test_e2e_idle_resume_refreshes_model_metadata() {
             let chat_state_handle = xai_chat_state::ChatStateActor::spawn(
                 vec![],
                 xai_grok_sampling_types::SamplingConfig {
+                    experimental: Default::default(),
                     base_url: mock_url,
                     mtls_cert_dir: None,
                     model: "test-model".to_string(),

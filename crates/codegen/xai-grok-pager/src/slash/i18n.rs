@@ -26,6 +26,14 @@ impl Lang {
 // 0 = 未初始化（首次读取时按 GROK_LANG 播种，缺省中文）；1 = Zh；2 = En
 static LANG: AtomicU8 = AtomicU8::new(0);
 
+/// LOCAL: 是否处于测试上下文。`cfg!(test)` 只覆盖单测构建；集成测试把本 crate 当
+/// 普通依赖链接（无 cfg(test)），但 cargo 跑测试时子进程带 `CARGO` 环境变量，
+/// 生产二进制没有——用它把英文默认扩展到集成测试（上游集成测试按英文文案断言）。
+/// 副作用：`cargo run` 起的开发二进制也默认英文，显式 `GROK_LANG=zh` 仍优先。
+fn test_context() -> bool {
+    cfg!(test) || std::env::var_os("CARGO").is_some()
+}
+
 fn seed_lang() -> Lang {
     let seeded = LANG.load(Ordering::Relaxed);
     if seeded != 0 {
@@ -35,7 +43,7 @@ fn seed_lang() -> Lang {
         Ok("en") | Ok("en-US") | Ok("English") => Lang::En,
         Ok("zh") | Ok("zh-CN") | Ok("中文") => Lang::Zh,
         // 测试构建默认英文：上游既有测试按英文文案断言；生产默认中文
-        _ if cfg!(test) => Lang::En,
+        _ if test_context() => Lang::En,
         _ => Lang::Zh,
     };
     LANG.store(match lang {
@@ -64,7 +72,7 @@ pub fn set_lang(lang: Lang) {
 /// （直接迭代 [`translations`]）覆盖，不经过任何进程级开关或语言状态。
 /// 以英文原文查中文译文；英文模式或无译文时原样返回。
 pub fn tr(text: &'static str) -> &'static str {
-    if cfg!(test) || current_lang() == Lang::En {
+    if test_context() || current_lang() == Lang::En {
         return text;
     }
     table_lookup(text).unwrap_or(text)
@@ -73,7 +81,7 @@ pub fn tr(text: &'static str) -> &'static str {
 /// LOCAL: 动态字符串（ACP 命令描述、快捷键标签等运行时文案）的查表版本。
 /// 英文模式原样返回；中文模式查表，命中返回译文，未命中原样拷贝。
 pub fn tr_str(text: &str) -> String {
-    if cfg!(test) || current_lang() == Lang::En {
+    if test_context() || current_lang() == Lang::En {
         return text.to_owned();
     }
     table_lookup(text)

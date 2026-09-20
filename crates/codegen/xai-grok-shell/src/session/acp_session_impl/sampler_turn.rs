@@ -674,6 +674,7 @@ impl SessionActor {
             .get_sampling_config()
             .await
             .unwrap_or_else(|| xai_grok_sampling_types::SamplingConfig {
+                experimental: Default::default(),
                 base_url: String::new(),
                 mtls_cert_dir: None,
                 model: String::new(),
@@ -780,6 +781,7 @@ impl SessionActor {
             rate_limit_retry_threshold: cfg.rate_limit_retry_threshold,
             stream_tool_calls: cfg.stream_tool_calls.unwrap_or(false),
             idle_timeout_secs: None,
+            experimental: cfg.experimental,
             client_identifier: self.client_identifier.clone(),
             deployment_id: crate::managed_config::resolve_deployment_id(
                 crate::managed_config::resolve_deployment_key().as_deref(),
