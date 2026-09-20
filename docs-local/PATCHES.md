@@ -1084,3 +1084,31 @@ Windows 增量缓存损坏（上游已知家族，rust-lang/rust #134119/#144652
 配套措施（建议但不入库）：把仓库目录、`D:\cargo-tmp`、`~/.cargo`、`~/.rustup`
 加入 Defender 排除（本机注册表确认当前无任何排除项）；`rustup update` 跟进
 stable 修复。暂不建议 Dev Drive/ReFS（#151181 在其上有增量回归）。
+
+## CI release 缓存投毒：陈旧 rmeta 导致 E0609（2026-09-20，feat/local-release-cache-fix）
+
+现象：tag `v1.0.37-preview.1` 两次 release 构建在 linux/windows 同报
+`error[E0609]: no field reasoning_text on type ChatChunkDelta`，但该字段在
+tag 源码里存在、本地 `cargo check --release -p xai-grok-sampler` 全绿。
+
+根因（CI 日志证据：全程无 `Compiling xai-grok-sampling-types` 行，sampler
+却链接到了它的产物）：release.yml 开了
+`cache-workspace-crates: "true"`（背景见 `docs-local/ci-cache-incident.md`
+"v1.0.29" 一节），叠加 `git-restore-mtime`。cargo 按 **mtime** 做指纹，
+restore-mtime 把 research 合并改过的 `types.rs` 回拨到其最后提交时刻，与
+缓存 blob 里记录的指纹时间一致 → cargo 判定源码未变 → 复用合入前编译的
+旧 rmeta。`cache-on-failure: true` 又把带毒产物存回同一 key，重打 tag 全部复现。
+这正是 rust-cache 默认不缓存 workspace crate（README: "generally not
+effective"）要防的场景——默认值被关掉才踩的坑。
+
+修复（`a895e0ca` / main `40f330d0`）：
+
+- release.yml 两个 job：`cache-workspace-crates` 恢复默认 `"false"`；
+  workspace crate 每次 tag 重编（registry deps 仍走缓存）。
+- `cache-scope` 改名 `release-2` / `release-xwin-2`，带毒 v1 blob 永不复用
+  （一次性冷重建）。
+
+对交接文档 `docs-local/ci-failures-2026-09-20.md` 的对账：其"修复 1"假设
+源码不一致（建议重排 `.or()` 链）不成立——三字段在 tag 源码中齐备且无 cfg，
+无需改 sampler；其"修复 2"（SessionActor 字面量 + output_style Instant）
+已随 `1815e39b` 修复。
