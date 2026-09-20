@@ -125,7 +125,11 @@ fn format_usage_row(row: &ModelUsageAggregate) -> String {
         ),
     ];
     if row.reasoning_tokens > 0 {
-        token_parts.push(format!("{} {}", tr("reasoning"), fmt_tokens(row.reasoning_tokens)));
+        token_parts.push(format!(
+            "{} {}",
+            tr("reasoning"),
+            fmt_tokens(row.reasoning_tokens)
+        ));
     }
     let perf_parts = [
         format!(
@@ -153,8 +157,8 @@ fn format_usage_row(row: &ModelUsageAggregate) -> String {
 mod tests {
     use super::*;
     use crate::acp::model_state::ModelState;
-    use crate::app::bundle::BundleState;
     use crate::app::ScreenMode;
+    use crate::app::bundle::BundleState;
     use crate::settings::PagerLocalSnapshot;
     use xai_grok_tools::model_usage_ledger::{WINDOW_5H_MS, WINDOW_DAY_MS, WINDOW_WEEK_MS};
 
@@ -181,7 +185,14 @@ mod tests {
         }
     }
 
-    fn sample(ts: u64, model: &str, prompt: u64, cached: u64, ttft: u64, tps: f64) -> ModelCallSample {
+    fn sample(
+        ts: u64,
+        model: &str,
+        prompt: u64,
+        cached: u64,
+        ttft: u64,
+        tps: f64,
+    ) -> ModelCallSample {
         ModelCallSample {
             ts_unix_ms: ts,
             model_id: model.to_string(),
@@ -306,9 +317,15 @@ mod tests {
         // 分节定位：5h 窗不含 m-b，日窗含 m-b 不含 m-c，周窗含 m-c 不含 m-d
         let day_start = report.find("Last day:").unwrap();
         let week_start = report.find("Last week:").unwrap();
-        assert!(!report[..day_start].contains("m-b"), "5h 窗不该含 m-b: {report}");
+        assert!(
+            !report[..day_start].contains("m-b"),
+            "5h 窗不该含 m-b: {report}"
+        );
         assert!(report[day_start..week_start].contains("m-b"), "{report}");
-        assert!(!report[day_start..week_start].contains("m-c"), "日窗不该含 m-c: {report}");
+        assert!(
+            !report[day_start..week_start].contains("m-c"),
+            "日窗不该含 m-c: {report}"
+        );
         assert!(report[week_start..].contains("m-c"), "{report}");
         assert!(!report.contains("m-d"), "周窗外的样本不该出现: {report}");
     }

@@ -294,7 +294,10 @@ fn handle_stats_modal_key(state: &mut StatsModalState, key: &KeyEvent) -> StatsM
     }
 }
 
-fn handle_stats_modal_mouse(state: &mut StatsModalState, kind: MouseEventKind) -> StatsModalOutcome {
+fn handle_stats_modal_mouse(
+    state: &mut StatsModalState,
+    kind: MouseEventKind,
+) -> StatsModalOutcome {
     match kind {
         MouseEventKind::ScrollUp => {
             state.scroll_to(state.scroll.saturating_sub(3));
@@ -308,7 +311,12 @@ fn handle_stats_modal_mouse(state: &mut StatsModalState, kind: MouseEventKind) -
     }
 }
 
-pub fn render_stats_modal(buf: &mut Buffer, area: Rect, state: &mut StatsModalState, theme: &Theme) {
+pub fn render_stats_modal(
+    buf: &mut Buffer,
+    area: Rect,
+    state: &mut StatsModalState,
+    theme: &Theme,
+) {
     let labels: Vec<&str> = StatsTab::ALL.iter().map(|t| t.label()).collect();
     state.window.active_tab = state.active_tab.index();
 
@@ -492,7 +500,9 @@ fn metric_rows(pairs: &[(&'static str, String)], theme: &Theme, width: u16) -> V
                 (*label).to_string(),
                 Style::default().fg(theme.gray_dim),
             ));
-            let gap = label_w.saturating_sub(label.width()) + 1 + VALUE_WIDTH.saturating_sub(value.width());
+            let gap = label_w.saturating_sub(label.width())
+                + 1
+                + VALUE_WIDTH.saturating_sub(value.width());
             spans.push(Span::raw(" ".repeat(gap)));
             spans.push(Span::styled(
                 value.clone(),
@@ -632,7 +642,11 @@ mod tests {
         for _ in 0..3 {
             handle_stats_modal_key(&mut state, &key(KeyCode::Tab));
         }
-        assert_eq!(state.active_tab, StatsTab::Window(Window::FiveHours), "循环");
+        assert_eq!(
+            state.active_tab,
+            StatsTab::Window(Window::FiveHours),
+            "循环"
+        );
         handle_stats_modal_key(&mut state, &key(KeyCode::BackTab));
         assert_eq!(state.active_tab, StatsTab::Compression, "反向循环");
     }
@@ -678,10 +692,7 @@ mod tests {
 
         let week = tab_text(&state, StatsTab::Window(Window::Week));
         assert!(week.contains("m-c"), "{week}");
-        assert!(
-            !week.contains("m-d"),
-            "周窗不该含周窗外的样本: {week}"
-        );
+        assert!(!week.contains("m-d"), "周窗不该含周窗外的样本: {week}");
     }
 
     /// 渲染指定标签页的内容文本。必须显式切换 `active_tab`——`tab_lines` 读的是
@@ -699,7 +710,8 @@ mod tests {
 
     #[test]
     fn empty_window_shows_placeholder() {
-        let mut state = StatsModalState::new(StatsTab::Window(Window::Week), Vec::new(), Vec::new());
+        let mut state =
+            StatsModalState::new(StatsTab::Window(Window::Week), Vec::new(), Vec::new());
         state.now_unix_ms = 1_000_000_000_000;
         let text = tab_text(&state, StatsTab::Window(Window::Week));
         assert!(text.contains("no calls in this window"), "{text}");
@@ -711,11 +723,8 @@ mod tests {
         let samples: Vec<ModelCallSample> = (0..MAX_CARDS + 3)
             .map(|i| sample(now - 1000, &format!("m-{i}"), 1000 - i as u64, 0))
             .collect();
-        let mut state = StatsModalState::new(
-            StatsTab::Window(Window::FiveHours),
-            samples,
-            Vec::new(),
-        );
+        let mut state =
+            StatsModalState::new(StatsTab::Window(Window::FiveHours), samples, Vec::new());
         state.now_unix_ms = now;
         let text = tab_text(&state, StatsTab::Window(Window::FiveHours));
         assert!(text.contains("+3 more"), "{text}");
@@ -731,11 +740,11 @@ mod tests {
     fn compression_tab_renders_passthrough_lines() {
         let state = state_with_samples();
         let text = tab_text(&state, StatsTab::Compression);
-        assert!(text.contains("Tool-output compression (experimental)"), "{text}");
         assert!(
-            !text.contains("m-a"),
-            "压缩标签页不该混入用量卡片: {text}"
+            text.contains("Tool-output compression (experimental)"),
+            "{text}"
         );
+        assert!(!text.contains("m-a"), "压缩标签页不该混入用量卡片: {text}");
     }
 
     #[test]
