@@ -106,6 +106,14 @@ enum Surface {
     #[strum(serialize = "all")]
     All,
 }
+
+impl Surface {
+    // LOCAL: call sites use `as_str`; strum 0.27's AsRefStr only generates `AsRef<str>`,
+    // so bridge via the `IntoStaticStr` derive (which this enum already has).
+    fn as_str(&self) -> &'static str {
+        self.into()
+    }
+}
 /// Aggregated latency stats for one (surface, mode) cell.
 /// For `image` the primary p50/p95/max track the chip (end-to-end attach) latency.
 /// The burst responsiveness and chip p50s are also broken out explicitly.

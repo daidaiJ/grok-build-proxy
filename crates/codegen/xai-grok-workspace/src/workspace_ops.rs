@@ -2132,6 +2132,8 @@ mod tests {
                 E::SubagentEnd => HookEventNameWire::SubagentEnd,
                 E::PreCompact => HookEventNameWire::PreCompact,
                 E::PostCompact => HookEventNameWire::PostCompact,
+                // LOCAL: BeforeModelCall has no dedicated wire variant yet; Unknown keeps it lossless on the wire.
+                E::BeforeModelCall => HookEventNameWire::Unknown("before_model_call".to_string()),
             }
         }
         for e in [
@@ -2151,6 +2153,7 @@ mod tests {
             E::SubagentEnd,
             E::PreCompact,
             E::PostCompact,
+            E::BeforeModelCall,
         ] {
             assert_eq!(
                 serde_json::to_value(e).unwrap(),

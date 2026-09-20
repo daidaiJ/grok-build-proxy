@@ -1,5 +1,10 @@
-use super::{park_blocking_workers, release_parked_workers, *};
+// LOCAL: these are only used by the #[cfg(target_os = "linux")] behavior tests.
+use super::*;
+#[cfg(target_os = "linux")]
+use super::{park_blocking_workers, release_parked_workers};
+#[cfg(target_os = "linux")]
 use std::sync::Arc;
+#[cfg(target_os = "linux")]
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 

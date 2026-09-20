@@ -262,6 +262,8 @@ fn pty_session_pre_exec(tty: &std::ffi::CStr) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    // LOCAL: only the #[cfg(unix)] tests use OsString.
+    #[cfg(unix)]
     use std::ffi::OsString;
 
     use super::*;

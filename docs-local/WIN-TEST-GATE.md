@@ -87,3 +87,31 @@ WSL 内需自装 rustup（toolchain 跟随 rust-toolchain.toml）。跨 /mnt/d �
 - **RISK 40 / RISK-LIGHT 3**：有未门控风险特征，本机默认不跑；确需跑的先进阶段 2 抽样。
 - **CLEAN 43**：无静态特征，本地主题 crate 已在白名单；其余靠抽样+速读逐步晋升。
 - feature 名单已入报告汇总表，`--all-features` 抽样时单独核对。
+
+## 增量缓存 0xc0000005 自愈（2026-09-20 追加）
+
+本机 rustc 反复 `STATUS_ACCESS_VIOLATION (0xc0000005)`，多次实测「清
+`target/debug/incremental` + `CARGO_INCREMENTAL=0` 后同命令全绿」，归因为
+Windows 增量缓存损坏（上游已知家族：rust-lang/rust #134119 / #144652 /
+#148067；另 #151181 表明 1.90+ 在 ReFS/Dev Drive 上有独立的增量回归，故
+暂不建议 Dev Drive）。第 10 轮实测在 `CARGO_INCREMENTAL=0` 下也偶发一次
+同码崩溃——即存在与增量无关的基础性偶发崩溃，增量损坏是其放大器（崩溃
+半写缓存 → 之后每次增量运行加载即崩，直至手清）。
+
+处置（保留增量速度，不全局关）：
+
+- `ctest.sh` 尾部自愈：检测输出含 `0xc0000005` / `STATUS_ACCESS_VIOLATION`
+  时清 `target/debug/incremental` 并自动重试一次；平时零开销。
+- 手工等价物：`rm -rf target/debug/incremental` 后重跑（勿盲目原样重跑，
+  缓存是持久的，污染不自愈）。
+- 配套建议（不入库）：把仓库目录（至少 `target/`）、`D:\cargo-tmp`、
+  `~/.cargo`、`~/.rustup` 加入 Defender 排除——本机注册表确认当前无任何
+  排除项，实时扫描与 rustc 写文件竞争是 Windows 增量损坏的常见外因。
+- `rustup update` 跟进 stable 修复（本机 1.94.0，2026-03 构建）。
+
+## 全目标检查基线（2026-09-20 起）
+
+`cargo check --workspace --all-targets` 在本机应保持 0 error / 0 warning。
+该口径首次覆盖非白名单 crate 与全部 bench/example/bin target；为维持基线，
+新增环境族一律走 cfg 门控（`#[cfg(unix)]` / `cfg_attr`）或最小本地桩，
+并在 PATCHES.md 登记。

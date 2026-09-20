@@ -52,6 +52,12 @@ pub enum Scenario {
 }
 
 impl Scenario {
+    // LOCAL: strum 0.27's AsRefStr only generates `AsRef<str>`; bridge to the
+    // `IntoStaticStr` derive for the `as_str()` call sites (benches).
+    pub fn as_str(&self) -> &'static str {
+        self.into()
+    }
+
     /// Every scenario, in dispatch order.
     pub const ALL: &'static [Scenario] = &[
         Scenario::ScrollStress,

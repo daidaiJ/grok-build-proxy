@@ -89,4 +89,17 @@ if [ "${GATE_DRYRUN:-0}" = 1 ]; then
   exit 0
 fi
 
-exec "${final_cmd[@]}"
+# 增量缓存损坏自愈：rustc 0xc0000005 反复触发多为 target/debug/incremental 半写污染
+# （崩溃或杀进程遗留，见 docs-local/WIN-TEST-GATE.md）。平时保留增量速度；
+# 检测到崩溃特征时清缓存自动重试一次，避免"崩一次→全量重编"或人工反复清缓存。
+INCR_CRASH_LOG=$(mktemp)
+"${final_cmd[@]}" 2>&1 | tee "$INCR_CRASH_LOG"
+rc=${PIPESTATUS[0]}
+if [ $rc -ne 0 ] && grep -q -e '0xc0000005' -e 'STATUS_ACCESS_VIOLATION' "$INCR_CRASH_LOG"; then
+  echo "ctest: 检测到 rustc 增量缓存崩溃（0xc0000005），清理 target/debug/incremental 后重试一次…"
+  rm -rf "$REPO/target/debug/incremental"
+  "${final_cmd[@]}" 2>&1 | tee "$INCR_CRASH_LOG"
+  rc=${PIPESTATUS[0]}
+fi
+rm -f "$INCR_CRASH_LOG"
+exit $rc

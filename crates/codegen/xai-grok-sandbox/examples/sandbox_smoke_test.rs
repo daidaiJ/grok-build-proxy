@@ -13,8 +13,12 @@
 //! ```
 
 use std::path::Path;
+// LOCAL: enforce-only APIs (`support_info`) and libc are unix-only; this smoke test is a
+// unix scenario. Non-unix builds get stubs below so `--all-targets` stays clean on Windows.
+#[cfg(unix)]
 use xai_grok_sandbox::{ProfileName, SandboxManager};
 
+#[cfg(unix)]
 fn main() {
     // Parse profile from args (default: workspace).
     let profile_name = std::env::args()
@@ -121,6 +125,7 @@ fn main() {
     println!("\n✅ Smoke test complete");
 }
 
+#[cfg(unix)]
 fn test_read(label: &str, path: &Path) {
     if path.is_file() {
         match std::fs::read(path) {
@@ -150,6 +155,7 @@ fn test_read(label: &str, path: &Path) {
     }
 }
 
+#[cfg(unix)]
 fn test_write(label: &str, path: &Path) {
     match std::fs::write(path, b"sandbox-test") {
         Ok(()) => {
@@ -163,4 +169,21 @@ fn test_write(label: &str, path: &Path) {
             }
         }
     }
+}
+
+#[cfg(not(unix))]
+fn main() {
+    println!("sandbox_smoke_test: Landlock/Seatbelt sandbox (nono) is unix-only; nothing to smoke-test on this platform.");
+}
+
+#[cfg(not(unix))]
+#[allow(dead_code)] // signature parity with the unix variants; not invoked on this platform
+fn test_read(label: &str, _path: &Path) {
+    println!("  ⏭️  {label}: SKIPPED (unix-only sandbox)");
+}
+
+#[cfg(not(unix))]
+#[allow(dead_code)] // signature parity with the unix variants; not invoked on this platform
+fn test_write(label: &str, _path: &Path) {
+    println!("  ⏭️  {label}: SKIPPED (unix-only sandbox)");
 }

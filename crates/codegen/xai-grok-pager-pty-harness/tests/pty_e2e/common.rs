@@ -1222,6 +1222,12 @@ pub(crate) fn dump_non_system_messages(bodies: &[serde_json::Value]) -> String {
     out
 }
 
+// LOCAL: no-op on non-unix so ungated test files referencing these helpers compile on Windows.
+#[cfg(not(unix))]
+pub(crate) fn dump_non_system_messages(_bodies: &[serde_json::Value]) -> String {
+    String::new()
+}
+
 /// Extract the runtime task id from a serialized request body containing the background-start tool result's `<task-id>…</task-id>` envelope.
 #[cfg(unix)]
 pub(crate) fn extract_task_id(body: &str) -> Option<String> {
@@ -1248,6 +1254,9 @@ pub(crate) fn write_cast_if_requested(harness: &PtyHarness, file_name: &str) {
         Err(e) => eprintln!("failed to write cast {}: {e}", path.display()),
     }
 }
+
+#[cfg(not(unix))]
+pub(crate) fn write_cast_if_requested(_harness: &PtyHarness, _file_name: &str) {}
 
 /// Dump the current screen (plain text and HTML) into `$GROK_PTY_CAST_DIR/<file_stem>.{txt,html}` when the env var is set.
 /// Failures are logged, never fatal; same opt-in as [`write_cast_if_requested`].

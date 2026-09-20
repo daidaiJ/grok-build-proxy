@@ -76,6 +76,8 @@ async fn create_test_actor(
     );
     chat_state_handle.record_token_usage(total_tokens);
     SessionActor {
+    output_style_applied: std::sync::atomic::AtomicBool::new(false),
+    first_model_call_done: std::sync::atomic::AtomicBool::new(false),
         repo_status_prefetch: crate::session::repo_status_prefix::RepoStatusPrefetchState::default(
         ),
         transient_retry_enabled: true,
@@ -513,6 +515,8 @@ async fn create_test_actor_with_memory(
         .as_ref()
         .map_or_else(Default::default, |mc| mc.initial_injection.clone());
     SessionActor {
+    output_style_applied: std::sync::atomic::AtomicBool::new(false),
+    first_model_call_done: std::sync::atomic::AtomicBool::new(false),
         repo_status_prefetch: crate::session::repo_status_prefix::RepoStatusPrefetchState::default(
         ),
         transient_retry_enabled: true,

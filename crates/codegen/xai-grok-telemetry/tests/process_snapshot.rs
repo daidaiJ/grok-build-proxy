@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use xai_grok_telemetry::events::ShellTrueNoop;
 use xai_grok_telemetry::{process_metrics, session_ctx};
 
+#[cfg_attr(not(unix), allow(unused_variables))] // LOCAL: `second` only consumed in the unix block
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_gated_emit_takes_no_snapshot_and_the_second_snapshot_reports_cpu() {
     assert!(
