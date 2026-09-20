@@ -81,6 +81,17 @@
 另外注意语义混淆：tools 里的截断阈值是**字节数**，但文案写着 `chars`
 （`read/mod.rs:307` 的 `(line truncated to 2000 chars)`）——修的时候别把两者当成同一口径。
 
+## 验证前提（2026-09-20 实测，给下一批修 A1–A3 的人）
+
+- 本机能编 `xai-grok-tools` 的测试目标：`cargo check -p xai-grok-tools --all-targets`
+  实测 0 error（1m23s）。`WIN-TEST-GATE.md` 首轮扫描（2026-09-19）把它列进
+  COMPILE-BREAK 的结论**已过时**，别据此跳过本机回归（该文档 2026-09-20 的
+  "全目标检查基线"一节已覆盖此点）。
+- 但 `xai-grok-tools` 不在 `docs-local/win-whitelist.txt`，跑 lib 测试要走逃生门：
+  `GATE_FORCE=1 scripts-local/ctest.sh -p xai-grok-tools --lib`。
+- **CI 不跑 tools 的测试**：`build.yml:62` 只有 `cargo check --locked -p xai-grok-tools`
+  （不带 `--all-targets`）。所以 A1–A3 修完后回归必须在本机执行，CI 绿不代表测试通过。
+
 ## 审计方法（上游同步后可复用）
 
 扫描模式（rg，`crates/` 下 96 个 crate）：
