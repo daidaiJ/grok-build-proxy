@@ -1220,3 +1220,33 @@ byte index 2 is not a char boundary; it is inside '│' (bytes 1..4) of ` │ �
 8: xai_grok_sampler::stream::think_split::ThinkTagSplitter::emit_all_but_partial_marker at .\src\stream\think_split.rs:160
 9: xai_grok_sampler::stream::think_split::ThinkTagSplitter::feed                        at .\src\stream\think_split.rs:109
 ```
+
+## 内置命令清单同步：`available_commands` 期望列表补 `/style`（2026-09-21）
+
+**同步文件**（上游 `Synced from monorepo` 自带）：
+`crates/codegen/xai-grok-shell/src/session/slash_commands_tests.rs`
+
+十五期把 `BuiltinCommand "style"` 插在 `BUILTIN_COMMANDS` 的 `always-approve`
+之后（`slash_commands.rs:88`），但本同步文件的
+`available_commands_orders_builtins_first` 期望列表没跟着加，导致 main 的
+build 工作流 linux job 在 `Test shell (in-process harness)` 步骤挂 1 例
+（6657 passed / 1 failed，run 35521509986）：
+
+```
+left:  [..., "always-approve", "style", "flush", ...]   // 实际（含本地新增命令）
+right: [..., "always-approve", "flush", ...]            // 期望（未同步）
+```
+
+补丁：期望列表在 `"always-approve"` 后插入 `"style"`，并加
+`// LOCAL(minimal-style)` 注释说明它必须在 `flush` 之前、与
+`BUILTIN_COMMANDS` 顺序一致。重放方式：同步冲掉后，把 `"style"` 重新插回该位置。
+
+**注意**：此不一致自 `676ae80`（/style 合入 main，2026-09-18）起就存在，但那次
+push **没有触发 build 工作流**（main 上 9-18 `f50f0f9e` 之后直接跳到 9-20
+`be1ce7f`），所以直到 9-20 的 `/stats` 合入才暴露。割 tag 发预览版时 release
+工作流只 build 不跑 shell 套件，同样拦不住这类同步漂移。
+
+验证：静态对账（期望列表逐项比对 CI 日志里的 `left` 数组，22 项全等）；
+本机 shell 套件因上游自带测试 profile 编译错误无法运行（见"已知问题"），
+最终以 Linux CI build job 为准。
+
