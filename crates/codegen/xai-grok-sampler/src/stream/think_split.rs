@@ -157,7 +157,15 @@ impl ThinkTagSplitter {
                 continue;
             }
             let start = buf_len - n;
-            if ALL_TAGS.iter().any(|t| t.starts_with(&self.buffer[start..])) {
+            // A marker always begins with ASCII `<`, so a start offset inside a
+            // multi-byte codepoint cannot begin one — and slicing there panics.
+            if !self.buffer.is_char_boundary(start) {
+                continue;
+            }
+            if ALL_TAGS
+                .iter()
+                .any(|t| t.starts_with(&self.buffer[start..]))
+            {
                 cut = start;
                 break;
             }
@@ -316,6 +324,24 @@ mod tests {
         let s = feed_all(&mut sp, &["value < th", "an 11"]);
         assert_eq!(s.text, "value < than 11");
         assert_eq!(s.reasoning, "");
+    }
+
+    #[test]
+    fn multibyte_delta_is_not_probed_at_a_non_char_boundary() {
+        // CJK deltas: the suffix scan must skip byte offsets inside a codepoint
+        // (`这篇` = 6 bytes, probing at byte 1 slices inside '这').
+        let mut sp = ThinkTagSplitter::new();
+        let s = feed_all(&mut sp, &["这篇"]);
+        assert_eq!(s.text, "这篇");
+        assert_eq!(s.reasoning, "");
+    }
+
+    #[test]
+    fn multibyte_text_around_markers_is_byte_intact() {
+        let mut sp = ThinkTagSplitter::new();
+        let s = feed_all(&mut sp, &["回答<thi", "nk>想一下</think>", "结束"]);
+        assert_eq!(s.text, "回答结束");
+        assert_eq!(s.reasoning, "想一下");
     }
 
     #[test]
