@@ -927,3 +927,28 @@ main 逐字节相同，属 main 既有 Windows 环境族）：
 - 不加配置开关：无标记流逐字节直通（仅尾部 `<` 类前缀的跨 chunk 扣留，下一
   chunk 或 EOF 必然归还），常开零风险
 - 版本：v1.0.35
+
+## /stats 模型用量聚合（model usage ledger，2026-09-20）
+
+`/stats` 新增按 5h/一周/一月 × model id 聚合的用量/性能报表（累计输入/输出/缓存读/
+缓存写 token、平均缓存命中率、TTFT 与 TPS 的 p50/p90），压缩账本段保留在其后。
+分支 `feat/local-model-usage-stats`。
+
+### xai-grok-tools
+- `src/model_usage_ledger.rs`（新增）：调用粒度 JSONL 账本
+  `grok_home/cache/model-usage.jsonl`——shell 每次成功推理追加一条采样
+  （ts/model_id/四类 token/ttft/tps/duration），文件超 2MB 按保留窗口（35 天）重写剪裁；
+  `aggregate(samples, window_ms, now)` 纯函数聚合 + 最近邻秩百分位
+
+### xai-grok-shell
+- `src/session/acp_session_impl/turn.rs`：`ModelResponseReceived` 事件落盘后
+  追加一条 `model_usage_ledger` 采样（model_id 改为 clone 传入）
+
+### xai-grok-pager
+- `src/slash/commands/stats.rs`：重写为「用量聚合报表 + 压缩账本」双段；
+  `format_usage_report(samples, now)` 纯函数可测
+- `src/slash/i18n.rs`：命令描述换键 + 13 个报表词条
+
+### 已知边界
+- 采样只覆盖主循环推理路径（subagent 的模型调用不经 turn.rs，暂不计入）
+- 历史数据不回填：账本从合入后新产生的调用开始累积
