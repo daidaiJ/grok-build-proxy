@@ -927,3 +927,21 @@ main 逐字节相同，属 main 既有 Windows 环境族）：
 - 不加配置开关：无标记流逐字节直通（仅尾部 `<` 类前缀的跨 chunk 扣留，下一
   chunk 或 EOF 必然归还），常开零风险
 - 版本：v1.0.35
+
+## 趣味等待文案（witty loading phrases，2026-09-20）
+
+移植 qwen-code 等待模型响应时的随机趣味文案（Apache-2.0；词表与轮换机制见
+`packages/cli/src/ui/hooks/usePhraseCycler.ts`、`packages/web-shell/client/constants/loadingPhrases.ts`、
+`packages/cli/src/i18n/locales/zh.js` 的 `WITTY_LOADING_PHRASES`）。分支
+`feat/local-witty-loading-phrases`。
+
+### xai-grok-pager
+- `src/views/witty_phrases.rs`（新增）：EN/ZH 全量词表原文迁入 +
+  `witty_phrase(turn_elapsed)`——按「本轮已进行秒数 / 15」时间桶 + 进程种子
+  FNV-1a 取词（确定性伪随机，无 RNG 依赖），语言取 `slash::i18n::current_lang()`
+- `src/views/mod.rs`：注册 `witty_phrases` 模块
+- `src/views/turn_status.rs`：`compute_activity` 增参 `turn_elapsed`；
+  `Thinking` / `Responding` 两臂的状态行文案从固定 "Thinking…" / "Responding…"
+  改为趣味轮换词；其余（工具运行/重试/Compacting/Waiting 家族）不动
+  （`Waiting(Model)` 的 "Waiting for response…" 有 pty e2e 依赖，保留）
+- 测试：`views::witty_phrases` 4 个纯单测 + `turn_status` 既有用例改为断言词表成员
