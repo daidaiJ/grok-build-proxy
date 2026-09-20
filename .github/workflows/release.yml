@@ -18,9 +18,12 @@
 # even with rust-lld. Linux hosted the same tree in ~27 min; cross-compile
 # keeps that CPU and drops the Windows runner.
 #
-# Workspace crates are kept in the rust-cache blob. That only helps if git
-# mtimes survive checkout (cargo fingerprints by mtime, not content).
-# fetch-depth: 0 + git-restore-mtime is the helix / rust-cache#37 pattern.
+# Workspace-crate artifacts are NOT cached (cache-workspace-crates: false,
+# the rust-cache default). Caching them relied on git mtimes surviving
+# checkout, but cargo fingerprints by mtime while restore-mtime back-dates
+# sources — a workspace source edit then reuses a stale rmeta (v1.0.37
+# poisoning, see the linux job comment). Workspace crates rebuild per tag;
+# registry deps stay cached.
 #
 # workflow_dispatch runs the identical build on a branch ref (packaging and
 # upload are guarded to tag refs) — used to warm the release cache before
@@ -62,9 +65,21 @@ jobs:
       - uses: chetan/git-restore-mtime-action@v2
       - uses: ./.github/actions/ci-setup
         with:
-          cache-scope: release
+          # "-2" suffix (2026-09-20): v1 blobs were saved with workspace-crate
+          # artifacts (cache-workspace-crates was true) and poisoned builds
+          # with stale rmeta (see the linux job comment). New keys force a
+          # one-time cold rebuild instead of restoring the poisoned blobs.
+          cache-scope: release-2
           cache-targets: "true"
-          cache-workspace-crates: "true"
+          # LOCAL fix (v1.0.37-preview.1 poisoning): workspace-crate artifacts in
+          # the blob are unsound here. cargo fingerprints by mtime, and
+          # git-restore-mtime back-dates sources to their last git commit — so a
+          # source edit whose restored mtime matches the cached fingerprint is
+          # treated as unchanged and a STALE rmeta ships (research merge changed
+          # xai-grok-sampling-types, sampler then failed E0609 on a field the
+          # cached artifact predated). rust-cache's default (false) exists for
+          # exactly this; workspace crates rebuild per tag (deps stay cached).
+          cache-workspace-crates: "false"
           # The build is the only long step; a post-build failure (asset
           # upload) leaves a complete, valid tree worth caching for the
           # rerun. Trade-off: a build-stage failure also saves, and its
@@ -116,9 +131,12 @@ jobs:
           sudo apt-get install --quiet -y clang lld ninja-build zip
       - uses: ./.github/actions/ci-setup
         with:
-          cache-scope: release-xwin
+          cache-scope: release-xwin-2
           cache-targets: "true"
-          cache-workspace-crates: "true"
+          # See the linux job: workspace-crate caching + restore-mtime poisons
+          # fingerprints when workspace sources change; new scope key drops
+          # the poisoned v1 blobs.
+          cache-workspace-crates: "false"
           rust-targets: x86_64-pc-windows-msvc
           rust-components: llvm-tools
           # Same reasoning as the linux job: build completes before upload.
