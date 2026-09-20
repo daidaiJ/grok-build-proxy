@@ -1144,6 +1144,72 @@ byte index 2 is not a char boundary; it is inside '│' (bytes 1..4) of ` │ �
 `doom_loop_recovery.rs` 的同类截断早就是 `while cut > 0 && !text.is_char_boundary(cut)`，
 本次是 think_split 漏了这个守卫。
 
+
+验证：`think_split.rs` 追加 2 例（纯 CJK delta `这篇`；标记前后夹中文
+`回答<thi|nk>想一下</think>|结束`），修前两例均在 160:66 panic，修后
+`ctest.sh -p xai-grok-sampler --lib` 263 例全过。开发构建取栈（release 二进制
+在 TUI 下只打出 `stack backtrace:` 头行 + note，无可用帧）：
+
+## /stats 窗口化：三时间窗标签页 + 参数 + i18n（2026-09-20，feat/local-stats-modal-i18n）
+
+`/stats` 从「回滚缓冲纯文本」升级为模态窗口，标签栏即时间窗，视觉与交互
+对齐 `/usage`（同一 `modal_window` 框架：边框、标签栏、页脚快捷键、滚动）。
+月窗按需求移除，改为 **5h / day / week** 三个窗口。
+
+已完成：T1（参数 + day 窗）与 T2（模态窗口）。T3（全仓 i18n 扫尾）**未做**，
+本批只覆盖 `/stats` 自身新增文案。TODO 与验收标准见
+`docs-local/stats-modal-todo.md`。
+
+### xai-grok-tools
+- `src/model_usage_ledger.rs`：常量组改为 `WINDOW_5H_MS` / `WINDOW_DAY_MS`（新增）/
+  `WINDOW_WEEK_MS`，**删除 `WINDOW_MONTH_MS`**；新增 `Window` 枚举
+  （`ALL` / `len_ms` / `arg` / `from_arg` / `label` / `index` / `from_index`），
+  供命令参数解析与标签页复用；`retain` 剪裁窗口与报表窗口解耦（原注释写"保证月窗
+  完整"，月窗已无，保留窗口只剩"限制账本无界增长"的作用，注释同步订正）；
+  新增 `fmt_tokens` / `fmt_ms_pair` / `fmt_tps_pair`（从 pager 下沉，使文本路径与
+  模态窗口共用同一份数字格式化）
+- 测试：day 窗边界（`now - WINDOW_DAY_MS - 1` 排除）、`Window` 参数解析与索引
+  往返/越界钳制、`fmt_*` 边界，各拆独立用例
+
+### xai-grok-pager
+- `src/views/stats_modal.rs`（新增）：`StatsModalState` + `StatsTab`
+  （三个时间窗 + 压缩账本共 4 标签页）+ `route_stats_modal_key/mouse` +
+  `render_stats_modal`。每个 model 一张卡片（id + 调用数，token 与性能两组指标行，
+  数值右对齐，面板过窄自动退化为每行一个指标）；超过 8 张卡片折叠为
+  `… +N more` 一行，`a` 展开/收起；`y` 复制整份报表；`1`–`4` 直跳标签页。
+  骨架（标签步进/滚动钳制/Outcome 枚举）与 `usage_modal` 同形，不塞进
+  `usage_modal`（后者的标签页语义是会话用量/限额，与本地历史聚合不同源）
+- `src/slash/commands/stats.rs`：`takes_args: true`，`usage` 改
+  `/stats [5h|day|week]`，加 `suggest_args`；未知参数报
+  `Unknown argument: {arg}. Use /stats [5h|day|week]`（对齐 `/usage` 文案风格）。
+  全屏模式返回 `CommandResult::Action(Action::ShowStats { window })`；
+  **保留极简模式文本路径**（极简无浮动窗口，仍走回滚缓冲全窗口报表）
+- `src/app/actions.rs` / `dispatch/router.rs` / `dispatch/status.rs`：新增
+  `Action::ShowStats { window }` 与 `dispatch_show_stats`（本地同步读取
+  model-usage.jsonl + 压缩账本，**无** `fetch_nonce` 异步那套；已开窗口则只
+  重新定位标签页）
+- `src/views/modal.rs`：`ActiveModal::StatsInfo` 变体 + 标题映射（`Model usage`）
+- `src/app/modals.rs` / `agent_view/panes.rs`：键盘、鼠标、滚轮路由与渲染分支
+- `src/slash/i18n.rs`：新增/替换报表词条（窗口标签、卡片指标、页脚说明片段），
+  删除已无用的 `last 5h` / `last week` / `last month` 键
+
+### 已知边界
+- 极简模式的文本路径与模态窗口共用 `fmt_*` 与聚合函数，但文本路径仍渲染全部
+  三窗（与改造前的"全窗口"输出保持一致），窗口分节按 `Window::ALL` 顺序
+- `Window::label()` 返回的英文串同时是 i18n 键（如 `Last 5h`），改文案须同改表
+
+## CI 缓存清理脚本修复：过宽前缀会误删在用 scope（2026-09-20）
+
+`scripts-local/purge-gh-caches.py` 的 `DELETE_PREFIXES` 用了 `v1-rust-release-`
+与 `v1-rust-release-xwin-`，而**这两个串分别是当前在用的
+`v1-rust-release-2-…` / `v1-rust-release-xwin-2-…` 的前缀**——按原清单执行会把
+活着的 release 缓存一并删掉（preview 打 tag 后下次构建退化为冷编译）。
+改为以 `-<os>-` 收尾的精确 scope 前缀（`v1-rust-release-Linux-x64-`、
+`v1-rust-release-xwin-Linux-x64-`），并把当前 scope 与 build 条目移入
+`KEEP_PREFIXES`。build 两条尾部 hash 不同、无法从 key 反推哪条是活的，
+且各仅 ~290 MiB，一并保留（宁可留，不误删）。
+
+
 验证：`think_split.rs` 追加 2 例（纯 CJK delta `这篇`；标记前后夹中文
 `回答<thi|nk>想一下</think>|结束`），修前两例均在 160:66 panic，修后
 `ctest.sh -p xai-grok-sampler --lib` 263 例全过。开发构建取栈（release 二进制

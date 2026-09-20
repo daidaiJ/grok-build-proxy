@@ -1,9 +1,9 @@
-//! LOCAL: 按调用粒度的模型用量/性能账本，`/stats` 的 5h/周/月聚合数据源。
+//! LOCAL: 按调用粒度的模型用量/性能账本，`/stats` 的 5h/天/周聚合数据源。
 //!
 //! shell 每次成功推理追加一条 JSONL（时间戳、model_id、输入/输出/缓存 token、
 //! ttft、tps）；`/stats` 读取后按时间窗 × model 聚合出累计 token、平均缓存命中率
 //! 和 ttft/tps 的 p50/p90。文件放在 `grok_home/cache/model-usage.jsonl`，超过体积
-//! 上限时整体重写并丢弃超出保留窗口（35 天）的旧样本，保证月窗数据完整。
+//! 上限时整体重写并丢弃超出保留窗口的旧样本。
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -11,13 +11,69 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-/// 聚合窗口：5 小时 / 一周 / 一月（毫秒）。
+/// 聚合窗口：5 小时 / 一天 / 一周（毫秒）。
 pub const WINDOW_5H_MS: u64 = 5 * 60 * 60 * 1000;
+pub const WINDOW_DAY_MS: u64 = 24 * 60 * 60 * 1000;
 pub const WINDOW_WEEK_MS: u64 = 7 * 24 * 60 * 60 * 1000;
-pub const WINDOW_MONTH_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 
-/// 样本保留窗口：略长于月窗，避免窗沿抖动丢数据。
+/// 样本保留窗口：独立于报表窗口，只在文件体积超限触发剪裁时生效，避免账本无界增长。
 const RETAIN_MS: u64 = 35 * 24 * 60 * 60 * 1000;
+
+/// `/stats` 报表时间窗，同时充当模态窗口的标签页身份。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Window {
+    FiveHours,
+    Day,
+    Week,
+}
+
+impl Window {
+    /// 全部窗口，按显示顺序（也是标签页顺序）。
+    pub const ALL: [Window; 3] = [Window::FiveHours, Window::Day, Window::Week];
+
+    /// 窗口长度（毫秒）。
+    pub fn len_ms(self) -> u64 {
+        match self {
+            Window::FiveHours => WINDOW_5H_MS,
+            Window::Day => WINDOW_DAY_MS,
+            Window::Week => WINDOW_WEEK_MS,
+        }
+    }
+
+    /// 命令行参数名（`/stats <arg>`）。同时是渲染层的 i18n 键，故为 `'static`。
+    pub fn arg(self) -> &'static str {
+        match self {
+            Window::FiveHours => "5h",
+            Window::Day => "day",
+            Window::Week => "week",
+        }
+    }
+
+    /// 解析 `/stats` 参数；大小写不敏感，首尾空白忽略。
+    pub fn from_arg(arg: &str) -> Option<Self> {
+        let arg = arg.trim();
+        Self::ALL.into_iter().find(|w| w.arg().eq_ignore_ascii_case(arg))
+    }
+
+    /// 窗口标题（i18n 表以英文原文为键）。
+    pub fn label(self) -> &'static str {
+        match self {
+            Window::FiveHours => "Last 5h",
+            Window::Day => "Last day",
+            Window::Week => "Last week",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|w| *w == self).unwrap_or(0)
+    }
+
+    /// 越界索引回退到首个窗口（标签页点击与数字键都经这里）。
+    pub fn from_index(i: usize) -> Self {
+        *Self::ALL.get(i).unwrap_or(&Self::ALL[0])
+    }
+}
+
 /// 超过该体积触发按保留窗口重写。
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
@@ -135,6 +191,39 @@ pub struct ModelUsageAggregate {
     pub ttft_p90_ms: Option<u64>,
     pub tps_p50: Option<f64>,
     pub tps_p90: Option<f64>,
+}
+
+/// token 数人性化：`823` / `45.2k` / `3.05m`。
+pub fn fmt_tokens(n: u64) -> String {
+    if n < 1_000 {
+        n.to_string()
+    } else if n < 1_000_000 {
+        let k = n as f64 / 1_000.0;
+        if k < 100.0 {
+            format!("{k:.1}k")
+        } else {
+            format!("{:.0}k", k)
+        }
+    } else {
+        format!("{:.2}m", n as f64 / 1_000_000.0)
+    }
+}
+
+/// 性能指标显示串：`900/1100` / `n/a`。渲染层把指标名拼在后面，
+/// 保证文本路径与模态窗口显示同一份数字。
+pub fn fmt_ms_pair(p50: Option<u64>, p90: Option<u64>, na: &str) -> String {
+    match (p50, p90) {
+        (Some(p50), Some(p90)) => format!("{p50}/{p90}"),
+        _ => na.to_string(),
+    }
+}
+
+/// 吞吐（tokens/s）显示串，与 [`fmt_ms_pair`] 同形。
+pub fn fmt_tps_pair(p50: Option<f64>, p90: Option<f64>, na: &str) -> String {
+    match (p50, p90) {
+        (Some(p50), Some(p90)) => format!("{p50:.1}/{p90:.1}"),
+        _ => na.to_string(),
+    }
 }
 
 /// 把样本按 `window_ms` 时间窗过滤后按 model 聚合，按总 token 降序排列。
@@ -259,10 +348,59 @@ mod tests {
     }
 
     #[test]
+    fn fmt_tokens_boundaries() {
+        assert_eq!(fmt_tokens(823), "823");
+        assert_eq!(fmt_tokens(45_200), "45.2k");
+        assert_eq!(fmt_tokens(999_999), "1000k");
+        assert_eq!(fmt_tokens(3_050_000), "3.05m");
+    }
+
+    #[test]
+    fn fmt_pairs_fall_back_to_na_when_either_percentile_is_missing() {
+        assert_eq!(fmt_ms_pair(Some(900), Some(1100), "n/a"), "900/1100");
+        assert_eq!(fmt_ms_pair(Some(900), None, "n/a"), "n/a");
+        assert_eq!(fmt_ms_pair(None, Some(1100), "n/a"), "n/a");
+        assert_eq!(fmt_tps_pair(Some(50.0), Some(60.0), "n/a"), "50.0/60.0");
+        assert_eq!(fmt_tps_pair(None, Some(60.0), "n/a"), "n/a");
+    }
+
+    #[test]
+    fn window_arg_parsing_is_case_insensitive_and_rejects_unknown() {
+        assert_eq!(Window::from_arg("5h"), Some(Window::FiveHours));
+        assert_eq!(Window::from_arg("day"), Some(Window::Day));
+        assert_eq!(Window::from_arg("week"), Some(Window::Week));
+        assert_eq!(Window::from_arg("  DAY  "), Some(Window::Day));
+        assert_eq!(Window::from_arg("month"), None);
+        assert_eq!(Window::from_arg(""), None);
+        assert_eq!(Window::ALL.map(Window::arg), ["5h", "day", "week"]);
+    }
+
+    #[test]
+    fn window_index_roundtrips_and_clamps() {
+        for (i, w) in Window::ALL.into_iter().enumerate() {
+            assert_eq!(w.index(), i);
+            assert_eq!(Window::from_index(i), w);
+        }
+        assert_eq!(Window::from_index(Window::ALL.len()), Window::FiveHours);
+    }
+
+    #[test]
     fn aggregate_empty_window_yields_no_rows() {
         let now = 1_000_000_000_000;
-        let samples = vec![sample(now - WINDOW_MONTH_MS - 1, "m-a", 1, 0, 1, 1.0)];
-        assert!(aggregate(&samples, WINDOW_MONTH_MS, now).is_empty());
+        let samples = vec![sample(now - WINDOW_WEEK_MS - 1, "m-a", 1, 0, 1, 1.0)];
+        assert!(aggregate(&samples, WINDOW_WEEK_MS, now).is_empty());
+    }
+
+    #[test]
+    fn aggregate_day_window_excludes_samples_at_or_before_the_cutoff() {
+        let now = 1_000_000_000_000;
+        let samples = vec![
+            sample(now - WINDOW_DAY_MS + 1, "m-in", 1, 0, 1, 1.0),
+            sample(now - WINDOW_DAY_MS - 1, "m-out", 1, 0, 1, 1.0),
+        ];
+        let rows = aggregate(&samples, WINDOW_DAY_MS, now);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0].model_id, "m-in");
     }
 
     #[test]
