@@ -8,7 +8,10 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use portable_pty::{ExitStatus, PtySize, native_pty_system};
-use xai_grok_test_support::{TestProcessTree, TestSandbox, process_has_exited_without_reap};
+use xai_grok_test_support::{TestProcessTree, TestSandbox};
+// LOCAL: `process_has_exited_without_reap` is `#[cfg(unix)]` upstream; all call sites here are unix-gated too.
+#[cfg(unix)]
+use xai_grok_test_support::process_has_exited_without_reap;
 
 const PTY_DROP_REAP_TIMEOUT: Duration = Duration::from_millis(250);
 /// Grace after group SIGTERM before SIGKILL so a responsive child can run TERM cleanup. Wedged children fall through to SIGKILL.

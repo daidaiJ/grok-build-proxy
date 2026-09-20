@@ -144,6 +144,8 @@ fn write_private(path: &Path, contents: &str) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // LOCAL: only the #[cfg(unix)] tests use Instant.
+    #[cfg(unix)]
     use std::time::Instant;
 
     /// Write an executable `#!/bin/sh` fake `mmdc` and return (dir-guard, path).

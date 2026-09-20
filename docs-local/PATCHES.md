@@ -1036,3 +1036,51 @@ main 逐字节相同，属 main 既有 Windows 环境族）：
 - 研究分支（research/agent-cli-tracking）的流层实现（thinking_scrub/实验开关）与
   main 的 deepseek-compat（think_split 常开）取并集：保留 think_split 常开语义与
   dialect 学习/回放，移除实验开关 `thinking_tag_scrub`（行为由 think_split 全量承载）。
+
+## Windows all-targets 修复批次（2026-09-20，feat/local-win-build-hygiene）
+
+首次在本机跑 `cargo check --workspace --all-targets`（上游只在 Linux 编测试/bench/example），
+暴露两类问题并就地修复：环境族（unix 专属测试代码在 Windows 上的噪声）与真实损坏
+（research 分支/本地提交给 `SessionActor` 前后加过两个字段，xai-grok-shell 的测试
+从没在本机编过，断链未被发现）。全部为最小 diff，Linux 侧行为不变。
+
+### 环境族（cfg 门控 / 本地桩）
+- `xai-grok-pager-pty-harness/src/pty.rs`：`process_has_exited_without_reap` 的
+  import 加 `#[cfg(unix)]`（上游 bug：lib 内全部调用点已 unix 门控，仅 import 漏了）
+- `xai-grok-pager-pty-harness/benches/paste_latency.rs`：本地补 `Surface::as_str`
+  （strum 0.27 的 `AsRefStr` 只生成 `AsRef<str>`；经 `IntoStaticStr` 桥接）
+- `xai-grok-pager-pty-harness/src/scenarios/mod.rs`：同因补 `pub fn Scenario::as_str`
+- `xai-grok-mermaid/src/{mmdc,subprocess}.rs`：测试 mod 里仅被 `#[cfg(unix)]`
+  用例使用的 `Instant`/`Stdio`/`detached` 加门控
+- `xai-grok-sandbox/examples/sandbox_smoke_test.rs`：非 unix 平台提供
+  no-op `main`/`test_read`/`test_write` 桩（Landlock/Seatbelt 本就 unix 专属）
+
+### 真实损坏（本机/上游 CI 均不编译该 crate 测试导致积压）
+- `xai-grok-shell` 测试：11 处 `SessionActor {` 字面量补
+  `output_style_applied` / `first_model_call_done`（AtomicBool::new(false)，
+  与 spawn.rs 生产路径默认一致）；`src/agent/output_style.rs` 测试里
+  `Instant::timestamp_nanos_opt`（用错类型，应为 `SystemTime`）改
+  `duration_since(UNIX_EPOCH).as_nanos()`；`benches/session_list.rs` 去重
+  `agent_id`/`attempt_id`（research 合并残留）
+- `xai-grok-shell/Cargo.toml`：补 `[[test]] test_startup_prefetch_repair_overlap`
+  条目 `required-features = ["test-support"]`（兄弟 5 个条目都有，该文件漏登记）
+- `xai-grok-shell/tests/{acp_harness/mod.rs,common/mod.rs}`：
+  `reset_startup_settings_for_tests` / `clear_startup_profile_for_tests` 调用点
+  加 `#[cfg(feature = "test-support")]`（lib 侧函数本就带该门控）
+- `xai-grok-workspace/src/workspace_ops.rs`：漂移守卫
+  `hook_event_name_wire_covers_all_upstream_variants` 补
+  `BeforeModelCall => Unknown("before_model_call")` 映射并加入轮询列表
+  （本地 phase-3 给 `HookEventName` 加变体后守卫未跟上）
+
+## 增量缓存 0xc0000005 处置（2026-09-20）
+
+本机 rustc 反复 `STATUS_ACCESS_VIOLATION (0xc0000005)`，清
+`target/debug/incremental` + `CARGO_INCREMENTAL=0` 后同命令全绿，确认是
+Windows 增量缓存损坏（上游已知家族，rust-lang/rust #134119/#144652/#148067）。
+自延续机制：崩溃/杀进程留下半写缓存，后续每次增量运行加载即崩，直到手清。
+
+处置：不全局关增量（全量重编更贵），`ctest.sh` 执行尾部加自愈——检测
+`0xc0000005`/`STATUS_ACCESS_VIOLATION` 自动清增量缓存重试一次，平时零开销。
+配套措施（建议但不入库）：把仓库目录、`D:\cargo-tmp`、`~/.cargo`、`~/.rustup`
+加入 Defender 排除（本机注册表确认当前无任何排除项）；`rustup update` 跟进
+stable 修复。暂不建议 Dev Drive/ReFS（#151181 在其上有增量回归）。

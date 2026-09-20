@@ -273,6 +273,18 @@ required-features = ["test-support"]
 name = "test_startup_prefetch_shared"
 required-features = ["test-support"]
 
+# LOCAL: this test uses test-support-only lib APIs (`SettingsQuery::from_auth`,
+# `SettingsOutcome::settings`) but had no [[test]] entry, so it compiled (and
+# failed) in plain unfeatured builds.
+[[test]]
+name = "test_startup_prefetch_repair_overlap"
+required-features = ["test-support"]
+
+# LOCAL: same situation as test_startup_prefetch_repair_overlap above.
+[[test]]
+name = "test_startup_settings_unpersisted_session"
+required-features = ["test-support"]
+
 [lints]
 workspace = true
 [build-dependencies]

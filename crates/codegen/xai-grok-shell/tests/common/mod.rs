@@ -290,7 +290,11 @@ pub mod leader {
 
 #[allow(dead_code)]
 pub fn isolated_home() -> tempfile::TempDir {
+    // LOCAL: both reset helpers only exist under `test-support`; without the
+    // feature the plain (unfeatured) test build would not compile this helper.
+    #[cfg(feature = "test-support")]
     xai_grok_shell::agent::remote_config::settings_get::reset_startup_settings_for_tests();
+    #[cfg(feature = "test-support")]
     xai_grok_shell::managed_config::clear_startup_profile_for_tests();
     let home = tempfile::TempDir::new().expect("grok home tempdir");
     // SAFETY: single-test binary; no other thread reads or writes the environment.

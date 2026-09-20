@@ -69,6 +69,7 @@ mod tests {
         assert_eq!(std::fs::read(&dest).unwrap(), data);
     }
 
+    #[cfg(unix)] // LOCAL: PermissionsExt/mode are unix-only
     #[test]
     fn test_clone_preserves_permissions() {
         use std::os::unix::fs::PermissionsExt;

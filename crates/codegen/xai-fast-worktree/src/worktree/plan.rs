@@ -196,6 +196,7 @@ mod tests {
         let abs = std::env::current_dir().unwrap().join(&name);
         assert_eq!(worktree_id_from_path(&rel), worktree_id_from_path(&abs));
     }
+    #[cfg(unix)] // LOCAL: os::unix::symlink is unix-only
     #[test]
     fn worktree_id_does_not_follow_dest_or_parent_symlink() {
         let tmp = TempDir::new().unwrap();

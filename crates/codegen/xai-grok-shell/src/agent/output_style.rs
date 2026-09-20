@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn state_roundtrips_and_tolerates_corruption() {
-        let dir = std::env::temp_dir().join(format!("output-style-{}-{}", std::process::id(), std::time::Instant::now().timestamp_nanos_opt().unwrap_or_default()));
+        let dir = std::env::temp_dir().join(format!("output-style-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or_default()));
         std::fs::create_dir_all(&dir).expect("temp home");
         assert!(!read_state_at_home(&dir).minimal);
 

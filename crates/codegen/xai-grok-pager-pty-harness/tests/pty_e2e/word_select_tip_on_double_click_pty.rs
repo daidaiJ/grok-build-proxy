@@ -1,3 +1,5 @@
+// LOCAL: test helpers/sentinels idle after upstream #[ignore] moves; keep all-targets warning-clean on Windows.
+#![allow(dead_code)]
 // Per-test-case module for the `pty_e2e` integration test crate.
 #[allow(unused_imports)]
 use super::common::*;

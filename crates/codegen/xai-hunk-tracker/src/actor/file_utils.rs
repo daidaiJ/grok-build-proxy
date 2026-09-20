@@ -292,6 +292,7 @@ mod tests {
         assert!(matches!(state, FileContentState::TooLarge { .. }));
     }
 
+    #[cfg(unix)] // LOCAL: os::unix::symlink is unix-only
     #[tokio::test]
     async fn test_read_file_bounded_symlink() {
         let dir = tempfile::tempdir().unwrap();
