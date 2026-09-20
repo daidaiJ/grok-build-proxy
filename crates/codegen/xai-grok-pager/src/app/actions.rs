@@ -644,6 +644,11 @@ pub enum Action {
     ShowContextInfo,
     /// `/usage`: session token/cost, plus consumer credits when visible.
     ShowUsage,
+    /// `/stats` (LOCAL): model-usage report in the stats modal.
+    /// `window` is the time-window tab to open on; `None` keeps the first tab.
+    ShowStats {
+        window: Option<xai_grok_tools::model_usage_ledger::Window>,
+    },
     /// `/usage manage`: open consumer billing (a no-op when billing is hidden).
     ManageBilling,
     /// Commit a read-only list of the queued prompts as a system block (`/queue`).

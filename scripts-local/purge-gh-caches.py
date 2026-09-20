@@ -2,10 +2,12 @@
 """清理 GitHub Actions 废弃缓存（需要仓库 admin 权限的 gh 登录）。
 
 背景（docs-local/PATCHES.md "CI release 缓存投毒"）：release 旧 scope
-`v1-rust-release*` 的 blob 含 research 合入前的 workspace-crate 产物
-（陈旧 rmeta），scope 已改名为 release-2 / release-xwin-2，旧 blob 永不
-再被读取，仅占 10 GB 配额，可安全删除。另有旧 lockfile hash 的 build
-blob 一并过期。
+`release` / `release-xwin` 的 blob 含 research 合入前的 workspace-crate 产物
+（陈旧 rmeta），scope 已改名为 release-2 / release-xwin-2，旧 blob 永
+不再被读取，仅占 10 GB 配额，可安全删除。
+
+注意 DELETE_PREFIXES 必须写成精确 scope 前缀（见下方注释）：`v1-rust-release-`
+这类宽前缀会把当前在用的 `v1-rust-release-2-…` 一并匹配掉。
 
 用法：
     python scripts-local/purge-gh-caches.py          # 预览（默认 dry-run）
@@ -20,17 +22,27 @@ import sys
 
 REPO = 'daidaiJ/grok-build-proxy'
 
-# 按 key 前缀匹配删除：旧 release scope（含带毒 blob）+ 旧 lockfile hash 的 build
+# 按 key 前缀匹配删除。**必须是精确 scope 前缀**：`v1-rust-release-` 同时是
+# 当前在用的 `v1-rust-release-2-…` 的前缀（`v1-rust-release-xwin-` 之于
+# `v1-rust-release-xwin-2-…` 同理），用宽前缀会把活缓存一起删掉。下面每条都以
+# `-<os>-` 收尾来锚定 scope 名，`-2` 那种不会命中。
+#   v1-rust-release-Linux-x64-*      旧 scope `release`（native linux）
+#   v1-rust-release-xwin-Linux-x64-* 旧 scope `release-xwin`
+# 旧 scope 的 blob 含 research 合入前的 workspace-crate 产物（陈旧 rmeta，
+# 见 docs-local/PATCHES.md "CI release 缓存投毒"），scope 已改名 release-2 /
+# release-xwin-2，这些 blob 永不再被读取，仅占 10 GB 配额。
 DELETE_PREFIXES = [
-    'v1-rust-release-',
-    'v1-rust-release-xwin-',
-    'v1-rust-build-Windows_NT-x64-4566bc01-9c6f845c',
-    'v1-rust-build-Linux-x64-54fa28ac-',
+    'v1-rust-release-Linux-x64-',
+    'v1-rust-release-xwin-Linux-x64-',
 ]
-# 明确保留：xwin SDK 缓存、当前 lockfile hash 的 build blob
+# 明确保留：xwin SDK 缓存、当前 release scope（release-2 / release-xwin-2）、
+# 两个 build scope 条目。build 的尾部 hash 差异无法从 key 反推哪个是活的，
+# 且各自仅 ~290 MiB，全部保留（宁可留，不误删）。
 KEEP_PREFIXES = [
     'xwin-sdk-',
-    'v1-rust-build-Windows_NT-x64-4566bc01-3ff2ea85',
+    'v1-rust-release-2-Linux-x64-',
+    'v1-rust-release-xwin-2-Linux-x64-',
+    'v1-rust-build-',
 ]
 
 

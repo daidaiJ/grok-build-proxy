@@ -207,9 +207,21 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "查看模型用量统计与压缩收益",
         ),
         ("Model usage (aggregated by model)", "模型用量（按 model 聚合）"),
-        ("last 5h", "近 5 小时"),
-        ("last week", "近一周"),
-        ("last month", "近一月"),
+        ("Model usage", "模型用量"),
+        // -- 时间窗标签页（/stats 模态窗口；标签即窗口名） --
+        ("Last 5h", "近 5 小时"),
+        ("Last day", "近一天"),
+        ("Last week", "近一周"),
+        ("Last 5 hours", "近 5 小时"),
+        ("Last 24 hours", "近 24 小时"),
+        ("Last 7 days", "近 7 天"),
+        ("Compression", "压缩"),
+        // 页脚快捷键的说明部分（键位 token 保留英文，见 modal_window::shortcut_label_i18n）
+        (" all models", " 全部 model"),
+        (" copy", " 复制"),
+        // 卡片折叠提示整句成键，计数在运行时插值
+        ("\u{2026} +{n} more (press a to show all)", "\u{2026} 另有 {n} 个（按 a 显示全部）"),
+        // -- 卡片指标 --
         ("no calls in this window", "该时间窗内没有调用"),
         ("calls", "次调用"),
         ("output", "输出"),

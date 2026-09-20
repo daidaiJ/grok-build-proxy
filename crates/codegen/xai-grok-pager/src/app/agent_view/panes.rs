@@ -1090,6 +1090,11 @@ impl AgentView {
                     crate::views::modal::apply_doc_scroll_delta(scroll, lines);
                     return;
                 }
+                // LOCAL: stats modal scrolls like the usage modal, but owns its own handler
+                ActiveModal::StatsInfo { state } => {
+                    state.scroll_by(lines);
+                    return;
+                }
                 _ => {}
             }
         }

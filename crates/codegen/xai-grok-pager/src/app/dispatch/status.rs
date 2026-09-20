@@ -175,6 +175,43 @@ pub(super) fn dispatch_show_session_info(app: &mut AppView) -> Vec<Effect> {
     }]
 }
 
+/// LOCAL `/stats`: open the model-usage modal on the requested time-window tab.
+/// Full-TUI only; minimal mode is handled inside the command (it returns the scrollback text report).
+/// Everything is read synchronously from the local ledger, so unlike `/usage` there are no fetch effects.
+pub(super) fn dispatch_show_stats(
+    app: &mut AppView,
+    window: Option<xai_grok_tools::model_usage_ledger::Window>,
+) -> Vec<Effect> {
+    use crate::views::modal::ActiveModal;
+    use crate::views::stats_modal::{StatsModalState, StatsTab};
+
+    let ActiveView::Agent(id) = app.active_view else {
+        return vec![];
+    };
+    let tab = window.map_or(StatsTab::ALL[0], StatsTab::from_window);
+    let Some(agent) = app.agents.get_mut(&id) else {
+        return vec![];
+    };
+    if let Some(ActiveModal::StatsInfo { state }) = agent.active_modal.as_mut() {
+        state.set_tab(tab);
+        return vec![];
+    }
+    let home = xai_grok_config::grok_home();
+    let samples = xai_grok_tools::model_usage_ledger::load_samples(Some(&home));
+    let stats = xai_grok_tools::implementations::output_compression::stats_for_display(Some(&home));
+    let compression = xai_grok_tools::implementations::output_compression::format_stats_report(
+        &stats,
+        xai_grok_tools::implementations::output_compression::is_enabled(),
+    )
+    .lines()
+    .map(str::to_string)
+    .collect();
+    agent.active_modal = Some(ActiveModal::StatsInfo {
+        state: Box::new(StatsModalState::new(tab, samples, compression)),
+    });
+    vec![]
+}
+
 /// State-only mutation for `coding_data_sharing`; the shell owns the setting.
 pub(super) fn set_coding_data_sharing_inner(app: &mut AppView, opted_in: bool) {
     app.coding_data_retention_opt_out = !opted_in;

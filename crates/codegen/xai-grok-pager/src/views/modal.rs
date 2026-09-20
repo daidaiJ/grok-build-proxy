@@ -302,6 +302,11 @@ pub enum ActiveModal {
     UsageInfo {
         state: Box<crate::views::usage_modal::UsageInfoModalState>,
     },
+    /// LOCAL: `/stats` model-usage modal (time-window tabs + the tool-output compression ledger).
+    /// Boxed because it holds the ledger samples read at open time.
+    StatsInfo {
+        state: Box<crate::views::stats_modal::StatsModalState>,
+    },
     /// Reset-settings confirmation, stacked above Settings. The underlying `SettingsModalState` is
     /// moved in/out so cancel preserves the user's filter/scroll position. The setting key lives only
     /// here (single source of truth for dispatch).
@@ -679,6 +684,7 @@ impl ActiveModal {
             | ActiveModal::MemoryBrowser { .. }
             | ActiveModal::Settings { .. }
             | ActiveModal::UsageInfo { .. }
+            | ActiveModal::StatsInfo { .. }
             | ActiveModal::RememberNoteReview { .. } => vec![],
         }
     }
@@ -711,6 +717,7 @@ impl ActiveModal {
             ActiveModal::ResetSettingsConfirm { .. } => tr("Reset setting?"),
             ActiveModal::RememberNoteReview { .. } => tr("Memory Note"),
             ActiveModal::UsageInfo { .. } => tr("Usage"),
+            ActiveModal::StatsInfo { .. } => tr("Model usage"),
         }
     }
 }

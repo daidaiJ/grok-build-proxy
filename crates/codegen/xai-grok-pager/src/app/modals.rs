@@ -436,6 +436,12 @@ impl AgentView {
             return self.apply_usage_modal_outcome(outcome);
         }
 
+        // LOCAL StatsInfo: same shape as UsageInfo, minus the session-copy shortcut.
+        if let ActiveModal::StatsInfo { state } = modal {
+            let outcome = crate::views::stats_modal::route_stats_modal_key(state, key);
+            return self.apply_stats_modal_outcome(outcome);
+        }
+
         // ResetSettingsConfirm: y/n routing
         // Handled before the generic char-match so Esc/F2/Ctrl+, route to Cancel (not modal close)
         if let Some(ActiveModal::ResetSettingsConfirm { modal, .. }) = self.active_modal.as_ref() {
@@ -487,6 +493,7 @@ impl AgentView {
             | ActiveModal::MemoryBrowser { .. }
             | ActiveModal::Settings { .. }
             | ActiveModal::UsageInfo { .. }
+            | ActiveModal::StatsInfo { .. }
             | ActiveModal::ResetSettingsConfirm { .. }
             | ActiveModal::RememberNoteReview { .. } => unreachable!(),
         }
@@ -1570,6 +1577,17 @@ impl AgentView {
             return self.apply_usage_modal_outcome(outcome);
         }
 
+        // LOCAL StatsInfo: chrome first, then wheel scroll.
+        if let Some(ActiveModal::StatsInfo { state }) = &mut self.active_modal {
+            let outcome = crate::views::stats_modal::route_stats_modal_mouse(
+                state,
+                mouse.kind,
+                mouse.column,
+                mouse.row,
+            );
+            return self.apply_stats_modal_outcome(outcome);
+        }
+
         // ResetSettingsConfirm: route mouse events through the modal-window chrome
         if let Some(ActiveModal::ResetSettingsConfirm { settings_state, .. }) =
             &mut self.active_modal
@@ -1630,6 +1648,26 @@ impl AgentView {
                 }
             }
             _ => InputOutcome::Changed,
+        }
+    }
+
+    /// LOCAL: map the stats modal's routing outcome onto this host (modal slot, clipboard, toast).
+    fn apply_stats_modal_outcome(
+        &mut self,
+        outcome: crate::views::stats_modal::StatsModalOutcome,
+    ) -> InputOutcome {
+        use crate::views::stats_modal::StatsModalOutcome;
+        match outcome {
+            StatsModalOutcome::Close => {
+                self.active_modal = None;
+                InputOutcome::Changed
+            }
+            StatsModalOutcome::CopyText(text) => {
+                self.copy_usage_modal_text(&text);
+                InputOutcome::Changed
+            }
+            StatsModalOutcome::Changed => InputOutcome::Changed,
+            StatsModalOutcome::Unchanged => InputOutcome::Unchanged,
         }
     }
 
@@ -2366,6 +2404,8 @@ impl AgentView {
                     compact,
                     &theme,
                 );
+            } else if let modal::ActiveModal::StatsInfo { state } = active_modal {
+                crate::views::stats_modal::render_stats_modal(buf, area, state, &theme);
             } else if let modal::ActiveModal::MemoryBrowser { state: mem_state } = active_modal {
                 crate::views::memory_modal::render_memory_modal(buf, area, mem_state, compact);
             } else if let modal::ActiveModal::Settings {
