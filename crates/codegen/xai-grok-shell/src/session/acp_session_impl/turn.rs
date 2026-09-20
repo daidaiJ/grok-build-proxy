@@ -3215,7 +3215,7 @@ impl SessionActor {
                 let model_id = self.current_model_id().await;
                 xai_grok_telemetry::session_ctx::log_event(
                     xai_grok_telemetry::events::ModelResponseReceived {
-                        model_id,
+                        model_id: model_id.clone(),
                         duration_ms: model_duration_ms,
                         stop_reason: response
                             .stop_reason
@@ -3233,6 +3233,31 @@ impl SessionActor {
                             .as_ref()
                             .map(|u| u.cache_creation_prompt_tokens),
                         cost_usd_ticks: response.cost_usd_ticks,
+                    },
+                );
+                // LOCAL: 调用粒度用量/性能采样，/stats 的 5h/周/月聚合数据源
+                xai_grok_tools::model_usage_ledger::append_sample(
+                    &xai_grok_config::grok_home(),
+                    &xai_grok_tools::model_usage_ledger::ModelCallSample {
+                        ts_unix_ms:
+                            xai_grok_tools::model_usage_ledger::ModelCallSample::now_unix_ms(),
+                        model_id: model_id.clone(),
+                        prompt_tokens: u64::from(usage.map(|u| u.prompt_tokens).unwrap_or(0)),
+                        completion_tokens: u64::from(
+                            usage.map(|u| u.completion_tokens).unwrap_or(0),
+                        ),
+                        cached_prompt_tokens: u64::from(
+                            usage.map(|u| u.cached_prompt_tokens).unwrap_or(0),
+                        ),
+                        cache_creation_tokens: u64::from(
+                            usage.map(|u| u.cache_creation_prompt_tokens).unwrap_or(0),
+                        ),
+                        reasoning_tokens: u64::from(
+                            usage.map(|u| u.reasoning_tokens).unwrap_or(0),
+                        ),
+                        ttft_ms,
+                        tps: tokens_per_sec,
+                        duration_ms: model_duration_ms,
                     },
                 );
             }
