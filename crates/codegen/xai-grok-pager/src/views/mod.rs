@@ -59,4 +59,5 @@ pub mod turn_status;
 pub mod tutorial;
 pub mod usage_modal;
 pub mod welcome;
+pub mod witty_phrases;
 pub mod workflows;

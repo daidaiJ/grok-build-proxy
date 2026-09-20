@@ -26,6 +26,7 @@ use crate::app::agent::{AgentCommand, AgentState};
 use crate::app::agent_view::McpInitProgress;
 use crate::render::line_utils::truncate_str;
 use crate::theme::Theme;
+use crate::views::witty_phrases;
 
 /// Show each spinner frame for this many animation ticks.
 /// At ~30fps, 4 ticks is ~133ms per frame, about 7.5 spinner fps.
@@ -308,7 +309,7 @@ pub fn render_turn_status(
 
     // ── Compute activity style and label ──
     let (activity_style, label, is_tool) =
-        compute_activity(&theme, state, activity, is_bash_turn, goal_verifying);
+        compute_activity(&theme, state, activity, is_bash_turn, goal_verifying, turn_elapsed);
 
     // Early return for idle (shouldn't happen if should_show is respected, but be safe).
     if matches!(state, AgentState::Idle) {
@@ -581,6 +582,7 @@ fn compute_activity(
     activity: &Option<TurnActivity>,
     is_bash_turn: bool,
     goal_verifying: bool,
+    turn_elapsed: Option<Duration>,
 ) -> (Style, String, bool) {
     match (state, activity) {
         (AgentState::TurnCancelling | AgentState::CommandCancelling { .. }, _) => (
@@ -598,12 +600,13 @@ fn compute_activity(
         ),
         (AgentState::TurnRunning, Some(TurnActivity::Thinking)) => (
             Style::default().fg(theme.text_secondary),
-            "Thinking…".to_string(),
+            // LOCAL: 等待模型响应期间显示趣味随机文案（每 15 秒轮换，移植自 qwen-code）
+            witty_phrases::witty_phrase(turn_elapsed).to_string(),
             false,
         ),
         (AgentState::TurnRunning, Some(TurnActivity::Responding)) => (
             Style::default().fg(theme.text_secondary),
-            "Responding…".to_string(),
+            witty_phrases::witty_phrase(turn_elapsed).to_string(),
             false,
         ),
         (AgentState::TurnRunning, Some(TurnActivity::ToolRunning { title, description })) => {
@@ -846,13 +849,15 @@ mod tests {
     fn activity_label_reads_verifying_while_goal_verifying_overriding_stale_activity() {
         let theme = Theme::current();
         // Running turn, no streaming activity, the verifying flag set: "Verifying…"
-        let (_, label, _) = compute_activity(&theme, &AgentState::TurnRunning, &None, false, true);
+        let (_, label, _) =
+            compute_activity(&theme, &AgentState::TurnRunning, &None, false, true, None);
         assert_eq!(label, "Verifying…");
         // The same state without the verifying flag falls back to the generic "Waiting…"
-        let (_, label, _) = compute_activity(&theme, &AgentState::TurnRunning, &None, false, false);
+        let (_, label, _) =
+            compute_activity(&theme, &AgentState::TurnRunning, &None, false, false, None);
         assert_eq!(label, "Waiting…");
         // During verification the model is idle but its last streaming activity (Responding/Thinking) can linger
-        // The flag overrides it so the panel reads "Verifying…", not "Responding…"
+        // The flag overrides it so the panel reads "Verifying…", not the witty loading phrase
         for activity in [TurnActivity::Responding, TurnActivity::Thinking] {
             let (_, label, _) = compute_activity(
                 &theme,
@@ -860,18 +865,29 @@ mod tests {
                 &Some(activity),
                 false,
                 true,
+                None,
             );
             assert_eq!(label, "Verifying…");
         }
-        // Without the flag the streaming label stands.
+        // Without the flag the witty loading phrase stands (LOCAL: replaces "Responding…"/"Thinking…").
         let (_, label, _) = compute_activity(
             &theme,
             &AgentState::TurnRunning,
             &Some(TurnActivity::Responding),
             false,
             false,
+            Some(Duration::from_secs(0)),
         );
-        assert_eq!(label, "Responding…");
+        assert!(witty_phrases::WITTY_LOADING_PHRASES_EN.contains(&label.as_str()));
+        let (_, label, _) = compute_activity(
+            &theme,
+            &AgentState::TurnRunning,
+            &Some(TurnActivity::Thinking),
+            false,
+            false,
+            Some(Duration::from_secs(0)),
+        );
+        assert!(witty_phrases::WITTY_LOADING_PHRASES_EN.contains(&label.as_str()));
     }
 
     #[test]
@@ -910,6 +926,7 @@ mod tests {
                 &Some(TurnActivity::Waiting(reason.clone())),
                 false,
                 false,
+                None,
             );
             assert_eq!(label, expected, "reason {reason:?}");
             assert!(!is_tool, "waiting is not a tool activity");
@@ -920,7 +937,8 @@ mod tests {
     fn bash_turn_still_renders_running_not_waiting() {
         let theme = Theme::current();
         // A bash (non-inference) turn with no activity keeps its own "Running…" label; the view leaves it as `None` rather than Waiting(Model)
-        let (_, label, _) = compute_activity(&theme, &AgentState::TurnRunning, &None, true, false);
+        let (_, label, _) =
+            compute_activity(&theme, &AgentState::TurnRunning, &None, true, false, None);
         assert_eq!(label, "Running…");
     }
 
