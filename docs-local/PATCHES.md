@@ -1112,3 +1112,45 @@ effective"）要防的场景——默认值被关掉才踩的坑。
 源码不一致（建议重排 `.or()` 链）不成立——三字段在 tag 源码中齐备且无 cfg，
 无需改 sampler；其"修复 2"（SessionActor 字面量 + output_style Instant）
 已随 `1815e39b` 修复。
+
+## think_split 多字节字符 panic 修复（2026-09-20，v1.0.37-preview.2）
+
+现象：流式正文里出现 CJK / 制表符时**整个进程 panic 崩溃**（会话直接死掉，TUI
+里只留一行 panic 头）。当日两次现场：
+
+```
+thread 'ses-01a0be8c' (16248) panicked at crates/codegen/xai-grok-sampler/src/stream/think_split.rs:160:66:
+byte index 1 is not a char boundary; it is inside '这' (bytes 0..3) of `这篇`
+
+thread 'ses-01a0be97' (17856) panicked at .../think_split.rs:160:66:
+byte index 2 is not a char boundary; it is inside '│' (bytes 1..4) of ` │ ✓`
+```
+
+两例同为 step-3.7-flash / grok-build-plan，且都崩在**首个内容 delta**；
+01a0be8c 的 `unified.jsonl` 尾部（`loop_index: 2` inference_start →
+`waiting_model→thinking` phase transition）与 `first_token` 事件时间戳对齐，
+可确认崩溃点在流式接收路径。
+
+根因：`ThinkTagSplitter::emit_all_but_partial_marker` 的 holdback 窗口扫描按
+**字节**枚举后缀起点（`for n in (1..MAX_TAG_LEN).rev()` → `start = buf_len - n`），
+把不落在字符边界上的偏移直接喂给 `&self.buffer[start..]`。delta 尾部是非 ASCII
+时（中文回答、表格/清单里的 `│ ✓`），`buf_len - n` 就会落进某个多字节码点内部
+→ 切片 panic。触发面与内容语言强相关：只要尾部多字节字符落在 1..11 字节探测窗口内
+即崩，故中文场景近乎必现。注意这不是"标记跨 chunk 拆分"的边界语义问题，
+而是纯越界切片——无标记的普通正文一样会崩。
+
+修复：扫描前加 `is_char_boundary` 守卫，跳过码点内部偏移（标记恒以 ASCII `<`
+开头，这类偏移本就不可能起标记，跳过不改变任何 holdback 语义）。同 crate
+`doom_loop_recovery.rs` 的同类截断早就是 `while cut > 0 && !text.is_char_boundary(cut)`，
+本次是 think_split 漏了这个守卫。
+
+验证：`think_split.rs` 追加 2 例（纯 CJK delta `这篇`；标记前后夹中文
+`回答<thi|nk>想一下</think>|结束`），修前两例均在 160:66 panic，修后
+`ctest.sh -p xai-grok-sampler --lib` 263 例全过。开发构建取栈（release 二进制
+在 TUI 下只打出 `stack backtrace:` 头行 + note，无可用帧）：
+
+```
+6: xai_grok_sampler::stream::think_split::impl$0::emit_all_but_partial_marker::closure$1  at .\src\stream\think_split.rs:160
+8: xai_grok_sampler::stream::think_split::ThinkTagSplitter::emit_all_but_partial_marker at .\src\stream\think_split.rs:160
+9: xai_grok_sampler::stream::think_split::ThinkTagSplitter::feed                        at .\src\stream\think_split.rs:109
+```
