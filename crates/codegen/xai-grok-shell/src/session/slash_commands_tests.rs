@@ -571,6 +571,9 @@ fn available_commands_orders_builtins_first() {
         [
             "compact",
             "always-approve",
+            // LOCAL(minimal-style): keep in sync with BUILTIN_COMMANDS, where
+            // `/style` follows `always-approve`.
+            "style",
             "flush",
             "dream",
             "memory",
