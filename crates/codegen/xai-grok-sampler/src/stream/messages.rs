@@ -271,6 +271,10 @@ pub fn stream_messages<'a>(
                                             request_id: request_id.clone(),
                                         };
                                     }
+                                    // LOCAL: thinking deltas are streamed model
+                                    // output too — a thinking-first turn must
+                                    // still land a TTFT sample.
+                                    chunk_timestamps.push(Instant::now());
                                     chunk_index += 1;
                                     yield SamplingEvent::ChannelToken {
                                         request_id: request_id.clone(),
@@ -305,6 +309,13 @@ pub fn stream_messages<'a>(
                             }
                             StreamDelta::InputJsonDelta { partial_json } => {
                                 state.args_acc.push_str(&partial_json);
+                                // LOCAL: tool-argument deltas stream like tokens —
+                                // without a timestamp a tool-only turn produces no
+                                // TTFT sample at all, which blanks the status
+                                // line's perf segment.
+                                if !partial_json.is_empty() {
+                                    chunk_timestamps.push(Instant::now());
+                                }
                                 if let Some(&tool_index) = block_to_tool_index.get(&index) {
                                     yield SamplingEvent::ToolCallDelta {
                                         request_id: request_id.clone(),

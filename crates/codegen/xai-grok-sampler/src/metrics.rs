@@ -25,7 +25,9 @@ pub fn compute_percentiles(sorted: &[u64]) -> (u64, u64, u64, u64, u64) {
 /// Per-response inference latency metrics computed from chunk timestamps.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct InferenceLatencyStats {
-    /// Time to first content token (ms)
+    /// Time to the first streamed output token (text, reasoning, or tool-call arguments) in ms.
+    /// LOCAL: reasoning / tool-argument deltas count, so a tool-only or thinking-first
+    /// turn still lands a sample instead of leaving the status-line perf segment blank.
     pub time_to_first_token_ms: Option<u64>,
     /// Measured at stream exhaustion, not at the last content chunk, so it includes trailing metadata chunks.
     pub time_to_last_byte_ms: u64,
@@ -57,7 +59,7 @@ impl InferenceLatencyStats {
     }
 
     /// `stream_start` - `Instant::now()` captured before initiating the stream.
-    /// `chunk_timestamps` - `Instant` recorded on each content-bearing chunk.
+    /// `chunk_timestamps` - `Instant` recorded on each output-token-bearing chunk (text, reasoning, or tool-call arguments).
     /// `stream_end` - `Instant::now()` captured after the stream is fully exhausted (after trailing metadata/`[DONE]` chunks). Used for TTLB.
     pub fn from_timestamps(
         stream_start: Instant,

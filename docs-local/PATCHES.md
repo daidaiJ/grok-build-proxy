@@ -1324,3 +1324,25 @@ tools 块，MCP 工具集变动会整段打断复用，跨会话一次性试模�
 - 测试：+1 用例（单次调用的卡片行与复制文本都出 `n/a`）；文本报表用例补
   `cache hit n/a` 断言
 
+
+## 状态行 ttft/tps 长时间缺失（2026-09-21，feat/local-perf-ttft-output-streams）
+
+背景：用户在 v1.0.37-preview.3 上反馈状态行 TPS"丢失"。排查结论：代码无回归
+（TPS 链路自 v1.0.36 起 byte 级不变，release 二进制确证构建自标签 commit）。真因是
+数据门槛：`build_turn_perf()` 要求 signals 会话均 TTFT > 0 才显示 ttft，tps 公式又
+依赖 ttft，而 sampler 三个流里只有**文本 delta** 推 `chunk_timestamps`——
+reasoning delta（`reasoning_content` / `<think>` / ThinkingDelta）与工具调用参数
+delta 只设 `chunk_has_content`（空闲超时用）。纯思考+工具调用的 agentic 开场连续
+多个请求不产生任何 TTFT 样本，要等第一次流出可见文本，ttft/tps 才一起出现。
+
+语义修正：TTFT 改为"首个流式输出 token（文本 / reasoning / 工具参数）"。
+
+### xai-grok-sampler
+- `src/stream/chat_completions.rs`：reasoning 字段臂、think_split 的 reasoning 臂、
+  tool_calls 臂补 `chunk_timestamps.push(Instant::now())`
+- `src/stream/messages.rs`：ThinkingDelta 臂、InputJsonDelta 臂同款补齐
+- `src/stream/responses.rs`：ReasoningSummaryTextDelta / ReasoningTextDelta /
+  FunctionCallArgumentsDelta 臂同款补齐
+- `src/metrics.rs`：`time_to_first_token_ms` 与 `from_timestamps` 文档注释同步语义
+- 影响：signals 的 ITL / 均值 TTFT 样本从首个输出 token 开始计；`/stats` 的 ttft
+  分位数在工具-only 回合也有样本（此前整回合缺席）
