@@ -1113,6 +1113,26 @@ effective"）要防的场景——默认值被关掉才踩的坑。
 无需改 sampler；其"修复 2"（SessionActor 字面量 + output_style Instant）
 已随 `1815e39b` 修复。
 
+## README 改为 fork 版（2026-09-21）
+
+`README.md`（上游同步文件）整篇重写为社区 fork 说明：仓库定位与二进制名
+（`grok2`，与官方 `grok` 并存、自动更新默认关）、快速开始、**第三方模型接入**
+（机制 + 最小配置 + 验证命令 + 6 条常见坑 + `model_providers`/`auth_provider`/
+`endpoints.models_base_url`/`preferred_method` 进阶）、本地新特性分主题清单
+（模型与网关 / 网络与代理 / Windows / 上下文与成本 / 交互与界面 / 扩展与钩子）、
+配置速查表、**默认行为差异**（中文界面、状态行开启、自动更新关、工具输出压缩关）、
+内置文档与 skill 指引、构建、开发约定（分支纪律 + ctest 门控 + PATCHES 重放）、
+来源与许可。
+
+重放注意：上游同步会整体覆盖 `README.md`。同步后**不要逐行合并**——直接从本
+仓库历史取回 fork 版 README，再按上游本次同步的变更逐条回填（上游 README 主要
+变动点是安装方式、crate 布局表、文档索引）。`SOURCE_REV` 与构建命令段需按同步
+后的实际情况核对。
+
+特性事实的唯一台账仍是 `docs-local/PATCHES.md`（本文件）与内置文档
+`docs/user-guide/29-local-enhancements.md`；README 只做汇总索引，新增特性时同步
+补一节，不在这里复述实现细节。
+
 ## think_split 多字节字符 panic 修复（2026-09-20，v1.0.37-preview.2）
 
 现象：流式正文里出现 CJK / 制表符时**整个进程 panic 崩溃**（会话直接死掉，TUI
