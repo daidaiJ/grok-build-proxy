@@ -6,6 +6,12 @@
   option（5h/day/week/month）+ 输出改成 Grok 自制窗口样式（对齐 agents / usage limit 面板）
   + TUI 残留英文说明 i18n 扫尾。分支 `feat/local-stats-modal-i18n`，基线 `86a6e1d`。
   三个子任务 T1/T2/T3 相互独立，可分批施工；文档内含现状锚点、改动点、验收标准与纪律要求。
+- [`docs-local/webdav-sync-todo.md`](docs-local/webdav-sync-todo.md) — WebDAV 同步（用量 +
+  主机无关配置，服务端按机器分子目录）+ `/sync` 选择恢复/同步。**评估完成、未开工**；分期
+  T1 传输层+假服务夹具 → T2 白名单/合并内核+`grok2 sync` CLI → T3 `/sync` TUI → T4 加密与凭据。
+  净开发 6–8.5 人天，含测试联调 10–12 人天。三个前提风险：明文密钥外泄（默认剥离）、
+  TOML 合并冲突、上游同步维护面；文档内含数据分类白名单、身份/目录/协议定案、备选路线对比
+  与待定决策。基线 `f8e1fea3`（调研快照 2026-09-21）。
 
 ## 分支纪律（MANDATORY）
 
