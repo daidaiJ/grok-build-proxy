@@ -201,6 +201,9 @@ pub fn stream_chat_completions<'a>(
                         };
                     }
                     chunk_has_content = true;
+                    // LOCAL: reasoning deltas are streamed model output too — a
+                    // thinking-first turn must still land a TTFT sample.
+                    chunk_timestamps.push(Instant::now());
                     chunk_index += 1;
                     reasoning_acc.push_str(&thought);
                     think_splitter.note_reasoning_field();
@@ -246,6 +249,7 @@ pub fn stream_chat_completions<'a>(
                             };
                         }
                         chunk_has_content = true;
+                        chunk_timestamps.push(Instant::now());
                         chunk_index += 1;
                         reasoning_acc.push_str(&split.reasoning);
                         yield SamplingEvent::ChannelToken {
@@ -259,6 +263,10 @@ pub fn stream_chat_completions<'a>(
 
                 for tc_delta in delta.tool_calls.into_iter() {
                     chunk_has_content = true;
+                    // LOCAL: tool-argument deltas stream like tokens — without a
+                    // timestamp a tool-only turn produces no TTFT sample at all,
+                    // which blanks the status line's perf segment.
+                    chunk_timestamps.push(Instant::now());
 
                     let entry = tool_call_acc
                         .entry(tc_delta.index)

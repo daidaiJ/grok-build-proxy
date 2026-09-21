@@ -362,6 +362,8 @@ pub(crate) fn stream_responses_tracked<'a>(
                                 request_id: request_id.clone(),
                             };
                         }
+                        // LOCAL: reasoning deltas are streamed model output too.
+                        chunk_timestamps.push(Instant::now());
                         chunk_index += 1;
                         yield SamplingEvent::ChannelToken {
                             request_id: request_id.clone(),
@@ -381,6 +383,8 @@ pub(crate) fn stream_responses_tracked<'a>(
                                 request_id: request_id.clone(),
                             };
                         }
+                        // LOCAL: reasoning deltas are streamed model output too.
+                        chunk_timestamps.push(Instant::now());
                         chunk_index += 1;
                         reasoning_acc.push_str(&delta);
                         yield SamplingEvent::ChannelToken {
@@ -417,6 +421,10 @@ pub(crate) fn stream_responses_tracked<'a>(
                         && let Some(&tool_index) =
                             output_to_tool_index.get(&args_event.output_index)
                     {
+                        // LOCAL: tool-argument deltas stream like tokens — without
+                        // a timestamp a tool-only turn produces no TTFT sample at
+                        // all, which blanks the status line's perf segment.
+                        chunk_timestamps.push(Instant::now());
                         yield SamplingEvent::ToolCallDelta {
                             request_id: request_id.clone(),
                             tool_index,
