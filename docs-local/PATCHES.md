@@ -1303,3 +1303,24 @@ token 段与性能段只是分段换行；性能段列数上限固定 2（`PERF_
   数字口径与卡片一致，仅排版不同
 - 性能段标签（`ttft p50` 等）仍是英文字面量，未进 i18n 表——属 T3 全仓英文扫尾范围
 
+## `/stats` 单次调用的缓存命中率显示 `n/a`（2026-09-21，feat/local-stats-card-align）
+
+背景：`glm-5.3-flash`（火山 Ark）与 `step-3.5-flash`（StepFun）在 `/stats` 里显示
+`cache hit 0.0%`，被读成"这两个 model 不支持缓存"。排查结论见
+`docs-local/prompt-cache-notes.md`：**命中率数字本身没错**，但单次调用必然冷启动
+（`step-3.5-flash` 在账本里只有一条样本），0.0% 会误导；另外 Ark 的缓存前缀包含
+tools 块，MCP 工具集变动会整段打断复用，跨会话一次性试模型必然 0。
+
+改动：命中率显示收进共享格式化 `fmt_hit_rate(calls, rate, na)`——`calls > 1` 才算
+百分比，`calls == 1`（及无样本）返回 `na`。
+
+### xai-grok-tools
+- `src/model_usage_ledger.rs`：新增 `fmt_hit_rate`（+1 单测：多调用 98.6% / 单次 `n/a`）
+
+### xai-grok-pager
+- `src/views/stats_modal.rs`：卡片与复制文本改用 `fmt_hit_rate`
+- `src/slash/commands/stats.rs`：极简模式文本报表同口径（三处显示一致，避免同一份
+  聚合数据在不同界面给出互相矛盾的数字）
+- 测试：+1 用例（单次调用的卡片行与复制文本都出 `n/a`）；文本报表用例补
+  `cache hit n/a` 断言
+

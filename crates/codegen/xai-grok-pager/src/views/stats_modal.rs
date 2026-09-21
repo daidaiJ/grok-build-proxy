@@ -21,7 +21,7 @@ use crate::views::modal_window::{
     self as mw, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
 };
 use xai_grok_tools::model_usage_ledger::{
-    self, ModelCallSample, ModelUsageAggregate, Window, fmt_ms, fmt_tokens, fmt_tps,
+    self, ModelCallSample, ModelUsageAggregate, Window, fmt_hit_rate, fmt_ms, fmt_tokens, fmt_tps,
 };
 
 /// 页脚快捷键：复制整份报表。
@@ -463,7 +463,7 @@ fn model_card_lines(row: &ModelUsageAggregate, theme: &Theme, width: u16) -> Vec
     }
     token_pairs.push((
         tr("cache hit"),
-        format!("{:.1}%", row.cache_hit_rate * 100.0),
+        fmt_hit_rate(row.calls, row.cache_hit_rate, tr("n/a")),
     ));
 
     // p50/p90 各占一格：`ttft p50/p90 4536/12324` 那种复合标签比 token 段的标签宽、
@@ -575,9 +575,9 @@ fn model_card_text(row: &ModelUsageAggregate) -> String {
         ));
     }
     tokens.push(format!(
-        "{} {:.1}%",
+        "{} {}",
         tr("cache hit"),
-        row.cache_hit_rate * 100.0
+        fmt_hit_rate(row.calls, row.cache_hit_rate, tr("n/a"))
     ));
     parts.push(tokens.join(" · "));
     let na = tr("n/a");
@@ -849,6 +849,28 @@ mod tests {
         assert_eq!(lines[3], "ttft p50         n/a  ttft p90         n/a");
         assert_eq!(lines[4], "tps p50          n/a  tps p90          n/a");
     }
+
+    /// 单次调用的 model 必然冷启动：命中率显示 `n/a` 而不是 0.0%
+    /// （一次性试模型的调用不该被读成"该 model 不支持缓存"）。
+    #[test]
+    fn single_call_rows_show_cache_hit_as_na() {
+        let mut row = wide_card_row();
+        row.calls = 1;
+        let lines = card_lines(&row, 80);
+        assert_eq!(
+            lines[2],
+            "cache write        0  reasoning       270k  cache hit        n/a"
+        );
+
+        let mut state = StatsModalState::new(
+            StatsTab::Window(Window::FiveHours),
+            vec![sample(1_000_000_000_000, "m-solo", 1000, 0)],
+            Vec::new(),
+        );
+        state.now_unix_ms = 1_000_000_000_000;
+        assert!(state.copy_all().contains("cache hit n/a"), "{}", state.copy_all());
+    }
+
     #[test]
     fn compression_tab_renders_passthrough_lines() {
         let state = state_with_samples();
