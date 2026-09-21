@@ -1270,3 +1270,36 @@ push **没有触发 build 工作流**（main 上 9-18 `f50f0f9e` 之后直接跳
 本机 shell 套件因上游自带测试 profile 编译错误无法运行（见"已知问题"），
 最终以 Linux CI build job 为准。
 
+## `/stats` 卡片性能指标对齐（2026-09-21，feat/local-stats-card-align）
+
+`/stats` 卡片里 ttft/tps 与 token 段对不齐，根因两条：
+1. 性能段用复合标签 `ttft p50/p90`（12 列）比 token 段最宽的标签
+   （`cache write`，11 列）宽，值 `4536/12324`（10 列）又超出固定数值列
+   `VALUE_WIDTH = 8`——`saturating_sub` 只会把标签后间隔压到 1 列，数值列不再成立；
+2. token 段与性能段各自调用 `metric_rows`，各自算自己的标签列宽，两段数值右边缘
+   本来就不在一批列上（宽面板下 token 挤 4 列、性能才 2 列，错位最明显）。
+
+窄面板下还会溢出：内容宽 44 列时性能行实宽 47 列，数值被顶出边框。
+
+改法：p50/p90 各拆成一格（`ttft p50` / `ttft p90` / `tps p50` / `tps p90`），
+标签不再比 token 段宽；列几何升为卡片级共享（`MetricGrid`：`label_w` / `value_w`
+取自卡片内全部指标，`VALUE_WIDTH` 退化为数值列下限，数值更宽时自动放宽），
+token 段与性能段只是分段换行；性能段列数上限固定 2（`PERF_COLS`），ttft 一行、tps 一行。
+
+### xai-grok-tools
+- `src/model_usage_ledger.rs`：新增单值格式化 `fmt_ms` / `fmt_tps`（与
+  `fmt_ms_pair` / `fmt_tps_pair` 数值同口径；成对形式留给极简模式文本报表）；+1 单测
+
+### xai-grok-pager
+- `src/views/stats_modal.rs`：`metric_rows` → `MetricGrid`（列几何卡片级共享 +
+  数值列按实际内容放宽 + 单段列数上限）；卡片性能段从 2 个复合格改为 4 个独立指标格；
+  复制文本（`model_card_text`）同步为同一份数字口径
+- 测试：+3 用例——真实账本数据（ttft 4536/12324、tps 98.8/230.4）的黄金串对齐、
+  四个宽度档不越界（含 9 列宽数值 `10000.00m` 撑开数值列）、缺 ttft/tps 采样时占位
+  `n/a`；`y_copies_every_section` 补复制文本口径断言
+
+### 已知边界
+- 极简模式文本报表仍是 `ttft p50/p90 4536/12324` 成对形式（滚动缓冲单行更紧凑），
+  数字口径与卡片一致，仅排版不同
+- 性能段标签（`ttft p50` 等）仍是英文字面量，未进 i18n 表——属 T3 全仓英文扫尾范围
+

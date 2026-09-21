@@ -21,7 +21,7 @@ use crate::views::modal_window::{
     self as mw, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
 };
 use xai_grok_tools::model_usage_ledger::{
-    self, ModelCallSample, ModelUsageAggregate, Window, fmt_ms_pair, fmt_tokens, fmt_tps_pair,
+    self, ModelCallSample, ModelUsageAggregate, Window, fmt_ms, fmt_tokens, fmt_tps,
 };
 
 /// 页脚快捷键：复制整份报表。
@@ -31,8 +31,10 @@ pub const COPY_STATS_SHORTCUT: usize = 1;
 const EXPAND_TOGGLE_LABEL: &str = "a all models";
 /// 未展开时每个时间窗最多画多少个 model 卡片。
 const MAX_CARDS: usize = 8;
-/// 指标数值右对齐宽度（`45.2k` / `900/1100` 都落在 8 列内）。
+/// 指标数值右对齐的最小宽度（`45.2k` / `230.4`）；更宽的数值按卡片内实际最宽值放宽。
 const VALUE_WIDTH: usize = 8;
+/// 性能段一行的指标格数：p50 / p90 各一格，ttft 与 tps 各占一行。
+const PERF_COLS: usize = 2;
 
 /// 模态窗口持有的数据：打开时同步读取账本，之后不再变化（本地文件，无异步刷新）。
 pub struct StatsModalState {
@@ -439,7 +441,8 @@ fn header_style(theme: &Theme) -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
-/// 一张 model 卡片：model id + 调用数一行，token 与性能各一行（指标名左、数值右对齐）。
+/// 一张 model 卡片：model id + 调用数一行，token 与性能各一段（指标名左、
+/// 数值右对齐到卡片共用的列宽，段间断行）。
 fn model_card_lines(row: &ModelUsageAggregate, theme: &Theme, width: u16) -> Vec<Line<'static>> {
     let mut lines = vec![Line::from(vec![
         Span::styled(row.model_id.clone(), header_style(theme)),
@@ -462,56 +465,89 @@ fn model_card_lines(row: &ModelUsageAggregate, theme: &Theme, width: u16) -> Vec
         tr("cache hit"),
         format!("{:.1}%", row.cache_hit_rate * 100.0),
     ));
-    lines.extend(metric_rows(&token_pairs, theme, width));
 
+    // p50/p90 各占一格：`ttft p50/p90 4536/12324` 那种复合标签比 token 段的标签宽、
+    // 数值又超出数值列，两段各排各的列，就成了错位
+    // （回归由 perf_rows_line_up_with_the_token_grid 用例钉住）
+    let na = tr("n/a");
     let perf_pairs: Vec<(&'static str, String)> = vec![
-        (
-            "ttft p50/p90",
-            fmt_ms_pair(row.ttft_p50_ms, row.ttft_p90_ms, tr("n/a")),
-        ),
-        (
-            "tps p50/p90",
-            fmt_tps_pair(row.tps_p50, row.tps_p90, tr("n/a")),
-        ),
+        ("ttft p50", fmt_ms(row.ttft_p50_ms, na)),
+        ("ttft p90", fmt_ms(row.ttft_p90_ms, na)),
+        ("tps p50", fmt_tps(row.tps_p50, na)),
+        ("tps p90", fmt_tps(row.tps_p90, na)),
     ];
-    lines.extend(metric_rows(&perf_pairs, theme, width));
+
+    // 两段共用同一份列几何：数值右边缘才会落在同一批列上
+    let grid = MetricGrid::new(token_pairs.iter().chain(perf_pairs.iter()), width);
+    lines.extend(grid.lines(&token_pairs, usize::MAX, theme));
+    lines.extend(grid.lines(&perf_pairs, PERF_COLS, theme));
     lines
 }
 
-/// 把 `(标签, 数值)` 两列一行地铺开：标签左对齐、数值右对齐到列宽。
-/// 面板过窄时退化为每行一个指标，避免数值被挤到边框外。
-fn metric_rows(pairs: &[(&'static str, String)], theme: &Theme, width: u16) -> Vec<Line<'static>> {
-    let label_w = pairs
-        .iter()
-        .map(|(label, _)| label.width())
-        .max()
-        .unwrap_or(0);
-    let col_w = label_w + 1 + VALUE_WIDTH;
-    // 列间距 2 列；面板装不下时至少保留一列
-    let per_row = (((width as usize) + 2) / (col_w + 2)).max(1);
-    let mut lines = Vec::new();
-    for chunk in pairs.chunks(per_row) {
-        let mut spans: Vec<Span<'static>> = Vec::new();
-        for (i, (label, value)) in chunk.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::raw("  "));
-            }
-            spans.push(Span::styled(
-                (*label).to_string(),
-                Style::default().fg(theme.gray_dim),
-            ));
-            let gap = label_w.saturating_sub(label.width())
-                + 1
-                + VALUE_WIDTH.saturating_sub(value.width());
-            spans.push(Span::raw(" ".repeat(gap)));
-            spans.push(Span::styled(
-                value.clone(),
-                Style::default().fg(theme.text_primary),
-            ));
+/// 一张卡片内所有指标共享的列几何：标签左对齐、数值右对齐到同一列宽。
+/// 卡片按段（token / 性能）分行，但列宽只算一份——各段分别算就会各排各的。
+struct MetricGrid {
+    label_w: usize,
+    value_w: usize,
+    width: u16,
+}
+
+impl MetricGrid {
+    /// 列宽取自卡片内的全部指标；[`VALUE_WIDTH`] 只作数值列下限。
+    fn new<'a>(pairs: impl Iterator<Item = &'a (&'static str, String)>, width: u16) -> Self {
+        let (mut label_w, mut value_w) = (0, 0);
+        for (label, value) in pairs {
+            label_w = label_w.max(label.width());
+            value_w = value_w.max(value.width());
         }
-        lines.push(Line::from(spans));
+        Self {
+            label_w,
+            value_w: value_w.max(VALUE_WIDTH),
+            width,
+        }
     }
-    lines
+
+    fn col_w(&self) -> usize {
+        self.label_w + 1 + self.value_w
+    }
+
+    /// 把 `(标签, 数值)` 铺成若干行；`max_cols` 给单段设列数上限（token 段传
+    /// `usize::MAX`，即只受面板宽度约束）。
+    /// 面板过窄时退化为每行一个指标，避免数值被挤到边框外。
+    fn lines(
+        &self,
+        pairs: &[(&'static str, String)],
+        max_cols: usize,
+        theme: &Theme,
+    ) -> Vec<Line<'static>> {
+        // 列间距 2 列；面板装不下时至少保留一列
+        let per_row = (((self.width as usize) + 2) / (self.col_w() + 2))
+            .min(max_cols)
+            .max(1);
+        let mut lines = Vec::new();
+        for chunk in pairs.chunks(per_row) {
+            let mut spans: Vec<Span<'static>> = Vec::new();
+            for (i, (label, value)) in chunk.iter().enumerate() {
+                if i > 0 {
+                    spans.push(Span::raw("  "));
+                }
+                spans.push(Span::styled(
+                    (*label).to_string(),
+                    Style::default().fg(theme.gray_dim),
+                ));
+                let gap = self.label_w.saturating_sub(label.width())
+                    + 1
+                    + self.value_w.saturating_sub(value.width());
+                spans.push(Span::raw(" ".repeat(gap)));
+                spans.push(Span::styled(
+                    value.clone(),
+                    Style::default().fg(theme.text_primary),
+                ));
+            }
+            lines.push(Line::from(spans));
+        }
+        lines
+    }
 }
 
 /// 卡片块的纯文本版（复制用）。
@@ -544,10 +580,13 @@ fn model_card_text(row: &ModelUsageAggregate) -> String {
         row.cache_hit_rate * 100.0
     ));
     parts.push(tokens.join(" · "));
+    let na = tr("n/a");
     parts.push(format!(
-        "ttft p50/p90 {} · tps p50/p90 {}",
-        fmt_ms_pair(row.ttft_p50_ms, row.ttft_p90_ms, tr("n/a")),
-        fmt_tps_pair(row.tps_p50, row.tps_p90, tr("n/a")),
+        "ttft p50 {} · ttft p90 {} · tps p50 {} · tps p90 {}",
+        fmt_ms(row.ttft_p50_ms, na),
+        fmt_ms(row.ttft_p90_ms, na),
+        fmt_tps(row.tps_p50, na),
+        fmt_tps(row.tps_p90, na),
     ));
     parts.join("\n")
 }
@@ -736,6 +775,80 @@ mod tests {
         assert!(!text.contains("more"), "展开后不该再有折叠提示: {text}");
     }
 
+    /// 一张卡片渲染成文本行（测试用固定宽度，不依赖终端）。
+    fn card_lines(row: &ModelUsageAggregate, width: u16) -> Vec<String> {
+        model_card_lines(row, &Theme::current(), width)
+            .iter()
+            .map(|l| l.to_string())
+            .collect()
+    }
+
+    /// 真实账本里取的一组数字（deepseek-v4.1-flash，5h 窗）：ttft 四/五位数、
+    /// tps 一位小数，正是把旧固定数值列（8 列）撑爆、导致错位的那类数据。
+    fn wide_card_row() -> ModelUsageAggregate {
+        ModelUsageAggregate {
+            model_id: "deepseek/deepseek-v4.1-flash".to_string(),
+            calls: 459,
+            prompt_tokens: 66_215_043,
+            completion_tokens: 424_085,
+            cached_read_tokens: 65_314_304,
+            cache_creation_tokens: 0,
+            reasoning_tokens: 270_095,
+            cache_hit_rate: 0.986_396_761_835_524_3,
+            ttft_p50_ms: Some(4536),
+            ttft_p90_ms: Some(12_324),
+            tps_p50: Some(98.8),
+            tps_p90: Some(230.4),
+        }
+    }
+
+    /// p50/p90 拆成独立指标格后，性能段与 token 段共用一份列几何：
+    /// 每个数据格 20 列（标签 11 + 间隔 1 + 数值 8），数值右边缘落在同一批列上。
+    #[test]
+    fn perf_rows_line_up_with_the_token_grid() {
+        let lines = card_lines(&wide_card_row(), 80);
+        assert_eq!(lines[0], "deepseek/deepseek-v4.1-flash  459 calls");
+        assert_eq!(
+            lines[1],
+            "input         66.22m  output          424k  cache read    65.31m"
+        );
+        assert_eq!(
+            lines[2],
+            "cache write        0  reasoning       270k  cache hit      98.6%"
+        );
+        assert_eq!(lines[3], "ttft p50        4536  ttft p90       12324");
+        assert_eq!(lines[4], "tps p50         98.8  tps p90        230.4");
+    }
+
+    /// 数值列宽按卡片内实际最宽的数值放宽；面板再窄也不许把数值挤到边框外。
+    #[test]
+    fn card_metrics_never_overflow_the_panel() {
+        let mut row = wide_card_row();
+        // 数值比 VALUE_WIDTH 更宽（`10000.00m` 9 列），数值列必须跟着放宽
+        row.prompt_tokens = 9_999_999_999;
+        for width in [44u16, 60, 80, 94] {
+            for line in card_lines(&row, width) {
+                assert!(
+                    line.width() <= width as usize,
+                    "width={width} 越界: |{line}| ({})",
+                    line.width()
+                );
+            }
+        }
+    }
+
+    /// 缺 ttft/tps 采样（非流式调用）时性能段仍占位，不塌成半行。
+    #[test]
+    fn missing_perf_samples_render_as_na_cells() {
+        let mut row = wide_card_row();
+        row.ttft_p50_ms = None;
+        row.ttft_p90_ms = None;
+        row.tps_p50 = None;
+        row.tps_p90 = None;
+        let lines = card_lines(&row, 80);
+        assert_eq!(lines[3], "ttft p50         n/a  ttft p90         n/a");
+        assert_eq!(lines[4], "tps p50          n/a  tps p90          n/a");
+    }
     #[test]
     fn compression_tab_renders_passthrough_lines() {
         let state = state_with_samples();
@@ -757,6 +870,11 @@ mod tests {
         assert!(text.contains("== Compression =="), "{text}");
         assert!(text.contains("m-a · 2 calls"), "{text}");
         assert!(text.contains("m-c · 1 calls"), "{text}");
+        // 复制文本与卡片同一份数字与 p50/p90 拆分口径
+        assert!(
+            text.contains("ttft p50 900 · ttft p90 900 · tps p50 50.0 · tps p90 50.0"),
+            "{text}"
+        );
         assert!(!text.contains("m-d"), "周窗外的样本不该进报表: {text}");
     }
 

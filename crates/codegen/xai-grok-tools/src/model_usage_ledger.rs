@@ -209,8 +209,25 @@ pub fn fmt_tokens(n: u64) -> String {
     }
 }
 
-/// 性能指标显示串：`900/1100` / `n/a`。渲染层把指标名拼在后面，
-/// 保证文本路径与模态窗口显示同一份数字。
+/// 单个 ttft 显示串（毫秒，不带单位，与 [`fmt_ms_pair`] 同口径）：`900` / `n/a`。
+/// 卡片把 p50/p90 拆成两个独立指标格，每格一个数值，故不再拼成 `900/1100`。
+pub fn fmt_ms(v: Option<u64>, na: &str) -> String {
+    match v {
+        Some(ms) => ms.to_string(),
+        None => na.to_string(),
+    }
+}
+
+/// 单个吞吐（tokens/s）显示串：`50.0` / `n/a`。
+pub fn fmt_tps(v: Option<f64>, na: &str) -> String {
+    match v {
+        Some(tps) => format!("{tps:.1}"),
+        None => na.to_string(),
+    }
+}
+
+/// 性能指标显示串：`900/1100` / `n/a`。文本报表一行内收纳 p50/p90 用，
+/// 与 [`fmt_ms`] 同口径（数值部分完全一致）。
 pub fn fmt_ms_pair(p50: Option<u64>, p90: Option<u64>, na: &str) -> String {
     match (p50, p90) {
         (Some(p50), Some(p90)) => format!("{p50}/{p90}"),
@@ -362,6 +379,15 @@ mod tests {
         assert_eq!(fmt_ms_pair(None, Some(1100), "n/a"), "n/a");
         assert_eq!(fmt_tps_pair(Some(50.0), Some(60.0), "n/a"), "50.0/60.0");
         assert_eq!(fmt_tps_pair(None, Some(60.0), "n/a"), "n/a");
+    }
+
+    #[test]
+    fn fmt_single_values_match_the_pair_form() {
+        assert_eq!(fmt_ms(Some(4536), "n/a"), "4536");
+        assert_eq!(fmt_ms(None, "n/a"), "n/a");
+        assert_eq!(fmt_tps(Some(230.4), "n/a"), "230.4");
+        assert_eq!(fmt_tps(Some(99.0), "n/a"), "99.0");
+        assert_eq!(fmt_tps(None, "n/a"), "n/a");
     }
 
     #[test]
