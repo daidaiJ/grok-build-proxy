@@ -17,7 +17,8 @@ use xai_grok_tools::implementations::output_compression::{
     format_stats_report, is_enabled, stats_for_display,
 };
 use xai_grok_tools::model_usage_ledger::{
-    self, ModelCallSample, ModelUsageAggregate, Window, fmt_ms_pair, fmt_tokens, fmt_tps_pair,
+    self, ModelCallSample, ModelUsageAggregate, Window, fmt_hit_rate, fmt_ms_pair, fmt_tokens,
+    fmt_tps_pair,
 };
 
 pub struct StatsCommand;
@@ -148,7 +149,7 @@ fn format_usage_row(row: &ModelUsageAggregate) -> String {
         tr("calls"),
         token_parts.join(" · "),
         tr("cache hit"),
-        format!("{:.1}%", row.cache_hit_rate * 100.0),
+        fmt_hit_rate(row.calls, row.cache_hit_rate, tr("n/a")),
         perf_parts.join(" · "),
     )
 }
@@ -312,6 +313,8 @@ mod tests {
         assert!(report.contains("cache read 1.3k"));
         assert!(report.contains("cache write 400"));
         assert!(report.contains("cache hit 86.7%"));
+        // m-b / m-c 各只有一次调用：冷启动算不出命中率，显示 n/a 而不是 0.0%
+        assert!(report.contains("cache hit n/a"), "{report}");
         assert!(report.contains("ttft p50/p90 900/1100"));
         assert!(report.contains("tps p50/p90 50.0/60.0"));
         // 分节定位：5h 窗不含 m-b，日窗含 m-b 不含 m-c，周窗含 m-c 不含 m-d
