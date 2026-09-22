@@ -367,6 +367,46 @@ async fn test_inference_metrics_single_response() {
     actor_handle.await.unwrap();
 }
 
+/// LOCAL(perf): a 0ms TTFT is a buffered-delivery artifact (upstream dumped the whole
+/// SSE body at once), not a measurable first-token RTT. It must not set the last-call
+/// sample, must not enter the average, and must not blank a session whose only samples
+/// so far were zero (the old `avg > 0` gate stayed false forever).
+#[tokio::test]
+async fn zero_ttft_samples_do_not_poison_latency_stats() {
+    let (handle, actor) = SessionSignalsActor::new();
+    let actor_handle = tokio::spawn(actor.run());
+
+    let stats_with = |ttft: Option<u64>| InferenceLatencyStats {
+        time_to_first_token_ms: ttft,
+        time_to_last_byte_ms: 2000,
+        chunk_count: 10,
+        itl_intervals_ms: vec![],
+        itl_p50_ms: None,
+        itl_p99_ms: None,
+        itl_max_ms: None,
+        itl_mean_ms: None,
+        attempts: 0,
+    };
+
+    // Buffered-delivery calls: everything arrives at once, ttft = Some(0).
+    handle.record_inference_metrics(stats_with(Some(0)));
+    handle.record_inference_metrics(stats_with(Some(0)));
+    let snap = handle.snapshot().await.unwrap();
+    assert_eq!(snap.avg_time_to_first_token_ms, 0);
+    assert_eq!(snap.latency_sample_count, 0, "zero samples must not count");
+    assert_eq!(snap.last_time_to_first_token_ms, None);
+
+    // The first real sample must surface as the last-call TTFT.
+    handle.record_inference_metrics(stats_with(Some(380)));
+    let snap = handle.snapshot().await.unwrap();
+    assert_eq!(snap.avg_time_to_first_token_ms, 380, "average must not be diluted by zeros");
+    assert_eq!(snap.latency_sample_count, 1);
+    assert_eq!(snap.last_time_to_first_token_ms, Some(380));
+
+    handle.shutdown();
+    actor_handle.await.unwrap();
+}
+
 #[tokio::test]
 async fn test_turn_end_snapshot_multi_turn_deltas() {
     let (handle, actor) = SessionSignalsActor::new();

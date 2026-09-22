@@ -244,16 +244,16 @@ impl SessionActor {
     }
 
     /// LOCAL: assemble the status-line latency/throughput snapshot.
-    /// `ttft_ms` is the session-average TTFT from the signals actor (the exact
-    /// per-call value lives on the turn delta, which the billing path consumes);
-    /// `tps` is the last turn's output tokens over its API window (API duration
-    /// minus average TTFT). Absent before the first completed call.
+    /// `ttft_ms` is the last measured model call's TTFT (0ms buffered-delivery
+    /// artifacts are skipped at the signals actor); `tps` is that same call's
+    /// output tokens over its API window (API duration minus its TTFT), so the
+    /// window and the TTFT always belong to one call. Absent until a real
+    /// first-token sample exists.
     async fn build_turn_perf(&self) -> Option<StatusLineTurnPerf> {
         let signals = self.signals_handle().snapshot().await?;
         let usage = self.chat_state_handle.get_last_turn_usage().await?;
         let output_tokens = u64::from(usage.completion_tokens);
-        let ttft_ms = (signals.avg_time_to_first_token_ms > 0)
-            .then_some(signals.avg_time_to_first_token_ms);
+        let ttft_ms = signals.last_time_to_first_token_ms;
         let last_api_ms = self.last_turn_api_duration_ms.load(Ordering::Relaxed);
         let tps = match (last_api_ms, ttft_ms) {
             (api_ms, Some(first_ms)) if api_ms > first_ms && output_tokens > 0 => {

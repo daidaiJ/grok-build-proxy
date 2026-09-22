@@ -1346,3 +1346,4 @@ delta 只设 `chunk_has_content`（空闲超时用）。纯思考+工具调用�
 - `src/metrics.rs`：`time_to_first_token_ms` 与 `from_timestamps` 文档注释同步语义
 - 影响：signals 的 ITL / 均值 TTFT 样本从首个输出 token 开始计；`/stats` 的 ttft
   分位数在工具-only 回合也有样本（此前整回合缺席）
+## 状态行 ttft/tps 基本不显示：0ms 伪样本污染 + 窗口错配（2026-09-22，fix/local-perf-ttft-zerosample）

@@ -342,6 +342,12 @@ pub struct SessionSignals {
     pub max_time_to_first_token_ms: u64,
     /// Total number of responses measured for latency
     pub latency_sample_count: u32,
+    /// LOCAL(perf): TTFT of the most recent measured model call. 0ms samples are a
+    /// buffered-delivery artifact (upstream/proxy dumps the whole SSE body at once),
+    /// never a measurable first-token RTT, so they are skipped everywhere; `None`
+    /// until a real sample arrives.
+    #[serde(default)]
+    pub last_time_to_first_token_ms: Option<u64>,
 
     // === Inter-Token Latency (ITL) Metrics ===
     /// Session-level ITL p50 in milliseconds (computed from TDigest)
@@ -1255,17 +1261,26 @@ impl SessionSignalsActor {
                     time_to_first_token_ms,
                     total_response_time_ms,
                 } => {
-                    // Track per-turn latency (overwritten each time within a turn; the last value before TakeTurnEndSnapshot is used)
-                    self.last_turn_ttft_ms = Some(time_to_first_token_ms);
-                    self.last_turn_response_time_ms = Some(total_response_time_ms);
-
-                    self.update_latency_stats(time_to_first_token_ms, total_response_time_ms);
+                    // LOCAL(perf): 0ms TTFT is a buffered-delivery artifact, not a sample.
+                    if time_to_first_token_ms > 0 {
+                        // Track per-turn latency (overwritten each time within a turn; the last value before TakeTurnEndSnapshot is used)
+                        self.last_turn_ttft_ms = Some(time_to_first_token_ms);
+                        self.last_turn_response_time_ms = Some(total_response_time_ms);
+                        self.signals.last_time_to_first_token_ms = Some(time_to_first_token_ms);
+                        self.update_latency_stats(time_to_first_token_ms, total_response_time_ms);
+                    }
                 }
                 SignalEvent::RecordInferenceMetrics(stats) => {
+                    // LOCAL(perf): 0ms TTFT is a buffered-delivery artifact (upstream
+                    // dumped the whole body at once), never a measurable first-token
+                    // RTT. Recording it would blank the status-line gate
+                    // (`avg > 0` on an all-zero session) and dilute the average.
+                    let measured_ttft = stats.time_to_first_token_ms.filter(|t| *t > 0);
                     // Track per-turn latency for turn-delta snapshots
-                    if let Some(ttfb) = stats.time_to_first_token_ms {
+                    if let Some(ttfb) = measured_ttft {
                         self.last_turn_ttft_ms = Some(ttfb);
                         self.last_turn_response_time_ms = Some(stats.time_to_last_byte_ms);
+                        self.signals.last_time_to_first_token_ms = Some(ttfb);
                     }
 
                     // Accumulate all ITL intervals from this response into turn buffer
@@ -1277,7 +1292,7 @@ impl SessionSignalsActor {
                     }
 
                     // Also feed the existing TTFB/TTLB tracking for backward compat
-                    if let Some(ttfb) = stats.time_to_first_token_ms {
+                    if let Some(ttfb) = measured_ttft {
                         self.update_latency_stats(ttfb, stats.time_to_last_byte_ms);
                     }
                 }

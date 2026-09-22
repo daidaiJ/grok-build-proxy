@@ -49,3 +49,17 @@ headless::tests::worktree_create_opens_session_at_worktree_subdirectory
 disk_usage_cmd::tests::collect_report_joins_registry_and_flags_untracked
 views::btw_overlay::tests::done_state_scans_file_paths_like_scrollback
 views::extensions_modal::tests::handle_key_tab_completes_single_field_path
+
+# 族N shell 测试夹具 POSIX 路径 —— create_test_actor 夹具写死 /tmp(support.rs),
+# Windows 路径校验 NotAbsolute 直接 panic,属环境族不修;xai-grok-shell 不在白名单,
+# GATE_FORCE=1 一次性放行时由本条挡噪声(2026-09-22)。
+tool_dispatch_gates_on_its_own_server_not_the_slowest_handshake
+a_dropped_session_ends_its_parked_emitter
+client_that_cannot_draw_the_row_never_builds_one
+the_notification_payload_serializes_without_a_trigger_key
+the_payload_carries_real_values_or_no_field_at_all
+# 族O signals RSS 采样 —— sample_rss_bytes 走 /proc 语义,Windows 恒返回 0,
+# 三个断言 RSS>0 的用例环境族不修(2026-09-22)。
+test_sample_rss_bytes_returns_nonzero
+test_sample_rss_bytes_is_stable
+test_peak_rss_recorded_at_turn_end
