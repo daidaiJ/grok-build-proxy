@@ -2788,6 +2788,82 @@ fn verbatim_truncates_trailing_incomplete_tool_call() {
         Some(ConversationItem::ToolResult(_))
     ));
 }
+/// A parallel run that arrived only half-answered is backfilled: strict backends reject a
+/// `tool_calls` entry with no `ToolResult` ("insufficient tool messages following tool_calls").
+#[test]
+fn verbatim_backfills_unanswered_call_in_partial_parallel_run() {
+    use xai_grok_sampling_types::ToolCall;
+    let conv = vec![
+        ConversationItem::system("sys"),
+        ConversationItem::user("scan the disk"),
+        ConversationItem::assistant_tool_calls(vec![
+            ToolCall {
+                id: "c1".into(),
+                name: "read_file".to_string(),
+                arguments: r#"{"target_file":"a.rs"}"#.into(),
+            },
+            ToolCall {
+                id: "c2".into(),
+                name: "grep".to_string(),
+                arguments: "{}".into(),
+            },
+        ]),
+        ConversationItem::tool_result("c1", "fn main() {}"),
+        // Turn aborted mid-flight: c2's result never landed, and the compaction prompt follows.
+        ConversationItem::user("summarize the conversation so far"),
+    ];
+    let result = prepare_conversation_for_verbatim_summarization(conv, false);
+    assert!(
+        !xai_grok_sampling_types::has_dangling_tool_calls(&result),
+        "every tool call must carry a result in a verbatim summarizer payload"
+    );
+    assert_eq!(result.len(), 6, "one synthetic result inserted for c2");
+    match (&result[3], &result[4]) {
+        (ConversationItem::ToolResult(kept), ConversationItem::ToolResult(synth)) => {
+            assert_eq!(kept.tool_call_id.as_str(), "c1");
+            assert_eq!(kept.content.as_ref(), "fn main() {}", "real result kept");
+            assert_eq!(synth.tool_call_id.as_str(), "c2");
+            assert!(
+                synth.content.contains("grep"),
+                "synthetic result must name the unanswered tool: {}",
+                synth.content
+            );
+        }
+        other => panic!("expected the answered result then the synthetic one, got {other:?}"),
+    }
+}
+
+/// Backfill is idempotent and leaves fully answered runs (incl. reasoning siblings) untouched.
+#[test]
+fn verbatim_backfill_skips_complete_runs_and_is_idempotent() {
+    use xai_grok_sampling_types::{ToolCall, rs};
+    let conv = vec![
+        ConversationItem::system("sys"),
+        ConversationItem::Reasoning(rs::ReasoningItem {
+            id: "r1".to_string(),
+            summary: vec![],
+            content: None,
+            encrypted_content: Some("sig".to_string()),
+            status: None,
+        }),
+        ConversationItem::assistant_tool_calls(vec![ToolCall {
+            id: "c1".into(),
+            name: "read_file".to_string(),
+            arguments: "{}".into(),
+        }]),
+        ConversationItem::tool_result("c1", "ok"),
+        ConversationItem::user("next"),
+    ];
+    let once = prepare_conversation_for_verbatim_summarization(conv, false);
+    assert_eq!(
+        once.len(),
+        5,
+        "complete run must not gain a synthetic result"
+    );
+    let twice = prepare_conversation_for_verbatim_summarization(once.clone(), false);
+    assert_eq!(twice.len(), once.len(), "backfill must be idempotent");
+}
+
 /// A conversation ending in a complete tool run (tail = `ToolResult`) is left untouched.
 #[test]
 fn verbatim_keeps_trailing_complete_tool_run() {

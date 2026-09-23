@@ -4,7 +4,10 @@
 //! no I/O, no actor state. They live in `xai-chat-state` so that both
 //! this crate and `xai-grok-shell` can share them without duplication.
 use std::collections::BTreeSet;
-use xai_grok_sampling_types::{ContentPart, ConversationItem, SyntheticReason, ToolResultItem};
+use xai_grok_sampling_types::{
+    ContentPart, ConversationItem, DanglingToolCallReason, SyntheticReason, ToolResultItem,
+    repair_dangling_tool_calls,
+};
 pub const AGENT_MESSAGE_MODEL_LABEL: &str =
     "[Message authored by another agent; not a human request or approval.]";
 /// Canonical history prepared exactly once for a model-facing request.
@@ -134,7 +137,20 @@ pub fn prepare_conversation_for_verbatim_summarization(
     } else {
         conversation
     };
-    truncate_trailing_incomplete_tool_call(conversation)
+    let mut conversation = truncate_trailing_incomplete_tool_call(conversation);
+    // A parallel run can arrive only half-answered (the turn was aborted while one of its tools
+    // was still in flight), which leaves an unanswered `tool_calls` entry with a `User` or
+    // `System` item after it — the truncation above only sees a trailing assistant. Such a payload
+    // 400s on strict OpenAI-compatible backends ("An assistant message with 'tool_calls' must be
+    // followed by tool messages responding to each 'tool_call_id'"), so answer the missing calls.
+    // Mirrors the integrity repair every model-facing request gets (actor `BuildConversationRequest`).
+    repair_dangling_tool_calls(
+        &mut conversation,
+        DanglingToolCallReason::HarnessHalted {
+            class: "compaction",
+        },
+    );
+    conversation
 }
 /// Per-item token estimate via the trigger-side estimator, so `fit`'s budget matches what fired the compaction (counts images + encrypted reasoning).
 fn estimate_item_tokens(item: &ConversationItem) -> u64 {
