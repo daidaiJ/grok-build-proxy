@@ -1250,3 +1250,42 @@ push **没有触发 build 工作流**（main 上 9-18 `f50f0f9e` 之后直接跳
 本机 shell 套件因上游自带测试 profile 编译错误无法运行（见"已知问题"），
 最终以 Linux CI build job 为准。
 
+## 压缩请求半答并行 tool call 回填（2026-09-23，feat/local-compaction-toolpair-repair）
+
+> 全量证据链（会话工件、事件流、上游复现探针）见
+> `docs-local/compaction-dangling-toolcall-400.md`。
+
+### 问题
+
+`/compact` 在 DeepSeek 上游 400：`An assistant message with 'tool_calls' must be followed by
+tool messages responding to each 'tool_call_id'. (insufficient tool messages following
+tool_calls message)`。成因：回合在「并行工具仍有一个在飞」时中止，历史留下
+「assistant 带 2 个 tool_calls + 只有 1 个 ToolResult」的半答 run；普通模型请求会在
+`BuildConversationRequest` 里回填（`ensure_conversation_integrity`），压缩走 `GetConversation`
+纯读不回填，而 prep 里的 `truncate_trailing_incomplete_tool_call` 只认「末项是 assistant」。
+同一个上游对 MiMo 放行、对 DeepSeek 拒绝，故表现为"某模型压缩必挂"。
+
+### 改动（同步文件，重放用）
+
+- `crates/codegen/xai-chat-state/src/compaction_utils.rs`
+  - 导入 `DanglingToolCallReason` / `repair_dangling_tool_calls`（`xai_grok_sampling_types`）
+  - `prepare_conversation_for_verbatim_summarization`：`truncate_trailing_incomplete_tool_call`
+    之后追加一次 `repair_dangling_tool_calls(&mut conversation, HarnessHalted { class:
+    "compaction" })`——按调用顺序为未答的 tool_calls 插入合成 `tool_result`
+- `crates/codegen/xai-chat-state/src/compaction_utils_tests.rs`
+  - `verbatim_backfills_unanswered_call_in_partial_parallel_run`（半答并行 run：真实结果保留、
+    合成结果指名工具、`has_dangling_tool_calls` 为假）
+  - `verbatim_backfill_skips_complete_runs_and_is_idempotent`（完整 run 不回填、二次调用不变）
+
+### 覆盖面
+
+`session/compaction.rs` 三处请求组装（941 verbatim、256/347 two-pass、1165 阶梯降级）与
+`helpers/session_recap.rs` 全经此函数，一处修复全覆盖；lossy 路径本就剥掉全部工具消息，免疫。
+
+### 重放注意
+
+- 只动这一个 `pub fn` 的尾部三行逻辑，上游若自行在 prep 里加了回填（如改用
+  `repair_dangling_tool_calls`）则本补丁作废，直接删
+- 用户侧绕过（旧二进制）：`features.compaction_verbatim_input = false` 走 lossy 路径
+- 未处理反方向（孤儿 `ToolResult`），该形态由 `/repair` 与会话加载覆盖
+
