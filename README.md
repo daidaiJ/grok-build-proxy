@@ -134,8 +134,13 @@ proxy = "http://127.0.0.1:7897"
 
 ### Windows 可用性
 
-- **`[shell] backend`**：选择 bash 工具使用的 shell，默认级联 pwsh → powershell.exe → Git Bash → powershell.exe。跑 make/脚本类工作流时建议 `bash`（MSYS2 路径转换会改坏 `/flag` 形式参数）。环境变量等价物 `GROK_SHELL`。
+- **`[shell] backend`**：选择 bash 工具使用的 shell，**仅 Windows 生效**。取值 `pwsh` | `powershell` | `bash`（=Git Bash，别名 `gitbash`/`git-bash`）| `cmd`（别名 `cmd.exe`）；缺省自动级联 pwsh → powershell.exe → Git Bash → powershell.exe。优先于环境变量等价物 `GROK_SHELL`；取值不认识、或选了 `bash` 但本机没装 Git Bash 时，打告警并退回级联。跑 make/脚本类工作流建议 `bash`——Git Bash 自带 `grep`/`head`/`sed`/`awk`，且子进程注入 `MSYS_NO_PATHCONV=1` / `MSYS2_ARG_CONV_EXCL=*`，`/flag` 形式参数不会被 MSYS2 路径转换改坏；反之原生 Windows 工具链（`MSBuild /t:Build`、`cl.exe /nologo`）建议留默认的 PowerShell。取值在进程内首次使用时固定，**改完需重启 `grok2`**。Unix 上该表被忽略，shell 仍由 `$SHELL`（`GROK_SHELL` 可给绝对路径）决定。完整取值表与各 shell 行为差异见内置文档 [`29-local-enhancements.md`](crates/codegen/xai-grok-pager/docs/user-guide/29-local-enhancements.md#shell-backend)。
 - **构建与测试**：`xai-proto-build` 修复了 protoc 在 Windows 上的 Unix 路径 panic；路径语义、目录身份、测试线程栈等一批环境族问题按 `docs-local/WIN-TEST-GATE.md` 的流水线处理，测试统一走 `scripts-local/ctest.sh`（自动注入 `RUST_MIN_STACK` / `TMP`，并按 `docs-local/win-skip.txt` 台账跳过已知必挂用例）。
+
+```toml
+[shell]
+backend = "bash"   # pwsh | powershell | bash(Git Bash) | cmd；缺省自动级联
+```
 
 ### 上下文与成本
 
@@ -171,7 +176,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 | `[models] default` / `[model.<key>]` | 选模型、接第三方端点（见上一节） |
 | `[models] hidden_models` / `disabled_models` / `allowed_models` | 收进选择器 / 移出目录 / 白名单 |
 | `[network] proxy` / `proxy_hosts` | 出口代理与 host 白名单（默认 `x.ai`、`grok.com`） |
-| `[shell] backend` | `pwsh` \| `powershell` \| `bash` \| `cmd`（Windows） |
+| `[shell] backend` | `pwsh` \| `powershell` \| `bash`(Git Bash) \| `cmd`（仅 Windows；优先于 `GROK_SHELL`，改完需重启） |
 | `[ui.status_line] type` / `items` | 状态行开关与段集合 |
 | `[notifications]` | 桌面通知与提示音（opt-in） |
 | `[tool_output_compression]` | 工具输出压缩（默认关） |

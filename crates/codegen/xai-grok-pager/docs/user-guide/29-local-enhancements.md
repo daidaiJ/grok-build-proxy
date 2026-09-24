@@ -32,14 +32,31 @@ proxy = "http://127.0.0.1:7897"
 
 ## Shell backend
 
-**What it does.** Selects which shell the bash tool spawns on Windows. The default auto-detect cascade is pwsh → powershell.exe → Git Bash → powershell.exe — PowerShell is preferred because MSYS2 path translation mangles `/flag`-style arguments of native Windows toolchains. Unix is unaffected (it follows `$SHELL`).
+**What it does.** Selects which shell the bash tool spawns **on Windows**. The default auto-detect cascade is pwsh → powershell.exe → Git Bash → powershell.exe — PowerShell is preferred because MSYS2 path translation mangles `/flag`-style arguments of native Windows toolchains. Unix is not affected by this table. Stock upstream has no config-file equivalent here: outside this build the only lever is the `GROK_SHELL` environment variable.
 
 ```toml
 [shell]
-backend = "bash"   # pwsh | powershell | bash (=gitbash) | cmd
+backend = "bash"   # pwsh | powershell | bash (=gitbash/git-bash) | cmd (=cmd.exe)
 ```
 
-The config value takes precedence over the `GROK_SHELL` environment variable. Suggest `backend = "bash"` when the user's workflow is Unix-flavored (make, shell scripts with `//` flags, ripgrep pipelines); leave the default when they mostly run native Windows toolchains.
+| `backend` | Shell spawned | What it changes |
+| --- | --- | --- |
+| `pwsh` | PowerShell 7+ | `&&` chaining and native `\` paths; no `grep` / `head` / `tail` / `sed` / `awk` |
+| `powershell` | Windows PowerShell 5.1 | Native paths; no `&&` (chained commands use `;`); no Unix utilities |
+| `bash` (also `gitbash`, `git-bash`) | Git Bash (MSYS2) | Unix utilities available; MSYS2 path translation is disabled for the child (`MSYS_NO_PATHCONV=1`, `MSYS2_ARG_CONV_EXCL=*`) so `/flag` arguments survive |
+| `cmd` (also `cmd.exe`) | `cmd.exe` | Native paths; no `&&` chaining in our invocation; no Unix utilities |
+| unset | auto cascade | pwsh → powershell.exe → Git Bash → powershell.exe |
+
+Every variant gets `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8:surrogateescape` injected, so Python children decode UTF-8 output under the legacy ANSI codepage.
+
+**Precedence and when it takes effect.**
+
+- `[shell] backend` beats the `GROK_SHELL` environment variable (`GROK_SHELL` takes the same names); with neither set, the cascade decides.
+- An unrecognized value — and `bash` when no Git Bash is installed — logs a warning and falls back to the cascade instead of failing the launch.
+- The shell is latched the first time the process needs it, and the config is read before that; the practical consequence is that changing the value takes effect **after a restart**, not mid-session.
+- The table is Windows-only. On Unix it is parsed and ignored, and upstream's resolution stays in charge: `GROK_SHELL` as an absolute path (honored only when the file name matches the requested kind, `bash` or `zsh`, and the file is executable) → `$SHELL` (same name test) → `which` → `/bin`, `/usr/bin`, `/usr/local/bin`, `/opt/homebrew/bin` → `/bin/bash`. The kind itself comes from `$SHELL` (bash unless it contains `zsh`).
+
+**When to configure it.** Suggest `backend = "bash"` when the user's workflow is Unix-flavored (make, shell scripts, ripgrep pipelines): Git Bash carries the Unix utilities, and its path-translation guards keep `/flag` arguments intact. Leave the default when they mostly run native Windows toolchains (`MSBuild /t:Build`, `cl.exe /nologo`, `dotnet`), where PowerShell passes such flags through unchanged.
 
 ---
 

@@ -51,6 +51,14 @@
 - `src/shell.rs` LOCAL 段：`SHELL_OVERRIDE` OnceLock + `set_windows_shell_override()`；
   `detect_windows_shell` 的显式覆盖读取顺序改为 config 覆盖 → `GROK_SHELL` → 自动级联
 - 默认级联不变：pwsh → powershell.exe → Git Bash → powershell.exe
+- 上游核实（2026-09-23，对 upstream main `07e35a3d`，2026-09-22 同步）：上游**没有**配置文件层面的
+  shell 选择——`shell.rs` 只有 `GROK_SHELL` 环境变量（Windows 四取值：pwsh/powershell/bash/cmd；
+  Unix 当绝对路径用，且要求文件名匹配 bash/zsh）与 `$SHELL`；`26-config-reference.md` 无 `shell`
+  表段，配置解析层（含远程 `/v1/settings`）也没有 shell 字段。上游 main 的 `shell.rs` 与本仓库快照
+  除本补丁段外逐行一致，故不存在"上游已提供、可撤销本补丁"的路径，补丁继续保留。
+- 文档落点：内置 `29-local-enhancements.md` Shell backend 段（取值表 / 优先级 / 生效时机 /
+  Windows-Unix 分工 / 各 shell 行为差异）+ 本文件下方"用户侧配置示例" +
+  README 的 "Windows 可用性" 小节与配置速查行。
 
 ### xai-grok-shell
 - `src/agent/config.rs`：新 `ShellBackendConfig`（`[shell] backend` 表，值：
@@ -98,7 +106,9 @@ proxy = "http://127.0.0.1:7897"
 backend = "bash"   # pwsh | powershell | bash(=gitbash) | cmd；缺省自动级联（pwsh 优先）
 ```
 
-环境变量等价物：`GROK_SHELL=bash`（config 覆盖优先于 env）。
+环境变量等价物：`GROK_SHELL=bash`（config 覆盖优先于 env；两者都没有才走自动级联）。
+仅 Windows 生效（Unix 忽略此表，看 `$SHELL` / `GROK_SHELL` 绝对路径）；取值在进程内首次使用时
+固定，改完需重启 `grok2`。
 
 模型侧（opencode Go 会话亲和头示例）：
 
