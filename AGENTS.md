@@ -17,25 +17,21 @@
 
 ### think-split-quoted-marker-fold — in-progress
 
-- **当前状态：** 修复已合并 main（`bc33d257`）、tag `v1.0.37-preview.6` 已发布（release 资产与 windows 版本戳均核对通过），剩 build workflow 与 TUI 实测
+- **当前状态：** 修复已合并 main（`bc33d257`）、tag `v1.0.37-preview.6` 已发布并核对通过；release 与 build 两个 workflow 均 success，剩 TUI 实测
 - **关键证据：** 正文里被反引号引用的 `<think>` 曾被切分器当控制标记，把回答尾部改道 reasoning；
   判定签名＝正文 chunk 以反引号结尾 + 紧随 thought chunk 以反引号开头 + `<think>` 字面量两通道都缺
-  （3 会话 6 处现场）；修复后 `ctest.sh -p xai-grok-sampler --lib` 272/272，mutation 下 5 例转红
-- **验收标准：** release 侧已达标（4 资产 + `grok2.exe --version` = `1.0.37-preview.6`）；
-  余下：build run success + TUI 正向用例正文完整不折叠 + 落盘扫描 0 命中 + 回归 272 全过（详见 handoff §5）
+  （3 会话 6 处现场）；修复后 `ctest.sh -p xai-grok-sampler --lib` 272/272，mutation 下 5 例转红。
+  ⚠️ CI 不跑 sampler 用例（只把它当依赖编译），见 handoff §8
+- **验收标准：** CI 侧已达标（release 4 资产 + `grok2.exe --version` = `1.0.37-preview.6`；build 双 job success）；
+  余下：TUI 正向用例正文完整不折叠 + 落盘扫描 0 命中 + 回归 272 全过（详见 handoff §5）
 - **详情指针：** [`.handoff/think-split-quoted-marker-fold.md`](.handoff/think-split-quoted-marker-fold.md)
-- **遗留清理命令：**
-  ```bash
-  gh run view 35957891470          # 只剩 build workflow 待确认
-  rm -rf /d/d/cargo-tmp/preview6   # gh 首次下载误落到盘内相对路径（MSYS_NO_PATHCONV=1）
-  ```
 
 ### 未验证事项
 
-- [ ] build workflow `35957891470`（main）结论
 - [ ] 真实 TUI 会话的正向用例（本会话只跑单测 + 线级事件断言，未跑活回合）
 - [ ] 真标记路径在活的上游流里的表现（仅单测覆盖）
 - [ ] 已知未覆盖形态（`"<think>"` / `**<think>**`）的现场确认（预期仍折叠）
+- [ ] sampler 用例在 Linux CI 上的表现（CI 当前不跑；可选改进见 handoff §8）
 
 ---
 
