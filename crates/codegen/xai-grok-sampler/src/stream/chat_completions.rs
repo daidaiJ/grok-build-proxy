@@ -1199,6 +1199,35 @@ mod tests {
         }
     }
 
+    /// The answer documents the protocol and *quotes* the marker inside inline code. A quoted
+    /// marker is prose: neither it nor the answer after it may be rerouted to the reasoning
+    /// channel, where the UI would fold the tail into a collapsed "Thought for Xs" block
+    /// (live incident, session 01a0d161).
+    #[tokio::test]
+    async fn quoted_marker_in_answer_stays_text() {
+        let answer = "1. **模板补丁**：强制每轮以 `<think>` 开头，修复流式空响应。\n\n## 四、客户端侧缓解\n\n- 伪标记清洗\n";
+        let events = run(vec![
+            text_chunk("1. **模板补丁**：强制每轮以 `"),
+            text_chunk("<think>"),
+            text_chunk("` 开头，修复流式空响应。\n\n## 四、客户端侧缓解\n\n- 伪标记清洗\n"),
+            final_chunk(FinishReason::Stop),
+        ])
+        .await;
+
+        assert!(
+            reasoning_tokens(&events).is_empty(),
+            "a quoted marker must not open a reasoning block"
+        );
+        assert_eq!(text_tokens(&events).concat(), answer);
+        match events.last().unwrap() {
+            SamplingEvent::Completed { response, .. } => {
+                assert_eq!(response.assistant_text(), answer);
+                assert!(response.reasoning_items().next().is_none());
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
     /// Whole thinking inlined in `content` (no reasoning field) with the markers
     /// split across chunks; must land on the reasoning channel and stay out of
     /// the persisted assistant content that gets replayed next turn.

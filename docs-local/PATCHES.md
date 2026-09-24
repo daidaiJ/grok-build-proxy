@@ -1386,3 +1386,44 @@ tool_calls message)`。成因：回合在「并行工具仍有一个在飞」时
   `repair_dangling_tool_calls`）则本补丁作废，直接删
 - 用户侧绕过（旧二进制）：`features.compaction_verbatim_input = false` 走 lossy 路径
 - 未处理反方向（孤儿 `ToolResult`），该形态由 `/repair` 与会话加载覆盖
+
+## think_split 把正文里被反引号括起来的 `<think>` 字面量当控制标记（2026-09-24，fix/local-think-split-code-span）
+
+现象：TUI 里可见回答**恰好在某个落单反引号处截断**，其后的内容（连同 `##` 标题、表格、
+清单）整段出现于一个折叠的 “Thought for Xs” 思考块。用户先后以 `'` 与反引号描述，实为
+同一处——折叠前最后一个可见字符就是那个反引号。
+
+根因（`stream/think_split.rs`，LOCAL 独有文件）：`find_earliest(&buffer, &OPEN_TAGS)` 在正文
+**任意位置**匹配 `<think>`/`<thinking>`，不看 markdown 上下文。模型在回答里*引用*协议时写的
+行内代码跨度 `` `<think>` `` 被当成真标记：标记本身被 drain（两个通道都不出现），跨度首反引号
+留在正文、第二个反引号连同其后**全部剩余 token** 走 reasoning（永不闭合 → `finish()` 按
+qwen-code `final` 语义整块 flush 成 reasoning，字节不丢）。下游逐级放大：
+`ChannelToken{Reasoning}` → `AgentThoughtChunk` → pager `RenderBlock::Thinking` → 回合结束
+`finished_display_mode() = Collapsed`（`blocks/thinking.rs:553`）。
+
+证据：扫本机全部 76 份会话 `updates.jsonl`，同形态 **6 处 / 3 会话**（`01a0c38e`×4、
+`01a0c849`×1、`01a0d161`×1）。判定签名：正文 chunk 以反引号结尾、紧随的 thought chunk 以
+反引号开头、且 `<think>` 字面量两个通道都缺——message/thought 两条 chunk 通道均不跨类型合并
+（`update_chunk_merge.rs`、`persistence.rs::maybe_merge_notification`），故该缺字只可能由
+splitter 吞掉。样本 `01a0d161` 第 42/43 条：原文 “强制每轮以 `` `<think>` `` 开头，修复流式
+空响应”，其后续 1125 字符（含 `## 四`、`## 五` 两节）全部落入思考块。
+
+修复：`think_split.rs` 新增 `CodeScan`，按**可见文本通道**增量跟踪行内代码跨度与反引号/波浪号
+围栏；`in_code()` 为真的候选标记按普通文本发回正文（不再 drain），其余行为不变。要点：
+- 跨度按行跟踪：未闭合的反引号只致盲本行，换行即清空，不连累后文；
+- 围栏要 3+ 同字符且是行首内容（≤3 空格缩进）才开，闭合需同字符且长度 ≥ 开围栏长度；
+- 跨 delta 的 run 用 pending 状态承载（` ``` ` 被拆成 `"``"`+`"`"` 也能正确开围栏）；
+  `code_after_run` 与 `flush_run` 共用判据，避免“未 flush 的 run”被误判为非代码；
+- 只喂正文通道（reasoning 不喂）；holdback 扣留的尾巴在真正发出时才喂，顺序不颠倒。
+
+验证：`think_split.rs` 追加 8 例（本会话原文样本、标记跨 chunk 拆在跨度内、双跨度形态、
+围栏内标记、围栏自身反引号 run 跨 delta 拆分、代码之后的真标记仍生效、跨度不跨行、
+4 反引号围栏内 3 反引号不算闭合）；
+`chat_completions.rs` 追加 1 例线级回归 `quoted_marker_in_answer_stays_text`（断言零
+Reasoning token + `assistant_text()` 逐字还原 + 无 reasoning item）。
+`bash scripts-local/ctest.sh -p xai-grok-sampler --lib` 272 例全过（原 263 例语义零改动）。
+反证：把 `in_code()` 临时改成恒 `false` 后，上述 5 例跨度/围栏用例立刻转红（20 passed /
+5 failed），确认守卫是承重的。
+
+重放注意：`think_split.rs` 上游不存在，无同步冲突面；本修复只落该文件 + `chat_completions.rs`
+测试块。残留边界（有意不覆盖）：其它引用形态（`"<think>"`、`**<think>**`）仍按标记处理。
