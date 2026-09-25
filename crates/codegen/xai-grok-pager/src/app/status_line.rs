@@ -49,6 +49,8 @@ fn display_for(text: &str) -> Option<StatusLineDisplay> {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct ClientOwnedFields {
     pub(crate) session_name: Option<String>,
+    /// LOCAL: the shell resolves this from the wire model id, which several `[model.*]` entries can share (each provider of the same model keeps its own key, endpoint, and name). Only the client holds the catalog key the session is actually on, so its name wins over the shell's.
+    pub(crate) model_display_name: Option<String>,
 }
 
 /// Identifies one run of the user's script, so a result that outlived the run that asked for it can be told from the one the row is waiting on.
@@ -143,6 +145,14 @@ pub struct StatusLineRun {
     command: String,
     ctx: Box<StatusLineContext>,
     term_size: RowSize,
+}
+
+#[cfg(test)]
+impl StatusLineRun {
+    /// The payload the script would receive, for tests that assert on it.
+    pub(crate) fn ctx(&self) -> &StatusLineContext {
+        &self.ctx
+    }
 }
 
 /// What one run produced.

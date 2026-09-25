@@ -95,7 +95,7 @@ Nothing outside the table below is sent. A ported script that reads counts of li
 | `session_name` | The session's tab name, filled in by the client. Present in `command` stdin, absent from the `SessionStatus` notification |
 | `prompt_id` | UUID of the prompt being processed. Present only during a turn |
 | `transcript_path` | Path to the session's `updates.jsonl`. The file is Grok's own update stream, so a script that parses another tool's transcript format will not read it |
-| `model.id`, `model.display_name` | Model identifier and display name. Omitted when the agent cannot read the session's model |
+| `model.id`, `model.display_name` | Model identifier and display name. Omitted when the agent cannot read the session's model. (LOCAL) `display_name` is resolved client-side from the session's catalog entry, so when several `[model.*]` entries share one wire model, it names the provider the session actually runs rather than whichever entry owns the bare id; `model.id` stays the wire id |
 | `workspace.current_dir` | Current directory |
 | `workspace.repo_root` | The repository root, absent outside one. Not `project_dir`, a name used elsewhere for a launch directory |
 | `workspace.branch` | Checked-out branch, in any repo. Absent on a detached HEAD |

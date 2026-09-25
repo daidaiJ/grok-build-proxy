@@ -1437,3 +1437,34 @@ Reasoning token + `assistant_text()` 逐字还原 + 无 reasoning item）。
 
 重放注意：`think_split.rs` 上游不存在，无同步冲突面；本修复只落该文件 + `chat_completions.rs`
 测试块。残留边界（有意不覆盖）：其它引用形态（`"<think>"`、`**<think>**`）仍按标记处理。
+
+## 状态行 model.display_name 按会话 catalog key 覆盖（2026-09-25，feat/local-statusline-catalog-model-name）
+
+现象：配置里多个 `[model.*]` 条目共用同一个 wire model id（如 `[model.gpt-6-luna]` 与
+`[model.sub2-gpt-6-luna]` 都发 `model = "gpt-6-luna"`，name 不同、供应商不同）时，切到
+sub2 的条目，状态行仍显示 `gpt-6-luna (token-unlimited)`——与选择器、`/session-info`、
+dashboard 徽标（全部走 client 侧 catalog key）显示的供应商对不上。
+
+根因（shell 侧 `acp_session_impl/status_line.rs:118-133`）：状态行快照的
+`display_name` 用 `models_manager.display_name(SamplerConfig.model)` 解析，即拿 **wire id
+当 catalog key 查** `info.name`。多个条目共享 wire id 时查到的是恰好以该 id 为 key 的那个
+条目（通常配置序靠前、先写的那家），与会话实际所 run 的条目无关。live 实测（4 条目复刻
+配置 + ACP stdio driver）：`-m sub2-gpt-6-luna` → 快照显示 `gpt-6-luna (token-unlimited)`
+（错）；`sub2-gpt-6-sol` → 裸 `gpt-6-sol`；`gpt-5.6-luna` → `gpt-5.6-sol (token-unlimited)`
+（用户 config 把 luna 条目命名成 sol）。非回退：404 `model_not_found` 现场确认请求带
+`sk-sub2`、`{"model":"gpt-6-luna"}` 直发，无 `model_auto_switched`，且错误的名字在任何
+请求发出前（`total_api_duration_ms: 0`）就已存在于快照。
+
+修复（pager 侧覆盖，一处入口同时管 builtin 行与脚本 JSON）：`status_line.rs` 新增
+`ClientOwnedFields.model_display_name`；`status_line_policy.rs::shell_status_context()` 用
+`agent.session.models.current_model_name()`（client 侧按 catalog key 解析的名字，无 name
+时回退 key 本身）覆盖 `ctx.model.display_name`。`model.id` 语义不动（仍为 wire id，脚本
+按它 key 的不受影响）；shell 查不到时快照本就回退 wire id，覆盖是幂等的。
+有意不做 shell 侧修复：session actor 不持有 catalog key（`spawn_session_on_thread` 60+
+个位置参数，同步风险高），且 adjacent bug（actor 把 wire id 持久化为
+`summary.json.current_model_id`）另案。
+
+测试：`app/dispatch/tests/status_line.rs` 追加 3 例——builtin 行显示会话实际条目的名字
+（真实载荷夹具复现 sub2→token-unlimited）、脚本载荷同名且 `model.id` 保持 wire id、
+key 不在 client catalog 时回退显示 key。文档 `25-status-line.md` 的
+`model.id`/`display_name` 行补 LOCAL 说明。
