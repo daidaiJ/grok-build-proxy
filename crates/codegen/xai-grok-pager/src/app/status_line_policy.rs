@@ -255,14 +255,26 @@ impl AppView {
                 .display_name
                 .clone()
                 .or_else(|| agent.generated_session_title.clone()),
+            // LOCAL: the shell names the model from the wire id, which every provider of the same
+            // model shares; the catalog key is the client's to resolve, and its name carries the
+            // provider suffix. `current_model_name` falls back to the key (or the wire id after a
+            // slug-addressed switch) when the catalog entry sets no name.
+            model_display_name: agent.session.models.current_model_name(),
         }
     }
 
     fn shell_status_context(&self) -> Option<StatusLineContext> {
         let mut ctx = self.status_line_source_view()?.status_context.clone()?;
         // Destructured, so a field added to the overlay is a compile error here rather than one the staleness check watches and nothing applies
-        let ClientOwnedFields { session_name } = self.client_owned_fields();
+        let ClientOwnedFields {
+            session_name,
+            model_display_name,
+        } = self.client_owned_fields();
         ctx.session_name = session_name;
+        // LOCAL: overrides the shell's name, which resolves the wire id as if it were a catalog key
+        if let Some(name) = model_display_name {
+            ctx.model.display_name = Some(name);
+        }
         Some(ctx)
     }
 

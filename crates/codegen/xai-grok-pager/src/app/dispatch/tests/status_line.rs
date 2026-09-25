@@ -526,3 +526,104 @@ fn only_a_row_that_can_change_mid_turn_holds_the_loop_awake_for_one() {
         assert_eq!(app.status_line_tick_demand_at(now), demand, "{kind:?}");
     }
 }
+
+/// The recorded mismatch, from a live ACP session: the shell snapshot names the
+/// model via a catalog-key lookup on the wire id, which several `[model.*]`
+/// entries share, so the row describes whichever provider sorted first instead
+/// of the one the session switched to.
+fn repro_agent(app: &mut AppView) {
+    let agent = app.agents.get_mut(&AgentId(0)).unwrap();
+    let key = acp::ModelId::new(std::sync::Arc::from("sub2-gpt-6-luna"));
+    agent.session.models.available.insert(
+        key.clone(),
+        acp::ModelInfo::new(key.clone(), "gpt-6-luna (sub2)".to_string()),
+    );
+    agent.session.models.current = Some(key);
+    let mut snapshot = test_context("/tmp");
+    snapshot.model = xai_grok_status_line::StatusLineModel {
+        id: Some("gpt-6-luna".into()),
+        display_name: Some("gpt-6-luna (token-unlimited)".into()),
+    };
+    agent.status_context = Some(snapshot);
+}
+
+#[test]
+fn builtin_model_row_names_the_provider_the_session_is_on() {
+    let now = Instant::now();
+    let mut app = status_line_app(StatusLineType::Builtin);
+    app.current_ui.status_line = command_row(StatusLineType::Builtin)
+        .with_items(vec![StatusLineItem::Model])
+        .into_config();
+    repro_agent(&mut app);
+
+    app.update_status_line_at(now);
+
+    let display = app.status_line.display();
+    let Some(StatusLineDisplay::Segments(segments)) = display.as_deref() else {
+        panic!("the model row never filled");
+    };
+    assert_eq!(
+        segments.iter().map(StatusSegment::text).collect::<Vec<_>>(),
+        ["gpt-6-luna (sub2)"],
+        "the catalog name of the entry the session runs, not the name the \
+         shell resolved from the shared wire id"
+    );
+}
+
+#[test]
+fn script_payload_carries_the_same_provider_name_and_the_wire_id() {
+    let now = Instant::now();
+    let mut app = status_line_app(StatusLineType::Command);
+    app.current_ui.status_line = command_row(StatusLineType::Command)
+        .with_items(vec![StatusLineItem::Model])
+        .into_config();
+    repro_agent(&mut app);
+
+    app.update_status_line_at(now);
+    let [Effect::RunStatusLineCommand(run)] = app.pending_effects.as_slice() else {
+        panic!("the script never ran");
+    };
+    assert_eq!(
+        run.ctx().model.display_name.as_deref(),
+        Some("gpt-6-luna (sub2)"),
+        "one entry point feeds both row styles, so a script sees the same name"
+    );
+    assert_eq!(
+        run.ctx().model.id.as_deref(),
+        Some("gpt-6-luna"),
+        "the wire id is untouched: scripts keying on it keep working"
+    );
+}
+
+#[test]
+fn model_name_falls_back_to_the_catalog_key_outside_the_catalog() {
+    let now = Instant::now();
+    let mut app = status_line_app(StatusLineType::Builtin);
+    app.current_ui.status_line = command_row(StatusLineType::Builtin)
+        .with_items(vec![StatusLineItem::Model])
+        .into_config();
+    // A slug-addressed switch can leave `current` pointing at a key the
+    // catalog the client holds does not list: the key itself is then the only
+    // honest name.
+    let agent = app.agents.get_mut(&AgentId(0)).unwrap();
+    agent.session.models.current = Some(acp::ModelId::new(std::sync::Arc::from(
+        "sub2-gpt-6-sol",
+    )));
+    let mut snapshot = test_context("/tmp");
+    snapshot.model = xai_grok_status_line::StatusLineModel {
+        id: Some("gpt-6-sol".into()),
+        display_name: Some("gpt-6-sol (token-unlimited)".into()),
+    };
+    agent.status_context = Some(snapshot);
+
+    app.update_status_line_at(now);
+
+    let display = app.status_line.display();
+    let Some(StatusLineDisplay::Segments(segments)) = display.as_deref() else {
+        panic!("the model row never filled");
+    };
+    assert_eq!(
+        segments.iter().map(StatusSegment::text).collect::<Vec<_>>(),
+        ["sub2-gpt-6-sol"]
+    );
+}
