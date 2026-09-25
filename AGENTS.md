@@ -12,6 +12,20 @@
   净开发 6–8.5 人天，含测试联调 10–12 人天。三个前提风险：明文密钥外泄（默认剥离）、
   TOML 合并冲突、上游同步维护面；文档内含数据分类白名单、身份/目录/协议定案、备选路线对比
   与待定决策。基线 `f8e1fea3`（调研快照 2026-09-21）。
+- [`docs-local/upstream-responses-event-compat.md`](docs-local/upstream-responses-event-compat.md)
+  — 第三方网关（Command Code）发非标 `response.reasoning.delta` 事件，撞上 async-openai
+  的 serde 严格枚举 → 流式解析中止、整轮失败且不重试。含抓包、本仓库落点、三个修复
+  选项与未验证项。**尚未修**，当前以配置侧绕过（该模型改用 `chat_completions`）。
+- [`docs-local/model-limits-config.md`](docs-local/model-limits-config.md)
+  — 自定义模型 `context_window` / `max_completion_tokens` 的兜底语义（三个兜底值分属
+  不同代码路径，含锚点）与「不烧 token 拿真实上限」的查法（OpenRouter 目录 /
+  方舟 `token_limits` / CC `/models`）。含文档约数 vs 元数据精确值的差异、新增模型检查清单。
+- [`docs-local/agent-memory-design/`](docs-local/agent-memory-design/README.md) — **专题调研
+  （调研完成，不含落地方案）**：业界 agent 软件（Claude Code / Cursor / opencode / Codex CLI /
+  Copilot / Windsurf / Cline）的记忆模块工程落地与取舍、核心优化点与演进方向。目录内含索引
+  `README.md`（用途 / 范围 / 可信度分级）、主报告 `memory-design-survey.md`、社区风评
+  `notes/community-sentiment.md`（Reddit 归档 API + HN Algolia，含原始引语）。边界：只谈 agent
+  软件内部的记忆模块（指令层 / 自动记忆层 / 会话内上下文管理），不做独立 memory 框架选型。
 
 ## 🔄 Handoff 摘要
 
