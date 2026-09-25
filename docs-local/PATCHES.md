@@ -1468,3 +1468,34 @@ dashboard 徽标（全部走 client 侧 catalog key）显示的供应商对不�
 （真实载荷夹具复现 sub2→token-unlimited）、脚本载荷同名且 `model.id` 保持 wire id、
 key 不在 client catalog 时回退显示 key。文档 `25-status-line.md` 的
 `model.id`/`display_name` 行补 LOCAL 说明。
+
+## wake 测试 rejected_deferred_start 的 summary 字节级比较改为身份字段比较（2026-09-25，fix/local-wake-summary-settle）
+
+现象：Linux CI build 的 linux job 偶发挂一例——`xai-grok-shell` 的
+`agent::subagent::tests::wake::rejected_deferred_start_restores_prior_without_publication`
+（`summary.json` 恢复后与 spawn 刚结束时逐字节不等，`num_messages` 3→4，两次写入相差
+176 ms）。近期 main 历史首次失败；本机（Windows）复现为确定性必挂，且滞后可达秒级。
+
+根因：被测产品路径的 durable append 是"假等待"——`emit_turn_completed`（Durable 档）里
+`AppendUpdateDurablyAndAck` 的 `respond_to` 直接丢弃（`acp_session_impl/updates.rs`，
+persistence actor 注释自证"A dropped receiver is a fire-and-forget durable append"）。
+因此 spawn 返回后仍有多笔尽力而为的滞后写入会合法地改写子会话 `summary.json`：
+① 回合自身的 `TurnCompleted` 终态（patch `num_messages`/`updated_at`）；
+② 被拒 deferred start 的取消终态（`stop_reason:"cancelled"` + `cancelTrigger:"shutdown"`，
+`MidTurnAbort`）——本机实测有时滞后 ~2 s，有时 10 s 内不落盘。测试在 spawn 返回后立刻
+读快照、恢复后再逐字节比较，比较的是"滞后中的磁盘"而非不变量，平台时序决定成败。
+
+修复（仅改测试，`agent/subagent/tests/wake.rs`，LOCAL）：放弃字节级比较，改为解析
+`Summary` 后比较身份字段——`attempt_id`（不许重试）、`agent_id`、`created_at`、
+`current_model_id`、`next_trace_turn`、`session_kind`。这些才是"拒绝的 wake 不得篡改
+先前工件"真正要守的不变量；`updated_at`/`num_messages` 允许因滞后的合法追加而前进。
+与上游同文件兄弟用例 `started_wake_with_failed_metadata_write...`（只比
+attempt_id/next_trace_turn）的模式一致。曾尝试"锚定终态行 + 计数自洽"的 settle 轮询
+（三版），均因取消终态本身时序不定而放弃——fire-and-forget 通道的静默无法从文件状态证明。
+
+验证：本机修复前该用例 4/4 必挂（含确定性复现 CI 形态），修复后 4/4 过（连跑 3 轮稳定）。
+Linux 侧由 build.yml 全量 shell 测试回归（CI 不受滞后影响，字段比较严格弱于原断言的
+通过面，不会引入新失败）。
+
+重放注意：只动这一个测试函数内的两处读法与断言块；上游若把 Durable 档改为真等待 ack，
+字节比较即恢复可行，本补丁可撤销。

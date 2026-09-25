@@ -800,8 +800,15 @@ async fn rejected_deferred_start_restores_prior_without_publication() {
                 cwd: child_cwd,
             };
             let child_session_dir = crate::session::persistence::session_dir(&child_info);
-            let prior_summary =
-                std::fs::read(child_session_dir.join("summary.json")).expect("prior summary");
+            // LOCAL: parsed rather than byte-compared. The run's terminal and
+            // the rejected deferred start's cancelled terminal are fire-and-
+            // forget durable appends, so `updated_at` / `num_messages` may
+            // still advance after the spawn returns (CI raced this once); only
+            // the identity fields below are the invariant worth guarding.
+            let prior_summary = serde_json::from_slice::<crate::session::persistence::Summary>(
+                &std::fs::read(child_session_dir.join("summary.json")).expect("prior summary"),
+            )
+            .expect("parse prior summary");
             let prior_meta =
                 std::fs::read(meta_dir.path().join("meta.json")).expect("prior metadata");
             assert!(write_subagent_output(
@@ -831,9 +838,38 @@ async fn rejected_deferred_start_restores_prior_without_publication() {
                 std::fs::read(meta_dir.path().join("meta.json")).expect("restored metadata"),
                 prior_meta
             );
+            let restored_summary =
+                serde_json::from_slice::<crate::session::persistence::Summary>(
+                    &std::fs::read(child_session_dir.join("summary.json"))
+                        .expect("restored summary"),
+                )
+                .expect("parse restored summary");
+            // Identity fields the rejected wake must not touch. Counters and
+            // timestamps are excluded: the start's own terminal and the
+            // cancelled terminal may still be landing (fire-and-forget).
             assert_eq!(
-                std::fs::read(child_session_dir.join("summary.json")).expect("restored summary"),
-                prior_summary
+                restored_summary.attempt_id, prior_summary.attempt_id,
+                "rejected wake must not re-attempt the child"
+            );
+            assert_eq!(
+                restored_summary.agent_id, prior_summary.agent_id,
+                "rejected wake must not re-identity the child"
+            );
+            assert_eq!(
+                restored_summary.created_at, prior_summary.created_at,
+                "rejected wake must not recreate the child"
+            );
+            assert_eq!(
+                restored_summary.current_model_id, prior_summary.current_model_id,
+                "rejected wake must not re-model the child"
+            );
+            assert_eq!(
+                restored_summary.next_trace_turn, prior_summary.next_trace_turn,
+                "rejected wake must not start a trace turn"
+            );
+            assert_eq!(
+                restored_summary.session_kind, prior_summary.session_kind,
+                "rejected wake must not re-kind the child"
             );
             assert_eq!(
                 read_subagent_output(meta_dir.path()).as_deref(),
