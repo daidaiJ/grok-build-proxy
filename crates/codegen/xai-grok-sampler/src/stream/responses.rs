@@ -195,6 +195,8 @@ pub fn stream_responses<'a>(
     request_id: RequestId,
     idle_timeout: Duration,
     doom_loop: Option<crate::doom_loop::DoomLoopSignalCollector>,
+    // LOCAL(perf): captured before the HTTP request is issued; TTFT anchors here (see `metrics::InferenceLatencyStats::from_timestamps`)
+    request_sent_at: Instant,
 ) -> impl Stream<Item = SamplingEvent> + Send + 'a {
     stream_responses_tracked(
         raw_stream,
@@ -204,6 +206,7 @@ pub fn stream_responses<'a>(
         doom_loop,
         Arc::new(AtomicBool::new(false)),
         FailedResponseCapture::default(),
+        request_sent_at,
     )
 }
 
@@ -215,6 +218,7 @@ pub(crate) fn stream_responses_tracked<'a>(
     doom_loop: Option<crate::doom_loop::DoomLoopSignalCollector>,
     output_observed: Arc<AtomicBool>,
     failed_response: FailedResponseCapture,
+    request_sent_at: Instant,
 ) -> impl Stream<Item = SamplingEvent> + Send + 'a {
     async_stream::stream! {
         use rs::{ResponseStreamEvent, Status};
@@ -722,7 +726,12 @@ pub(crate) fn stream_responses_tracked<'a>(
 
         let stream_end = Instant::now();
         let metrics =
-            InferenceLatencyStats::from_timestamps(stream_start, &chunk_timestamps, stream_end);
+            InferenceLatencyStats::from_timestamps(
+                request_sent_at,
+                stream_start,
+                &chunk_timestamps,
+                stream_end,
+            );
 
         decode_region
             .span()
@@ -906,6 +915,7 @@ mod tests {
                 Some(collector),
                 Arc::new(AtomicBool::new(false)),
                 capture.clone(),
+                Instant::now(),
             ))
             .await;
 
@@ -930,6 +940,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
 
@@ -966,6 +977,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
         match events.last().unwrap() {
@@ -1036,6 +1048,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
         match events.last().unwrap() {
@@ -1076,6 +1089,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
         match events.last().unwrap() {
@@ -1106,6 +1120,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
 
@@ -1152,6 +1167,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
 
@@ -1189,6 +1205,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
 
@@ -1216,6 +1233,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
 
@@ -1242,6 +1260,7 @@ mod tests {
             rid(),
             Duration::from_millis(100),
             None,
+            Instant::now(),
         ))
         .await;
 
@@ -1266,6 +1285,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
 
@@ -1338,6 +1358,7 @@ mod tests {
             None,
             Arc::clone(&output_observed),
             FailedResponseCapture::default(),
+            Instant::now(),
         ))
         .await;
 
@@ -1377,6 +1398,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
 
@@ -1470,6 +1492,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
         let deltas = tool_call_deltas(&evs);
@@ -1500,6 +1523,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
         assert_eq!(tool_call_deltas(&evs).len(), 0);
@@ -1521,6 +1545,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
         let deltas = tool_call_deltas(&evs);
@@ -1550,6 +1575,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             Some(collector),
+            Instant::now(),
         ))
         .await;
 
@@ -1580,6 +1606,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             Some(collector),
+            Instant::now(),
         ))
         .await;
         assert!(matches!(
@@ -1620,6 +1647,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             Some(collector),
+            Instant::now(),
         ))
         .await;
         match events.last().unwrap() {
@@ -1639,6 +1667,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             None,
+            Instant::now(),
         ))
         .await;
         match events.last().unwrap() {
@@ -1656,6 +1685,7 @@ mod tests {
             rid(),
             Duration::from_secs(60),
             Some(crate::doom_loop::DoomLoopSignalCollector::default()),
+            Instant::now(),
         ))
         .await;
         match events.last().unwrap() {

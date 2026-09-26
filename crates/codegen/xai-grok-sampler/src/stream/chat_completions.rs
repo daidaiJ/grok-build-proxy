@@ -48,6 +48,8 @@ pub fn stream_chat_completions<'a>(
     model_metadata: Option<ResponseModelMetadata>,
     request_id: RequestId,
     options: ChatStreamOptions,
+    // LOCAL(perf): captured before the HTTP request is issued; TTFT anchors here (see `metrics::InferenceLatencyStats::from_timestamps`)
+    request_sent_at: Instant,
 ) -> impl Stream<Item = SamplingEvent> + Send + 'a {
     async_stream::stream! {
         let ChatStreamOptions {
@@ -407,7 +409,12 @@ pub fn stream_chat_completions<'a>(
 
         let stream_end = Instant::now();
         let metrics =
-            InferenceLatencyStats::from_timestamps(stream_start, &chunk_timestamps, stream_end);
+            InferenceLatencyStats::from_timestamps(
+                request_sent_at,
+                stream_start,
+                &chunk_timestamps,
+                stream_end,
+            );
 
         decode_region
             .span()
@@ -515,6 +522,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -541,6 +549,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -596,6 +605,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -650,6 +660,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -693,6 +704,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -754,6 +766,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -810,6 +823,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -836,6 +850,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_millis(100)),
+            Instant::now(),
         ))
         .await;
 
@@ -861,6 +876,7 @@ mod tests {
             Some(metadata.clone()),
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -899,6 +915,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -939,6 +956,7 @@ mod tests {
                 None,
                 rid(),
                 ChatStreamOptions::new(Duration::from_secs(60)),
+                Instant::now(),
             ))
             .await;
             match events.last().unwrap() {
@@ -986,6 +1004,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
         match events.last().unwrap() {
@@ -1018,6 +1037,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
 
@@ -1072,7 +1092,7 @@ mod tests {
         let chunks: Vec<Result<ChatCompletionChunk, SamplingError>> =
             vec![Ok(chunk), Ok(final_chunk(FinishReason::Stop))];
         let raw = stream::iter(chunks).boxed();
-        let _ = collect(stream_chat_completions(raw, None, rid(), options)).await;
+        let _ = collect(stream_chat_completions(raw, None, rid(), options, Instant::now())).await;
         assert_eq!(
             memory.learned("test-model"),
             xai_grok_sampling_types::ReasoningDialect::Reasoning,
@@ -1087,6 +1107,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await;
     }
@@ -1115,6 +1136,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         ))
         .await
     }

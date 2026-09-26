@@ -1358,6 +1358,14 @@ delta 只设 `chunk_has_content`（空闲超时用）。纯思考+工具调用�
   分位数在工具-only 回合也有样本（此前整回合缺席）
 ## 状态行 ttft/tps 基本不显示：0ms 伪样本污染 + 窗口错配（2026-09-22，fix/local-perf-ttft-zerosample）
 
+- signals：0ms TTFT（上游/代理整体吐包的缓冲伪影）不计入 avg/min/max/count、不置末次样本；
+  `SessionSignals.last_time_to_first_token_ms` 暴露末次实测值
+- status_line：perf 段 ttft 改用末次实测调用的 TTFT 配同调用 API 时长（tps 窗口自洽）
+- 实证：unified.jsonl 1096 条 inference_done 中 82% 采样为 None/0
+- （2026-09-26 注：当时"整体吐包"的解读对 Ark 场景不准确——0ms 的主因是
+  **晚响应头**（首 token 就绪才发 headers），见下文 request-anchor 节与
+  `docs-local/status-line-perf-wiki.md`）
+
 ## 压缩请求半答并行 tool call 回填（2026-09-23，feat/local-compaction-toolpair-repair）
 
 > 全量证据链（会话工件、事件流、上游复现探针）见
@@ -1508,3 +1516,43 @@ Linux 侧由 build.yml 全量 shell 测试回归（CI 不受滞后影响，字�
 
 重放注意：只动这一个测试函数内的两处读法与断言块；上游若把 Durable 档改为真等待 ack，
 字节比较即恢复可行，本补丁可撤销。
+
+## 状态行 TTFT 参考点前移到请求发起（2026-09-26，feat/local-perf-ttft-request-anchor）
+
+> 接续 `4e27104`（reasoning/工具 delta 补时间戳）与 `8e049b6`（0ms 过滤）：两者之后火山 Ark
+> 会话的状态行 ttft/tps 仍整段缺席，且被误判为"model id 显示修复（7804d5e）引入的回归"。
+
+现象与取证（详见 `docs-local/status-line-perf-wiki.md`）：同一 preview.6 二进制、同一天内，
+Command Code `deepseek/deepseek-v4.1-flash` 会话 799/807 次 ttft>0，火山 Ark
+`glm-5.3-flash` 会话 302/303 次 ttft=0（09-23 起 preview.4/6 皆然，早于嫌疑提交两天）。
+日志时间线还原（`01a0ddae` loop 31）：inference_start 37.223 → waiting_model phase
+4731ms → thinking 42.010 → inference_done 50.611（model_elapsed 13386）。用户感知首
+token 延迟 4.7s，而 ttft_ms=0——根因是 **metrics 层参考点在响应头之后**（`stream_start`
+取于 L2 流首次 poll，poll 前 `conversation_stream().await` 已等完响应头），而 Ark 是
+"首 token 就绪才发响应头、headers 与首 SSE 同 flush"：头后段恒 <1ms → 0ms → 被 8e049b6
+门槛过滤 → ttft 无样本 → tps（依赖同调用 ttft）一并隐藏。Command Code 先发响应头，
+头后段即真实值，故正常。8e049b6 的"整体吐包"解读对 Ark 场景修正为"晚响应头"。
+
+改动（全部同步文件，重放用）：
+
+- `crates/codegen/xai-grok-sampler/src/metrics.rs`：`from_timestamps` 增首参
+  `request_sent_at`——ttft = 首 chunk − 请求发起；ttlb/ITL 维持 stream_start 参考
+  （投递窗口口径连续，ttft 可大于 ttlb，无不变量约束）。+1 语义测试
+  `ttft_anchors_to_request_sent_at_not_stream_start`（锚点 400ms/首 token 500ms/end
+  1200ms → ttft 500、ttlb 800，两参考点独立断言）。
+- `src/stream/{chat_completions,messages,responses}.rs`：三流函数尾参
+  `request_sent_at: Instant` 透传（`stream_responses` 经 `stream_responses_tracked`）。
+- `src/actor/request_task.rs` `run_one_attempt` 顶部取锚（retry 循环内每次物理尝试一次，
+  失败尝试样本随其丢弃）；`src/client.rs` `conversation_collect_with_idle_timeout`
+  同款。锚点含请求序列化与 bearer 准备（1–5ms 量级，可忽略）；不含 sampling gate 等待
+  （在 submit 之前，与 shell model_timer 同界排除）。
+- 消费侧零改动：signals 0ms 过滤保留（仍挡真伪影）；状态行 ttft=末样本、
+  tps=output/(last_api−ttft) 配对维持 8e049b6 约束；`/stats` 与 turn-delta 的 ttft
+  自动同步转为请求锚定口径。
+
+验证：`cargo check -p xai-grok-sampler` 干净；`ctest.sh -p xai-grok-sampler --lib`
+278/278（原 277 +1）；`cargo check -p xai-grok-shell` 干净。
+
+重放注意：三流函数签名变化（尾参），上游若重构流入口按参数语义对齐；span 层
+`http.*.ttft` 有意不前移（保持头后段，配 `response_headers_ms` 可拼装全窗口），
+两口径并存见 wiki §1。

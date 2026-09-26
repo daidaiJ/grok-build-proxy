@@ -6,7 +6,7 @@ use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use futures_util::stream::BoxStream;
@@ -535,6 +535,10 @@ async fn run_one_attempt(
     output_observed: Arc<AtomicBool>,
 ) -> AttemptOutcome {
     let length_policy = request.length_policy;
+    // LOCAL(perf): TTFT anchor — each attempt re-issues the HTTP request, so the
+    // pre-headers queue/prefill window counts into this attempt's first-token sample
+    // (see `metrics::InferenceLatencyStats::from_timestamps`).
+    let request_sent_at = Instant::now();
     match client.api_backend() {
         ApiBackend::ChatCompletions => {
             let (raw, metadata) = match client.conversation_stream(request).await {
@@ -547,6 +551,7 @@ async fn run_one_attempt(
                 metadata,
                 request_id.clone(),
                 client.chat_stream_options(idle_timeout),
+                request_sent_at,
             );
             drive_l2(
                 l2,
@@ -587,6 +592,7 @@ async fn run_one_attempt(
                 doom_loop,
                 Arc::clone(&output_observed),
                 failed_response.clone(),
+                request_sent_at,
             );
             drive_l2(
                 l2,
@@ -607,7 +613,13 @@ async fn run_one_attempt(
                 Err(e) => return AttemptOutcome::InitFailed { error: e },
             };
             let (teed, captured) = tee_errors(raw);
-            let l2 = stream_messages(teed, metadata, request_id.clone(), idle_timeout);
+            let l2 = stream_messages(
+                teed,
+                metadata,
+                request_id.clone(),
+                idle_timeout,
+                request_sent_at,
+            );
             drive_l2(
                 l2,
                 request_id,
