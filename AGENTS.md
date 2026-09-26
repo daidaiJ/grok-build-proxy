@@ -2,6 +2,12 @@
 
 ## 待办事项（TODO）
 
+- [`docs-local/limit-inference.md`](docs-local/limit-inference.md) — **供应商 cache
+  TTL / RPM / TPM 反推记录，T1/T2 已实现**（分支 `feat/local-limit-probe`）：sampler
+  HTTP 层被动落盘每次请求的限流头/429 现场/前缀哈希/终端 cached_tokens 到
+  `~/.grok/limit-probe/records.ndjson`，`scripts-local/limit-inference.py` 离线反推
+  TTL 生存曲线与 429 滑窗限流夹逼。全被动零 token 成本；`GROK_LIMIT_PROBE=0` 关闭。
+  T3 主动探测（idle sweep 补 >1h 长尾、多前缀容量测试）未做。
 - [`docs-local/stats-modal-todo.md`](docs-local/stats-modal-todo.md) — `/stats` 加时间窗
   option（5h/day/week/month）+ 输出改成 Grok 自制窗口样式（对齐 agents / usage limit 面板）
   + TUI 残留英文说明 i18n 扫尾。分支 `feat/local-stats-modal-i18n`，基线 `86a6e1d`。

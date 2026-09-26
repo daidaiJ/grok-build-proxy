@@ -181,7 +181,7 @@ fn splice_extra_tool_entries(
 }
 
 /// Parse `Retry-After` as integer seconds, capped at 120; HTTP-dates yield `None`.
-fn extract_retry_after(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+pub(crate) fn extract_retry_after(headers: &reqwest::header::HeaderMap) -> Option<u64> {
     headers
         .get(reqwest::header::RETRY_AFTER)
         .and_then(|v| v.to_str().ok())
@@ -886,10 +886,12 @@ impl SamplingClient {
     }
 
     /// `sent_bearer` is the fragment [`Self::post`] captured for the request that produced `response` (401 attribution).
+    /// `probe` carries the limit-probe identity so the error body and usage land next to the matching "req" line.
     async fn handle_response(
         &self,
         response: reqwest::Response,
         sent_bearer: Option<&str>,
+        probe: Option<&crate::limit_probe::CallNote>,
     ) -> Result<ChatCompletionResponse> {
         let status = response.status();
         let model_metadata = extract_model_metadata(response.headers());
@@ -910,6 +912,9 @@ impl SamplingClient {
                 ));
             }
             let message = user_facing_api_error_message(status, bytes.as_ref());
+            if let Some(note) = probe {
+                crate::limit_probe::note_error_body(note, status.as_u16(), bytes.as_ref());
+            }
             return Err(SamplingError::Api {
                 status,
                 message,
@@ -929,6 +934,11 @@ impl SamplingClient {
             );
             SamplingError::Serialization(e)
         })?;
+        if let (Some(note), Some(usage)) = (probe, completion.usage.as_ref()) {
+            let (prompt, cached, completion_tokens, reasoning) =
+                crate::limit_probe::chat_usage_parts(usage);
+            crate::limit_probe::note_usage(note, prompt, cached, completion_tokens, reasoning);
+        }
         Ok(completion)
     }
 
@@ -969,6 +979,14 @@ impl SamplingClient {
             deployment_id: payload.x_grok_deployment_id.as_deref(),
             user_id: payload.x_grok_user_id.as_deref(),
         };
+        let probe = crate::limit_probe::CallNote::chat(
+            "nonstream",
+            &model_id,
+            payload.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+            payload.x_grok_transient_retry.as_deref(),
+            &payload,
+        );
         self.prepare_bearer().await;
         let SentRequest {
             builder,
@@ -987,8 +1005,12 @@ impl SamplingClient {
             .span()
             .record("status_code", status.as_u16() as i64);
         request_region.span().record("success", status.is_success());
+        if let Some(note) = &probe {
+            crate::limit_probe::note_response(note, status.as_u16(), response.headers());
+        }
 
-        self.handle_response(response, sent_bearer.as_deref()).await
+        self.handle_response(response, sent_bearer.as_deref(), probe.as_ref())
+            .await
     }
 
     async fn execute_stream_request(
@@ -1063,6 +1085,14 @@ impl SamplingClient {
             deployment_id: payload.x_grok_deployment_id.as_deref(),
             user_id: payload.x_grok_user_id.as_deref(),
         };
+        let probe = crate::limit_probe::CallNote::chat(
+            "stream",
+            &model_id,
+            payload.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+            payload.x_grok_transient_retry.as_deref(),
+            &payload,
+        );
         self.prepare_bearer().await;
         let SentRequest {
             builder,
@@ -1093,6 +1123,9 @@ impl SamplingClient {
             .span()
             .record(STATUS_CODE, status.as_u16() as i64);
         span_timing.span().record(SUCCESS, status.is_success());
+        if let Some(note) = &probe {
+            crate::limit_probe::note_response(note, status.as_u16(), response.headers());
+        }
         let model_metadata = extract_model_metadata(response.headers());
         let retry_after_secs = extract_retry_after(response.headers());
         let should_retry = extract_should_retry(response.headers());
@@ -1115,6 +1148,9 @@ impl SamplingClient {
             let bytes = response.bytes().await?;
             let message = user_facing_api_error_message(status, bytes.as_ref());
             span_timing.span().record(ERROR, message.as_str());
+            if let Some(note) = &probe {
+                crate::limit_probe::note_error_body(note, status.as_u16(), bytes.as_ref());
+            }
             tracing::error!(
                 status = %status,
                 error_message = %message,
@@ -1152,6 +1188,7 @@ impl SamplingClient {
         // Map SSE events into ChatCompletionChunk.
         // Uses `scan` so that `[DONE]` and transport errors both terminate the stream (`None`)
         // The first transport error is emitted to the consumer, then subsequent polls return `None`
+        let usage_probe = probe.clone();
         let chunks = event_stream
             .scan(false, |had_transport_error, event_res| {
                 if *had_transport_error {
@@ -1192,6 +1229,19 @@ impl SamplingClient {
                     }
                 };
                 std::future::ready(item)
+            })
+            .map(move |item| {
+                // `stream_options.include_usage` makes the terminal chunk the
+                // only one carrying usage; providers that repeat it just add
+                // near-identical lines the offline pass dedups by req_id.
+                if let (Some(note), Ok(chunk)) = (&usage_probe, &item)
+                    && let Some(usage) = &chunk.usage
+                {
+                    let (prompt, cached, completion, reasoning) =
+                        crate::limit_probe::chat_usage_parts(usage);
+                    crate::limit_probe::note_usage(note, prompt, cached, completion, reasoning);
+                }
+                item
             })
             .boxed();
 
@@ -1282,6 +1332,14 @@ impl SamplingClient {
         // async-openai's ReasoningTextContent struct omits the `type` discriminator that the Responses API requires on input
         // Patch it in after serializing
         xai_grok_sampling_types::patch_reasoning_text_types(&mut request_body);
+        let probe = crate::limit_probe::CallNote::json_body(
+            "nonstream",
+            &model_id,
+            request.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+            request.x_grok_transient_retry.as_deref(),
+            &request_body,
+        );
         self.prepare_bearer().await;
         let SentRequest {
             builder,
@@ -1299,6 +1357,9 @@ impl SamplingClient {
             .span()
             .record("status_code", status.as_u16() as i64);
         request_region.span().record("success", status.is_success());
+        if let Some(note) = &probe {
+            crate::limit_probe::note_response(note, status.as_u16(), response.headers());
+        }
         let model_metadata = extract_model_metadata(response.headers());
         let retry_after_secs = extract_retry_after(response.headers());
         let should_retry = extract_should_retry(response.headers());
@@ -1319,6 +1380,9 @@ impl SamplingClient {
             }
 
             let message = user_facing_api_error_message(status, bytes.as_ref());
+            if let Some(note) = &probe {
+                crate::limit_probe::note_error_body(note, status.as_u16(), bytes.as_ref());
+            }
             tracing::warn!(
                 status = %status,
                 error_message = %message,
@@ -1426,6 +1490,14 @@ impl SamplingClient {
         splice_extra_tool_entries(&mut request_body, extra_tool_entries);
         append_response_includes(&mut request_body, &self.defaults.extra_response_includes);
         xai_grok_sampling_types::patch_reasoning_text_types(&mut request_body);
+        let probe = crate::limit_probe::CallNote::json_body(
+            "stream",
+            &model_id,
+            request.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+            request.x_grok_transient_retry.as_deref(),
+            &request_body,
+        );
         // Fresh per attempt so signals never leak across retries; `None` (check disabled) sends no header and does no peek work per event
         let doom_loop = self
             .defaults
@@ -1469,6 +1541,9 @@ impl SamplingClient {
             .span()
             .record(STATUS_CODE, status.as_u16() as i64);
         span_timing.span().record(SUCCESS, status.is_success());
+        if let Some(note) = &probe {
+            crate::limit_probe::note_response(note, status.as_u16(), response.headers());
+        }
         if !status.is_success() {
             if status == reqwest::StatusCode::UNAUTHORIZED {
                 span_timing.span().record(ERROR, "unauthorized (401)");
@@ -1490,6 +1565,9 @@ impl SamplingClient {
             let bytes = response.bytes().await?;
             let message = user_facing_api_error_message(status, bytes.as_ref());
             span_timing.span().record(ERROR, message.as_str());
+            if let Some(note) = &probe {
+                crate::limit_probe::note_error_body(note, status.as_u16(), bytes.as_ref());
+            }
             tracing::error!(
                 status = %status,
                 error_message = %message,
@@ -1527,6 +1605,7 @@ impl SamplingClient {
         let event_stream = byte_stream.eventsource();
 
         let doom_loop_for_stream = doom_loop.clone();
+        let usage_probe = probe.clone();
 
         // The scan item is an `Option`: `Some(None)` skips an absorbed doom-loop event without terminating the stream (`filter_map` below)
         // An outer `None` still ends the stream
@@ -1561,7 +1640,28 @@ impl SamplingClient {
                         } else if let Some(stream_error) = try_parse_stream_error(data) {
                             Some(Some(Err(stream_error)))
                         } else {
-                            Some(Some(deserialize_response_event(data)))
+                            let event = deserialize_response_event(data);
+                            if let Some(note) = &usage_probe {
+                                let usage = match &event {
+                                    Ok(rs::ResponseStreamEvent::ResponseCompleted(done)) => {
+                                        done.response.usage.as_ref()
+                                    }
+                                    Ok(rs::ResponseStreamEvent::ResponseIncomplete(done)) => {
+                                        done.response.usage.as_ref()
+                                    }
+                                    _ => None,
+                                };
+                                if let Some(usage) = usage {
+                                    crate::limit_probe::note_usage(
+                                        note,
+                                        usage.input_tokens,
+                                        usage.input_tokens_details.cached_tokens,
+                                        usage.output_tokens,
+                                        usage.output_tokens_details.reasoning_tokens,
+                                    );
+                                }
+                            }
+                            Some(Some(event))
                         }
                     }
                     Err(e) => {
@@ -1643,6 +1743,14 @@ impl SamplingClient {
             deployment_id: request.x_grok_deployment_id.as_deref(),
             user_id: request.x_grok_user_id.as_deref(),
         };
+        let probe = crate::limit_probe::CallNote::messages(
+            "nonstream",
+            &model_id,
+            request.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+            request.x_grok_transient_retry.as_deref(),
+            &request,
+        );
         self.prepare_bearer().await;
         let SentRequest {
             builder,
@@ -1660,6 +1768,9 @@ impl SamplingClient {
             .span()
             .record("status_code", status.as_u16() as i64);
         request_region.span().record("success", status.is_success());
+        if let Some(note) = &probe {
+            crate::limit_probe::note_response(note, status.as_u16(), response.headers());
+        }
         let model_metadata = extract_model_metadata(response.headers());
         let retry_after_secs = extract_retry_after(response.headers());
         let should_retry = extract_should_retry(response.headers());
@@ -1680,6 +1791,9 @@ impl SamplingClient {
             }
 
             let message = user_facing_api_error_message(status, bytes.as_ref());
+            if let Some(note) = &probe {
+                crate::limit_probe::note_error_body(note, status.as_u16(), bytes.as_ref());
+            }
             tracing::warn!(
                 status = %status,
                 error_message = %message,
@@ -1770,6 +1884,14 @@ impl SamplingClient {
             deployment_id: request.x_grok_deployment_id.as_deref(),
             user_id: request.x_grok_user_id.as_deref(),
         };
+        let probe = crate::limit_probe::CallNote::messages(
+            "stream",
+            &model_id,
+            request.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+            request.x_grok_transient_retry.as_deref(),
+            &request,
+        );
         self.prepare_bearer().await;
         let SentRequest {
             builder,
@@ -1800,6 +1922,9 @@ impl SamplingClient {
             .span()
             .record(STATUS_CODE, status.as_u16() as i64);
         span_timing.span().record(SUCCESS, status.is_success());
+        if let Some(note) = &probe {
+            crate::limit_probe::note_response(note, status.as_u16(), response.headers());
+        }
         if !status.is_success() {
             if status == reqwest::StatusCode::UNAUTHORIZED {
                 span_timing.span().record(ERROR, "unauthorized (401)");
@@ -1821,6 +1946,9 @@ impl SamplingClient {
             let bytes = response.bytes().await?;
             let message = user_facing_api_error_message(status, bytes.as_ref());
             span_timing.span().record(ERROR, message.as_str());
+            if let Some(note) = &probe {
+                crate::limit_probe::note_error_body(note, status.as_u16(), bytes.as_ref());
+            }
             tracing::error!(
                 status = %status,
                 error_message = %message,
