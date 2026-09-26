@@ -2,6 +2,11 @@
 
 ## 待办事项（TODO）
 
+- [`docs-local/status-line-perf-wiki.md`](docs-local/status-line-perf-wiki.md) — 状态行性能段
+  （ttft/tps）专题 wiki：TTFT 三参考点对照、网关响应头行为分类（Command Code 早头 vs
+  火山 Ark 晚头）、0ms 过滤×晚响应头的相互作用、unified.jsonl 取证 playbook、双 tps 口径。
+  只收深挖节点，不复述可从代码/文档推出的内容。随修复 `feat/local-perf-ttft-request-anchor`
+  （TTFT 参考点前移到请求发起）落地。
 - [`docs-local/limit-inference.md`](docs-local/limit-inference.md) — **供应商 cache
   TTL / RPM / TPM 反推记录，T1/T2 已实现**（分支 `feat/local-limit-probe`）：sampler
   HTTP 层被动落盘每次请求的限流头/429 现场/前缀哈希/终端 cached_tokens 到

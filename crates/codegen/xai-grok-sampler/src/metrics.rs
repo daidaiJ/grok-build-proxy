@@ -58,10 +58,17 @@ impl InferenceLatencyStats {
         }
     }
 
-    /// `stream_start` - `Instant::now()` captured before initiating the stream.
+    /// `request_sent_at` - `Instant::now()` captured right before the HTTP request is issued.
+    /// LOCAL(perf): TTFT anchors here, not at stream start. Gateways that withhold response
+    /// headers until the first token is ready flush headers and the first SSE event
+    /// back-to-back, so a stream-start anchor collapses TTFT to ~0ms and the shell's
+    /// zero-sample filter then hides it; the pre-headers queue/prefill window is part of
+    /// the user-perceived first-token wait.
+    /// `stream_start` - `Instant::now()` captured before initiating the stream (first poll, ≈ headers arrival); TTLB keeps this reference so the delivery window stays comparable with prior samples.
     /// `chunk_timestamps` - `Instant` recorded on each output-token-bearing chunk (text, reasoning, or tool-call arguments).
     /// `stream_end` - `Instant::now()` captured after the stream is fully exhausted (after trailing metadata/`[DONE]` chunks). Used for TTLB.
     pub fn from_timestamps(
+        request_sent_at: Instant,
         stream_start: Instant,
         chunk_timestamps: &[Instant],
         stream_end: Instant,
@@ -75,7 +82,7 @@ impl InferenceLatencyStats {
             };
         }
 
-        let ttfb = chunk_timestamps[0].duration_since(stream_start);
+        let ttfb = chunk_timestamps[0].duration_since(request_sent_at);
 
         let intervals: Vec<u64> = chunk_timestamps
             .windows(2)
@@ -119,7 +126,7 @@ mod tests {
         let start = Instant::now();
         let end = start + Duration::from_millis(500);
 
-        let stats = InferenceLatencyStats::from_timestamps(start, &[], end);
+        let stats = InferenceLatencyStats::from_timestamps(start, start, &[], end);
 
         assert_eq!(stats.time_to_first_token_ms, None);
         assert_eq!(stats.time_to_last_byte_ms, 500);
@@ -136,7 +143,7 @@ mod tests {
         let chunks = vec![offset(start, 100)];
         let end = offset(start, 200);
 
-        let stats = InferenceLatencyStats::from_timestamps(start, &chunks, end);
+        let stats = InferenceLatencyStats::from_timestamps(start, start, &chunks, end);
 
         assert_eq!(stats.time_to_first_token_ms, Some(100));
         assert_eq!(stats.time_to_last_byte_ms, 200);
@@ -154,7 +161,7 @@ mod tests {
         let chunks = vec![offset(start, 100), offset(start, 150)];
         let end = offset(start, 200);
 
-        let stats = InferenceLatencyStats::from_timestamps(start, &chunks, end);
+        let stats = InferenceLatencyStats::from_timestamps(start, start, &chunks, end);
 
         assert_eq!(stats.time_to_first_token_ms, Some(100));
         assert_eq!(stats.time_to_last_byte_ms, 200);
@@ -179,7 +186,7 @@ mod tests {
             .collect();
         let end = offset(start, 1000);
 
-        let stats = InferenceLatencyStats::from_timestamps(start, &chunks, end);
+        let stats = InferenceLatencyStats::from_timestamps(start, start, &chunks, end);
 
         assert_eq!(stats.time_to_first_token_ms, Some(100));
         assert_eq!(stats.time_to_last_byte_ms, 1000);
@@ -201,7 +208,7 @@ mod tests {
         let chunks: Vec<Instant> = (0..101).map(|i| offset(start, 100 + i * 10)).collect();
         let end = offset(start, 2000);
 
-        let stats = InferenceLatencyStats::from_timestamps(start, &chunks, end);
+        let stats = InferenceLatencyStats::from_timestamps(start, start, &chunks, end);
 
         assert_eq!(stats.chunk_count, 101);
         // All 100 intervals are 10ms
@@ -219,9 +226,27 @@ mod tests {
         // stream_end is 500ms after start, well past the last chunk at 200ms
         let end = offset(start, 500);
 
-        let stats = InferenceLatencyStats::from_timestamps(start, &chunks, end);
+        let stats = InferenceLatencyStats::from_timestamps(start, start, &chunks, end);
 
         assert_eq!(stats.time_to_last_byte_ms, 500);
         assert_eq!(stats.time_to_first_token_ms, Some(100));
+    }
+
+    /// LOCAL(perf): TTFT counts from the request being issued, TTLB from stream start.
+    /// A gateway that sits 400ms on queue/prefill before flushing headers together with
+    /// the first event must still report a first-token wait that includes that window.
+    #[test]
+    fn ttft_anchors_to_request_sent_at_not_stream_start() {
+        let sent = Instant::now();
+        // 400ms of queue/prefill before the headers arrive (stream start)
+        let stream_start = offset(sent, 400);
+        // first token 100ms after the headers
+        let chunks = vec![offset(sent, 500)];
+        let end = offset(sent, 1200);
+
+        let stats = InferenceLatencyStats::from_timestamps(sent, stream_start, &chunks, end);
+
+        assert_eq!(stats.time_to_first_token_ms, Some(500));
+        assert_eq!(stats.time_to_last_byte_ms, 800);
     }
 }

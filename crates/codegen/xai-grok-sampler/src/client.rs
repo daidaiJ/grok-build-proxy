@@ -2264,6 +2264,9 @@ impl SamplingClient {
     ) -> Result<ConversationResponse> {
         let request_id = crate::types::RequestId::random();
         let length_policy = request.length_policy;
+        // LOCAL(perf): TTFT anchor — the request (de)serialization, headers wait, and queue/prefill
+        // all count into this call's first-token sample (see `metrics::InferenceLatencyStats::from_timestamps`).
+        let request_sent_at = std::time::Instant::now();
         let result = match self.api_backend() {
             ApiBackend::ChatCompletions => {
                 let (raw, meta) = self.conversation_stream(request).await?;
@@ -2272,18 +2275,31 @@ impl SamplingClient {
                     meta,
                     request_id,
                     self.chat_stream_options(idle_timeout),
+                    request_sent_at,
                 );
                 crate::stream::collect_response(events).await
             }
             ApiBackend::Responses => {
                 let (raw, meta, doom_loop) = self.conversation_stream_responses(request).await?;
-                let events =
-                    crate::stream::stream_responses(raw, meta, request_id, idle_timeout, doom_loop);
+                let events = crate::stream::stream_responses(
+                    raw,
+                    meta,
+                    request_id,
+                    idle_timeout,
+                    doom_loop,
+                    request_sent_at,
+                );
                 crate::stream::collect_response(events).await
             }
             ApiBackend::Messages => {
                 let (raw, meta) = self.conversation_stream_messages(request).await?;
-                let events = crate::stream::stream_messages(raw, meta, request_id, idle_timeout);
+                let events = crate::stream::stream_messages(
+                    raw,
+                    meta,
+                    request_id,
+                    idle_timeout,
+                    request_sent_at,
+                );
                 crate::stream::collect_response(events).await
             }
         };

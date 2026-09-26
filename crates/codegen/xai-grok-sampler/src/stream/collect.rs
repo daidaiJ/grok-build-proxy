@@ -50,6 +50,7 @@ pub async fn collect_response(
 mod tests {
     use super::*;
     use futures_util::stream;
+    use std::time::Instant;
     use xai_grok_sampling_types::{ConversationItem, SamplingError, StopReason};
 
     use crate::events::SamplingChannel;
@@ -116,6 +117,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         );
 
         let (response, _metrics) = collect_response(events)
@@ -138,6 +140,7 @@ mod tests {
             None,
             rid(),
             ChatStreamOptions::new(Duration::from_secs(60)),
+            Instant::now(),
         );
 
         let err = collect_response(events).await.expect_err("error returned");

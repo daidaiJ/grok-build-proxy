@@ -60,6 +60,8 @@ pub fn stream_messages<'a>(
     model_metadata: Option<ResponseModelMetadata>,
     request_id: RequestId,
     idle_timeout: Duration,
+    // LOCAL(perf): captured before the HTTP request is issued; TTFT anchors here (see `metrics::InferenceLatencyStats::from_timestamps`)
+    request_sent_at: Instant,
 ) -> impl Stream<Item = SamplingEvent> + Send + 'a {
     async_stream::stream! {
         use messages::{ContentBlock, StreamDelta};
@@ -539,7 +541,12 @@ pub fn stream_messages<'a>(
 
         let stream_end = Instant::now();
         let metrics =
-            InferenceLatencyStats::from_timestamps(stream_start, &chunk_timestamps, stream_end);
+            InferenceLatencyStats::from_timestamps(
+                request_sent_at,
+                stream_start,
+                &chunk_timestamps,
+                stream_end,
+            );
 
         decode_region
             .span()
