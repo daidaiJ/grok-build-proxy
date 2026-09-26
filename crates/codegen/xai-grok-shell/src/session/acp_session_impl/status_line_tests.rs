@@ -45,15 +45,15 @@ fn status_usage_scopes_to_the_current_model() {
 }
 
 #[test]
-fn status_usage_for_a_model_without_calls_reads_empty() {
-    // A model switch with no completed call yet: the row restarts from zero
-    // instead of carrying the previous model's accumulation.
-    let usage = scoped_usage(two_model_ledger(), Some("m-c"));
+fn status_usage_model_known_only_through_failures_reads_zeroed_calls() {
+    // A model the ledger knows only through a terminal failure: scoped totals
+    // have model_calls = 0, which the downstream session-usage filter hides —
+    // the failure itself surfaces through `api_calls`.
+    let mut ledger = xai_chat_state::UsageLedger::default();
+    ledger.record_main_loop_failure("m-b");
+    let usage = scoped_usage(ledger, Some("m-b"));
     assert_eq!(usage.totals.model_calls, 0);
-    assert_eq!(usage.totals.input_tokens, 0);
-    assert_eq!(usage.totals.output_tokens, 0);
-    assert_eq!(usage.totals.cost_usd_ticks, None);
-    assert_eq!(usage.totals.failed_model_calls, 0);
+    assert_eq!(usage.totals.failed_model_calls, 1);
 }
 
 #[test]
@@ -63,6 +63,44 @@ fn status_usage_without_a_model_keeps_cross_model_totals() {
     let usage = scoped_usage(ledger, None);
     assert_eq!(usage.totals, PromptUsageModel::from(&expected));
     assert_eq!(usage.totals.cost_usd_ticks, Some(150));
+}
+
+#[test]
+fn status_usage_unknown_current_model_keeps_cross_model_totals() {
+    // The ledger keys are the provider-echoed model ids; a current model that
+    // matches none of them (renamed catalog entry, first switch before any
+    // call) must not zero the row — it falls back to the cross-model totals.
+    let ledger = two_model_ledger();
+    let expected = ledger.totals.clone();
+    let usage = scoped_usage(ledger, Some("never-called-model"));
+    assert_eq!(usage.totals, PromptUsageModel::from(&expected));
+}
+
+#[test]
+fn status_usage_matches_gateway_qualified_echo_by_suffix() {
+    // A gateway echoes `vendor/model` for a request sent as `model`; the
+    // status line scopes by the wire name, so the lookup tries the qualified
+    // key as a `/{wire-name}` suffix.
+    let mut ledger = xai_chat_state::UsageLedger::default();
+    ledger.record_main_loop_call(
+        "deepseek/deepseek-v4.1-flash",
+        &{
+            let call = |prompt: u32, completion: u32| xai_grok_sampling_types::TokenUsage {
+                prompt_tokens: prompt,
+                completion_tokens: completion,
+                total_tokens: prompt + completion,
+                reasoning_tokens: 0,
+                cached_prompt_tokens: 0,
+                cache_creation_prompt_tokens: 0,
+            };
+            call(4_000, 400)
+        },
+        None,
+        Some(30),
+    );
+    let usage = scoped_usage(ledger, Some("deepseek-v4.1-flash"));
+    assert_eq!(usage.totals.model_calls, 1);
+    assert_eq!(usage.totals.input_tokens, 4_000);
 }
 
 #[test]

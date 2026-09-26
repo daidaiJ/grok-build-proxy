@@ -119,11 +119,30 @@ fn live_turn(started_at_ms: Option<i64>, prompt_id: Option<&str>) -> Option<Stat
 /// new model's own totals instead of the cross-model accumulation, matching
 /// `/stats`'s per-model cards (same calls, same per-model buckets). A model with
 /// no completed calls yet reads as all zeros, which the `model_calls > 0` filters
-/// downstream hide; an unknown current model keeps the cross-model totals.
+/// downstream hide. The ledger keys are the provider-echoed `model_id` on the
+/// assistant message, which a gateway can qualify (`deepseek/deepseek-v4.1-flash`
+/// for a request sent as `deepseek-v4.1-flash`), so the lookup also tries that
+/// suffix form; an unknown current model keeps the cross-model totals rather
+/// than zeroing the row.
 fn scoped_usage(ledger: xai_chat_state::UsageLedger, model_id: Option<&str>) -> PromptUsage {
     let mut ledger = ledger;
     if let Some(id) = model_id {
-        ledger.totals = ledger.by_model.get(id).cloned().unwrap_or_default();
+        let qualified = format!("/{id}");
+        let scoped = ledger
+            .by_model
+            .get(id)
+            .or_else(|| {
+                ledger
+                    .by_model
+                    .iter()
+                    .rev()
+                    .find(|(key, _)| key.ends_with(&qualified))
+                    .map(|(_, totals)| totals)
+            })
+            .cloned();
+        if let Some(totals) = scoped {
+            ledger.totals = totals;
+        }
     }
     PromptUsage::from(&ledger)
 }
