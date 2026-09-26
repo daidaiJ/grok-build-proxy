@@ -58,6 +58,10 @@ a_dropped_session_ends_its_parked_emitter
 client_that_cannot_draw_the_row_never_builds_one
 the_notification_payload_serializes_without_a_trigger_key
 the_payload_carries_real_values_or_no_field_at_all
+# 族N 续：perf 快照三个用例走 create_test_actor 夹具,同 /tmp 环境族(2026-09-26)。
+the_perf_snapshot_prefers_the_sampler_sample
+a_buffered_call_falls_back_to_the_shell_measured_ttft
+a_call_with_neither_sample_nor_shell_output_reads_no_perf
 # 族O signals RSS 采样 —— sample_rss_bytes 走 /proc 语义,Windows 恒返回 0,
 # 三个断言 RSS>0 的用例环境族不修(2026-09-22)。
 test_sample_rss_bytes_returns_nonzero

@@ -267,6 +267,7 @@ async fn test_e2e_idle_resume_refreshes_model_metadata() {
                 git_head_enabled: false,
                 status_line_enabled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 last_turn_api_duration_ms: std::sync::atomic::AtomicU64::new(0),
+                shell_turn_perf: parking_lot::Mutex::new(crate::session::acp_session::ShellTurnPerf::default()),
         session_transient_retries: std::sync::atomic::AtomicU64::new(0),
                 models_manager: Default::default(),
                 display_cwd: std::sync::OnceLock::new(),

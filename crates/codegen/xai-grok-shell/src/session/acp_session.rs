@@ -700,6 +700,19 @@ impl StreamApplySpan {
         self.region.close();
     }
 }
+
+/// LOCAL(perf): shell-side first-output timing for one model call, see
+/// [`SessionActor::shell_turn_perf`].
+#[derive(Default)]
+pub(crate) struct ShellTurnPerf {
+    /// Instant the current physical attempt was submitted (None = between calls).
+    call_started: Option<std::time::Instant>,
+    /// First-output latency of the current attempt, ms (0 = no output yet).
+    attempt_first_output_ms: u64,
+    /// First-output latency of the most recent completed call, ms (0 = none yet).
+    last_ttft_ms: u64,
+}
+
 pub(crate) struct SessionActor {
     pub(crate) repo_status_prefetch: crate::session::repo_status_prefix::RepoStatusPrefetchState,
     pub(crate) session_info: SessionInfo,
@@ -860,6 +873,14 @@ pub(crate) struct SessionActor {
     /// LOCAL: API duration of the most recent completed model call, ms (0 = none yet).
     /// Status-line TPS denominator; stored on the actor to keep chat-state's wire untouched.
     pub(crate) last_turn_api_duration_ms: std::sync::atomic::AtomicU64,
+    /// LOCAL(perf): shell-side TTFT anchor for the status line. The sampler's
+    /// chunk timestamps exclude the header wait, so a provider that buffers the
+    /// whole SSE body reports ttft=0 and the signals actor skips it — the perf
+    /// segment hides for sessions where every call is buffered. Anchored per
+    /// physical attempt in `submit_turn_request`, stamped by the attempt's
+    /// `FirstToken` event, promoted at call completion; the status line reads
+    /// [`ShellTurnPerf::last_ttft_ms`] only when the sampler has no sample.
+    pub(crate) shell_turn_perf: parking_lot::Mutex<ShellTurnPerf>,
     /// LOCAL: cumulative transient retry resubmissions for the session, for the
     /// status-line endpoint-health row. Lives on the actor because the turn
     /// loop's own counters reset per prompt/step.

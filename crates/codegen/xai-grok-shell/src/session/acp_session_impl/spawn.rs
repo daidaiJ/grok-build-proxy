@@ -1864,6 +1864,7 @@ pub(crate) async fn spawn_session_actor(
         git_head_enabled: fs_watch_caps.git_head,
         status_line_enabled: client_caps.status_line.clone(),
         last_turn_api_duration_ms: std::sync::atomic::AtomicU64::new(0),
+        shell_turn_perf: parking_lot::Mutex::new(crate::session::acp_session::ShellTurnPerf::default()),
         session_transient_retries: std::sync::atomic::AtomicU64::new(0),
         // LOCAL(minimal-style): seeded from the same persisted read that styled
         // the bootstrap prompt above.

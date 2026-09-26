@@ -11,6 +11,20 @@ impl SessionActor {
         .await;
     }
 
+    /// LOCAL(perf): record the shell-side first-output latency of the current
+    /// attempt, from the `FirstToken` event. Fired once per attempt by every
+    /// streaming terminal; the status line falls back to it when the sampler
+    /// has no chunk-timestamp sample (buffered body delivery).
+    pub(crate) fn record_shell_first_output(&self) {
+        let mut perf = self.shell_turn_perf.lock();
+        if let Some(started) = perf.call_started {
+            let ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+            if perf.attempt_first_output_ms == 0 {
+                perf.attempt_first_output_ms = ms;
+            }
+        }
+    }
+
     /// Stamp ttft on the first token of any channel (reasoning, text, or tool call).
     pub(crate) fn record_turn_first_token(&self, request_id: Option<&xai_grok_sampler::RequestId>) {
         let Some(generation) = self.turn_generation(request_id) else {
@@ -165,6 +179,7 @@ impl SessionActor {
                 self.open_stream_apply_span(&request_id);
             }
             SamplingEvent::FirstToken { .. } => {
+                self.record_shell_first_output();
                 self.emit_event(crate::session::events::Event::FirstToken);
             }
             SamplingEvent::ChannelToken {

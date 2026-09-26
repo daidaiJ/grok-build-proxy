@@ -277,23 +277,34 @@ impl SessionActor {
     }
 
     /// LOCAL: assemble the status-line latency/throughput snapshot.
-    /// `ttft_ms` is the last measured model call's TTFT (0ms buffered-delivery
-    /// artifacts are skipped at the signals actor); `tps` is that same call's
-    /// output tokens over its API window (API duration minus its TTFT), so the
-    /// window and the TTFT always belong to one call. Absent until a real
-    /// first-token sample exists.
-    async fn build_turn_perf(&self) -> Option<StatusLineTurnPerf> {
+    /// `ttft_ms` prefers the sampler's chunk-timestamp sample; when the provider
+    /// buffered the whole SSE body every chunk lands at the same Instant, the
+    /// signals actor skips the 0ms artifact, and the shell-measured first-output
+    /// latency of the same call (which includes the header wait) is used instead.
+    /// `tps` is the matched call's output tokens over its streaming window (API
+    /// duration minus TTFT) for sampler samples; the shell fallback measured no
+    /// stream, so it uses the whole-call window, matching `/stats`'s turn-level
+    /// tok/s.
+    pub(crate) async fn build_turn_perf(&self) -> Option<StatusLineTurnPerf> {
         let signals = self.signals_handle().snapshot().await?;
         let usage = self.chat_state_handle.get_last_turn_usage().await?;
         let output_tokens = u64::from(usage.completion_tokens);
-        let ttft_ms = signals.last_time_to_first_token_ms;
+        let sampler_ttft_ms = signals.last_time_to_first_token_ms;
+        let shell_ttft_ms = self.shell_turn_perf.lock().last_ttft_ms;
+        let ttft_ms = sampler_ttft_ms.or_else(|| (shell_ttft_ms > 0).then_some(shell_ttft_ms));
         let last_api_ms = self.last_turn_api_duration_ms.load(Ordering::Relaxed);
-        let tps = match (last_api_ms, ttft_ms) {
-            (api_ms, Some(first_ms)) if api_ms > first_ms && output_tokens > 0 => {
-                let stream_secs = (api_ms - first_ms) as f64 / 1000.0;
-                Some((output_tokens as f64 / stream_secs * 10.0).round() / 10.0)
-            }
-            _ => None,
+        let tps = if output_tokens == 0 || last_api_ms == 0 {
+            None
+        } else if let Some(first_ms) = sampler_ttft_ms.filter(|first_ms| last_api_ms > *first_ms) {
+            let stream_secs = (last_api_ms - first_ms) as f64 / 1000.0;
+            Some((output_tokens as f64 / stream_secs * 10.0).round() / 10.0)
+        } else if sampler_ttft_ms.is_none() {
+            // Shell fallback: no usable stream sample, so the streaming window is
+            // meaningless — throughput over the whole API call.
+            let call_secs = last_api_ms as f64 / 1000.0;
+            Some((output_tokens as f64 / call_secs * 10.0).round() / 10.0)
+        } else {
+            None
         };
         Some(StatusLineTurnPerf {
             ttft_ms,

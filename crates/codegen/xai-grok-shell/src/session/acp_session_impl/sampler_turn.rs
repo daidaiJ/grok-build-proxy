@@ -1755,6 +1755,14 @@ impl SessionActor {
     ) -> Result<SamplerTurnOutcome, xai_grok_sampler::SamplingErrorInfo> {
         let request_id = xai_grok_sampler::RequestId::random();
         self.turn_phases.record_sampling_request();
+        // LOCAL(perf): anchor this physical attempt for the shell-side TTFT
+        // fallback; doom-loop recoveries inside the sampler keep the original
+        // anchor, so the fallback measures "wait until output you kept".
+        {
+            let mut perf = self.shell_turn_perf.lock();
+            perf.call_started = Some(std::time::Instant::now());
+            perf.attempt_first_output_ms = 0;
+        }
         let _sampling_phase = self.turn_phases.begin_sampling();
         let stream_drained_rx = {
             let (tx, rx) = tokio::sync::oneshot::channel();
@@ -2207,6 +2215,12 @@ impl SessionActor {
             );
             self.signals_handle()
                 .record_token_usage(u.completion_tokens, u.reasoning_tokens);
+            // LOCAL(perf): the call completed — promote this attempt's shell-side
+            // first-output latency for the status-line TTFT fallback.
+            {
+                let mut perf = self.shell_turn_perf.lock();
+                perf.last_ttft_ms = perf.attempt_first_output_ms;
+            }
             // LOCAL: tokens/cache/think/perf all read this call's numbers; wake the
             // row now rather than waiting for the turn-end snapshot.
             self.emit_status_snapshot_detached();

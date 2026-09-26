@@ -33,17 +33,25 @@
   `From<&UsageTotals>` 穷尽解构接线（该处上游注释本就要求新字段显式接线）；
   `is_token_empty` / headless 投影 / per-model 行三处穷尽解构补 `failed_model_calls: _`
 - `src/session/acp_session.rs`：`SessionActor.last_turn_api_duration_ms`（AtomicU64，
-  LOCAL：上一调用 API 时长，供 TPS 分母，不动 chat-state 协议）
-- `src/session/acp_session_impl/spawn.rs`：上述字段初始化
+  LOCAL：上一调用 API 时长，供 TPS 分母，不动 chat-state 协议）+
+  `SessionActor.shell_turn_perf: parking_lot::Mutex<ShellTurnPerf>`（LOCAL(perf) 2026-09-26：
+  shell 侧 TTFT 锚点/尝试采样/落定值三槽，sampler chunk 时间戳缺样本时的状态行回退源）
+- `src/session/acp_session_impl/spawn.rs`：上述字段初始化（两处）
 - `src/session/acp_session_impl/status_line.rs`：
   - `build_context_window` 填 `reasoning_tokens`
   - `build_status_context` 填 `api_calls` / `perf`
-  - 新 `build_turn_perf()`（signals 会话均 TTFT + actor 上的 last api 时长 → TPS，零新埋点）
+  - 新 `build_turn_perf()`（signals 会话均 TTFT + actor 上的 last api 时长 → TPS，零新埋点）；
+    2026-09-26 起 sampler 无样本（整包缓冲投递、0ms 伪样本被跳）时回退
+    `shell_turn_perf.last_ttft_ms`（shell 实测首输出，含 header 等待），tps 回退全窗
+- `src/session/acp_session_impl/sampling_events.rs`：新 `record_shell_first_output()`
+  （`FirstToken` 臂调用，按尝试记 shell 侧首输出毫秒）
 - `src/session/acp_session_impl/sampler_turn.rs`：
   - `expand_session_header_templates()` + 3 个单测；在 `reconstruct` 的
     `inject_url_derived_headers` 之后展开 `${session_id}`
   - `log_terminal_failure()` 开头挂 `record_model_call_failure(None)`（所有终态失败的单一收口）
   - `record_response_token_usage()` 写入 `last_turn_api_duration_ms`
+  - `submit_turn_request()` 锚定 `shell_turn_perf.call_started`（每物理尝试复位；
+    `record_response_token_usage()` 完成时把尝试值落定到 `last_ttft_ms`）
 - `src/agent/config.rs`：新 `NetworkConfig`（`[network]` 表）+ `Config.network` 字段 +
   `Config::default()` 补字段 + `resolve_runtime_fields` 开头调 `set_process_proxy`（配置加载时一次算好）
 
