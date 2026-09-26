@@ -114,6 +114,20 @@ fn live_turn(started_at_ms: Option<i64>, prompt_id: Option<&str>) -> Option<Stat
         .map(|started_at_ms| StatusLineTurn { started_at_ms })
 }
 
+/// The session usage the status line reports, scoped to the session's current model.
+/// The ledger folds by model, so after a model switch the row restarts from the
+/// new model's own totals instead of the cross-model accumulation, matching
+/// `/stats`'s per-model cards (same calls, same per-model buckets). A model with
+/// no completed calls yet reads as all zeros, which the `model_calls > 0` filters
+/// downstream hide; an unknown current model keeps the cross-model totals.
+fn scoped_usage(ledger: xai_chat_state::UsageLedger, model_id: Option<&str>) -> PromptUsage {
+    let mut ledger = ledger;
+    if let Some(id) = model_id {
+        ledger.totals = ledger.by_model.get(id).cloned().unwrap_or_default();
+    }
+    PromptUsage::from(&ledger)
+}
+
 impl SessionActor {
     pub(super) async fn build_status_context(&self) -> StatusLineContext {
         let config = self.chat_state_handle.get_sampling_config().await;
@@ -143,7 +157,7 @@ impl SessionActor {
             .try_get_session_usage()
             .await
             .ok()
-            .map(|ledger| PromptUsage::from(&ledger));
+            .map(|ledger| scoped_usage(ledger, model_id.as_deref()));
         // LOCAL: a ledger with no completed call yet is all zeros, and `Some(0)`
         // would paint `in 0 out 0` for a session that has not spent anything —
         // hide the token window until the first call instead.
