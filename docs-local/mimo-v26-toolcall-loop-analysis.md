@@ -40,9 +40,9 @@ MiMo-Code#2482：同机、同仓库、同日上午——
 - thinking 默认开启，多轮必须回传完整 `reasoning_content`，缺失 → 400 或指令遵循明显退化。
 - 自托管（vLLM/SGLang）：tool-call XML 泄进 `<think>` 或正文（parser 只扫 content 段）。
 
-### 官方动作（全在框架侧，模型侧无下文）
+### MiMo Code 框架侧动作（模型侧无公开修复）
 
-MiMo-Code 0.1.15 与 v2.6 同日发布：flood guard（单响应超额调用不再执行）、仅纯读/搜类工具允许并行、失败调用跳过后续依赖；main 分支另有单代 16 次硬上限（#2463，未发版）。
+MiMo Code `v0.1.15`（2026-09-22）含工具洪水门控：单次响应最多 16 个调用；超额时结束生成、放行第一个合格的客户端工具调用，其余取消；只读/搜索工具可并行，其余调用串行，失败调用会跳过后续依赖。最初的 16 次门控由 [#2463](https://github.com/XiaomiMiMo/MiMo-Code/pull/2463) 加入，随后恢复行为由 [#2487](https://github.com/XiaomiMiMo/MiMo-Code/pull/2487) 调整。#2482 中的复现使用 `v0.1.14`，早于该发版。主分支于 2026-09-23 的 [#2515](https://github.com/XiaomiMiMo/MiMo-Code/pull/2515) 撤销了洪水门控；后续变更见本文件 2026-09-26 更新。以上是框架侧防护，不代表模型侧问题已修复。
 
 ### 本机确认的现场机制（2026-09-23）：伪标记泄露 → 上下文模仿 → 自增强
 
@@ -136,10 +136,43 @@ for name, msgs in cases.items():
 - 检测面建议：按「输入签名集合」做循环判定，而非相邻等值——现有等值型检测对轮转模式全盲。
 - `/dump` 现场取证命令：方案已备（见会话 plan），未施工；施工后本探针可与 dump 产物互为印证。
 
+## 更新：工具调用故障后续与 vLLM / agent 侧缓解（2026-09-26）
+
+> 本节补充 2026-09-23 之后查到的进展。以下区分 agent 框架防护与模型服务端解析修复；社区部署报告不等于小米官方根因确认。
+
+### Agent 框架侧：发布过洪水防护，主分支随后撤回
+
+- MiMo Code `v0.1.15`（2026-09-22）发布说明加入工具调用串行门控与洪水防护：只读/搜索工具可并行，其余调用串行；单次响应调用过多时拦下超额调用。见[发布说明](https://github.com/XiaomiMiMo/MiMo-Code/releases/tag/v0.1.15)及[#2463](https://github.com/XiaomiMiMo/MiMo-Code/pull/2463)。
+- [#2475](https://github.com/XiaomiMiMo/MiMo-Code/issues/2475) 报告洪水时整批调用被取消，界面显示成普通工具失败，模型随后重试相同批次；案例记录到单个会话 374 次取消。已合并的[#2487](https://github.com/XiaomiMiMo/MiMo-Code/pull/2487)尝试在拦截超额批次时放行第一个合格调用，再把结果交还模型。
+- 后续方向发生反转：[#2515](https://github.com/XiaomiMiMo/MiMo-Code/pull/2515) 于 2026-09-23 合入主分支，撤销 v2.6 的 PascalCase 工具名投影及工具洪水限制/恢复路径，保留 FIFO 串行门控和失败级联；[#2532](https://github.com/XiaomiMiMo/MiMo-Code/pull/2532) 于 2026-09-24 移除同一步完全重复调用拦截器。故 `v0.1.15` 发布版与当时主分支行为不同；截至本次查询，主分支没有该硬性洪水上限。
+- 模型侧的轮转工具调用问题仍未得到公开确认的模型修复：[MiMo-Code #2482](https://github.com/XiaomiMiMo/MiMo-Code/issues/2482) 仍开放。以上 agent 防护只能限制或处理调用，不能证明模型输出已恢复正常。
+
+### 自托管 vLLM：有服务端设置，不是 agent 开关
+
+- 当前 [vLLM MiMo-V2.6 配方](https://recipes.vllm.ai/XiaomiMiMo/MiMo-V2.6-Flash-RL)给出的关键启动参数是：
+
+  ```bash
+  --reasoning-parser mimo --tool-call-parser mimo --enable-auto-tool-choice
+  ```
+
+  这些参数配置在 **vLLM 服务端**，让服务端解析 reasoning 与结构化工具调用并启用自动工具选择。它们不能通过普通 agent 配置替代；需要确认实际运行的 vLLM 版本/镜像支持 MiMo 解析器。
+- NVIDIA 论坛用户报告的具体空回复问题是：开启 thinking 后，工具结果之后的下一轮把 `<think>` 内容送进普通 `content`，某些 agent 将其清洗后得到空回复，继而重试。关联的[复现与修复记录](https://github.com/tonyd2wild/MiMo-V2.6-Flash-DGX-Spark-Recipe/issues/1)提出在聊天模板的 generation prompt 里预先打开 `<think>`：thinking 开启时追加 `<think>`，关闭时追加 `<think></think>`，然后在 vLLM 启动参数中加载修改后的模板（`--chat-template /path/to/chat_template.preopen.jinja`）。报告者称同一配置下一个 7 次工具调用任务由循环变为完成；这是单一部署的社区验证，不是通用保证。
+- 论坛反馈并不一致：有人称 Tony 配方及 parser 补丁在 OpenClaw / OpenCode 可用，也有人指出 thinking 内容仍会滞留在 reasoning、交互式客户端仍可能收到空内容。参见[NVIDIA 讨论串第 1 页](https://forums.developer.nvidia.com/t/mimo-v2-6-flash-rl-about-310b-total-12b-active-moe-dflash-running-on-2x-dgx-sparks-peak-80-tok-s-in-code/383968)和[第 2 页](https://forums.developer.nvidia.com/t/mimo-v2-6-flash-rl-about-310b-total-12b-active-moe-dflash-running-on-2x-dgx-sparks-peak-80-tok-s-in-code/383968?page=2)。
+
+### 托管 API 与 agent 侧退路
+
+- 托管 API 用户一般不能设置 vLLM 的 `--tool-call-parser` 或服务端 chat template。若 agent 和服务商都支持，可尝试关闭 thinking（例如服务端请求参数 `chat_template_kwargs.enable_thinking=false`，或已有配置里的 `reasoning.enabled=false`）；这只针对 reasoning 泄漏类问题，可能降低推理质量，也**不等于修复洪水/重复调用**。
+- 若响应里没有结构化 `tool_calls`，而伪 XML 只出现在普通 `content` / `reasoning_content`，单靠 agent 开关无法可靠地把它恢复成结构化调用。不要把任意文本中的 `<tool_call>` / `<function=...>` 直接当成可执行工具调用；应先修服务端解析/模板，或临时换到工具调用正常的模型端点。
+
 ## 参考链接
 
-- https://github.com/XiaomiMiMo/MiMo-Code/issues/2482 （洪水法证主帖）
+- https://github.com/XiaomiMiMo/MiMo-Code/issues/2482 （洪水法证主帖；仍开放）
 - https://github.com/XiaomiMiMo/MiMo-Code/issues/2436 （loop_streak 被 reasoning 短路）
 - https://github.com/XiaomiMiMo/MiMo-Code/issues/2497、#2486、#2475、#2463
+- https://github.com/XiaomiMiMo/MiMo-Code/releases/tag/v0.1.15 （洪水防护发布说明）
+- https://github.com/XiaomiMiMo/MiMo-Code/pull/2487、#2515、#2532 （洪水恢复试验及后续撤回）
 - https://github.com/XiaomiMiMo/MiMo-V2-Flash/issues/8 （格式 400）
+- https://recipes.vllm.ai/XiaomiMiMo/MiMo-V2.6-Flash-RL （当前 vLLM MiMo 配方）
+- https://forums.developer.nvidia.com/t/mimo-v2-6-flash-rl-about-310b-total-12b-active-moe-dflash-running-on-2x-dgx-sparks-peak-80-tok-s-in-code/383968 （NVIDIA 论坛部署与工具调用讨论）
+- https://github.com/tonyd2wild/MiMo-V2.6-Flash-DGX-Spark-Recipe/issues/1 （thinking 泄漏与 chat template 修复）
 - r/opencode 2026-09-21 帖、r/LocalLLaMA vLLM 修复帖（社区侧证）
