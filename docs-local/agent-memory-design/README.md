@@ -3,22 +3,23 @@
 > 目的：跟踪业界 agent 软件（Claude Code、Cursor、opencode、Codex CLI、GitHub Copilot、
 > Windsurf Cascade、Cline）的**记忆模块**在工程上如何落地、有哪些取舍、当前优化点与演进方向；
 > 为 grok-build-proxy（xAI grok CLI 本地 fork）的记忆 / 上下文类迭代提供参照。
-> 状态：**调研快照 2026-09-25**，纯文档，无代码改动。
+> 状态：专题调研快照 2026-09-25；本仓库实现评估更新至 2026-09-26。纯文档，无代码改动。
 
 ## 本目录用途
 
-- 收纳"agent 软件的记忆模块"这一主题的全部调研产出：主报告 + 社区风评笔记。
+- 收纳"agent 软件的记忆模块"专题产出：业界主报告、社区风评笔记，以及本仓库实现评估与改进建议。
 - **范围边界**：只讨论 **agent 软件系统内部**的记忆模块，即三层——指令层（人写的规则文件）、
   自动记忆层（软件自己沉淀）、会话内上下文管理（compaction / 工具结果落盘 / 子代理隔离）。
   **不**做独立 memory 框架（Mem0、Zep、Cognee、Supermemory 等）的选型对比；Letta 仅作为
   "记忆即运行时"的对照样本出现。
-- **产出定位**：服务本仓库记忆 / 上下文相关设计的决策与"抄作业对象"筛选。**落地方案不在本目录**，
-  需要引入评估时另立文档（同类先例：`../agent-cli-tracking/ADOPTION.md`）。
+- **产出定位**：服务本仓库记忆 / 上下文相关设计的决策与"抄作业对象"筛选。业界调研与社区风评记录在主报告和笔记中；
+  本仓库实现对照与分期改进建议见 [ADOPTION.md](ADOPTION.md)。
 - **时效**：2026 年 agent 记忆仍是活跃战区，产品文档与实现月月变。引用处尽量落到机制与锚点，
   刷新按下面"维护方式"重跑。
 
 ## 文档导览
 
+- [ADOPTION.md](ADOPTION.md) — 本仓库记忆实现核查、业界设计对照、改进优先级与分期验收建议。
 - [memory-design-survey.md](memory-design-survey.md) — 主报告：三层拆解、七家落地对照、
   七个取舍轴、核心优化点、演进方向、自研决策清单、来源与可信度分级。
 - [notes/community-sentiment.md](notes/community-sentiment.md) — 社区风评：Reddit（PullPush /
@@ -51,7 +52,7 @@
 
 ## 已知缺口（未做 / 待补）
 
-- 本仓库（grok-build fork）自身记忆模块现状**未核实**，本目录不含落地结论。
+- 本仓库实现评估是 2026-09-26 的静态代码核查；未跑用户会话或测量记忆命中率，不能视为效果评测。
 - Codex CLI Memories 未见官方文档，机制为 C 级；Cursor Memories 官方文档页当前重定向到 Rules 页。
 - GitHub Copilot Memory 为 public preview，机制会变；企业 / 多租户记忆（TencentDB Agent Memory 等）未纳入。
 - 记忆评测基准（LongMemEval 等）未做独立交叉验证，仅记录厂商口径与一处社区实测（见风评笔记 §2）。
