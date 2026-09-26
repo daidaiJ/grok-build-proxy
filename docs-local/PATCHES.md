@@ -1417,6 +1417,8 @@ qwen-code `final` 语义整块 flush 成 reasoning，字节不丢）。下游逐
 （`update_chunk_merge.rs`、`persistence.rs::maybe_merge_notification`），故该缺字只可能由
 splitter 吞掉。样本 `01a0d161` 第 42/43 条：原文 “强制每轮以 `` `<think>` `` 开头，修复流式
 空响应”，其后续 1125 字符（含 `## 四`、`## 五` 两节）全部落入思考块。
+（诊断早期的快照；全量重扫为 14 处，多出的 8 处同属 `01a0d161` 后续回合——该会话客户端是
+`1.0.37-preview.4` 且期间无重启，故都在预览.4 上产生。）
 
 修复：`think_split.rs` 新增 `CodeScan`，按**可见文本通道**增量跟踪行内代码跨度与反引号/波浪号
 围栏；`in_code()` 为真的候选标记按普通文本发回正文（不再 drain），其余行为不变。要点：
@@ -1434,6 +1436,13 @@ Reasoning token + `assistant_text()` 逐字还原 + 无 reasoning item）。
 `bash scripts-local/ctest.sh -p xai-grok-sampler --lib` 272 例全过（原 263 例语义零改动）。
 反证：把 `in_code()` 临时改成恒 `false` 后，上述 5 例跨度/围栏用例立刻转红（20 passed /
 5 failed），确认守卫是承重的。
+
+现场验证（`v1.0.37-preview.6` release 产物，端点 `cc-deepseek-v4.1-flash`）：让模型用行内代码
+引用标记的回合，正文完整（562 字符，含 `## 四`/`## 五`），落盘扫描 0 命中；围栏代码块内标记
+同样留在正文；裸 `<think>…</think>` 真标记仍整块改道 reasoning（未误伤）；TUI 轮（`--minimal`）
+正文 398 字符完整、折叠思考块内只有规划。对照 `v1.0.37-preview.5` 产物同提示词复现旧签名
+（命中 1、466 字符改道）。R2/R5 印证残留边界：`"<think>"` 与 `**<think>**` 仍折叠。七轮对照表
+见 `.handoff/think-split-quoted-marker-fold.md` §13。
 
 重放注意：`think_split.rs` 上游不存在，无同步冲突面；本修复只落该文件 + `chat_completions.rs`
 测试块。残留边界（有意不覆盖）：其它引用形态（`"<think>"`、`**<think>**`）仍按标记处理。

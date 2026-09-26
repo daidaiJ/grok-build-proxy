@@ -92,3 +92,15 @@ for f in sorted(glob.glob(os.path.expanduser('~/.grok/sessions/D%3A*/*/updates.j
 
 验证：`ctest.sh -p xai-grok-sampler --lib` 272 例全过（新增 9 例，其中 5 例在把
 `in_code()` 临时置恒 `false` 后立刻转红，守卫承重有反证）。
+
+## 七、现场验证（release 产物上的活回合）
+
+同一条提示词（让模型在正文里用行内代码引用标记），分别在 `v1.0.37-preview.5`（修复前）与
+`v1.0.37-preview.6` 产物上跑活回合：preview.5 命中本签名——正文 83 字符截断于落单反引号、
+其后的 466 字符（含 `## 四`/`## 五`）整段改道 reasoning；preview.6 同提示词正文 562 字符
+完整、签名 0 命中。围栏轮（fenced 代码块内标记 + 行内跨度）全文留在正文；裸
+`<think>…</think>` 真标记仍整块改道 reasoning，说明真标记路径未被误伤。TUI 轮用 `--minimal`
+（scrollback 原生渲染）捕获：回合结束的折叠思考块（“Thought for 3.9s”）里只有英文规划，
+答案正文（含两节标题与标记字面量）在折叠块之外完整显示。`"<think>"` 与 `**<think>**` 当场
+复现折叠，与第六节「有意不覆盖」一致。七轮对照表、复现脚本与产物路径见
+`.handoff/think-split-quoted-marker-fold.md` §13。

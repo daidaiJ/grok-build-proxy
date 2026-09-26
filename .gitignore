@@ -2,3 +2,6 @@
 **/*.rs.bk
 .DS_Store
 .codegraph/
+
+# LOCAL: handoff 技能的项目专属目录（不入库）
+.handoff/

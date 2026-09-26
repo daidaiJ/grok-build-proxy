@@ -12,6 +12,12 @@
   净开发 6–8.5 人天，含测试联调 10–12 人天。三个前提风险：明文密钥外泄（默认剥离）、
   TOML 合并冲突、上游同步维护面；文档内含数据分类白名单、身份/目录/协议定案、备选路线对比
   与待定决策。基线 `f8e1fea3`（调研快照 2026-09-21）。
+- [`docs-local/dump-evidence-todo.md`](docs-local/dump-evidence-todo.md) — `/dump` 现场取证转储。
+  **设计完成、未开工**；分期 T1 派生层生成器（`INDEX.md` + `facts.json`）→ T2 出站请求体落盘
+  → T3 `/dump` TUI → T4 打包/脱敏档位 → T5 回归夹具。实测依据：会话 `01a0d161` 原始
+  25.5 MB / 168 文件（其中一个工具输出占 95%、`events.jsonl` 98.8% 行是同一种心跳）
+  → 派生层 4.8 KB（1/5292）。关键缺口是 MiMo 取证三问要的**出站请求体从未落盘**；
+  文档含三层结构、脱敏表、充分性/友好性两份验收清单与 5 条待定决策。基线：当时 `main`。
 - [`docs-local/upstream-responses-event-compat.md`](docs-local/upstream-responses-event-compat.md)
   — 第三方网关（Command Code）发非标 `response.reasoning.delta` 事件，撞上 async-openai
   的 serde 严格枚举 → 流式解析中止、整轮失败且不重试。含抓包、本仓库落点、三个修复
@@ -29,23 +35,30 @@
 
 ## 🔄 Handoff 摘要
 
-### think-split-quoted-marker-fold — in-progress
+### think-split-quoted-marker-fold — verified（preview.6 实测通过）
 
-- **当前状态：** 修复已合并 main（`bc33d257`）、tag `v1.0.37-preview.6` 已发布并核对通过；release 与 build 两个 workflow 均 success，剩 TUI 实测
+- **当前状态：** 修复已合并 main（`bc33d257`）、tag `v1.0.37-preview.6` 已发布；CI（release + build）已核对；
+  **活回合验证已补完**：正向用例（行内代码引用 / 围栏）正文完整不折叠、真标记路径未误伤、落盘扫描 0 命中、
+  回归 `ctest.sh -p xai-grok-sampler --lib` 272/272。⚠️ 用户当前在用的客户端 `D:\tool\cli\grok2.exe`
+  仍是 `1.0.37-preview.4`（**无此修复**），日常会话照旧折叠，需换到 preview.6 产物才生效
 - **关键证据：** 正文里被反引号引用的 `<think>` 曾被切分器当控制标记，把回答尾部改道 reasoning；
   判定签名＝正文 chunk 以反引号结尾 + 紧随 thought chunk 以反引号开头 + `<think>` 字面量两通道都缺
   （3 会话 6 处现场）；修复后 `ctest.sh -p xai-grok-sampler --lib` 272/272，mutation 下 5 例转红。
   ⚠️ CI 不跑 sampler 用例（只把它当依赖编译），见 handoff §8
-- **验收标准：** CI 侧已达标（release 4 资产 + `grok2.exe --version` = `1.0.37-preview.6`；build 双 job success）；
-  余下：TUI 正向用例正文完整不折叠 + 落盘扫描 0 命中 + 回归 272 全过（详见 handoff §5）
+- **验收标准：** 全部达标（release 4 资产 + `grok2.exe --version` = `1.0.37-preview.6`；build 双 job success；
+  活回合正向 + 落盘扫描 + 回归三项证据见 handoff §5 / §13）
 - **详情指针：** [`.handoff/think-split-quoted-marker-fold.md`](.handoff/think-split-quoted-marker-fold.md)
 
 ### 未验证事项
 
-- [ ] 真实 TUI 会话的正向用例（本会话只跑单测 + 线级事件断言，未跑活回合）
-- [ ] 真标记路径在活的上游流里的表现（仅单测覆盖）
-- [ ] 已知未覆盖形态（`"<think>"` / `**<think>**`）的现场确认（预期仍折叠）
-- [ ] sampler 用例在 Linux CI 上的表现（CI 当前不跑；可选改进见 handoff §8）
+- [ ] sampler 用例在 Linux CI 上的表现（CI 当前不跑；本机无 WSL/Linux 环境，跑不了；
+  是否把 `-p xai-grok-sampler` 加进 `build.yml` 的 linux job 仍未拍板，见 handoff §8）
+- [x] 修复前对照（A/B）— 同提示词跑 `v1.0.37-preview.5` 产物：签名命中 1 处、466 字符（含 `## 四`/`## 五`）
+  被改道 reasoning；preview.6 同提示词 0 命中
+- [x] 真实 TUI 会话的正向用例 — preview.6 + `--minimal` 活回合：正文 398 字符含 `` `<think>` `` 与
+  `## 四`/`## 五` 两节，思考通道 2800 字符纯规划，屏幕上有独立折叠思考块（“Thought for 3.9s”）
+- [x] 真标记路径在活的上游流里的表现 — 让模型裸写 `<think>…</think>`：块进思考通道、正文留在正文通道
+- [x] 已知未覆盖形态的现场确认 — `"<think>"` 与 `**<think>**` 当场复现折叠，与预期一致（登记为已知残留，不算回归）
 
 ---
 
