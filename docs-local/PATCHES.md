@@ -1612,3 +1612,20 @@ quota_estimate 8/8 过）；`ctest.sh -p xai-grok-pager --lib` **9614 过/0 挂*
 
 重放注意：`render_usage_modal`/`render_dashboard` 签名变化（新插参），上游若重构
 调用点按参数语义对齐；billing-samples.jsonl 为新缓存文件，不随会话走。
+
+## OpenCode Go 网关 UA 标识（2026-09-27，`feat/local-opencode-go-ua-marking`）
+
+要求背景与配置启用见 `docs-local/opencode-go-gateway.md`。OpenCode Go 官方网关强制
+请求携带应用标识 UA 与会话 ID 头（部分适配端点豁免）。
+
+- `xai-grok-sampler/src/client.rs`：`SamplingClient::new` 中默认 User-Agent 的写入
+  从 `extra_headers` 应用**之后**移到**之前**——per-model `[model.<id>].extra_headers`
+  里的 `User-Agent` 项现在可覆盖默认 `grok-shell/<版本>` UA（其余头语义不变，
+  `x-grok-*` 标识头仍在 UA 之后写入、不受 extra_headers 影响）。
+- 既有配套：`${session_id}` 模板展开（`sampler_turn.rs` `expand_session_header_templates`，
+  上期已实现），覆盖 `x-opencode-session` 的"同会话稳定、跨会话不同"要求。
+- 新增回归测试 `extra_headers_can_override_user_agent`。
+- 文档：`docs-local/opencode-go-gateway.md`（配置示例 + 要求对照表）。
+
+验证：`cargo check -p xai-grok-sampler` 干净；`ctest.sh -p xai-grok-sampler --lib`
+279/279（原 278 +1）。
