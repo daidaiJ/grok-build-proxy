@@ -2,6 +2,13 @@
 
 ## 待办事项（TODO）
 
+- [`docs-local/quota-pct-jump-audit.md`](docs-local/quota-pct-jump-audit.md) — 统一池
+  周用量 7%→76% 跳变排查记录（2026-W39）：本机四步排查（pct 轨迹 / 账本聚合 /
+  窗口活动三重核查 / config 审计）全部排除本机，消耗在账号其他统一池面；首嫌疑 =
+  他机 xAI 直连 agentic 会话（燃烧速率 ≈日常 15–20 倍）。含他机对账 playbook、
+  09-30 07:50 重置后的 Q 标定实验、unified.jsonl 活动文件取证坑。
+  配套只读取证工具 `scripts-local/quota_audit.py`（**工作区未入库**——按分支纪律
+  代码不走 main，入库存放分支待拍板）。他机对账结果待回填。
 - [`docs-local/usage-quota-estimate-todo.md`](docs-local/usage-quota-estimate-todo.md) —
   `/usage` 周额度 token 估算：billing 采样落盘 → 本机 xAI 直连 tokens/Δpct 反推下界
   （pct 整点量化、多设备按"各机下界取 max"语义）→ Usage limit 面板展示。**调研完成、
