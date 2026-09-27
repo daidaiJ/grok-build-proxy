@@ -538,6 +538,22 @@ impl SamplingClient {
             }
         }
 
+        // LOCAL: default UA first, so per-model `extra_headers` can override it.
+        // OpenCode-Go-style gateways enforce app-identifying User-Agent marking on
+        // upstream requests (`opencode/<version> ...`); a generic SDK UA is rejected.
+        {
+            let ua_string = match config.origin_client.as_ref() {
+                Some(origin) => user_agent_string_for(origin),
+                None => user_agent_string_for(&OriginClientInfo {
+                    product: AGENT_PRODUCT.to_string(),
+                    version: Some(agent_version()),
+                }),
+            };
+            if let Ok(v) = HeaderValue::from_str(&ua_string) {
+                headers.insert(USER_AGENT, v);
+            }
+        }
+
         // Apply all extra headers verbatim
         // This is the single injection point for proxy-auth headers and any other URL- or environment-specific headers the session decides to set
         for (key, value) in &config.extra_headers {
@@ -603,19 +619,6 @@ impl SamplingClient {
         }
 
         // Always set User-Agent: per-session origin if available, else fallback.
-        {
-            let ua_string = match config.origin_client.as_ref() {
-                Some(origin) => user_agent_string_for(origin),
-                None => user_agent_string_for(&OriginClientInfo {
-                    product: AGENT_PRODUCT.to_string(),
-                    version: Some(agent_version()),
-                }),
-            };
-            if let Ok(v) = HeaderValue::from_str(&ua_string) {
-                headers.insert(USER_AGENT, v);
-            }
-        }
-
         if config.force_http1 {
             tracing::info!("Using HTTP/1.1 for sampling client (force_http1=true)");
         }
@@ -2836,6 +2839,27 @@ mod tests {
     fn sampling_client_always_has_user_agent() {
         let client = SamplingClient::new(minimal_config()).expect("build");
         assert!(client.default_headers.contains_key(USER_AGENT));
+    }
+
+    // LOCAL: OpenCode-Go-style gateways enforce an app-identifying User-Agent
+    // (`opencode/<version> ...`); a per-model `extra_headers` entry must be able to
+    // override the default `grok-shell/...` UA.
+    #[test]
+    fn extra_headers_can_override_user_agent() {
+        let mut config = minimal_config();
+        config.extra_headers.insert(
+            "User-Agent".to_string(),
+            "opencode/1.18.18 (windows amd64)".to_string(),
+        );
+        let client = SamplingClient::new(config).expect("build");
+        assert_eq!(
+            client
+                .default_headers
+                .get(USER_AGENT)
+                .and_then(|v| v.to_str().ok()),
+            Some("opencode/1.18.18 (windows amd64)"),
+            "extra_headers must win over the default UA (gateway marking)"
+        );
     }
 
     // Regression: a past change dropped HeaderInjector (traceparent) from sampling requests.
