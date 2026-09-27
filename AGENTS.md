@@ -16,6 +16,8 @@
   PATCHES.md）；金额口径与 `/stats` 联动未做，等 09-30 07:50（北京）换周期
   historyLen 实测后拍板。关键实测：`creditUsagePercent` 全整点、7%→76% 跳变非本机
   （本周账本 xAI 直连 0 调用）、`isUnifiedBillingUser=true`、`historyLen=0`。
+  现场 QA（pct 已变仍报采样不足 = Δpct < 2 整点门，非无 xAI 消耗）见该文档末节，
+  补 user-guide / 文案时复用。
 - [`docs-local/status-line-perf-wiki.md`](docs-local/status-line-perf-wiki.md) — 状态行性能段
   （ttft/tps）专题 wiki：TTFT 三参考点对照、网关响应头行为分类（Command Code 早头 vs
   火山 Ark 晚头）、0ms 过滤×晚响应头的相互作用、unified.jsonl 取证 playbook、双 tps 口径。
@@ -57,6 +59,11 @@
   `README.md`（用途 / 范围 / 可信度分级）、主报告 `memory-design-survey.md`、社区风评
   `notes/community-sentiment.md`（Reddit 归档 API + HN Algolia，含原始引语）。边界：只谈 agent
   软件内部的记忆模块（指令层 / 自动记忆层 / 会话内上下文管理），不做独立 memory 框架选型。
+- [`docs-local/vision-bridge/`](docs-local/vision-bridge/README.md) — 视觉桥：纯文本主模型
+  用识图模型转写用户图 / 工具图。**评估完成、未开工**；分期 T1 能力位 `accepts_images` +
+  打开已有 `image_describe`（Cursor 管线在本 fork 写死关闭）→ T2 工具结果/`read_file`/PDF
+  剥图或转写 → T3 披露与 BYOK 禁止静默打 xAI。整回合切视觉 agent 明确不做。对照兄弟目录
+  Qwen Code。净开发约 6–11 人天。分支拟 `feat/local-vision-bridge`。基线：2026-09-27 `main`。
 
 ## 🔄 Handoff 摘要
 
