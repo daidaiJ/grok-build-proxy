@@ -17,6 +17,7 @@ pub use util::mcp_truncate::{
 };
 
 pub mod attribution;
+pub mod billing_samples;
 
 pub mod bridge;
 pub mod computer;
@@ -28,6 +29,7 @@ pub mod model_usage_ledger;
 pub mod normalization;
 pub mod notification;
 pub mod persistence;
+pub mod quota_estimate;
 pub mod registry;
 pub mod reminders;
 pub mod retry;
