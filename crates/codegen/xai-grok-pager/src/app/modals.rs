@@ -2401,6 +2401,7 @@ impl AgentView {
                     area,
                     state,
                     self.credit_balance.as_ref(),
+                    self.quota_estimate.as_ref(),
                     compact,
                     &theme,
                 );

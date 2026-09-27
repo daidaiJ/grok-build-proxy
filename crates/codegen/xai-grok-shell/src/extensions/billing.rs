@@ -266,6 +266,26 @@ async fn handle_get_billing(agent: &MvpAgent) -> ExtResult {
         Some(billing_unified_log_ctx(&billing)),
     );
 
+    // LOCAL: billing 百分比采样落盘，周额度反推（xai_grok_tools::quota_estimate）的数据源。
+    // 只记成功拉取；同 pct 60s 内去重，GROK_BILLING_SAMPLES=0 关闭。
+    if let Some(cfg) = billing.config.as_ref() {
+        if let Some(pct) = cfg.credit_usage_percent {
+            let period = cfg.current_period.as_ref();
+            xai_grok_tools::billing_samples::append_sample(
+                &xai_grok_config::grok_home(),
+                &xai_grok_tools::billing_samples::BillingSample {
+                    ts_unix_ms: xai_grok_tools::billing_samples::BillingSample::now_unix_ms(),
+                    pct,
+                    period_start: period.and_then(|p| p.start.clone()),
+                    period_end: period.and_then(|p| p.end.clone()),
+                    period_type: period.and_then(|p| p.period_type.clone()),
+                    tier: billing.subscription_tier.clone(),
+                    history_len: Some(cfg.history.len() as u32),
+                },
+            );
+        }
+    }
+
     to_raw_response(&billing)
 }
 

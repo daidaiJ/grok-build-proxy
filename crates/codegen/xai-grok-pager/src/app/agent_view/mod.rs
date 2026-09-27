@@ -907,6 +907,8 @@ pub struct AgentView {
     pub workspace_mode_cli_locked: bool,
     /// Mocked credit balance for the status bar indicator.
     pub credit_balance: Option<crate::views::credit_bar::CreditBalance>,
+    /// LOCAL: 周额度反推镜像（账号级数据，随 billing 拉取刷新；Usage limit 标签页渲染用）。
+    pub quota_estimate: Option<xai_grok_tools::quota_estimate::QuotaEstimate>,
     /// Auto top-up rule paired with `credit_balance` for the prompt warning.
     pub auto_topup: Option<crate::views::credit_bar::AutoTopupInfo>,
     /// Current goal orchestration state. Set by `GoalUpdated` session

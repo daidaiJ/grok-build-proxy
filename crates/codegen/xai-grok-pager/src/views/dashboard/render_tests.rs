@@ -125,6 +125,7 @@ fn workspace_dashboard_renders_snapshot_member_with_archive_control() {
         false,
         None,
         None,
+    None,
     );
 
     let content = buf_to_text(&buf);
@@ -188,6 +189,7 @@ fn dashboard_toast_paints_while_peek_is_open() {
         false,
         None,
         None,
+    None,
     );
 
     let content = buf_to_text(&buf);
@@ -248,6 +250,7 @@ fn narrow_workspace_dashboard_keeps_archive_hit_target() {
         false,
         None,
         None,
+    None,
     );
 
     assert!(
@@ -289,6 +292,7 @@ fn open_previous_actions_button_is_v2_only_and_follows_new_agent() {
             false,
             None,
             None,
+        None,
         );
         (buf_to_text(&buf), state)
     };
@@ -431,6 +435,7 @@ fn dashboard_session_picker_renders_simple_open_surface() {
         false,
         None,
         None,
+    None,
     );
     let content = buf_to_text(&buf);
     assert!(content.contains("Open session"));
@@ -491,6 +496,7 @@ fn render_dashboard_shows_roster_when_local_agents_empty() {
         false,
         None,
         None,
+    None,
     );
 
     let content = buf_to_text(&buf);
@@ -546,6 +552,7 @@ fn render_dashboard_hover_shows_delete_x_only_for_settled_rows() {
             false,
             None,
             None,
+        None,
         );
         buf_to_text(&buf)
     };
@@ -806,6 +813,7 @@ fn chrome_hit_areas_do_not_survive_a_frame_that_skips_the_header() {
             false,
             Some(cta),
             None,
+        None,
         );
     };
     let chrome_hits = |state: &DashboardState| {
@@ -3085,6 +3093,7 @@ fn render_dashboard_paints_full_area_background() {
         false,
         None,
         None,
+    None,
     );
 
     // Sample cells across the area; none may retain the seed bg colour

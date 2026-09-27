@@ -23,6 +23,7 @@ use crate::views::credit_bar::CreditBalance;
 use crate::views::modal_window::{
     self as mw, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
 };
+use xai_grok_tools::quota_estimate::{EstimateStatus, NoDataReason};
 
 /// Footer shortcut ID for "copy session ID".
 pub const COPY_SESSION_ID_SHORTCUT: usize = 1;
@@ -556,6 +557,7 @@ pub fn render_usage_modal(
     area: Rect,
     state: &mut UsageInfoModalState,
     balance: Option<&CreditBalance>,
+    quota_estimate: Option<&xai_grok_tools::quota_estimate::QuotaEstimate>,
     compact: bool,
     theme: &Theme,
 ) {
@@ -640,7 +642,7 @@ pub fn render_usage_modal(
         return;
     };
     let content = mca.content;
-    let tab = tab_content(state, balance, theme, content.width);
+    let tab = tab_content(state, balance, quota_estimate, theme, content.width);
     state.content_rect = content;
     let plain_lines: Vec<String> = tab.lines.iter().map(ToString::to_string).collect();
     // Endpoints index these strings; drop any gesture if the painted text changed.
@@ -829,6 +831,7 @@ impl TabContent {
 fn tab_content(
     state: &UsageInfoModalState,
     balance: Option<&CreditBalance>,
+    quota_estimate: Option<&xai_grok_tools::quota_estimate::QuotaEstimate>,
     theme: &Theme,
     width: u16,
 ) -> TabContent {
@@ -837,7 +840,7 @@ fn tab_content(
             TabContent::from_lines(context_tab_lines(state, theme, width))
         }
         UsageInfoTab::UsageLimit => {
-            TabContent::from_lines(usage_limit_lines(state, balance, theme))
+            TabContent::from_lines(usage_limit_lines(state, balance, quota_estimate, theme))
         }
         UsageInfoTab::SessionInfo => session_info_content(state, theme),
     }
@@ -877,6 +880,7 @@ fn context_tab_lines(state: &UsageInfoModalState, theme: &Theme, width: u16) -> 
 fn usage_limit_lines(
     state: &UsageInfoModalState,
     balance: Option<&CreditBalance>,
+    quota_estimate: Option<&xai_grok_tools::quota_estimate::QuotaEstimate>,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -894,7 +898,7 @@ fn usage_limit_lines(
             tr("Please check your usage on {url}").replace("{url}", url),
         ));
     } else if let Some(bal) = balance {
-        lines.extend(allowance_lines(state, bal, theme));
+        lines.extend(allowance_lines(state, bal, quota_estimate, theme));
     } else if let Some(error) = &state.billing_error {
         lines.push(muted_line(
             theme,
@@ -929,6 +933,7 @@ fn usage_limit_lines(
 fn allowance_lines(
     state: &UsageInfoModalState,
     bal: &CreditBalance,
+    quota_estimate: Option<&xai_grok_tools::quota_estimate::QuotaEstimate>,
     theme: &Theme,
 ) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
@@ -989,7 +994,74 @@ fn allowance_lines(
                 .replace("{cap}", &format!("{cap:.2}")),
         ));
     }
+
+    // LOCAL: 周额度反推（本机口径下界；多设备语义 = 各机取 max）。
+    if let Some(est) = quota_estimate {
+        lines.push(Line::default());
+        match &est.status {
+            EstimateStatus::NoData(reason) => {
+                let why = match reason {
+                    NoDataReason::NoLocalUsage => {
+                        tr("No xAI-direct usage on this device in the window; cannot infer.")
+                    }
+                    NoDataReason::InsufficientSamples => {
+                        tr("Not enough billing samples yet; keep using to accumulate.")
+                    }
+                };
+                lines.push(muted_line(
+                    theme,
+                    format!("{}: {why}", tr("Quota estimate (this device)")),
+                ));
+            }
+            EstimateStatus::Tight | EstimateStatus::Loose => {
+                let tokens = xai_grok_tools::model_usage_ledger::fmt_tokens(
+                    est.weekly_tokens_lower_bound.unwrap_or(0.0).round() as u64,
+                );
+                lines.push(plain(
+                    theme,
+                    format!(
+                        "{}: ≥ {tokens} {}",
+                        tr("Quota estimate (this device)"),
+                        tr(period_unit(est.period_type.as_deref())),
+                    ),
+                ));
+                if let (Some(from), Some(to), Some(delta)) =
+                    (est.basis_from_ms, est.basis_to_ms, est.basis_delta_pct)
+                {
+                    let stamp = |ms: u64| {
+                        chrono::DateTime::from_timestamp_millis(ms as i64)
+                            .map(|dt| {
+                                dt.with_timezone(&chrono::Local)
+                                    .format("%m-%d %H:%M")
+                                    .to_string()
+                            })
+                            .unwrap_or_default()
+                    };
+                    lines.push(muted_line(
+                        theme,
+                        tr("Basis: {from} → {to} (Δ{pct}%)")
+                            .replace("{from}", &stamp(from))
+                            .replace("{to}", &stamp(to))
+                            .replace("{pct}", &format!("{delta:.0}")),
+                    ));
+                }
+                lines.push(muted_line(
+                    theme,
+                    tr("This device only; with multiple devices take the max across devices."),
+                ));
+            }
+        }
+    }
     lines
+}
+
+/// 服务端周期枚举名 → 单位显示（i18n 键）。
+fn period_unit(period_type: Option<&str>) -> &'static str {
+    match period_type {
+        Some("USAGE_PERIOD_TYPE_WEEKLY") => "tokens / week",
+        Some("USAGE_PERIOD_TYPE_MONTHLY") => "tokens / month",
+        _ => "tokens / period",
+    }
 }
 
 fn session_info_content(state: &UsageInfoModalState, theme: &Theme) -> TabContent {
@@ -1149,7 +1221,7 @@ mod tests {
             is_unified_billing_user: None,
         };
         let theme = Theme::current();
-        let lines = usage_limit_lines(&state, Some(&bal), &theme);
+        let lines = usage_limit_lines(&state, Some(&bal), None, &theme);
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         assert_eq!(text[0], "Weekly limit (SuperGrok)");
         assert!(text[2].ends_with("50%"), "bar row: {:?}", text[2]);
@@ -1165,25 +1237,127 @@ mod tests {
         );
     }
 
+    fn tight_estimate() -> xai_grok_tools::quota_estimate::QuotaEstimate {
+        xai_grok_tools::quota_estimate::QuotaEstimate {
+            status: EstimateStatus::Tight,
+            weekly_tokens_lower_bound: Some(12_345_678.0),
+            basis_from_ms: Some(1_790_100_000_000),
+            basis_to_ms: Some(1_790_200_000_000),
+            basis_delta_pct: Some(18.0),
+            samples_in_period: 9,
+            period_type: Some("USAGE_PERIOD_TYPE_WEEKLY".to_string()),
+        }
+    }
+
+    #[test]
+    fn usage_limit_tab_renders_quota_estimate_block() {
+        let state = state_with_session();
+        let bal = CreditBalance {
+            usage_pct: 50.67,
+            effective_usage_pct: 50.67,
+            period_end_display: None,
+            pay_as_you_go: false,
+            on_demand_cap_cents: None,
+            on_demand_used_cents: None,
+            prepaid_balance_cents: None,
+            period_type: Some("USAGE_PERIOD_TYPE_WEEKLY".to_string()),
+            is_unified_billing_user: None,
+        };
+        let theme = Theme::current();
+        let lines = usage_limit_lines(&state, Some(&bal), Some(&tight_estimate()), &theme);
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        assert!(
+            text.iter()
+                .any(|l| l.contains("Quota estimate (this device): ≥ 12.35m tokens / week")),
+            "{text:?}"
+        );
+        assert!(
+            text.iter().any(|l| l.contains("Basis: ")),
+            "basis window line missing: {text:?}"
+        );
+        assert!(
+            text.iter().any(|l| l.contains("This device only")),
+            "multi-device caveat missing: {text:?}"
+        );
+        // 没有任何采样镜像时不渲染估算块（升级前/首周静默）
+        let lines = usage_limit_lines(&state, Some(&bal), None, &theme);
+        assert!(
+            !lines
+                .iter()
+                .any(|l| l.to_string().contains("Quota estimate")),
+            "no-sample mirror must stay silent"
+        );
+    }
+
+    #[test]
+    fn usage_limit_tab_quota_estimate_nodata_shows_reason() {
+        let state = state_with_session();
+        let bal = CreditBalance {
+            usage_pct: 50.67,
+            effective_usage_pct: 50.67,
+            period_end_display: None,
+            pay_as_you_go: false,
+            on_demand_cap_cents: None,
+            on_demand_used_cents: None,
+            prepaid_balance_cents: None,
+            period_type: Some("USAGE_PERIOD_TYPE_WEEKLY".to_string()),
+            is_unified_billing_user: None,
+        };
+        let theme = Theme::current();
+        let nodata = |reason| xai_grok_tools::quota_estimate::QuotaEstimate {
+            status: EstimateStatus::NoData(reason),
+            weekly_tokens_lower_bound: None,
+            basis_from_ms: None,
+            basis_to_ms: None,
+            basis_delta_pct: None,
+            samples_in_period: 9,
+            period_type: None,
+        };
+        let lines = usage_limit_lines(
+            &state,
+            Some(&bal),
+            Some(&nodata(NoDataReason::NoLocalUsage)),
+            &theme,
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.to_string().contains("No xAI-direct usage on this device")),
+            "{lines:?}"
+        );
+        let lines = usage_limit_lines(
+            &state,
+            Some(&bal),
+            Some(&nodata(NoDataReason::InsufficientSamples)),
+            &theme,
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.to_string().contains("Not enough billing samples")),
+            "{lines:?}"
+        );
+    }
+
     #[test]
     fn usage_limit_tab_states() {
         let theme = Theme::current();
         let mut state = state_with_session();
         state.billing_loading = true;
-        let lines = usage_limit_lines(&state, None, &theme);
+        let lines = usage_limit_lines(&state, None, None, &theme);
         assert!(lines[0].to_string().contains("Loading usage"));
 
         state.ctx.billing_redirect_url = Some("https://x.example/usage".to_string());
-        let lines = usage_limit_lines(&state, None, &theme);
+        let lines = usage_limit_lines(&state, None, None, &theme);
         assert!(lines[0].to_string().contains("https://x.example/usage"));
 
         state.ctx.usage_visible = false;
-        let lines = usage_limit_lines(&state, None, &theme);
+        let lines = usage_limit_lines(&state, None, None, &theme);
         assert!(lines[0].to_string().contains("managed by your team"));
 
         // Gateway chat sessions show no billing at all
         state.ctx.chat_kind = true;
-        let lines = usage_limit_lines(&state, None, &theme);
+        let lines = usage_limit_lines(&state, None, None, &theme);
         assert!(lines[0].to_string().contains("Loading session usage"));
     }
 
@@ -1194,7 +1368,7 @@ mod tests {
         let mut state = state_with_session();
         state.session_usage_text = Some("Session usage: no model calls yet.".to_string());
         let theme = Theme::current();
-        render_usage_modal(&mut buf, area, &mut state, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
         let text: String = (0..area.height)
             .map(|y| {
                 (0..area.width)
@@ -1234,7 +1408,7 @@ mod tests {
             Some("Session ID: sid-123\nModel Hash: fp-abc\nTurn: 3")
         );
         let theme = Theme::current();
-        render_usage_modal(&mut buf, area, &mut state, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
         let text: String = (0..area.height)
             .map(|y| {
                 (0..area.width)
@@ -1275,7 +1449,7 @@ mod tests {
             field("Session ID", "sid-123", false),
             field("Model Hash", "fp-abc", true),
         ]);
-        render_usage_modal(&mut buf, area, &mut state, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
         let values: Vec<&str> = state.copy_hits.iter().map(|h| h.value.as_str()).collect();
         assert_eq!(values, ["sid-123", "Model Hash: fp-abc"]);
         let hit = state
@@ -1312,7 +1486,7 @@ mod tests {
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Model Hash", "fp-abc", true)]);
         let theme = Theme::current();
-        render_usage_modal(&mut buf, area, &mut state, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
 
         let line_idx = state
             .plain_lines
@@ -1340,7 +1514,7 @@ mod tests {
             UsageModalOutcome::Changed
         );
 
-        render_usage_modal(&mut buf, area, &mut state, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
         let cell = &buf[(x0, y)];
         if theme.text_primary != ratatui::style::Color::Reset
             && theme.bg_base != ratatui::style::Color::Reset
@@ -1364,7 +1538,7 @@ mod tests {
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Title", "t", false)]);
-        render_usage_modal(&mut buf, area, &mut state, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
 
         let blank = state
             .plain_lines
@@ -1408,7 +1582,7 @@ mod tests {
         let mut buf = Buffer::empty(area);
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
-        render_usage_modal(&mut buf, area, &mut state, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
         let rect = state.content_rect;
         assert_eq!(
             handle_usage_modal_mouse(
@@ -1420,7 +1594,7 @@ mod tests {
             UsageModalOutcome::Changed
         );
         state.session_fields = Some(vec![field("Title", "t", false)]);
-        render_usage_modal(&mut buf, area, &mut state, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
         assert_eq!(
             handle_usage_modal_mouse(
                 &mut state,
@@ -1439,7 +1613,7 @@ mod tests {
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Model Hash", "fp-abc", true)]);
-        render_usage_modal(&mut buf, area, &mut state, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
         let hit = state.copy_hits[0].clone();
         let line = state
             .plain_lines
@@ -1478,7 +1652,7 @@ mod tests {
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Model Hash", "fp-abc", true)]);
-        render_usage_modal(&mut buf, area, &mut state, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
         let hit = state.copy_hits[0].clone();
         handle_usage_modal_mouse(
             &mut state,
@@ -1509,7 +1683,7 @@ mod tests {
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Session ID", "sid-123", false)]);
-        render_usage_modal(&mut buf, area, &mut state, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
         let rect = state.content_rect;
         assert!(rect.width > 0 && rect.height > 0);
         assert_eq!(
@@ -1567,7 +1741,7 @@ mod tests {
         let mut buf = Buffer::empty(area);
         let mut state = state_with_session();
         let theme = Theme::current();
-        render_usage_modal(&mut buf, area, &mut state, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
         let popup = state.window.popup_area.expect("popup rendered");
         assert_eq!(popup.height, 30);
         // Still vertically centered.

@@ -1356,6 +1356,26 @@ pub(super) fn persist_hint(
             TaskResult::CancelComplete
         });
 }
+/// LOCAL: 周额度反推（本机口径下界）= billing 采样 × 模型账本 × config 直连判定。
+/// 文件读取在 `spawn_blocking` 中进行（调用方保证）。没有任何采样时返回 `None`
+/// （升级后首周的正常状态，UI 静默跳过而不是显示"无法反推"）。
+pub(super) fn compute_quota_estimate(
+) -> Option<xai_grok_tools::quota_estimate::QuotaEstimate> {
+    let grok_home = xai_grok_shell::util::grok_home::grok_home();
+    let samples = xai_grok_tools::billing_samples::load_samples(Some(&grok_home));
+    if samples.is_empty() {
+        return None;
+    }
+    let rows = xai_grok_tools::model_usage_ledger::load_samples(Some(&grok_home));
+    let models = xai_grok_tools::quota_estimate::load_model_base_urls(&grok_home);
+    let is_xai_direct = xai_grok_tools::quota_estimate::xai_direct_predicate(&models);
+    Some(xai_grok_tools::quota_estimate::estimate(
+        &samples,
+        &rows,
+        &is_xai_direct,
+    ))
+}
+
 /// Map a billing config into a [`CreditBalance`].
 /// Prefers the newer credits-config fields (`credit_usage_percent`, `current_period`).
 /// Falls back to the deprecated `monthly_limit`/`used`/`billing_period_end`.

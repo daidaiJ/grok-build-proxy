@@ -2098,6 +2098,9 @@ pub enum Effect {
         /// Usage-modal fetch generation (`0` means a background refresh; those never touch the modal's loading/error flags).
         nonce: u64,
     },
+    /// LOCAL: 重算周额度估算（读 billing 采样 + 模型账本 + config 直连判定，spawn_blocking）。
+    /// `agent_id` 为发起方（会话模态），`None` = 仪表盘路径；结果同步落到对应镜像。
+    FetchQuotaEstimate { agent_id: Option<AgentId> },
     /// Fetch billing data at the app level (no agent required).
     /// Used on startup to populate the welcome-screen credit warning, and by the dashboard's `/usage` modal.
     FetchAppBilling {
@@ -3017,6 +3020,11 @@ pub enum TaskResult {
         autotopup: crate::views::credit_bar::AutoTopupFetch,
         /// Usage-modal fetch generation (`0` means a background refresh).
         nonce: u64,
+    },
+    /// LOCAL: 周额度反推完成（`None` = 暂无采样/无法估算，镜像置空）。
+    QuotaEstimateComputed {
+        agent_id: Option<AgentId>,
+        estimate: Option<xai_grok_tools::quota_estimate::QuotaEstimate>,
     },
     /// App-level billing fetch failed (transport or parse); the cached balance is kept.
     AppBillingError {

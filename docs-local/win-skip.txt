@@ -63,3 +63,8 @@ the_payload_carries_real_values_or_no_field_at_all
 test_sample_rss_bytes_returns_nonzero
 test_sample_rss_bytes_is_stable
 test_peak_rss_recorded_at_turn_end
+
+# 族P status_line 命令执行 —— python_command_line_with_a_drive_path_runs 在门控
+# 环境下探针退出码 2（手动直跑同一脚本 rc=0，status_line spawn 路径 × 测试 env 互作；
+# main 同源同样复现，与 LOCAL 改动无关），环境族不修(2026-09-27)。
+python_command_line_with_a_drive_path_runs

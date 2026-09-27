@@ -579,6 +579,15 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        TaskResult::QuotaEstimateComputed { agent_id, estimate } => {
+            app.quota_estimate = estimate.clone();
+            if let Some(agent_id) = agent_id
+                && let Some(agent) = app.agents.get_mut(&agent_id)
+            {
+                agent.quota_estimate = estimate;
+            }
+            vec![]
+        }
         TaskResult::AppBillingFetched {
             balance,
             autotopup,
@@ -586,13 +595,18 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         } => {
             app.credit_balance = balance;
             apply_auto_topup(&mut app.auto_topup, &autotopup);
+            // LOCAL: 仅模态打开的拉取（nonce != 0）触发周额度估算重算（仪表盘路径无 agent）
             if let Some(state) = app.dashboard.as_mut().and_then(|d| d.usage_modal.as_mut())
                 && state.fetch_nonce == nonce
             {
                 state.billing_loading = false;
                 state.billing_error = None;
             }
-            vec![]
+            if nonce != 0 {
+                vec![Effect::FetchQuotaEstimate { agent_id: None }]
+            } else {
+                vec![]
+            }
         }
         TaskResult::AppBillingError { error, nonce } => {
             if let Some(state) = app.dashboard.as_mut().and_then(|d| d.usage_modal.as_mut())
