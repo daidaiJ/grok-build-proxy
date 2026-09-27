@@ -167,7 +167,9 @@ mod tests {
     }
 
     /// 取词索引始终落在词表范围内（防取模越界/空表 panic）。
+    /// LOCAL: phrases()/witty_phrase() 读全局 lang，与 set_lang 的测试互踩 → serial。
     #[test]
+    #[serial_test::serial(WITTY_LANG)]
     fn phrase_always_resolves_within_list() {
         let list = phrases();
         for bucket in 0..1000u64 {
@@ -178,6 +180,7 @@ mod tests {
 
     /// 中英文模式各取自对应词表（i18n 语言开关生效）。
     #[test]
+    #[serial_test::serial(WITTY_LANG)]
     fn phrase_follows_current_lang() {
         set_lang(Lang::En);
         assert!(WITTY_LOADING_PHRASES_EN.contains(&witty_phrase(Some(Duration::from_secs(0)))));

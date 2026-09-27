@@ -173,6 +173,7 @@ impl AgentView {
             #[cfg(feature = "local-workspace")]
             workspace_mode_cli_locked: false,
             credit_balance: None,
+    quota_estimate: None,
             auto_topup: None,
             goal_state: None,
             workflow_blocks: std::collections::HashMap::new(),

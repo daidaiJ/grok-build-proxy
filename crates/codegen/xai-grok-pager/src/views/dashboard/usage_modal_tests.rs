@@ -52,6 +52,7 @@ fn render_with_modal(
         false,
         None,
         credit_balance,
+    None,
     );
     assert!(
         cursor.is_none(),

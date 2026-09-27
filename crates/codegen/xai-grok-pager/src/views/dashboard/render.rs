@@ -91,6 +91,8 @@ pub(crate) fn render_dashboard(
     upgrade_cta: Option<HeaderUpgradeCta<'_>>,
     // App-level billing mirror the `/usage` modal renders its allowance from
     credit_balance: Option<&crate::views::credit_bar::CreditBalance>,
+    // LOCAL: 周额度反推镜像（账号级，与 credit_balance 同源）
+    quota_estimate: Option<&xai_grok_tools::quota_estimate::QuotaEstimate>,
 ) -> Option<(u16, u16)> {
     state.workspace_membership_mode = workspace_dashboard_enabled;
     // Cache whether a pinned (non-dismissible) promo CTA is live so the key handler can steal Ctrl+O for it; the dispatch re-resolves the gate
@@ -475,6 +477,7 @@ pub(crate) fn render_dashboard(
             area,
             modal,
             credit_balance,
+            quota_estimate,
             /* compact */ false,
             &theme,
         );

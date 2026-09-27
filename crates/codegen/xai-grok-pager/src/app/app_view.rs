@@ -653,6 +653,8 @@ pub struct AppView {
     pub leader_mode: bool,
     /// App-level credit balance used to show the usage warning on the welcome screen before any agent session exists.
     pub credit_balance: Option<crate::views::credit_bar::CreditBalance>,
+    /// LOCAL: 周额度反推镜像（账号级，与 `credit_balance` 同模式；billing 拉取后异步刷新）。
+    pub quota_estimate: Option<xai_grok_tools::quota_estimate::QuotaEstimate>,
     /// App-level auto top-up rule paired with `credit_balance` for the warning.
     pub auto_topup: Option<crate::views::credit_bar::AutoTopupInfo>,
     /// Periodic billing poll requested (credits >= 99%).
@@ -1651,6 +1653,7 @@ impl AppView {
             tier_restricted_commands: Vec::new(),
             leader_mode: false,
             credit_balance: None,
+            quota_estimate: None,
             auto_topup: None,
             billing_poll_wanted: false,
             leader_roster: Vec::new(),
@@ -4995,6 +4998,7 @@ impl AppView {
                                 self.dashboard_sessions_loading,
                                 dash_upgrade_cta,
                                 self.credit_balance.as_ref(),
+                                self.quota_estimate.as_ref(),
                             );
                             let (popup_cursor, popup_post_flush, drawn_popup_agent) =
                                 if let Some(agent_id) = dashboard.attached_agent {

@@ -311,12 +311,21 @@ pub(super) fn handle_billing_fetched(
 ) -> Vec<Effect> {
     // Parse/transport failures route to `BillingError`, so a `None` balance here means the response carried no billing config
     // Clear the cached balance and polling so the status bar agrees with the "No billing data available." message rather than showing a stale value
+    let prev_pct = app.credit_balance.as_ref().map(|b| b.usage_pct);
     app.credit_balance = balance.clone();
     apply_auto_topup(&mut app.auto_topup, &autotopup);
     app.billing_poll_wanted = balance
         .as_ref()
         .map(|b| b.usage_pct >= 99.0)
         .unwrap_or(false);
+    // LOCAL: 仅在用量模态打开的拉取（nonce != 0）时重算周额度估算；
+    // turn 结束的静默刷新不触发（模态每次打开都会重新拉计费，估算随之新鲜）。
+    let mut effects: Vec<Effect> = Vec::new();
+    if nonce != 0 {
+        effects.push(Effect::FetchQuotaEstimate {
+            agent_id: Some(agent_id),
+        });
+    }
     if let Some(tier) = subscription_tier {
         app.subscription_tier = Some(tier);
     }
@@ -349,7 +358,7 @@ pub(super) fn handle_billing_fetched(
             ));
         }
     }
-    vec![]
+    effects
 }
 
 pub(super) fn handle_gate_refreshed(

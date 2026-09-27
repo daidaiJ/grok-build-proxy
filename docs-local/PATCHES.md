@@ -1556,3 +1556,59 @@ token 延迟 4.7s，而 ttft_ms=0——根因是 **metrics 层参考点在响应
 重放注意：三流函数签名变化（尾参），上游若重构流入口按参数语义对齐；span 层
 `http.*.ttft` 有意不前移（保持头后段，配 `response_headers_ms` 可拼装全窗口），
 两口径并存见 wiki §1。
+
+## /usage 周额度估算（2026-09-27，`feat/local-usage-quota-estimate`）
+
+调研与验收标准见 `docs-local/usage-quota-estimate-todo.md`；他机对账背景见
+`docs-local/quota-pct-jump-audit.md`。T1/T2/T3 一次落地。
+
+### xai-grok-tools（新增两模块，`lib.rs` 注册）
+- `src/billing_samples.rs`：`BillingSample`（ts/pct/period_start/period_type/tier/
+  history_len，serde camelCase）+ `append_sample`（同 pct 60s 去重；32 MiB 触发
+  35d 保留窗剪裁；`GROK_BILLING_SAMPLES=0` 关闭；进程内 Mutex 与账本同款）+
+  `load_samples`。落盘路径 `grok_home/cache/billing-samples.jsonl`。
+- `src/quota_estimate.rs`：反推内核 `estimate(samples, rows, is_xai_direct)`——
+  周期切片（只配对最后一条采样的 period_start）、max-over-pairs 下界
+  （Q̂=Δtokens_xai/Δpct×100）、质量门（≥3 采样、≥2 个不同 pct、Δpct≥2 整点、
+  分子>0）、Tight/Loose 按 Δpct≥10 分档；`NoData(InsufficientSamples|NoLocalUsage)`。
+  `load_model_base_urls` 手工解析 config.toml `[model."id"]` 的 base_url
+  （子表/[models] 拒绝；漏配方向 = 当第三方 = 低估，安全侧）+
+  `is_xai_direct`（缺省或 *.x.ai 官方）+ `xai_direct_predicate`（账本里查不到的
+  model id = 默认后端 = 直连）。
+
+### xai-grok-shell（T1 采样点）
+- `src/extensions/billing.rs` `handle_get_billing` 成功路径（unified log 之后）：
+  `credit_usage_percent` 有值即落一条采样；失败路径不落。
+
+### xai-grok-pager（T3 UI 接线）
+- `src/app/actions.rs`：`Effect::FetchQuotaEstimate { agent_id: Option<AgentId> }`、
+  `TaskResult::QuotaEstimateComputed { agent_id, estimate }`。
+- `src/app/dispatch/billing.rs` `handle_billing_fetched`：仅模态打开的拉取
+  （`nonce != 0`）追加 emit（turn 结束静默刷新不重算）；返回 `effects`。
+- `src/app/dispatch/task_result.rs`：新臂落双镜像（app 级 + 发起 agent 级）；
+  `AppBillingFetched` 臂同款 nonce 门控（仪表盘路径 agent_id=None）。
+- `src/app/effects/mod.rs` + `helpers.rs`：`compute_quota_estimate`（spawn_blocking）
+  读三个本地文件估算，无采样返回 `None`。
+- `src/app/app_view.rs` / `src/app/agent_view/{mod,session}.rs`：`quota_estimate`
+  镜像字段（与 `credit_balance` 同模式）。
+- `src/views/usage_modal.rs`：`render_usage_modal`/`tab_content`/`usage_limit_lines`/
+  `allowance_lines` 加参；额度条下渲染估算块（下界值 + 依据窗口 + 多设备提示；
+  NoData 显示原因；无采样镜像静默跳过）。
+- `src/views/dashboard/render.rs` `render_dashboard`：加参透传。
+- `src/slash/i18n.rs`：8 条中英文案。
+
+验证：`cargo check -p xai-grok-tools/-shell/-pager` 干净；
+`ctest.sh -p xai-grok-tools --lib`（GATE_FORCE=1，该 crate 不在白名单；全量 3114 过/75 挂，
+挂的全为既有 computer::local::terminal 环境族；本模块 billing_samples 2/2 +
+quota_estimate 8/8 过）；`ctest.sh -p xai-grok-pager --lib` **9614 过/0 挂**。
+
+顺手修（同分支，非本特性引入）：
+- `views/witty_phrases.rs`：`phrase_always_resolves_within_list` 与
+  `phrase_follows_current_lang` 加 `#[serial_test::serial(WITTY_LANG)]`——前者读全局
+  lang、后者 set_lang，并行跑互踩（同一 suite 两次运行一挂一过，实锤 flaky）。
+- `docs-local/win-skip.txt` 登记 `python_command_line_with_a_drive_path_runs`
+  （status_line spawn 路径 × 门控 env 探针退出码 2；手动直跑同脚本 rc=0；main 同源
+  复现，与 LOCAL 改动无关，环境族不修）。
+
+重放注意：`render_usage_modal`/`render_dashboard` 签名变化（新插参），上游若重构
+调用点按参数语义对齐；billing-samples.jsonl 为新缓存文件，不随会话走。

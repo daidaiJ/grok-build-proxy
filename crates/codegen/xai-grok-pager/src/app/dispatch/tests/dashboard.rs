@@ -3301,7 +3301,12 @@ fn dashboard_usage_modal_settles_only_on_its_own_app_billing_generation() {
         }),
         &mut app,
     );
-    assert!(effects.is_empty(), "got: {effects:?}");
+    // LOCAL: 模态代际拉取现在会附带一次周额度估算重算（FetchQuotaEstimate）
+    assert!(
+        effects.len() == 1
+            && matches!(effects[0], Effect::FetchQuotaEstimate { agent_id: None }),
+        "got: {effects:?}"
+    );
     let modal = dashboard_usage_modal(&app);
     assert!(!modal.billing_loading);
     assert!(modal.billing_error.is_none());
@@ -5732,6 +5737,7 @@ fn dashboard_upgrade_cta_paints_arms_rect_and_ctrl_o_override() {
             caption: Some(CAPTION),
         }),
         None,
+    None,
     );
     assert!(
         state.pinned_upgrade_cta_live,
@@ -5785,6 +5791,7 @@ fn dashboard_upgrade_cta_paints_arms_rect_and_ctrl_o_override() {
             caption: None,
         }),
         None,
+    None,
     );
     assert!(state.pinned_upgrade_cta_live);
     let rect = state
@@ -5817,6 +5824,7 @@ fn dashboard_upgrade_cta_paints_arms_rect_and_ctrl_o_override() {
             caption: Some(CAPTION),
         }),
         None,
+    None,
     );
     assert!(!state.pinned_upgrade_cta_live);
     let rect = state
@@ -5852,6 +5860,7 @@ fn dashboard_upgrade_cta_paints_arms_rect_and_ctrl_o_override() {
         false,
         None,
         None,
+    None,
     );
     assert!(state.upgrade_cta_hit.rect.is_none());
     assert!(!state.pinned_upgrade_cta_live);
@@ -7845,6 +7854,7 @@ fn dashboard_peek_auto_opens_for_selected_row() {
         false,
         None,
         None,
+    None,
     );
     assert!(
         app.dashboard.as_ref().unwrap().peek.is_some(),
@@ -7866,6 +7876,7 @@ fn dashboard_peek_auto_opens_for_selected_row() {
         false,
         None,
         None,
+    None,
     );
     assert!(
         app.dashboard.as_ref().unwrap().peek.is_none(),
@@ -7903,6 +7914,7 @@ fn dashboard_peek_box_grows_for_multiline_reply() {
                 false,
                 None,
                 None,
+            None,
             );
         };
         render(&mut app);

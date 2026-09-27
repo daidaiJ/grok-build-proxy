@@ -4859,6 +4859,14 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::FetchQuotaEstimate { agent_id } => {
+            tasks.spawn(async move {
+                let estimate = tokio::task::spawn_blocking(helpers::compute_quota_estimate)
+                    .await
+                    .unwrap_or_else(|_| None);
+                TaskResult::QuotaEstimateComputed { agent_id, estimate }
+            });
+        }
         Effect::RefreshGate => {
             tasks
                 .spawn(async move {
