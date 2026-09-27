@@ -1,9 +1,10 @@
 # `/usage` 周额度 token 估算（TODO）
 
-> **状态（2026-09-27）：调研完成、未开工。** 建议分支 `feat/local-usage-quota-estimate`，
-> 基线 `97252c5`。数据源与锚点均已实测验证（本机 unified.jsonl 93 条计费采样 +
-> model-usage.jsonl 1468 条调用），不是纸上设计。分期 T1 采样落盘 → T2 反推内核 →
-> T3 UI 接线，T1 可单独先行（零 UI、零风险）。
+> **状态（2026-09-27）：T1/T2/T3 施工完成**（分支 `feat/local-usage-quota-estimate`，
+> 实现记录见 `docs-local/PATCHES.md` 的「/usage 周额度估算」一节）。基线 `97252c5`，
+> 数据源与锚点均已实测验证（本机 unified.jsonl 93 条计费采样 + model-usage.jsonl
+> 1468 条调用）。金额口径（待定决策 1）与 `/stats week` 联动（待定决策 3）未做，
+> 等 2026-09-29 23:50 UTC 换周期 historyLen 实测后再拍板。
 
 ## 一句话
 

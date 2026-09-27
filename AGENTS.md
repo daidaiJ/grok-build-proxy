@@ -11,11 +11,11 @@
   代码不走 main，入库存放分支待拍板）。他机对账结果待回填。
 - [`docs-local/usage-quota-estimate-todo.md`](docs-local/usage-quota-estimate-todo.md) —
   `/usage` 周额度 token 估算：billing 采样落盘 → 本机 xAI 直连 tokens/Δpct 反推下界
-  （pct 整点量化、多设备按"各机下界取 max"语义）→ Usage limit 面板展示。**调研完成、
-  未开工**；关键实测：`creditUsagePercent` 全整点、7%→76% 跳变非本机（本周账本 xAI
-  直连 0 调用，消耗来自统一消费池其他面）、`isUnifiedBillingUser=true`、`historyLen=0`
-  （金额口径待 09-29 换周期验证 history 是否出现 included_used）。T1 采样落盘可单独
-  先行。分支建议 `feat/local-usage-quota-estimate`，基线 `97252c5`。
+  （pct 整点量化、多设备按"各机下界取 max"语义）→ Usage limit 面板展示。
+  **T1/T2/T3 施工完成**（分支 `feat/local-usage-quota-estimate`，实现记录见
+  PATCHES.md）；金额口径与 `/stats` 联动未做，等 09-30 07:50（北京）换周期
+  historyLen 实测后拍板。关键实测：`creditUsagePercent` 全整点、7%→76% 跳变非本机
+  （本周账本 xAI 直连 0 调用）、`isUnifiedBillingUser=true`、`historyLen=0`。
 - [`docs-local/status-line-perf-wiki.md`](docs-local/status-line-perf-wiki.md) — 状态行性能段
   （ttft/tps）专题 wiki：TTFT 三参考点对照、网关响应头行为分类（Command Code 早头 vs
   火山 Ark 晚头）、0ms 过滤×晚响应头的相互作用、unified.jsonl 取证 playbook、双 tps 口径。
