@@ -3,14 +3,16 @@
 ## 待办事项（TODO）
 
 - [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) —
-  **上游 5 快照合并进行中**（分支 `sync/upstream-2026-09-23`，自 `origin/main` = preview.11）。
+  **上游 5 快照合并已完成**：分支 `sync/upstream-2026-09-23`（快照合并 `e43381a7` + 收尾
+  修复 `c78b45bb`）已快进合入 `main`，随正式 tag **`v1.0.37`** 发布（2026-09-28）。
   上游 `xai-org/grok-build` main `f0e3be1`（09-23），本 fork 上一条同步线停在 `37949780`（09-09）；
-  2003 文件 +205k/−73k。冲突 52 文件已全部人工裁定（撤销本地 `respect_config_agent` 补丁，
+  2003 文件 +205k/−73k，冲突 52 文件全部人工裁定（撤销本地 `respect_config_agent` 补丁，
   改用上游 `defer_builtin_agent_profile`）。已验证：`cargo check --workspace --all-targets`
-  0 error/0 warning、白名单 6 个 crate lib 测试全绿（pager 10031 passed）。
-  **待办**：① 活回合（TUI 实跑）验证 ② 34 处 i18n 丢失站点按
+  0 error/0 warning、白名单 6 个 crate lib 测试全绿（pager 10031 passed / 0 failed，
+  新增 `win-skip.txt` 族Q 4 条环境族）。
+  **待办**：① 活回合（TUI 实跑）验证（发 tag 时未做）② 34 处 i18n 丢失站点按
   [`sync-2026-09-23-i18n-lost.txt`](docs-local/sync-2026-09-23-i18n-lost.txt) 补回
-  ③ PR（`sync/upstream-2026-09-23` → `main`）合并与 preview 发版。
+  ③ 下次同步前把本条并入 handoff 摘要，并把 `upstream` 分支移到 `f0e3be1`。
 
 - [`docs-local/quota-pct-jump-audit.md`](docs-local/quota-pct-jump-audit.md) — 统一池
   周用量 7%→76% 跳变排查记录（2026-W39）：本机四步排查（pct 轨迹 / 账本聚合 /

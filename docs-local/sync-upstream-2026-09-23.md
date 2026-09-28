@@ -1,9 +1,15 @@
 # 上游同步记录：2026-09-15 … 2026-09-23（5 个快照）
 
-> 分支 `sync/upstream-2026-09-23`，基线 `origin/main` = `9a211b70`（tag `v1.0.37-preview.11`）。
+> **状态：已完成并合入 `main`，随正式 tag `v1.0.37` 发布**（2026-09-28）。
+> 合并提交：分支 `sync/upstream-2026-09-23`（`e43381a7` 快照合并 + `c78b45bb` 收尾修复），
+> 基线 `origin/main` = `9a211b70`（`v1.0.37-preview.11`）。
 > 上游来源 = 公开镜像 `github.com/xai-org/grok-build` 的 `main`，本仓库内以 `refs/remotes/mirror/main`
 > 保存（一次性 fetch，`git update-ref -d refs/remotes/mirror/main` 可删）。本 fork 上一条同步线
 > `upstream` 分支停在 `37949780`（2026-09-09）。
+>
+> 未做：活回合（TUI 实跑）验证（用户决定直接发 tag）；PR 未建 —— gh 登录账号
+> `pandazhangS` 对 `daidaiJ/grok-build-proxy` 只有 `pull` 权限（推送走 SSH 别名），
+> 分支已推送，合并改由本地快进 `main` 完成。
 
 ## 合并范围
 
