@@ -97,7 +97,7 @@ rustc 1.94 上编译失败（`cc/src/tempfile.rs` 把 `find_msvc_tools::windows_
 | `ctest.sh -p xai-grok-status-line --lib` | 18 passed |
 | `ctest.sh -p xai-grok-sampler --lib` | 289 passed |
 | `ctest.sh -p xai-grok-pager --lib` | 10031 passed / 0 failed（43 skipped：新增 4 条环境族 + 既有 39 条） |
-| Linux CI（build.yml `linux` job） | 首次运行 **1 failed**（CI 无 ripgrep）；已在 `ci-setup` 装 ripgrep 后复跑，详见下节 |
+| Linux CI（build.yml `linux` job） | 首次运行 **1 failed**（CI 无 ripgrep）；`1b9d5fc9` 装 ripgrep 后复跑 `36402142384` linux+windows 双 success，该用例转为 `ok` |
 | 活回合（TUI 实跑） | 未做（用户决定直接发 tag） |
 
 编译期间有一次 `rustc` `STATUS_ACCESS_VIOLATION`（0xc0000005），按既有纪律
@@ -135,4 +135,5 @@ rustc 1.94 上编译失败（`cc/src/tempfile.rs` 把 `find_msvc_tools::windows_
 `NotFound` → `exit_code = 2`。实际该用例不注入 `DisplayCwd`（只在 fork session 的
 `model_switch.rs` 里设置），而且 not-found 分支的 stdout 是带提示的长文本，不会是空串。
 
-验证：修复已推 `main`，待该轮 `build` workflow 复核（见下方验证表）。
+验证：修复已推 `main`（`1b9d5fc9`），`build` 运行 `36402142384` **linux + windows 双 job
+success**；该用例在新日志里转为 `... ok`（旧的失败运行是 `1020a091` 的 `36392230442`）。
