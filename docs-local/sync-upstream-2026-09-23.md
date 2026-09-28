@@ -97,31 +97,42 @@ rustc 1.94 上编译失败（`cc/src/tempfile.rs` 把 `find_msvc_tools::windows_
 | `ctest.sh -p xai-grok-status-line --lib` | 18 passed |
 | `ctest.sh -p xai-grok-sampler --lib` | 289 passed |
 | `ctest.sh -p xai-grok-pager --lib` | 10031 passed / 0 failed（43 skipped：新增 4 条环境族 + 既有 39 条） |
-| Linux CI（build.yml `linux` job） | **1 failed**：`xai-grok-shell` 的 `tool_call_telemetry_tests::execute_tool_calls_records_the_product_row_and_execution_span`（上游本次新增用例），详见下节 |
+| Linux CI（build.yml `linux` job） | 首次运行 **1 failed**（CI 无 ripgrep）；已在 `ci-setup` 装 ripgrep 后复跑，详见下节 |
 | 活回合（TUI 实跑） | 未做（用户决定直接发 tag） |
 
 编译期间有一次 `rustc` `STATUS_ACCESS_VIOLATION`（0xc0000005），按既有纪律
 （`rm -rf target/debug/incremental` + `CARGO_INCREMENTAL=0`）复跑通过，非代码问题。
 
-## 未决：Linux CI 里一条新用例失败（v1.0.37 tag 后暴露）
+## 已收口：Linux CI 里一条新用例失败（v1.0.37 tag 后暴露）
 
 `cargo test -p xai-grok-shell --features test-support`（Linux）里
 `session::acp_session::tool_call_telemetry_tests::execute_tool_calls_records_the_product_row_and_execution_span`
 在 `tool_call_telemetry_tests.rs:485` 断言 `source_status == "succeeded"`，实得 `"failed"`。
 
-已定位到的事实：
-- `source_status` 直接取自 `GrepSearchOutput.exit_code`（0=成功 / 1=空结果 / 其它=失败），
-  即该次 `search_code` 的 rg 调用返回了 ≥2 的退出码。
-- 同一文件里 `renamed_grep_keeps_its_output_after_a_later_model_request` 在 CI 通过，
-  说明 CI 上 rg 可用、工具链本身正常；差别是该用例把 `session_info.cwd` 改成
-  `/tmp/opt-repo-<pid>`，而检索目标在**另一个**临时目录 `/tmp/secret-project-<pid>/note.txt`。
-- 工具侧 `resolve_model_path(cwd, display_cwd, path)`：绝对路径若以 `display_cwd` 为前缀，
-  会被**重写**成 `cwd.join(后缀)`；随后 `prepare_grep` 的 pre-check 用 `metadata()` 判 NotFound
-  即早退 `exit_code = 2`。`cwd` 与 `display_cwd` 一旦落在不同根上，绝对路径就会被改写成
-  不存在的位置——与观测到的 "failed" 一致。
-- 本机无法复现（`create_test_actor` 夹具把 cwd 写死 `/tmp`，Windows 上 `AbsPathBuf::new("/tmp")`
-  直接 `NotAbsolute` panic，属既有族N）。
+**根因：CI 上没有 ripgrep。** 该用例的 `search_code` 根本没跑起 rg：
 
-下一步选项：① 通过 push 到 `main` 触发 CI 做诊断迭代（每轮约 25 分钟，因为 fork 的
-`build.yml` 只在 main/PR 上跑，而 gh 账号无写权限、建不了 PR）；② 用户在自己账号下开 PR，
-让 CI 在分支上按 push 迭代。
+- `prepare_grep` 的 `rg_path()`（`grok_build/grep/ripgrep.rs`）在非 release 构建里依次取
+  `RG_BIN_PATH` → `RUNFILES_DIR` 里的 `ripgrep_hermetic` → 兜底字面量 `"rg"`；只有 release
+  构建才 `bundle_rg`（`build.rs` 仅对 release 打包）。ubuntu-24.04 runner 镜像**不含**
+  ripgrep，本 fork 的 `ci-setup` 又没装，因此 `Command::new("rg").spawn()` ENOENT。
+- 失败走的是 `prepare_grep` 的 spawn-failure 分支：`stdout: Vec::new()`、`stderr` 记错误、
+  `exit_code: -1` → telemetry 把 `exit_code ∉ {0,1}` 映射成 `source_status = "failed"`。
+  该分支 stdout 为空，所以断言消息 `"{off_result}"` 在 CI 日志里是空的——这也是当初
+  误判为"路径重写"的原因之一。
+- 同文件 `renamed_grep_keeps_its_output_after_a_later_model_request` 在 CI 通过**不能**证明
+  rg 可用：它只比较"存下来的结果 == 直接调工具的结果"，两边拿到同一份 spawn 失败文本，
+  相等；且没有断言退出码。
+- 旁证：该用例由 09-22 快照新增，合入前 `main` 的 `build` 是 green（本轮之前最近 15 次 main
+  运行全 success）；GitHub runner-image 官方清单里没有 ripgrep；`exit<0 + stdout 空`只有
+  spawn-failure 这一条分支。
+
+**修复**：`.github/actions/ci-setup/action.yml` 增 `Install ripgrep (Linux)`，与 protoc 同样
+从官方 release 下载固定版本（`ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz`）解到
+`$HOME/.local/ripgrep` 并写进 `GITHUB_PATH`。本机 Windows 开发机 PATH 上已有 `rg`
+（`D:\tool\cli\rg`），所以本地不受影响；release 产物自带 ripgrep 打包，运行期也不依赖它。
+
+被否掉的旧假说（留档以免重走）：`resolve_model_path` 按 `display_cwd` 重写绝对路径 → pre-check
+`NotFound` → `exit_code = 2`。实际该用例不注入 `DisplayCwd`（只在 fork session 的
+`model_switch.rs` 里设置），而且 not-found 分支的 stdout 是带提示的长文本，不会是空串。
+
+验证：修复已推 `main`，待该轮 `build` workflow 复核（见下方验证表）。

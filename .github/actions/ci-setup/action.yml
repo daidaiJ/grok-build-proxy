@@ -94,6 +94,21 @@ runs:
         echo "$HOME/.local/protoc/bin" >> "$GITHUB_PATH"
         "$HOME/.local/protoc/bin/protoc" --version
 
+    - name: Install ripgrep (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      # The shell suite's grep tool resolves `rg` from PATH in debug/test builds
+      # (`bundle_rg` only applies to release). ubuntu-24.04 runners do not ship
+      # ripgrep, so every grep call fails to spawn: exit -1 with empty stdout,
+      # which `tool_call_telemetry_tests` reads as source_status "failed".
+      run: |
+        curl -fsSL -o /tmp/ripgrep.tar.gz \
+          https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz
+        mkdir -p "$HOME/.local/ripgrep"
+        tar -xzf /tmp/ripgrep.tar.gz -C "$HOME/.local/ripgrep" --strip-components=1
+        echo "$HOME/.local/ripgrep" >> "$GITHUB_PATH"
+        "$HOME/.local/ripgrep/rg" --version
+
     - name: Install protoc (Windows)
       if: runner.os == 'Windows'
       shell: pwsh

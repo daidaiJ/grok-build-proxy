@@ -10,10 +10,10 @@
   改用上游 `defer_builtin_agent_profile`）。已验证：`cargo check --workspace --all-targets`
   0 error/0 warning、白名单 6 个 crate lib 测试全绿（pager 10031 passed / 0 failed，
   新增 `win-skip.txt` 族Q 4 条环境族）。
-  **待办**：① 活回合（TUI 实跑）验证（发 tag 时未做）② **Linux CI 一条新用例失败**：
-  `xai-grok-shell` 的 `tool_call_telemetry_tests::execute_tool_calls_records_the_product_row_and_execution_span`
-  （`source_status` 实得 `failed`，疑与绝对路径被 `resolve_model_path` 按 `display_cwd` 重写有关；
-  详见同步文档"未决"节）③ 34 处 i18n 丢失站点按
+  **待办**：① 活回合（TUI 实跑）验证（发 tag 时未做）② ~~Linux CI 一条新用例失败~~ 已收口：
+  根因是 CI 无 ripgrep（该用例的 grep 根本没 spawn 成功，`exit -1` + 空 stdout 被记成
+  `source_status = failed`），已在 `ci-setup` 增 `Install ripgrep (Linux)` 并推 main 复核；
+  详见同步文档"已收口"节 ③ 34 处 i18n 丢失站点按
   [`sync-2026-09-23-i18n-lost.txt`](docs-local/sync-2026-09-23-i18n-lost.txt) 补回
   ④ 下次同步前把本条并入 handoff 摘要，并把 `upstream` 分支移到 `f0e3be1`。
 
