@@ -52,8 +52,7 @@ fn drain_gateway_debug(
     out
 }
 
-/// The deferred apply runs as a detached local task with nothing to join, and several callers assert absence afterwards.
-/// That needs a window, not a completion signal.
+/// Several callers assert that a notification never arrives; that needs a window, not a completion signal.
 /// Yield to the LocalSet for a wall-clock bound.
 async fn settle() {
     let _ = tokio::time::timeout(std::time::Duration::from_millis(100), async {
@@ -335,7 +334,7 @@ async fn rewind_waits_for_in_flight_strip_write_before_restoring() {
                 .expect("snapshot available");
             snapshot.prompt_index = 2;
             snapshot.prompt_texts = vec!["image turn".into(), "later turn".into()];
-            let ConversationItem::User(image_turn) = &mut snapshot.conversation[0] else {
+            let Some(ConversationItem::User(image_turn)) = snapshot.conversation.first_mut() else {
                 panic!("seeded image must be a user turn");
             };
             image_turn.prompt_index = Some(0);

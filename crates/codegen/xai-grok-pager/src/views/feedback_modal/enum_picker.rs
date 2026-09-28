@@ -254,7 +254,7 @@ impl FeedbackModalState {
             .map(|(vis, &variant)| {
                 PickerEntry::Row(PickerRow {
                     // 屏显侧翻译；type-to-filter 的比较键保持英文（见 filtered_variants）。
-                    label: tr(labels[variant]),
+                    label: tr(labels.get(variant).copied().unwrap_or("")),
                     right_label: "",
                     selected: picker.state.hovered == Some(vis)
                         || (picker.state.hovered.is_none() && vis == picker.state.selected),

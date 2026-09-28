@@ -36,10 +36,6 @@ mod selection;
 pub(crate) use selection::format_blockquote;
 pub use selection::{TextDrag, TextEndpoint};
 
-// ---------------------------------------------------------------------------
-// ContentLine: generic ListItem for the viewer
-// ---------------------------------------------------------------------------
-
 /// A single line of content displayed in the block viewer's ListPane.
 #[derive(Clone)]
 pub struct ContentLine {
@@ -90,10 +86,6 @@ impl ListItem for ContentLine {
     }
 }
 
-// ---------------------------------------------------------------------------
-// DiffLineMeta: per-item diff metadata for edit viewer patch copy
-// ---------------------------------------------------------------------------
-
 /// Metadata for a single diff line, stored parallel to `items` in the edit viewer.
 pub struct DiffLineMeta {
     pub tag: similar::ChangeTag,
@@ -101,10 +93,6 @@ pub struct DiffLineMeta {
     pub lo: usize,
     pub ln: usize,
 }
-
-// ---------------------------------------------------------------------------
-// BlockViewerPane
-// ---------------------------------------------------------------------------
 
 /// What kind of block content the viewer is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -589,6 +577,20 @@ impl BlockViewerPane {
                     dim,
                 )));
             }
+        }
+
+        // The error and rowless payloads (e.g. a large-output note) have nowhere else to show
+        let (text, style) = match (&st.error, &st.content) {
+            (Some(error), _) => (Some(error), Style::default().fg(theme.accent_error)),
+            (None, content) if st.results.is_empty() => (content.as_ref(), dim),
+            _ => (None, dim),
+        };
+        if let Some(text) = text {
+            lines.push(Line::from(""));
+            lines.extend(
+                text.lines()
+                    .map(|line| Line::from(Span::styled(line.to_owned(), style))),
+            );
         }
 
         Some(Self::for_static_content(
@@ -1339,7 +1341,9 @@ impl BlockViewerPane {
 
     #[cfg(test)]
     pub(crate) fn select_body_line_for_test(&mut self, body_idx: usize) {
-        let id = self.items[body_idx].id;
+        let Some(id) = self.items.get(body_idx).map(|item| item.id) else {
+            return;
+        };
         self.list_state.select_by_id(id);
         self.rebuild_unified_cache();
         let area = self.last_content_area;

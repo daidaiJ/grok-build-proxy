@@ -809,6 +809,12 @@ P4 后跑 `cargo test --lib views::` 为 2766 通过 / 2 失败；两失败在 m
 
 ## 十三期补丁（2026-09-18：会话默认 agent 尊重 `[agent] name` 配置）
 
+> **2026-09-28 已由上游覆盖、补丁撤销**：上游 `a28ee2b`（同步快照 2026-09-17）以
+> `SessionFlags::defer_builtin_agent_profile` + `views::agents_modal::config_agent_is_explicit()`
+> 实现了同一语义（配置显式设置 `[agent]` 时不再合成 plan/ask-user `agentProfile`）。
+> 合并 `sync/upstream-2026-09-23` 时采用上游实现，本节的 `respect_config_agent` 闸门、
+> `config_default_agent_name()` 与配套测试一并移除。以下为撤销前的历史记录。
+
 ### 问题
 
 上游默认 `plan_mode`/`ask_user`/`subagents` 全开（`app.plan_mode = !args.no_plan`，

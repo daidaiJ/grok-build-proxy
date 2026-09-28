@@ -98,6 +98,9 @@ pub struct ChatCompletionRequest {
     /// Consumers downcast via `trace.as_ref().unwrap().as_any().downcast_ref::<T>()`.
     #[serde(skip)]
     pub trace: Option<Box<dyn TraceContext>>,
+    /// Caller span's W3C `traceparent`; see [`crate::ConversationRequest::traceparent`].
+    #[serde(skip)]
+    pub traceparent: Option<String>,
 }
 
 impl ChatCompletionRequest {
@@ -125,6 +128,7 @@ impl ChatCompletionRequest {
             x_grok_deployment_id: None,
             x_grok_user_id: None,
             trace: None,
+            traceparent: None,
         }
     }
 
@@ -152,6 +156,7 @@ impl ChatCompletionRequest {
             x_grok_deployment_id: None,
             x_grok_user_id: None,
             trace: None,
+            traceparent: None,
         }
     }
 
@@ -789,7 +794,6 @@ impl CompactionsRemaining {
     PartialEq,
     Eq,
     serde::Serialize,
-    serde::Deserialize,
     strum::AsRefStr,
     strum::IntoStaticStr,
 )]
@@ -865,8 +869,53 @@ impl std::str::FromStr for ReasoningEffort {
     }
 }
 
+impl<'de> serde::Deserialize<'de> for ReasoningEffort {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        raw.parse().map_err(serde::de::Error::custom)
+    }
+}
+
 pub fn parse_canonical_effort_token(token: &str) -> Option<ReasoningEffort> {
     token.parse().ok()
+}
+
+/// The `reasoning.summary` requested on the Responses API.
+/// `None` omits the field, for gateways that reject it (AWS Bedrock Mantle returns 400 for it as of 2026-09).
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::AsRefStr,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "snake_case")]
+pub enum ReasoningSummary {
+    None,
+    Auto,
+    #[default]
+    Concise,
+    Detailed,
+}
+
+impl ReasoningSummary {
+    pub fn to_responses_api(self) -> Option<crate::rs::ReasoningSummary> {
+        match self {
+            Self::None => None,
+            Self::Auto => Some(crate::rs::ReasoningSummary::Auto),
+            Self::Concise => Some(crate::rs::ReasoningSummary::Concise),
+            Self::Detailed => Some(crate::rs::ReasoningSummary::Detailed),
+        }
+    }
 }
 
 pub const REASONING_EFFORT_META_KEY: &str = "reasoningEffort";
@@ -933,7 +982,21 @@ enum RawReasoningEffortOption {
     },
 }
 
-/// Uppercase the first character of an id for a default label; `"xhigh"` becomes `"Xhigh"`, `"deep"` becomes `"Deep"`.
+/// Display label for a known level; the bare-string menu shorthand and the shell's built-in effort picker share it.
+pub fn effort_label(effort: ReasoningEffort) -> String {
+    match effort {
+        ReasoningEffort::None => "None",
+        ReasoningEffort::Minimal => "Minimal",
+        ReasoningEffort::Low => "Low",
+        ReasoningEffort::Medium => "Medium",
+        ReasoningEffort::High => "High",
+        ReasoningEffort::Xhigh => "X-High",
+        ReasoningEffort::Max => "Max",
+    }
+    .to_string()
+}
+
+/// Uppercase the first character of a custom id for a default label; `"deep"` becomes `"Deep"`.
 fn humanize_effort_id(id: &str) -> String {
     let mut chars = id.chars();
     match chars.next() {
@@ -952,12 +1015,10 @@ impl<'de> serde::Deserialize<'de> for ReasoningEffortOption {
                 let value = s
                     .parse::<ReasoningEffort>()
                     .map_err(serde::de::Error::custom)?;
-                let id = value.as_ref().to_string();
-                let label = humanize_effort_id(&id);
                 ReasoningEffortOption {
-                    id,
+                    id: value.as_ref().to_string(),
                     value,
-                    label,
+                    label: effort_label(value),
                     description: None,
                     default: false,
                 }
@@ -969,8 +1030,11 @@ impl<'de> serde::Deserialize<'de> for ReasoningEffortOption {
                 description,
                 default,
             } => {
+                let label = label.unwrap_or_else(|| match &id {
+                    Some(id) => humanize_effort_id(id),
+                    None => effort_label(value),
+                });
                 let id = id.unwrap_or_else(|| value.as_ref().to_string());
-                let label = label.unwrap_or_else(|| humanize_effort_id(&id));
                 ReasoningEffortOption {
                     id,
                     value,
@@ -985,14 +1049,17 @@ impl<'de> serde::Deserialize<'de> for ReasoningEffortOption {
 
 /// Parse a JSON array of reasoning-effort options element-by-element, skipping and warning on any entry whose `value` fails to parse.
 /// That keeps tiers a newer server introduces from breaking the whole list.
-/// The meta reader and the remote `/models` parser both call this, so the skip rule lives in one place.
-pub fn parse_reasoning_effort_options(arr: &[serde_json::Value]) -> Vec<ReasoningEffortOption> {
+/// The meta reader and the remote `/models` parser both call this, so the skip rule lives in one place; `field` names the source key in the warn.
+pub fn parse_reasoning_effort_options(
+    arr: &[serde_json::Value],
+    field: &str,
+) -> Vec<ReasoningEffortOption> {
     arr.iter()
         .filter_map(
             |el| match serde_json::from_value::<ReasoningEffortOption>(el.clone()) {
                 Ok(opt) => Some(opt),
                 Err(err) => {
-                    tracing::warn!(value = %el, error = %err, "reasoningEfforts: skipping invalid entry");
+                    tracing::warn!(value = %el, error = %err, "{field}: skipping invalid entry");
                     None
                 }
             },
@@ -1014,7 +1081,7 @@ pub fn parse_reasoning_efforts_meta(
             return None;
         }
     };
-    let options = parse_reasoning_effort_options(arr);
+    let options = parse_reasoning_effort_options(arr, REASONING_EFFORTS_META_KEY);
     (!options.is_empty()).then_some(options)
 }
 
@@ -1046,6 +1113,15 @@ impl ApiBackend {
     /// [`ConversationRequest::prompt_cache_key`]: crate::conversation::ConversationRequest::prompt_cache_key
     pub fn forwards_prompt_cache_key(&self) -> bool {
         matches!(self, Self::Responses)
+    }
+
+    /// Request-body cap the hosts speaking this protocol enforce; the budget when a model sets no `max_request_bytes`.
+    /// The xAI inference proxy rejects bodies over 50 MiB (nginx `proxy-body-size`); Messages API hosts reject bodies over 30 MB.
+    pub const fn default_max_request_bytes(&self) -> NonZeroU64 {
+        match self {
+            Self::ChatCompletions | Self::Responses => NonZeroU64::new(50 * 1024 * 1024).unwrap(),
+            Self::Messages => NonZeroU64::new(30_000_000).unwrap(),
+        }
     }
 }
 
@@ -1112,9 +1188,15 @@ pub struct SamplingConfig {
     pub env_http_headers: indexmap::IndexMap<String, String>,
     /// Total context window size in tokens; auto-compact thresholds derive from it.
     pub context_window: NonZeroU64,
+    /// Provider request-body cap, already defaulted from `api_backend` by model resolution; `None` budgets to 50 MiB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_request_bytes: Option<NonZeroU64>,
     /// Reasoning effort level for reasoning models.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffort>,
+    /// Responses API `reasoning.summary`; `None` keeps the request builder's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_summary: Option<ReasoningSummary>,
     /// When true, inject `stream_tool_calls: true` into the Responses API request body so the upstream emits per-chunk argument deltas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_tool_calls: Option<bool>,
@@ -1136,6 +1218,35 @@ pub struct ExperimentalSamplingOptions {
     // LOCAL(deepseek-compat): `<think>` 标签清洗已由 sampler 的 think_split
     // 常开承载（含边界伪影丢弃规则），无需实验开关；本结构保留作后续
     // 实验特性的扩展点。历史配置里的 `thinking_tag_scrub` 键会被 serde 静默忽略。
+}
+
+impl Default for SamplingConfig {
+    /// Empty defaults so construction sites (tests especially) can use `..Default::default()` and new fields don't ripple through every literal.
+    /// `context_window` defaults to the inert minimum; real configs must set it.
+    fn default() -> Self {
+        Self {
+            base_url: String::new(),
+            mtls_cert_dir: None,
+            model: String::new(),
+            max_completion_tokens: None,
+            temperature: None,
+            top_p: None,
+            max_retries: None,
+            rate_limit_retry_threshold: None,
+            api_backend: ApiBackend::default(),
+            extra_headers: indexmap::IndexMap::new(),
+            conversation_group_id: None,
+            query_params: indexmap::IndexMap::new(),
+            env_http_headers: indexmap::IndexMap::new(),
+            context_window: NonZeroU64::MIN,
+            max_request_bytes: None,
+            reasoning_effort: None,
+            reasoning_summary: None,
+            stream_tool_calls: None,
+            // LOCAL(experimental): 本地实验特性集合（全字段默认关）
+            experimental: ExperimentalSamplingOptions::default(),
+        }
+    }
 }
 
 // ============ Responses API wrapper ============
@@ -1162,6 +1273,8 @@ pub struct CreateResponseWrapper {
 
     /// Optional tracing context (e.g., where to persist the finalized request payload).
     pub trace: Option<Box<dyn TraceContext>>,
+    /// Caller span's W3C `traceparent`; see [`crate::ConversationRequest::traceparent`].
+    pub traceparent: Option<String>,
 
     /// xAI-specific tool definitions that can't be expressed via `async_openai`'s `rs::Tool` enum (e.g., `x_search`).
     /// They are injected as raw JSON into the serialized request body's `tools` array.
@@ -1181,6 +1294,7 @@ impl CreateResponseWrapper {
             x_grok_deployment_id: None,
             x_grok_user_id: None,
             trace: None,
+            traceparent: None,
             extra_tool_entries: vec![],
         }
     }
@@ -1230,6 +1344,8 @@ pub struct MessagesRequestWrapper {
 
     /// Optional tracing context (e.g., where to persist the finalized request payload).
     pub trace: Option<Box<dyn TraceContext>>,
+    /// Caller span's W3C `traceparent`; see [`crate::ConversationRequest::traceparent`].
+    pub traceparent: Option<String>,
 }
 
 impl MessagesRequestWrapper {
@@ -1245,6 +1361,7 @@ impl MessagesRequestWrapper {
             x_grok_deployment_id: None,
             x_grok_user_id: None,
             trace: None,
+            traceparent: None,
         }
     }
 
@@ -1328,7 +1445,7 @@ mod tests {
             ReasoningEffortOption {
                 id: "xhigh".to_string(),
                 value: ReasoningEffort::Xhigh,
-                label: "Xhigh".to_string(),
+                label: "X-High".to_string(),
                 description: None,
                 default: false,
             }
@@ -1384,9 +1501,11 @@ mod tests {
         .cloned()
         .unwrap();
         let parsed = parse_reasoning_efforts_meta(Some(&meta)).unwrap();
-        assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed[0].value, ReasoningEffort::High);
-        assert_eq!(parsed[1].value, ReasoningEffort::Low);
+        let [high, low] = parsed.as_slice() else {
+            panic!("expected two efforts: {parsed:?}");
+        };
+        assert_eq!(high.value, ReasoningEffort::High);
+        assert_eq!(low.value, ReasoningEffort::Low);
     }
 
     #[test]
@@ -1516,9 +1635,9 @@ mod tests {
 
             let blocks = msg.content.blocks();
             assert_eq!(blocks.len(), 1);
-            match &blocks[0] {
-                ChatContentBlock::Text { text } => assert_eq!(text, expected_content),
-                _ => panic!("Expected empty Text block"),
+            match blocks.first() {
+                Some(ChatContentBlock::Text { text }) => assert_eq!(text, expected_content),
+                other => panic!("Expected empty Text block, got {other:?}"),
             }
         }
     }

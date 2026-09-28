@@ -398,8 +398,6 @@ mod tests {
         );
     }
 
-    // ── usage_label / period type ────────────────────────────────────
-
     fn bal_period(pct: f64, period_type: &str) -> CreditBalance {
         CreditBalance {
             period_type: Some(period_type.to_string()),
@@ -467,8 +465,6 @@ mod tests {
             Some(("Weekly limit left: 0%".to_string(), true))
         );
     }
-
-    // ── usage_warning (prompt info row) ──────────────────────────────
 
     #[test]
     fn warning_usage_model_thresholds() {
@@ -624,8 +620,6 @@ mod tests {
         );
     }
 
-    // ── usage_warning: pay-as-you-go (monthly on-demand) ─────────────
-
     fn pay_as_you_go(usage_pct: f64, cap_cents: i64, used_cents: i64) -> CreditBalance {
         CreditBalance {
             pay_as_you_go: true,
@@ -705,13 +699,22 @@ mod tests {
         let theme = Theme::default();
 
         let low = credit_bar_line(&bal(50.0), false, &theme);
-        assert_eq!(low.spans[0].style.fg, Some(theme.accent_success));
+        assert_eq!(
+            low.spans.first().and_then(|s| s.style.fg),
+            Some(theme.accent_success)
+        );
 
         let high = credit_bar_line(&bal(85.0), false, &theme);
-        assert_eq!(high.spans[0].style.fg, Some(theme.warning));
+        assert_eq!(
+            high.spans.first().and_then(|s| s.style.fg),
+            Some(theme.warning)
+        );
 
         let over = credit_bar_line(&bal(100.0), false, &theme);
-        assert_eq!(over.spans[0].style.fg, Some(theme.accent_error));
+        assert_eq!(
+            over.spans.first().and_then(|s| s.style.fg),
+            Some(theme.accent_error)
+        );
     }
 
     #[test]
@@ -720,7 +723,10 @@ mod tests {
         let line = credit_bar_line(&bal(0.0), false, &theme);
         let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
         assert_eq!(text, "Credits used: 0%");
-        assert_eq!(line.spans[0].style.fg, Some(theme.accent_success));
+        assert_eq!(
+            line.spans.first().and_then(|s| s.style.fg),
+            Some(theme.accent_success)
+        );
     }
 
     #[test]
@@ -728,11 +734,17 @@ mod tests {
         let theme = Theme::default();
         // Exactly 80% renders yellow (warning)
         let at_80 = credit_bar_line(&bal(80.0), false, &theme);
-        assert_eq!(at_80.spans[0].style.fg, Some(theme.warning));
+        assert_eq!(
+            at_80.spans.first().and_then(|s| s.style.fg),
+            Some(theme.warning)
+        );
 
         // Just below 80% renders green (success)
         let below_80 = credit_bar_line(&bal(79.9), false, &theme);
-        assert_eq!(below_80.spans[0].style.fg, Some(theme.accent_success));
+        assert_eq!(
+            below_80.spans.first().and_then(|s| s.style.fg),
+            Some(theme.accent_success)
+        );
     }
 
     #[test]
@@ -740,11 +752,17 @@ mod tests {
         let theme = Theme::default();
         // Exactly 100% renders red (error)
         let at_100 = credit_bar_line(&bal(100.0), false, &theme);
-        assert_eq!(at_100.spans[0].style.fg, Some(theme.accent_error));
+        assert_eq!(
+            at_100.spans.first().and_then(|s| s.style.fg),
+            Some(theme.accent_error)
+        );
 
         // Just below 100% renders yellow (warning)
         let below_100 = credit_bar_line(&bal(99.9), false, &theme);
-        assert_eq!(below_100.spans[0].style.fg, Some(theme.warning));
+        assert_eq!(
+            below_100.spans.first().and_then(|s| s.style.fg),
+            Some(theme.warning)
+        );
     }
 
     #[test]
@@ -753,7 +771,10 @@ mod tests {
         let line = credit_bar_line(&bal(150.0), false, &theme);
         let text: String = line.spans.iter().map(|s| s.content.as_ref()).collect();
         assert_eq!(text, "Credits used: 150%");
-        assert_eq!(line.spans[0].style.fg, Some(theme.accent_error));
+        assert_eq!(
+            line.spans.first().and_then(|s| s.style.fg),
+            Some(theme.accent_error)
+        );
     }
 
     #[test]

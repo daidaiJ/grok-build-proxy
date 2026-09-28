@@ -1,0 +1,38 @@
+# 上游同步 2026-09-23：i18n 覆盖丢失站点清单
+# 来源：合并时上游删除/搬迁了承载本地 tr() 包裹的代码，本站点在中文模式下回落英文。
+# 补法：到上表注明的上游新落点重放 tr()/tr_str()，或按新文案补 i18n 表键。
+
+crates/codegen/xai-grok-pager/src/views/dashboard/render.rs | Subagent not loaded | 删除
+crates/codegen/xai-grok-pager/src/views/dashboard/render.rs | New session | 搬迁(row_title.rs RowTitle::render_wide 标题头)
+crates/codegen/xai-grok-pager/src/views/dashboard/render.rs | failed | 搬迁(row_title.rs 徽标 chip)
+crates/codegen/xai-grok-pager/src/views/dashboard/render.rs | bg | 搬迁(row_title.rs 徽标 chip)
+crates/codegen/xai-grok-pager/src/views/dashboard/render.rs | New session | 搬迁(row_title.rs RowTitle::render_narrow 窄模式回退头)
+crates/codegen/xai-grok-pager/src/views/dashboard/render.rs | [Dashboard] | 搬迁(会话 overlay 标题栏，上游删除 paint_session_title_bar)
+crates/codegen/xai-grok-pager/src/views/dashboard/row.rs | … {} more | 搬迁(build_local_rows 子代理溢出行上游删除)
+crates/codegen/xai-grok-pager/src/views/dashboard/row.rs | worktree | 搬迁(subagent_subtitle → row_activity.rs)
+crates/codegen/xai-grok-pager/src/views/dashboard/row.rs | command in-flight display_name | 搬迁(top_level_activity → row_activity.rs)
+crates/codegen/xai-grok-pager/src/views/dashboard/row.rs | {tools} tools · {toks} tok · {turns} turns | 搬迁(subagent_activity → row_activity.rs)
+crates/codegen/xai-grok-pager/src/views/memory_modal.rs | unknown | 删除
+crates/codegen/xai-grok-pager/src/views/memory_modal.rs | just now | 删除
+crates/codegen/xai-grok-pager/src/views/memory_modal.rs | {mins}m ago | 删除
+crates/codegen/xai-grok-pager/src/views/memory_modal.rs | {hours}h ago | 删除
+crates/codegen/xai-grok-pager/src/views/memory_modal.rs | {days}d ago | 删除
+crates/codegen/xai-grok-pager/src/views/memory_modal.rs | t toggle (on) | 删除(上游字面量改为 t turn on，已改用 tr("t turn on"))
+crates/codegen/xai-grok-pager/src/views/memory_modal.rs | t toggle (off) | 删除(上游字面量改为 t turn off，已改用 tr("t turn off"))
+crates/codegen/xai-grok-pager/src/views/tasks_pane.rs | {n} agent | 搬迁(run.activity_label())
+crates/codegen/xai-grok-pager/src/views/tasks_pane.rs | {n} agents | 搬迁(run.activity_label())
+crates/codegen/xai-grok-pager/src/views/tasks_pane.rs | running | 搬迁(run.activity_label())
+crates/codegen/xai-grok-pager/src/views/tasks_pane.rs | run.status (tr_str 动态状态串) | 搬迁(run.activity_label())
+crates/codegen/xai-grok-pager/src/views/tasks_pane.rs |  (next in {}) | 搬迁(scheduled_next::next_suffix)
+crates/codegen/xai-grok-pager/src/views/tasks_pane.rs |  (due now) | 搬迁(scheduled_next::next_suffix)
+crates/codegen/xai-grok-pager/src/views/tasks_pane.rs |  (running) | 搬迁(scheduled_next::next_suffix)
+crates/codegen/xai-grok-pager/src/views/tasks_pane.rs |  (starting) | 搬迁(scheduled_next::next_suffix)
+crates/codegen/xai-grok-pager/src/views/dock/mod.rs | subagents | 删除(Section::tab_hint 上游删除)
+crates/codegen/xai-grok-pager/src/views/dock/mod.rs | tasks | 删除(Section::tab_hint 上游删除)
+crates/codegen/xai-grok-pager/src/views/dock/mod.rs | watchers | 删除(Section::tab_hint 上游删除)
+crates/codegen/xai-grok-pager/src/views/dock/mod.rs | queued | 删除(Section::tab_hint 上游删除)
+crates/codegen/xai-grok-pager/src/views/location.rs |  (worktree of {repo}) | 删除(format_cwd_parts 上游删除，后缀改由 util/git_info 生成)
+crates/codegen/xai-grok-pager/src/views/workflows.rs | {done}/{total} agent | 删除(选择行 meta 上游移除 agent 计数；键仍在 render 处使用)
+crates/codegen/xai-grok-pager/src/views/workflows.rs | {done}/{total} agents | 删除(同上)
+crates/codegen/xai-grok-pager/src/views/subagent_catalog_pane.rs | No bundled items. | 删除(整文件按上游删除)
+crates/codegen/xai-grok-pager/src/views/subagent_catalog_pane.rs | tr_str(header name) | 删除(整文件按上游删除)
