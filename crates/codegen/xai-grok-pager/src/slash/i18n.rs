@@ -306,7 +306,8 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "<名称> [--agent-budget N] [--effort LEVEL] [参数] | runs | pause|resume|stop|save [名称]",
         ),
         // -- 快捷键提示栏（shortcuts_bar 标签，经 tr_str 在渲染时查表） --
-        ("press again to", "再按一次确认:"),
+        // LOCAL: 键含尾随空格，英文侧靠它分隔标签，中文侧无空格（对齐中文标点习惯）
+        ("press again to ", "再按一次确认:"),
         ("New Agent", "新建代理"),
         ("accept", "接受"),
         ("accept / toggle", "接受/切换"),

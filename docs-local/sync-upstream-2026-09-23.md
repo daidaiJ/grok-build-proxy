@@ -81,4 +81,17 @@ rustc 1.94 上编译失败（`cc/src/tempfile.rs` 把 `find_msvc_tools::windows_
 
 ## 验证
 
-（待填：`cargo check` / ctest 白名单 crate lib 测试 / 活回合）
+| 项 | 结果 |
+|---|---|
+| `cargo check --workspace` | 通过（0 error） |
+| `cargo check --workspace --all-targets` | 通过（0 error，0 warning） |
+| `ctest.sh -p xai-grok-sampling-types --lib` | 303 passed |
+| `ctest.sh -p xai-chat-state --lib` | 396 passed |
+| `ctest.sh -p xai-grok-extra-ca --lib` | 15 passed |
+| `ctest.sh -p xai-grok-status-line --lib` | 18 passed |
+| `ctest.sh -p xai-grok-sampler --lib` | 289 passed |
+| `ctest.sh -p xai-grok-pager --lib` | 10031 passed / 0 failed（43 skipped：新增 4 条环境族 + 既有 39 条） |
+| 活回合（TUI 实跑） | 待做 |
+
+编译期间有一次 `rustc` `STATUS_ACCESS_VIOLATION`（0xc0000005），按既有纪律
+（`rm -rf target/debug/incremental` + `CARGO_INCREMENTAL=0`）复跑通过，非代码问题。

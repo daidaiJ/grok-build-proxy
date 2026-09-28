@@ -68,3 +68,13 @@ test_peak_rss_recorded_at_turn_end
 # 环境下探针退出码 2（手动直跑同一脚本 rc=0，status_line spawn 路径 × 测试 env 互作；
 # main 同源同样复现，与 LOCAL 改动无关），环境族不修(2026-09-27)。
 python_command_line_with_a_drive_path_runs
+
+# 族Q 本机 HOME/config 与 POSIX 根路径夹具（2026-09-28 上游同步后新暴露）——
+# 三条 voice 用例经 resolve_voice_mode_live → voice_mode_config_value() 读本机
+# ~/.grok/config.toml，本机配置里 `voice_mode = false`（用户设置），远程 true 也翻不过来；
+# plan_kept 用例用 `file:///tmp/second.plan.md` 夹具，Windows 上 URL→路径转换丢根路径
+# （上游同样的 POSIX 根路径语义）。均属环境族，CI(Linux) 正常。
+settings_api_key_keeps_voice_despite_remote_false
+settings_non_api_key_tier_clears_stale_api_key_flag
+voice_remote_true_re_enables_after_kill_switch
+plan_kept_replaces_the_keep_and_refreshes_mounted_review

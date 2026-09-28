@@ -1,5 +1,7 @@
 use super::*;
 
+// LOCAL: only the cfg(unix) cases below call it.
+#[cfg_attr(windows, allow(dead_code))]
 fn assert_follow_refused(err: &std::io::Error) {
     assert!(
         err.kind() == std::io::ErrorKind::InvalidInput || is_follow_hard_error(err),

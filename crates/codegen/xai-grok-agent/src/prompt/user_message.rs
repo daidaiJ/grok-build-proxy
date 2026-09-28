@@ -335,6 +335,8 @@ impl UserMessageContext {
 mod tests {
     use super::*;
     /// Test-only lookup: `["k"]` would panic on a missing key, so index through a pointer path.
+    // LOCAL: only the cfg(unix) cases below call it.
+    #[cfg_attr(windows, allow(dead_code))]
     fn jp<'a>(v: &'a serde_json::Value, path: &str) -> &'a serde_json::Value {
         v.pointer(path).unwrap_or(&serde_json::Value::Null)
     }

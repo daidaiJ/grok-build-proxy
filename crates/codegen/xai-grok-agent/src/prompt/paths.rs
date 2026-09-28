@@ -55,6 +55,8 @@ fn expand_tilde_in(raw: &str, home: Option<&Path>) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    // LOCAL: only the cfg(unix) cases below use the parent scope.
+    #[cfg_attr(windows, allow(unused_imports))]
     use super::*;
 
     // The fixtures are POSIX-absolute; on Windows they would be relative and dropped

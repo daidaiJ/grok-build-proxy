@@ -1635,3 +1635,29 @@ quota_estimate 8/8 过）；`ctest.sh -p xai-grok-pager --lib` **9614 过/0 挂*
 
 验证：`cargo check -p xai-grok-sampler` 干净；`ctest.sh -p xai-grok-sampler --lib`
 279/279（原 278 +1）。
+
+## 上游同步 2026-09-15…09-23 收尾补丁（2026-09-28，分支 `sync/upstream-2026-09-23`）
+
+上游这 5 个快照把若干本地/上游共享结构收敛或搬迁，合并后为保住本机（Windows）
+`cargo check --workspace --all-targets` 与 lib 测试的基线，追加以下 LOCAL 改动：
+
+- `xai-grok-shell/src/session/persistence.rs`：上游把 `Summary.agent_name`（原来是 `pub`）
+  收敛成 `pub(crate) agent: PersistedAgentSelection`，导致 `benches/session_list.rs`
+  既无法命名类型、也无法构造字段。把 `PersistedAgentSelection` 与 `Summary.agent`
+  可见性放开到 `pub`（`selected` 字段同样放开），并在 bench 里改用
+  `PersistedAgentSelection { selected: Some(PersistedAgent::Named(..)) }`。
+  纯可见性放宽，不改语义；上游下次同步若再收敛可见性需重放。
+- `xai-grok-shell/src/session/helpers/session_compact_retain_session_asset_files_tests.rs`：
+  `keeps_only_regular_files_inside_the_assets_dir` 用 `std::os::unix::fs::symlink`
+  造软链（含软链目录逃逸用例），Windows 无此 API → `#[cfg(unix)]` 门控（同时登记
+  `win-skip.txt`）。
+- Windows 侧 lint 归零（上游 CI 是 Linux，这些告警只在 Windows 出现）：
+  `xai-grok-shared/src/clipboard.rs`（`#[cfg_attr(windows, allow(unused_assignments))]`）、
+  `xai-grok-agent/src/prompt/paths.rs`（unused import）、
+  `xai-grok-agent/src/prompt/user_message.rs`（`jp` dead_code）、
+  `xai-grok-config/src/fs_atomic.rs` 与 `fs_atomic_tests.rs`（`same_file_identity` /
+  `assert_follow_refused` dead_code）。均为属性级允许，不改行为。
+- `Cargo.lock` 本机偏离上游一处：`tree-sitter 0.26.13` 要求 `cc ^1.2.48`，上游锁的
+  `cc 1.2.48` 在 rustc 1.94 上编译失败（`tempfile.rs` 里
+  `find_msvc_tools::windows_sys::FILE_ATTRIBUTE_TEMPORARY` 类型不匹配）；
+  本机解析到 `cc 1.5.1` + `find-msvc-tools 0.1.14` 通过。

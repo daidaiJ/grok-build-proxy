@@ -231,7 +231,7 @@ impl Widget for ShortcutsBar<'_> {
             // LOCAL: 前缀经 i18n 查表（中文"再按一次确认:"），标签本身另查
             let label = format!(
                 "{}{}",
-                crate::slash::i18n::tr("press again to"),
+                crate::slash::i18n::tr("press again to "),
                 crate::slash::i18n::tr_str(pending.label)
             );
 

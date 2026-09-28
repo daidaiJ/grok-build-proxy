@@ -46,7 +46,7 @@ async fn newer_junk_does_not_consume_the_cap() {
 }
 
 // LOCAL: 该用例用 `std::os::unix::fs::symlink` 造符号链接（含软链目录逃逸），
-// Windows 无此 API；同语义由 win-skip.txt 登记跳过。
+// Windows 无此 API，整个用例按 unix 门控。
 #[cfg(unix)]
 #[tokio::test]
 async fn keeps_only_regular_files_inside_the_assets_dir() {

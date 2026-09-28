@@ -490,6 +490,8 @@ fn file_id_from_unix_meta(meta: &std::fs::Metadata) -> FileId {
 }
 
 #[cfg(test)]
+// LOCAL: only the cfg(unix) cases below call it.
+#[cfg_attr(windows, allow(dead_code))]
 fn same_file_identity(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
     #[cfg(unix)]
     {

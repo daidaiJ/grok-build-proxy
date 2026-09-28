@@ -1862,6 +1862,9 @@ mod platform {
             image,
             read_path: ClipboardReadPath::Arboard,
         };
+        // LOCAL: on Windows the Wayland arm is compiled out, so the initial `None`
+        // is dead until the `Err` arm overwrites it.
+        #[cfg_attr(windows, allow(unused_assignments))]
         let mut arboard_error = None;
         match arboard_get_image() {
             Ok(Some(image)) => return Ok(arboard(Some(image))),
