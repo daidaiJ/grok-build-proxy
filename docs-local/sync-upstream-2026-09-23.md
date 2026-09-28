@@ -97,7 +97,31 @@ rustc 1.94 上编译失败（`cc/src/tempfile.rs` 把 `find_msvc_tools::windows_
 | `ctest.sh -p xai-grok-status-line --lib` | 18 passed |
 | `ctest.sh -p xai-grok-sampler --lib` | 289 passed |
 | `ctest.sh -p xai-grok-pager --lib` | 10031 passed / 0 failed（43 skipped：新增 4 条环境族 + 既有 39 条） |
-| 活回合（TUI 实跑） | 待做 |
+| Linux CI（build.yml `linux` job） | **1 failed**：`xai-grok-shell` 的 `tool_call_telemetry_tests::execute_tool_calls_records_the_product_row_and_execution_span`（上游本次新增用例），详见下节 |
+| 活回合（TUI 实跑） | 未做（用户决定直接发 tag） |
 
 编译期间有一次 `rustc` `STATUS_ACCESS_VIOLATION`（0xc0000005），按既有纪律
 （`rm -rf target/debug/incremental` + `CARGO_INCREMENTAL=0`）复跑通过，非代码问题。
+
+## 未决：Linux CI 里一条新用例失败（v1.0.37 tag 后暴露）
+
+`cargo test -p xai-grok-shell --features test-support`（Linux）里
+`session::acp_session::tool_call_telemetry_tests::execute_tool_calls_records_the_product_row_and_execution_span`
+在 `tool_call_telemetry_tests.rs:485` 断言 `source_status == "succeeded"`，实得 `"failed"`。
+
+已定位到的事实：
+- `source_status` 直接取自 `GrepSearchOutput.exit_code`（0=成功 / 1=空结果 / 其它=失败），
+  即该次 `search_code` 的 rg 调用返回了 ≥2 的退出码。
+- 同一文件里 `renamed_grep_keeps_its_output_after_a_later_model_request` 在 CI 通过，
+  说明 CI 上 rg 可用、工具链本身正常；差别是该用例把 `session_info.cwd` 改成
+  `/tmp/opt-repo-<pid>`，而检索目标在**另一个**临时目录 `/tmp/secret-project-<pid>/note.txt`。
+- 工具侧 `resolve_model_path(cwd, display_cwd, path)`：绝对路径若以 `display_cwd` 为前缀，
+  会被**重写**成 `cwd.join(后缀)`；随后 `prepare_grep` 的 pre-check 用 `metadata()` 判 NotFound
+  即早退 `exit_code = 2`。`cwd` 与 `display_cwd` 一旦落在不同根上，绝对路径就会被改写成
+  不存在的位置——与观测到的 "failed" 一致。
+- 本机无法复现（`create_test_actor` 夹具把 cwd 写死 `/tmp`，Windows 上 `AbsPathBuf::new("/tmp")`
+  直接 `NotAbsolute` panic，属既有族N）。
+
+下一步选项：① 通过 push 到 `main` 触发 CI 做诊断迭代（每轮约 25 分钟，因为 fork 的
+`build.yml` 只在 main/PR 上跑，而 gh 账号无写权限、建不了 PR）；② 用户在自己账号下开 PR，
+让 CI 在分支上按 push 迭代。
