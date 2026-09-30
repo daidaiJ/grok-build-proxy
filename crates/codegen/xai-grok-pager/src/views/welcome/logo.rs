@@ -11,16 +11,20 @@ use crate::theme::Theme;
 
 const LOGO: &str = include_str!("../../../assets/logo/logo07.txt");
 const LOGO_SMALL: &str = include_str!("../../../assets/logo/logo05.txt");
+const LOGO_XL: &str = include_str!("../../../assets/logo/logo13.txt");
 
 /// Height at or above which the small logo is shown (below it, no logo).
 const SMALL_LOGO_MIN_HEIGHT: u16 = 22;
 /// Height at or above which the full logo is shown.
 const FULL_LOGO_MIN_HEIGHT: u16 = 26;
+/// Height at or above which the extra-large logo is shown.
+const XL_LOGO_MIN_HEIGHT: u16 = 44;
 
 /// Which logo art the stacked column shows.
 /// The terminal height picks the tier; the stacked layout steps it down only while the column would not fit beside the draft.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogoTier {
+    Xl,
     Full,
     Compact,
     Hidden,
@@ -37,13 +41,16 @@ impl LogoTier {
             Self::Hidden
         } else if window_height < FULL_LOGO_MIN_HEIGHT {
             Self::Compact
-        } else {
+        } else if window_height < XL_LOGO_MIN_HEIGHT {
             Self::Full
+        } else {
+            Self::Xl
         }
     }
 
     fn art(self) -> Option<&'static str> {
         match self {
+            Self::Xl => Some(LOGO_XL),
             Self::Full => Some(LOGO),
             Self::Compact => Some(LOGO_SMALL),
             Self::Hidden => None,
@@ -57,6 +64,7 @@ impl LogoTier {
     /// The next smaller tier; `None` once hidden.
     pub fn step_down(self) -> Option<Self> {
         match self {
+            Self::Xl => Some(Self::Full),
             Self::Full => Some(Self::Compact),
             Self::Compact => Some(Self::Hidden),
             Self::Hidden => None,
@@ -265,6 +273,16 @@ mod tests {
             Some(LOGO_SMALL)
         );
         assert_eq!(pick_logo_for(FULL_LOGO_MIN_HEIGHT, false), Some(LOGO));
+        assert_eq!(pick_logo_for(XL_LOGO_MIN_HEIGHT - 1, false), Some(LOGO));
+        assert_eq!(pick_logo_for(XL_LOGO_MIN_HEIGHT, false), Some(LOGO_XL));
+    }
+
+    #[test]
+    fn xl_tier_steps_down_through_every_art() {
+        assert_eq!(LogoTier::Xl.step_down(), Some(LogoTier::Full));
+        assert_eq!(LogoTier::Xl.rows(), count_lines(LOGO_XL));
+        assert!(count_lines(LOGO_XL) > count_lines(LOGO));
+        assert!(visual_width(LOGO_XL) > visual_width(LOGO));
     }
 
     // The braille art has no legacy-safe stand-in, so every height tier must collapse to no logo when the legacy-console flag is set
