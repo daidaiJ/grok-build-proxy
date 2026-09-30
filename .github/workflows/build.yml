@@ -51,7 +51,7 @@ jobs:
     # A deadlocked test must fail the job, not park it for the 6-hour GitHub default.
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/ci-setup
         with:
           cache-scope: build
@@ -85,7 +85,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/ci-setup
         with:
           cache-scope: build
