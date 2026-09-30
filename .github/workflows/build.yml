@@ -60,10 +60,25 @@ jobs:
       # crate this fork touches but does not test on CI.
       - name: Check untested crates
         run: cargo check --locked -p xai-grok-tools
+      # One invocation on purpose: every cargo call resolves features over its
+      # own -p set, so splitting shell / pager-bin / the touched crates into
+      # separate steps re-resolved features and recompiled ~90% of the tree per
+      # step (2654 compiles for 986 crates on 2026-09-30). The union below
+      # compiles each crate once; `xai-grok-shell/test-support` scopes the
+      # feature to shell without dragging it into the other packages. cargo
+      # test also builds xai-grok-pager-bin's bin target, which replaces the
+      # old dedicated `cargo build` step, and runs its 31 unit tests as a
+      # bonus. The pager step below stays separate: it runs a name-filtered
+      # subset, and one invocation cannot run other crates whole while
+      # filtering the pager.
       - name: Test touched crates
+        timeout-minutes: 25
         run: >-
-          cargo test --locked -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
+          cargo test --locked
+          -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
           -p xai-grok-extra-ca -p xai-proto-build -p xai-grok-hooks -p xai-grok-agent
+          -p xai-grok-shell -p xai-grok-pager-bin
+          --features xai-grok-shell/test-support
       # Name-filtered runs: the pager's full suite is not exercised by this
       # fork; these cover the fork's own additions (stats aggregation, the
       # /stats modal cards, the built-in status-line segments incl. the guide
@@ -75,11 +90,6 @@ jobs:
         run: >-
           cargo test --locked -p xai-grok-pager --
           stats_cmd status_line stats_modal commands::stats
-      - name: Test shell (in-process harness)
-        timeout-minutes: 20
-        run: cargo test --locked -p xai-grok-shell --features test-support
-      - name: Build CLI binary
-        run: cargo build --locked -p xai-grok-pager-bin
 
   windows:
     runs-on: windows-latest
