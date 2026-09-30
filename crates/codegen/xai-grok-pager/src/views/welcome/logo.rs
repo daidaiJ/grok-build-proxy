@@ -9,7 +9,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use crate::render::color::blend_color;
 use crate::theme::Theme;
 
-const LOGO: &str = include_str!("../../../assets/logo/logo07.txt");
+const LOGO: &str = include_str!("../../../assets/logo/logo13.txt");
 const LOGO_SMALL: &str = include_str!("../../../assets/logo/logo05.txt");
 const LOGO_XL: &str = include_str!("../../../assets/logo/logo13.txt");
 
@@ -281,8 +281,10 @@ mod tests {
     fn xl_tier_steps_down_through_every_art() {
         assert_eq!(LogoTier::Xl.step_down(), Some(LogoTier::Full));
         assert_eq!(LogoTier::Xl.rows(), count_lines(LOGO_XL));
-        assert!(count_lines(LOGO_XL) > count_lines(LOGO));
-        assert!(visual_width(LOGO_XL) > visual_width(LOGO));
+        // Full and Xl now share the wide art; both must stay bigger than Compact.
+        assert_eq!(count_lines(LOGO_XL), count_lines(LOGO));
+        assert_eq!(visual_width(LOGO_XL), visual_width(LOGO));
+        assert!(count_lines(LOGO_XL) > count_lines(LOGO_SMALL));
     }
 
     // The braille art has no legacy-safe stand-in, so every height tier must collapse to no logo when the legacy-console flag is set

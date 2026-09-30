@@ -3574,8 +3574,8 @@ mod tests {
 
     #[test]
     fn hero_box_moves_up_only_once_the_flex_gap_is_gone() {
-        // 90x26: an 11-row box, a one-row flex gap and an 11-row prompt fit exactly (min_content_height 25)
-        let area = Rect::new(0, 0, 90, 26);
+        // 90x32: a 17-row box, a one-row flex gap and an 11-row prompt fit exactly (min_content_height 31)
+        let area = Rect::new(0, 0, 90, 32);
         let input = |prompt_height| WelcomeLayoutInput {
             content_area: area,
             menu_height: 4,
@@ -3653,10 +3653,10 @@ mod tests {
         assert_places_every_row(&tall, &input(Some(max)));
     }
 
-    /// 80x33: the full logo fits beside every draft up to the cap, so it never steps down.
+    /// 80x44: the wide logo (13 lines) fits beside every draft up to the cap, so it never steps down.
     #[test]
     fn stacked_full_logo_survives_the_whole_draft_range_when_it_fits() {
-        let area = Rect::new(0, 0, 80, 33);
+        let area = Rect::new(0, 0, 80, 42);
         let input = |prompt_height| WelcomeLayoutInput {
             content_area: area,
             menu_height: 4,
@@ -3752,9 +3752,9 @@ mod tests {
     /// The consent screen passes 0 prompt rows and must sit exactly where it did before the composer could grow.
     #[test]
     fn zero_row_prompt_is_not_charged_for_a_one_line_box_when_centering() {
-        // 80x28, a 9-row body, a 2-row menu: full logo 7 + gap 1 + gap 1 + body 9 leaves 10 rows
+        // 80x34, a 9-row body, a 2-row menu: full logo 13 + gap 1 + gap 1 + body 9 leaves 10 rows
         // (10 - 4 - 2) / 3 = 1 with the zero-row box; a phantom 3-row box would give (10 - 4 - 5) / 3 = 0
-        let area = Rect::new(0, 0, 80, 28);
+        let area = Rect::new(0, 0, 80, 34);
         let layout = WelcomeLayout::compute_stacked(WelcomeLayoutInput {
             content_area: area,
             error_height: 9,
@@ -3928,10 +3928,10 @@ mod tests {
 
     #[test]
     fn hero_box_inactive_when_warning_would_overflow() {
-        // Regression: the box is forced to the full 7-row logo, so even a 3-item menu needs 11 box rows
-        // A startup warning (error_height = 2) pushes the total past height 19
+        // Regression: the box is forced to the wide 13-line logo, so even a 3-item menu needs 17 box rows
+        // A startup warning (error_height = 2) pushes the total past height 25
         // The gate must therefore fall back to the stacked layout instead of overflowing by a row
-        let area = Rect::new(0, 0, 90, 19);
+        let area = Rect::new(0, 0, 90, 25);
         let with_warning = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             error_height: 2,
@@ -3984,7 +3984,7 @@ mod tests {
         // A 6-item menu makes the box 2 rows taller than the default-4 box. The centering pad (derived
         // from the default box) must be clamped. Otherwise the box gets pushed down and the version row
         // clips at exactly min_content_height.
-        let area = Rect::new(0, 0, 100, 19);
+        let area = Rect::new(0, 0, 100, 23);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
             menu_height: 6,
@@ -4010,9 +4010,9 @@ mod tests {
 
     #[test]
     fn hero_box_height_accounts_for_borders_and_padding() {
-        // At h >= 26, logo07 is used (7 lines). With menu_height=3:
-        // right_col = 2 + 0 + 0 + 1 + 3 = 6, inner = max(7, 6) = 7.
-        // hero_box_height = 2 (borders) + 2 (v_pad) + 7 = 11.
+        // At h >= 26, logo13 is used (13 lines). With menu_height=3:
+        // right_col = 2 + 0 + 0 + 1 + 3 = 6, inner = max(13, 6) = 13.
+        // hero_box_height = 2 (borders) + 2 (v_pad) + 13 = 17.
         let area = Rect::new(0, 0, 100, 50);
         let layout = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
@@ -4020,7 +4020,7 @@ mod tests {
             ..Default::default()
         });
         assert!(layout.has_hero_box());
-        assert_eq!(layout.hero_box.height, 11);
+        assert_eq!(layout.hero_box.height, 17);
     }
 
     #[test]
