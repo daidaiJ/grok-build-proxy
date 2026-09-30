@@ -2,8 +2,9 @@
 
 ## 待办事项（TODO）
 
-- **欢迎页 XL 熊猫 logo 档** — 已合入 main（2026-09-30，分支
-  `feat/local-panda-logo-tier`），正式 tag **`v1.0.38`** 待 CI 绿后补打。内容：新增
+- **欢迎页 XL 熊猫 logo 档** — 已随 **`v1.0.38`** 发版并部署（2026-09-30，分支
+  `feat/local-panda-logo-tier`，CI 36672275454 绿后打 tag，release 36675360723 双 job
+  success）。内容：新增
   `assets/logo/logo13.txt`（44×13 盲文格）
   + `LogoTier::Xl` 档（终高 ≥44 行显示，step_down 链 Xl→Full→Compact→Hidden，
   stacked 布局对档位自适应、hero box 仍固定 Full）。资产由图像半调管线
