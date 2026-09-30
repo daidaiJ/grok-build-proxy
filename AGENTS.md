@@ -2,6 +2,14 @@
 
 ## 待办事项（TODO）
 
+> **docs-local 维护约定（2026-09-30 定）**：根层与专题目录只放**活跃**文档（有未完成
+> 待办 / 被引用的规约与账本 / 持续追加的 wiki）。排查、事故、审计类一次性记录在收口
+> 当天移入 [`docs-local/archive/`](docs-local/archive/README.md)（索引与收口原因见其
+> README），跨文引用同步改路径。**归档索引只追加**：新条目一律追加在
+> archive/README.md 表尾，禁止插入/重排/修改已有条目；归档文档正文同理不改，
+> 补充以文末"后记"追加。规约类完工文档（如 ui-i18n-plan）不归档但须在头部
+> 标明"已完工 + 保留角色"。更新本索引时先核对文件真实存在。
+
 - **欢迎页 XL 熊猫 logo 档** — 已随 **`v1.0.38`** 发版并部署（2026-09-30，分支
   `feat/local-panda-logo-tier`，CI 36672275454 绿后打 tag，release 36675360723 双 job
   success）。内容：新增
@@ -68,12 +76,14 @@
   净开发 6–8.5 人天，含测试联调 10–12 人天。三个前提风险：明文密钥外泄（默认剥离）、
   TOML 合并冲突、上游同步维护面；文档内含数据分类白名单、身份/目录/协议定案、备选路线对比
   与待定决策。基线 `f8e1fea3`（调研快照 2026-09-21）。
-- [`docs-local/dump-evidence-todo.md`](docs-local/dump-evidence-todo.md) — `/dump` 现场取证转储。
-  **设计完成、未开工**；分期 T1 派生层生成器（`INDEX.md` + `facts.json`）→ T2 出站请求体落盘
+- **`/dump` 现场取证转储**（⚠️ 2026-09-30 盘点：原 `docs-local/dump-evidence-todo.md`
+  已不在工作区且从未入库，仅本条摘要幸存）— **设计完成、未开工**；分期 T1 派生层生成器
+  （`INDEX.md` + `facts.json`）→ T2 出站请求体落盘
   → T3 `/dump` TUI → T4 打包/脱敏档位 → T5 回归夹具。实测依据：会话 `01a0d161` 原始
   25.5 MB / 168 文件（其中一个工具输出占 95%、`events.jsonl` 98.8% 行是同一种心跳）
   → 派生层 4.8 KB（1/5292）。关键缺口是 MiMo 取证三问要的**出站请求体从未落盘**；
   文档含三层结构、脱敏表、充分性/友好性两份验收清单与 5 条待定决策。基线：当时 `main`。
+  重启该专题时先按本摘要重建文档再施工。
 - [`docs-local/upstream-responses-event-compat.md`](docs-local/upstream-responses-event-compat.md)
   — 第三方网关（Command Code）发非标 `response.reasoning.delta` 事件，撞上 async-openai
   的 serde 严格枚举 → 流式解析中止、整轮失败且不重试。含抓包、本仓库落点、三个修复
@@ -93,6 +103,18 @@
   打开已有 `image_describe`（Cursor 管线在本 fork 写死关闭）→ T2 工具结果/`read_file`/PDF
   剥图或转写 → T3 披露与 BYOK 禁止静默打 xAI。整回合切视觉 agent 明确不做。对照兄弟目录
   Qwen Code。净开发约 6–11 人天。分支拟 `feat/local-vision-bridge`。基线：2026-09-27 `main`。
+- [`docs-local/workflow-pi-port/`](docs-local/workflow-pi-port/README.md) — **workflow ×
+  pi 特性移植预研（选型完成，下一步预研特性，未开工）**：对照 pi（earendil-works/pi，
+  `0.84.0`–`0.99.1`）近两月特性与 `xai-workflow` 现状，结论 = 编排原语不缺、真缺口三个
+  （编排上下文膨胀 / 子 agent 工具面全量声明 / 成本）。两个选型特性已出设计原型：
+  P1 [canonical-context-edit.md](docs-local/workflow-pi-port/canonical-context-edit.md)
+  （journal 化 `context_edit` host call + prompt 构建层可见面，历史不动与重放确定性
+  兼容）、P2 [deferred-tool-exposure.md](docs-local/workflow-pi-port/deferred-tool-exposure.md)
+  （exposure 收敛三档 + `AgentOpts.tools/defer_tools` + `search_tools` 延迟声明，
+  不碰重放语义）。codemode 判定不移植（QuickJS 双运行时破坏 journal hash 确定性，
+  决策 D1，只吸收按分支 KV / 大输出旁路两个思想）；cache warming 拟 P2' 独立专题。
+  分支拟 P1 `feat/local-workflow-context-edit` / P2 `feat/local-deferred-tool-exposure`。
+  基线：2026-09-30 `main` `95aad87`（pi 基线 `0.99.1`，2026-09-29）。
 
 ## 🔄 Handoff 摘要
 
@@ -108,7 +130,8 @@
   ⚠️ CI 不跑 sampler 用例（只把它当依赖编译），见 handoff §8
 - **验收标准：** 全部达标（release 4 资产 + `grok2.exe --version` = `1.0.37-preview.6`；build 双 job success；
   活回合正向 + 落盘扫描 + 回归三项证据见 handoff §5 / §13）
-- **详情指针：** [`.handoff/think-split-quoted-marker-fold.md`](.handoff/think-split-quoted-marker-fold.md)
+- **详情指针：** [`docs-local/archive/think-split-quoted-marker-fold.md`](docs-local/archive/think-split-quoted-marker-fold.md)
+  （⚠️ 原 `.handoff/` 目录从未入库、已不存在，archive 内该文是唯一完整记录）
 
 ### 未验证事项
 

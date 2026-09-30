@@ -219,7 +219,7 @@ extra_headers = { "x-opencode-session" = "${session_id}" }
 - `.github/workflows/release.yml`：推 `v*` tag 触发，构建 `xai-grok-pager`（grok CLI）
   release 二进制，仅 linux-amd64（tar.gz）与 windows-amd64（zip），附 sha256。
 - CI 缓存事故与最终方案（job 名撞车 → sccache GHA 碎片撑爆 10 GB → 改回隔离的 rust-cache）：
-  见 `ci-cache-incident.md`。
+  见 `archive/ci-cache-incident.md`。
 ## 待办（下一期）
 
 - 工具输出压缩：一期已落地（简化 headroom 策略，见 `tool-output-compression-plan.md`）；
@@ -1109,7 +1109,7 @@ tag 源码里存在、本地 `cargo check --release -p xai-grok-sampler` 全绿�
 
 根因（CI 日志证据：全程无 `Compiling xai-grok-sampling-types` 行，sampler
 却链接到了它的产物）：release.yml 开了
-`cache-workspace-crates: "true"`（背景见 `docs-local/ci-cache-incident.md`
+`cache-workspace-crates: "true"`（背景见 `docs-local/archive/ci-cache-incident.md`
 "v1.0.29" 一节），叠加 `git-restore-mtime`。cargo 按 **mtime** 做指纹，
 restore-mtime 把 research 合并改过的 `types.rs` 回拨到其最后提交时刻，与
 缓存 blob 里记录的指纹时间一致 → cargo 判定源码未变 → 复用合入前编译的
@@ -1124,7 +1124,7 @@ effective"）要防的场景——默认值被关掉才踩的坑。
 - `cache-scope` 改名 `release-2` / `release-xwin-2`，带毒 v1 blob 永不复用
   （一次性冷重建）。
 
-对交接文档 `docs-local/ci-failures-2026-09-20.md` 的对账：其"修复 1"假设
+对交接文档 `docs-local/archive/ci-failures-2026-09-20.md` 的对账：其"修复 1"假设
 源码不一致（建议重排 `.or()` 链）不成立——三字段在 tag 源码中齐备且无 cfg，
 无需改 sampler；其"修复 2"（SessionActor 字面量 + output_style Instant）
 已随 `1815e39b` 修复。
@@ -1375,7 +1375,7 @@ delta 只设 `chunk_has_content`（空闲超时用）。纯思考+工具调用�
 ## 压缩请求半答并行 tool call 回填（2026-09-23，feat/local-compaction-toolpair-repair）
 
 > 全量证据链（会话工件、事件流、上游复现探针）见
-> `docs-local/compaction-dangling-toolcall-400.md`。
+> `docs-local/archive/compaction-dangling-toolcall-400.md`。
 
 ### 问题
 
