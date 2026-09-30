@@ -3713,7 +3713,7 @@ mod tests {
     /// A draft that no longer fits beside the full logo steps the reserved rows AND the painted art down together.
     #[test]
     fn stacked_logo_art_matches_the_rows_reserved_for_a_tall_draft() {
-        // Full logo 7 + gap 1 + menu 4 + flex 1 + prompt + version 2 = 15 + prompt: 26 rows fit an 11-row draft under the full logo; 13 rows need the compact one
+        // Full logo 13 + gap 1 + menu 4 + flex 1 + prompt + version 2 = 21 + prompt: 26 rows fit a 5-row draft under the full logo; 13 rows need the compact one
         let area = Rect::new(0, 0, 60, 26);
         let input = |prompt_height| WelcomeLayoutInput {
             content_area: area,
@@ -3836,7 +3836,7 @@ mod tests {
         let trust = TrustState::Done;
         let params = render_params(&auth, &trust, None);
         // 60 cols keeps the stacked layout; the top bar and margins take 3 rows, so 29 rows give the 26-row content area
-        // whose full logo fits beside an 11-row draft but not the 13-row cap
+        // whose full logo fits beside a one-line draft but not the 13-row cap
         let area = Rect::new(0, 0, 60, 29);
         let mut picker = PickerState::default();
         let mut prompt = PromptWidget::new();
@@ -4097,7 +4097,8 @@ mod tests {
     fn hero_box_announcement_clamped_when_tight() {
         // A real announcement can't disable the hero box: the slot is clamped to whatever still fits (the renderer trails a `…`)
         // The box stays active rather than falling back to the stacked layout
-        let area = Rect::new(0, 0, 100, 17);
+        // 100x23: a 17-row box, a one-row flex gap and the 5 fixed-below rows fit exactly (min_content_height 23)
+        let area = Rect::new(0, 0, 100, 23);
         let a = long_ann();
         let without = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
@@ -4132,17 +4133,17 @@ mod tests {
     #[test]
     fn hero_box_keeps_one_bottom_pad_below_actions() {
         // With a changelog/announcement the subtitle is hidden, but there's still exactly one padding row between the actions and the bottom border
-        // (menu=4 + info=3 fills the inner, so the menu reaches the pad.)
+        // (menu=7 + info=3 fills the 13-row inner, so the menu reaches the pad.)
         let area = Rect::new(0, 0, 100, 50);
         let a = long_ann();
         let no_info = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
-            menu_height: 4,
+            menu_height: 7,
             ..Default::default()
         });
         let with_info = WelcomeLayout::compute(WelcomeLayoutInput {
             content_area: area,
-            menu_height: 4,
+            menu_height: 7,
             announcement: Some(&a),
             ..Default::default()
         });
@@ -4420,7 +4421,7 @@ the usual channels. "
         let area = Rect::new(0, 0, 100, 32);
         let ann = xai_grok_announcements::RemoteAnnouncement {
             title: Some("Upgrade".into()),
-            message: Some("SuperGrok Heavy is available for your team today.".into()),
+            message: Some("SuperGrok Heavy is available today.".into()),
             ..Default::default()
         };
         let input = |prompt_height| WelcomeLayoutInput {
