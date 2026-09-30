@@ -2,6 +2,19 @@
 
 ## 待办事项（TODO）
 
+- **欢迎页 XL 熊猫 logo 档** — 已合入 main（2026-09-30，分支
+  `feat/local-panda-logo-tier`），正式 tag **`v1.0.38`** 待 CI 绿后补打。内容：新增
+  `assets/logo/logo13.txt`（44×13 盲文格）
+  + `LogoTier::Xl` 档（终高 ≥44 行显示，step_down 链 Xl→Full→Compact→Hidden，
+  stacked 布局对档位自适应、hero box 仍固定 Full）。资产由图像半调管线
+  [`tools/panda_dither.py`](tools/panda_dither.py) 生成（采样/LANCZOS/边缘钉实/
+  纸白保护/Bayer 半调，用法见文件头 docstring）。背景：Windows 终端贴真图不可行
+  （ConPTY 剥 APC，`xai-grok-pager-render/src/terminal/image.rs` 的
+  `protocol_for_brand` 硬编码 None），此为字符路线在 Win 下的质量上限；Kitty/
+  Ghostty/WezTerm（非 Win）若要贴真图是独立 feature。已验证：`cargo check -p
+  xai-grok-pager` 通过、`ctest.sh -p xai-grok-pager --lib welcome` 全绿；中间产物
+  （半调 PNG/对比图）在 `panda-dither-out/` 未入库。
+
 - [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) —
   **上游 5 快照合并已完成**：分支 `sync/upstream-2026-09-23`（快照合并 `e43381a7` + 收尾
   修复 `c78b45bb`）已快进合入 `main`，随正式 tag **`v1.0.37`** 发布（2026-09-28）。
