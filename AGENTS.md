@@ -115,6 +115,14 @@
   决策 D1，只吸收按分支 KV / 大输出旁路两个思想）；cache warming 拟 P2' 独立专题。
   分支拟 P1 `feat/local-workflow-context-edit` / P2 `feat/local-deferred-tool-exposure`。
   基线：2026-09-30 `main` `95aad87`（pi 基线 `0.99.1`，2026-09-29）。
+- [`docs-local/kimicode-port/`](docs-local/kimicode-port/README.md) — **kimicode
+  （Kimi Code CLI）特性移植预研（调研完成，未选型）**：对照 MoonshotAI/kimi-code
+  （main `21406fb`，2026-09-30）与 fork 现状。头号候选 = `/rewind` 从破坏性截断升级
+  wire 分支树 undo（非破坏分支 + 原 prompt 放回 + compaction 边界精确可算）；次选 =
+  `select_tools` 延迟工具声明（并入 workflow-pi-port P2 对照定稿，公告流 +
+  历史 schema 持续剥离两点待吸收）；再次 = 子 agent 结果信封（stop_reason→next_step
+  映射 + resume 同会话）与委托图约束。hooks/插件市场/持久化/ACP 判定已有不移植
+  （决策 D2–D5）。本地 clone `D:\CODE\ai\kimi-code`。基线：2026-10-01 `main` `2b8adae`。
 
 ## 🔄 Handoff 摘要
 
