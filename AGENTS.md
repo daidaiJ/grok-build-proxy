@@ -10,19 +10,20 @@
 > 补充以文末"后记"追加。规约类完工文档（如 ui-i18n-plan）不归档但须在头部
 > 标明"已完工 + 保留角色"。更新本索引时先核对文件真实存在。
 
-- **欢迎页 XL 熊猫 logo 档** — 已随 **`v1.0.38`** 发版并部署（2026-09-30，分支
-  `feat/local-panda-logo-tier`，CI 36672275454 绿后打 tag，release 36675360723 双 job
-  success）。内容：新增
-  `assets/logo/logo13.txt`（44×13 盲文格）
-  + `LogoTier::Xl` 档（终高 ≥44 行显示，step_down 链 Xl→Full→Compact→Hidden，
-  stacked 布局对档位自适应、hero box 仍固定 Full）。资产由图像半调管线
-  [`tools/panda_dither.py`](tools/panda_dither.py) 生成（采样/LANCZOS/边缘钉实/
-  纸白保护/Bayer 半调，用法见文件头 docstring）。背景：Windows 终端贴真图不可行
-  （ConPTY 剥 APC，`xai-grok-pager-render/src/terminal/image.rs` 的
-  `protocol_for_brand` 硬编码 None），此为字符路线在 Win 下的质量上限；Kitty/
-  Ghostty/WezTerm（非 Win）若要贴真图是独立 feature。已验证：`cargo check -p
-  xai-grok-pager` 通过、`ctest.sh -p xai-grok-pager --lib welcome` 全绿；中间产物
-  （半调 PNG/对比图）在 `panda-dither-out/` 未入库。
+- **欢迎页 XL 熊猫 logo 档（v1.0.39 比例修复）** — v1.0.38 发的 44×13 盲文格
+  资产存在**采样宽高比 bug**：`panda_dither.py` 直接把源图 resize 到 `cols*2 ×
+  rows*4` 点阵，未补偿终端字符格 1:2（格高≈2×格宽、盲文点物理近正方），方形源图
+  被横向拉宽 ~1.35×（"卡比兽"）。分支 `fix/local-panda-logo-aspect` **最小修复**：
+  原版 44×13 资产原样横向重采样到 33×13（LANCZOS + 0.5 阈值，构图/笔触/抖动风格
+  不变），物理宽高比 33:26 ≈ 1.27 与源图内容 1.289 对齐；XL 档仍与 Full 共用
+  logo13，无其他改动。中间教训（未采用）：终端里盲文稠密区必呈麻点（字体内建点缝），
+  实心黑只能靠色块 `█`；13 行小画布上色块/灰阶混合会碎（8 变体证伪），已全部放弃，
+  过程产物在 `panda-aspect-out/` 未入库。管线 aspect 规则已写进
+  [`tools/panda_dither.py`](tools/panda_dither.py) docstring（cols*2/rows*4 == 源图
+  宽高比，即 cols ≈ rows × aspect / 2）。背景：Windows 终端贴真图不可行（ConPTY
+  剥 APC，`xai-grok-pager-render/src/terminal/image.rs` 的 `protocol_for_brand`
+  硬编码 None），此为字符路线在 Win 下的质量上限。已验证：`ctest.sh -p
+  xai-grok-pager --lib welcome` 223/223 全绿。
 
 - [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) —
   **上游 5 快照合并已完成**：分支 `sync/upstream-2026-09-23`（快照合并 `e43381a7` + 收尾

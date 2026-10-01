@@ -16,6 +16,13 @@ Usage:
 Outputs `<prefix>.txt` (braille), `<prefix>.png` (dot preview) and prints
 the braille art. `--ramp` additionally prints an ASCII-ramp variant where
 edge direction and tone pick the characters.
+
+Aspect rule (v1.0.38 卡比兽事故): braille dots render square in a terminal
+(2 dot-cols span the cell width, 4 dot-rows span the ~2x taller cell), so the
+DOT grid must keep the source image's aspect: cols*2 / (rows*4) == img_w/img_h
+after load_ink's content crop — i.e. cols ≈ rows * (img_w/img_h) / 2. Picking
+cols/rows freely stretches the art (a square image at 44x13 cells renders
+~1.7x too wide). load_ink reports the cropped size; check it first.
 """
 
 from __future__ import annotations
