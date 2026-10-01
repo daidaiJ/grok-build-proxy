@@ -23,7 +23,11 @@
   宽高比，即 cols ≈ rows × aspect / 2）。背景：Windows 终端贴真图不可行（ConPTY
   剥 APC，`xai-grok-pager-render/src/terminal/image.rs` 的 `protocol_for_brand`
   硬编码 None），此为字符路线在 Win 下的质量上限。已验证：`ctest.sh -p
-  xai-grok-pager --lib welcome` 223/223 全绿。
+  xai-grok-pager --lib welcome` 223/223 全绿。**已按用户指示直接覆盖 `v1.0.39`
+  旧 tag 发版**（2026-10-01，tag 重指 `c01f0db`，release run 36842496711 双 job
+  success，4 资产同名覆盖、URL 不变；注意删 tag 曾把 release 转 draft，重传后
+  已恢复发布）。历史备注：`v1.0.38` release 实为草稿状态留在 release 页（昨天
+  的正式发布是 v1.0.39），tag 已恢复原指向 `5667ea0`。
 
 - [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) —
   **上游 5 快照合并已完成**：分支 `sync/upstream-2026-09-23`（快照合并 `e43381a7` + 收尾
