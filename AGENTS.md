@@ -3,9 +3,11 @@
 ## 待办事项（TODO）
 
 - [`docs-local/stats-modal-todo.md`](docs-local/stats-modal-todo.md) — `/stats` 加时间窗
-  option（5h/day/week/month）+ 输出改成 Grok 自制窗口样式（对齐 agents / usage limit 面板）
+  option（5h/day/week）+ 输出改成 Grok 自制窗口样式（对齐 agents / usage limit 面板）
   + TUI 残留英文说明 i18n 扫尾。分支 `feat/local-stats-modal-i18n`，基线 `86a6e1d`。
-  三个子任务 T1/T2/T3 相互独立，可分批施工；文档内含现状锚点、改动点、验收标准与纪律要求。
+  **T1/T2/T3 全部施工完成（2026-10-02）**：T3 扫尾见 PATCHES.md 十六期（+157 组键、
+  22 文件接线、豁免台账在案，扫描器 `scripts-local/i18n_sweep.py`）；待办 = 活回合
+  `/lang zh` 抽查（发版后在新客户端看）。文档内含现状锚点、改动点、验收标准与纪律要求。
 
 ## 分支纪律（MANDATORY）
 
