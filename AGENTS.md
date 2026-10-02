@@ -140,8 +140,8 @@
 
 - **当前状态：** 修复已合并 main（`bc33d257`）、tag `v1.0.37-preview.6` 已发布；CI（release + build）已核对；
   **活回合验证已补完**：正向用例（行内代码引用 / 围栏）正文完整不折叠、真标记路径未误伤、落盘扫描 0 命中、
-  回归 `ctest.sh -p xai-grok-sampler --lib` 272/272。客户端状态（2026-10-02 复核）：
-  本机在用 `D:\tool-cli\grok2\grok2.exe` 已是 `1.0.38`（含此修复），旧记录
+  回归 `ctest.sh -p xai-grok-sampler --lib` 272/272。客户端状态（2026-10-02 更新）：
+  本机在用 `D:\tool-cli\grok2\grok2.exe` 已是 `1.0.40 (9117b5e6)`（v1.0.40 发版当班更新，含此修复与 /stats 窗口化 + i18n 扫尾），旧记录
   "`D:\tool\cli\grok2.exe` 仍是 preview.4 无此修复"已过时；路径与版本以
   `grok2 --version` 实测为准
 - **关键证据：** 正文里被反引号引用的 `<think>` 曾被切分器当控制标记，把回答尾部改道 reasoning；
