@@ -29,6 +29,14 @@
   已恢复发布）。历史备注：`v1.0.38` release 实为草稿状态留在 release 页（昨天
   的正式发布是 v1.0.39），tag 已恢复原指向 `5667ea0`。
 
+- [`docs-local/fork-feature-inventory.md`](docs-local/fork-feature-inventory.md) —
+  **fork 已有特性基线清单（移植预研对照表，持续回填）**：102 crate 按 11 功能域的
+  职责地图 + LOCAL 自产特性表（来源分支/期号）+ 既有预研「已有/不做」判定汇总 +
+  已知盲区（「未核实」清单）。**新预研专题（xx-port 类）开工前必须先对照本清单下
+  「已有」判定，防止把 fork 已有设计当缺口带进来；预研完工后把新澄清的行回填进
+  其 §3/§5。**教训背景：kimicode-port 曾误判 steer「无」、误把 sqlite-journal 当
+  会话历史 journal。基线：2026-10-02 `main`。
+
 - [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) —
   **上游 5 快照合并已完成**：分支 `sync/upstream-2026-09-23`（快照合并 `e43381a7` + 收尾
   修复 `c78b45bb`）已快进合入 `main`，随正式 tag **`v1.0.37`** 发布（2026-09-28）。
