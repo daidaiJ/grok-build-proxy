@@ -13,7 +13,7 @@ use ratatui::style::{Modifier, Style};
 use unicode_width::UnicodeWidthStr;
 
 use crate::input::line_editor::{LineEditOutcome, LineEditor};
-use crate::slash::i18n::tr;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::modal_window::{
     self, ModalContentArea, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
@@ -455,7 +455,7 @@ pub fn render_persona_detail(
                 } else {
                     Style::default().fg(theme.gray_dim)
                 };
-                buf.set_string(value_x, y, "(empty)", empty_style);
+                buf.set_string(value_x, y, tr("(empty)"), empty_style);
             } else {
                 let lines = word_wrap_lines(value, value_w);
                 let total = lines.len();
@@ -487,10 +487,9 @@ pub fn render_persona_detail(
                     if is_long {
                         y += 1;
                         if y < max_y {
-                            let hint = format!(
-                                "  ... ({} more lines: e to expand, j/k to scroll)",
-                                total - max_collapsed
-                            );
+                            // LOCAL: 整句 fmt 固定段入翻译表；{} 为行数占位（与 "Enter import {}" 同款 replace 模式）
+                            let hint = tr("  ... ({} more lines: e to expand, j/k to scroll)")
+                                .replace("{}", &(total - max_collapsed).to_string());
                             buf.set_string(
                                 content_area.x + 2,
                                 y,
@@ -582,7 +581,10 @@ pub fn render_persona_detail(
     }
 
     // I/O sections
-    for (section, items) in [(tr("Inputs"), &state.inputs), (tr("Outputs"), &state.outputs)] {
+    for (section, items) in [
+        (tr("Inputs"), &state.inputs),
+        (tr("Outputs"), &state.outputs),
+    ] {
         if items.is_empty() || y >= max_y {
             continue;
         }
@@ -604,7 +606,14 @@ pub fn render_persona_detail(
             } else {
                 String::new()
             };
-            let header = format!("  \u{2022} {} ({}{})", entry.name, entry.io_type, req);
+            // LOCAL: io_type 存英文键（TOML 缺省回退 "file"），渲染出口经 tr_str 查表；
+            // 其他运行时取值（如用户自填的 io 类型）未命中即透传
+            let header = format!(
+                "  \u{2022} {} ({}{})",
+                entry.name,
+                tr_str(&entry.io_type),
+                req
+            );
             buf.set_string(
                 content_area.x,
                 y,

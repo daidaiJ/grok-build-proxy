@@ -471,10 +471,10 @@ fn model_card_lines(row: &ModelUsageAggregate, theme: &Theme, width: u16) -> Vec
     // （回归由 perf_rows_line_up_with_the_token_grid 用例钉住）
     let na = tr("n/a");
     let perf_pairs: Vec<(&'static str, String)> = vec![
-        ("ttft p50", fmt_ms(row.ttft_p50_ms, na)),
-        ("ttft p90", fmt_ms(row.ttft_p90_ms, na)),
-        ("tps p50", fmt_tps(row.tps_p50, na)),
-        ("tps p90", fmt_tps(row.tps_p90, na)),
+        (tr("ttft p50"), fmt_ms(row.ttft_p50_ms, na)),
+        (tr("ttft p90"), fmt_ms(row.ttft_p90_ms, na)),
+        (tr("tps p50"), fmt_tps(row.tps_p50, na)),
+        (tr("tps p90"), fmt_tps(row.tps_p90, na)),
     ];
 
     // 两段共用同一份列几何：数值右边缘才会落在同一批列上
@@ -582,10 +582,14 @@ fn model_card_text(row: &ModelUsageAggregate) -> String {
     parts.push(tokens.join(" · "));
     let na = tr("n/a");
     parts.push(format!(
-        "ttft p50 {} · ttft p90 {} · tps p50 {} · tps p90 {}",
+        "{} {} · {} {} · {} {} · {} {}",
+        tr("ttft p50"),
         fmt_ms(row.ttft_p50_ms, na),
+        tr("ttft p90"),
         fmt_ms(row.ttft_p90_ms, na),
+        tr("tps p50"),
         fmt_tps(row.tps_p50, na),
+        tr("tps p90"),
         fmt_tps(row.tps_p90, na),
     ));
     parts.join("\n")

@@ -32,6 +32,8 @@ use ratatui::{
 };
 
 use crate::render::line_utils::truncate_str;
+// LOCAL: i18n — 隐藏操作文案查表；远程公告的 title/label/caption 是运行时数据，不查表
+use crate::slash::i18n::tr_str;
 use crate::theme::Theme;
 use xai_grok_announcements::visible_announcements;
 
@@ -351,17 +353,19 @@ fn dim_hide_style(theme: &Theme) -> Style {
 /// Right-aligned `[hide]` button on `row`, painted FIRST so its width is reserved before the text budget (text truncates, never the button).
 /// Hover mirrors the turn-status [stop] affordance: error red on hover, dim at rest.
 /// Returns the clickable rect (`None` when it cannot fit); the one paint/hover/reserve rule both banner painters share.
+/// LOCAL: i18n — 按钮文案查表（`button` 由调用方以 `tr_str(HIDE_BUTTON)` 传入，与调用方的预留宽度同源）。
 fn paint_hide_button(
     buf: &mut Buffer,
     area: Rect,
     row: u16,
     hovered: bool,
     theme: &Theme,
+    button: &str,
 ) -> Option<Rect> {
     use unicode_width::UnicodeWidthStr;
 
     let max_w = area.width as usize;
-    let button_w = UnicodeWidthStr::width(HIDE_BUTTON);
+    let button_w = UnicodeWidthStr::width(button);
     if max_w < button_w {
         return None;
     }
@@ -374,7 +378,7 @@ fn paint_hide_button(
     buf.set_span(
         hide_x,
         row,
-        &Span::styled(HIDE_BUTTON, button_style),
+        &Span::styled(button, button_style),
         button_w as u16,
     );
     Some(Rect::new(hide_x, row, button_w as u16, 1))
@@ -438,7 +442,9 @@ fn render_critical_rows(
     let dim_style = dim_hide_style(&theme);
     let max_w = area.width as usize;
     let prefix_w = UnicodeWidthStr::width(TITLE_PREFIX);
-    let button_w = UnicodeWidthStr::width(HIDE_BUTTON);
+    // LOCAL: i18n — 隐藏按钮/CTA 查表一次，宽度与绘制同源
+    let hide_button = tr_str(HIDE_BUTTON);
+    let button_w = UnicodeWidthStr::width(hide_button.as_str());
     let row0 = area.y;
     let row1 = area.y.saturating_add(1);
     let max_y = area.y.saturating_add(area.height);
@@ -458,7 +464,7 @@ fn render_critical_rows(
 
         // Non-dismissible: no [hide] button; the budget branch below hands its columns back to the title
         if dismissible {
-            hide_rect = paint_hide_button(buf, area, row0, hide_hovered, &theme);
+            hide_rect = paint_hide_button(buf, area, row0, hide_hovered, &theme, &hide_button);
         }
 
         let title_budget = if hide_rect.is_some() {
@@ -483,7 +489,8 @@ fn render_critical_rows(
         // Message column matches the title column: indent past the `! ` prefix
         let mut x = area.x.saturating_add(prefix_w as u16);
         let mut remaining = max_w.saturating_sub(prefix_w);
-        let cta_w = UnicodeWidthStr::width(HIDE_CTA);
+        let hide_cta = tr_str(HIDE_CTA);
+        let cta_w = UnicodeWidthStr::width(hide_cta.as_str());
 
         // Reserve the CTA (plus gap) up front: the message truncates, never the CTA
         // Non-dismissible reserves nothing; the message reclaims the full row past the prefix (`W−2`)
@@ -507,7 +514,7 @@ fn render_critical_rows(
         }
         if dismissible && remaining > 0 {
             // Degenerate widths still truncate the CTA itself rather than panic.
-            let cta_disp = truncate_str(HIDE_CTA, remaining);
+            let cta_disp = truncate_str(&hide_cta, remaining);
             buf.set_span(
                 x,
                 row1,
@@ -551,15 +558,18 @@ fn render_promo_row(
 
     let dim_style = dim_hide_style(&theme);
     let max_w = area.width as usize;
-    let button_w = UnicodeWidthStr::width(HIDE_BUTTON);
-    let hide_cta_w = UnicodeWidthStr::width(HIDE_CTA);
+    // LOCAL: i18n — 隐藏按钮/CTA 查表一次，宽度与绘制同源
+    let hide_button = tr_str(HIDE_BUTTON);
+    let hide_cta = tr_str(HIDE_CTA);
+    let button_w = UnicodeWidthStr::width(hide_button.as_str());
+    let hide_cta_w = UnicodeWidthStr::width(hide_cta.as_str());
     let row = area.y;
     let mut hits = BannerHits::default();
 
     // Non-dismissible: neither hide affordance paints and `right_reserved` stays 0, so the button reclaims the right-hand columns
     let mut right_reserved = 0usize;
     if is_dismissible(ann) {
-        hits.hide = paint_hide_button(buf, area, row, hide_hovered, &theme);
+        hits.hide = paint_hide_button(buf, area, row, hide_hovered, &theme, &hide_button);
     }
     if hits.hide.is_some() {
         right_reserved = button_w;
@@ -570,7 +580,7 @@ fn render_promo_row(
             buf.set_span(
                 hide_cta_x,
                 row,
-                &Span::styled(HIDE_CTA, dim_style),
+                &Span::styled(hide_cta.as_str(), dim_style),
                 hide_cta_w as u16,
             );
             right_reserved = button_w + GAP + hide_cta_w;

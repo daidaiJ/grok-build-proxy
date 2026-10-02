@@ -152,18 +152,26 @@ impl PlanApprovalViewState {
             .iter()
             .map(|comment| match self.source {
                 PlanReviewSource::Inline => {
+                    // LOCAL: 计划行标签模板整键翻译，两个 {} 依次为起始行、结束行（单行只填第一个）。
+                    // 产物同时流向模型反馈与 minimal 模式 scrollback 回显；测试构建 tr 旁路回英文。
                     let label = if comment.line_range.len() == 1 {
-                        format!("Proposed plan line {}:", comment.line_range.start)
-                    } else {
-                        format!(
-                            "Proposed plan lines {}-{}:",
-                            comment.line_range.start,
-                            comment.line_range.end - 1
+                        tr("Proposed plan line {}:").replacen(
+                            "{}",
+                            &comment.line_range.start.to_string(),
+                            1,
                         )
+                    } else {
+                        tr("Proposed plan lines {}-{}:")
+                            .replacen("{}", &comment.line_range.start.to_string(), 1)
+                            .replacen("{}", &(comment.line_range.end - 1).to_string(), 1)
                     };
                     let snippets =
                         inline_plan_snippets(self.plan_content.as_deref(), &comment.line_range);
-                    format!("{label}\n{snippets}\n\nComment:\n{}", comment.text)
+                    format!(
+                        "{label}\n{snippets}\n\n{}\n{}",
+                        tr("Comment:"),
+                        comment.text
+                    )
                 }
                 PlanReviewSource::FileBacked => format_file_backed_plan_comment(comment),
             })
@@ -173,7 +181,10 @@ impl PlanApprovalViewState {
             && !text.trim().is_empty()
         {
             let text = match (self.source, self.comments.is_empty()) {
-                (PlanReviewSource::Inline, false) => format!("Additional feedback:\n{text}"),
+                (PlanReviewSource::Inline, false) => {
+                    // LOCAL: 固定段整键，动态 freeform 文本拼接在译文之后
+                    format!("{}\n{text}", tr("Additional feedback:"))
+                }
                 _ => text.to_owned(),
             };
             parts.push(text);
@@ -263,11 +274,12 @@ pub(crate) fn inline_plan_snippets(
     range: &std::ops::Range<usize>,
 ) -> String {
     let Some(plan_content) = plan_content else {
-        return "> [plan content unavailable]".to_owned();
+        // LOCAL: 显示兜底文案整键翻译（"> " 骨架含在键内，随引文风格一起走查表）
+        return tr("> [plan content unavailable]").to_owned();
     };
     let lines: Vec<&str> = plan_content.lines().collect();
     if range.start == 0 || range.start >= range.end || range.start > lines.len() {
-        return "> [selected lines unavailable]".to_owned();
+        return tr("> [selected lines unavailable]").to_owned();
     }
 
     let Some(start) = range.start.checked_sub(1) else {
@@ -275,7 +287,7 @@ pub(crate) fn inline_plan_snippets(
     };
     let end = range.end.saturating_sub(1).min(lines.len());
     if end < range.start {
-        return "> [selected lines unavailable]".to_owned();
+        return tr("> [selected lines unavailable]").to_owned();
     }
 
     let Some(snippet) = lines.get(start..end) else {
@@ -292,17 +304,24 @@ pub(crate) fn format_plan_comments(comments: &[PlanComment], plan_content: Optio
     comments
         .iter()
         .map(|comment| {
+            // LOCAL: 与 format_feedback 同键（计划行标签模板 + Comment: 固定段）
             let label = if comment.line_range.len() == 1 {
-                format!("Proposed plan line {}:", comment.line_range.start)
-            } else {
-                format!(
-                    "Proposed plan lines {}-{}:",
-                    comment.line_range.start,
-                    comment.line_range.end - 1
+                tr("Proposed plan line {}:").replacen(
+                    "{}",
+                    &comment.line_range.start.to_string(),
+                    1,
                 )
+            } else {
+                tr("Proposed plan lines {}-{}:")
+                    .replacen("{}", &comment.line_range.start.to_string(), 1)
+                    .replacen("{}", &(comment.line_range.end - 1).to_string(), 1)
             };
             let snippets = inline_plan_snippets(plan_content, &comment.line_range);
-            format!("{label}\n{snippets}\n\nComment:\n{}", comment.text)
+            format!(
+                "{label}\n{snippets}\n\n{}\n{}",
+                tr("Comment:"),
+                comment.text
+            )
         })
         .collect::<Vec<_>>()
         .join("\n\n")

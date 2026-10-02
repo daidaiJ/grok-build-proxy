@@ -1,6 +1,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
+use crate::slash::i18n::tr;
 use crate::views::prompt_widget::{PromptInfo, PromptStyle, PromptWidget};
 
 use super::WelcomePromptFocus;
@@ -28,7 +29,8 @@ fn prompt_style(focus: WelcomePromptFocus, compact: bool) -> PromptStyle {
         chrome: true,
         chrome_pad_left: CHROME_PAD,
         chrome_pad_right: CHROME_PAD,
-        placeholder_override: Some("Type a message..."),
+        // LOCAL: i18n 查表；tr 返回 &'static str，与 placeholder_override 类型兼容
+        placeholder_override: Some(tr("Type a message...")),
         ..PromptStyle::default()
     }
 }

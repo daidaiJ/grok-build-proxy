@@ -3,6 +3,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
+use unicode_width::UnicodeWidthStr;
 
 use crate::slash::i18n::tr;
 use crate::theme::Theme;
@@ -370,7 +371,10 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 };
                 let dot_style = Style::default().fg(theme.gray).bg(ctx.row_bg);
                 let preview: String = crate::render::line_utils::truncate_str(
-                    point.prompt_preview.as_deref().unwrap_or(tr("(no preview)")),
+                    point
+                        .prompt_preview
+                        .as_deref()
+                        .unwrap_or(tr("(no preview)")),
                     ctx.content_width.saturating_sub(8) as usize,
                 );
                 let text_style = Style::default()
@@ -394,7 +398,10 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
             buf.set_line(
                 content_x,
                 y,
-                &Line::from(Span::styled("A turn is currently running.", title_style)),
+                &Line::from(Span::styled(
+                    tr("A turn is currently running."),
+                    title_style,
+                )),
                 content_w,
             );
             y += 1;
@@ -402,7 +409,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 content_x,
                 y,
                 &Line::from(Span::styled(
-                    "Would you like to cancel it before rewinding?",
+                    tr("Would you like to cancel it before rewinding?"),
                     Style::default().fg(theme.gray),
                 )),
                 content_w,
@@ -414,7 +421,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 y,
                 content_w,
                 'y',
-                "Cancel turn and rewind",
+                tr("Cancel turn and rewind"),
                 *active_idx == 0,
                 focused,
                 &theme,
@@ -426,7 +433,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 y,
                 content_w,
                 'n',
-                "Let it finish",
+                tr("Let it finish"),
                 *active_idx == 1,
                 focused,
                 &theme,
@@ -438,7 +445,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 content_x,
                 y,
                 &Line::from(Span::styled(
-                    "Rewinding...",
+                    tr("Rewinding..."),
                     Style::default().fg(theme.gray),
                 )),
                 content_w,
@@ -450,10 +457,12 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
             ..
         } => {
             let mut y = area.y + 1;
-            let preview_text = prompt_preview.as_deref().unwrap_or("this turn");
-            let prefix = "Rewind conversation to \u{201C}";
-            let suffix = "\u{201D}?";
-            let chrome = prefix.chars().count() + suffix.chars().count();
+            let preview_text = prompt_preview.as_deref().unwrap_or(tr("this turn"));
+            let prefix = tr("Rewind conversation to \u{201C}");
+            let suffix = tr("\u{201D}?");
+            // Use display width (not char count): the translated prefix/suffix contain CJK,
+            // each char 2 columns wide.
+            let chrome = prefix.width() + suffix.width();
             let max_preview = (content_w as usize).saturating_sub(chrome + 1);
             let preview_trunc: String = if preview_text.chars().count() > max_preview {
                 let truncated: String = preview_text
@@ -478,7 +487,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 y,
                 content_w,
                 'y',
-                "Yes",
+                tr("Yes"),
                 *active_idx == 0,
                 focused,
                 &theme,
@@ -490,7 +499,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 y,
                 content_w,
                 'a',
-                "Yes, and don't ask again",
+                tr("Yes, and don't ask again"),
                 *active_idx == 1,
                 focused,
                 &theme,
@@ -502,7 +511,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 y,
                 content_w,
                 'n',
-                "No",
+                tr("No"),
                 *active_idx == 2,
                 focused,
                 &theme,
@@ -514,7 +523,7 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 content_x,
                 y,
                 &Line::from(Span::styled(
-                    "Rewind failed",
+                    tr("Rewind failed"),
                     Style::default()
                         .fg(theme.accent_error)
                         .add_modifier(Modifier::BOLD),
@@ -534,7 +543,15 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
             );
             y += 1;
             render_radio_row(
-                buf, content_x, y, content_w, '\x1b', "Dismiss", true, focused, &theme,
+                buf,
+                content_x,
+                y,
+                content_w,
+                '\x1b',
+                tr("Dismiss"),
+                true,
+                focused,
+                &theme,
             );
         }
     }

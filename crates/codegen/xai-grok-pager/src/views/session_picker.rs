@@ -29,8 +29,10 @@ pub(crate) fn repo_name_from_cwd(cwd: &str) -> String {
         })
         .collect();
     if components.is_empty() {
+        // LOCAL: 仅作为分组标题展示；分组的所有生产方与比较方（current_repo）都经过本函数，
+        // 出口统一翻译不会破坏分组一致性（测试构建 tr 旁路英文，测试断言不受影响）。
         return if cwd.is_empty() {
-            "unknown".to_string()
+            tr("unknown").to_string()
         } else {
             cwd.to_string()
         };
@@ -686,38 +688,39 @@ pub(crate) fn build_session_entry_data(
             let mut field_data: Vec<(String, String)> = Vec::new();
             if is_expanded {
                 field_data.push(("ID".into(), entry.id.clone()));
-                field_data.push(("CWD".into(), entry.cwd.clone()));
+                // LOCAL: 展开卡片字段标签为纯展示，push 处查表（'CWD'/'Model' 等第二处渲染路径补接线）。
+                field_data.push((tr("CWD").into(), entry.cwd.clone()));
                 if let Some(ref model) = entry.model_id {
-                    field_data.push(("Model".into(), model.clone()));
+                    field_data.push((tr("Model").into(), model.clone()));
                 }
                 let fmt_time = |dt: chrono::DateTime<chrono::Utc>| {
                     dt.with_timezone(&chrono::Local)
                         .format("%b %d, %l:%M%P")
                         .to_string()
                 };
-                field_data.push(("Created".into(), fmt_time(entry.created_at)));
-                field_data.push(("Updated".into(), fmt_time(entry.updated_at)));
-                field_data.push(("Source".into(), entry.source.clone()));
+                field_data.push((tr("Created").into(), fmt_time(entry.created_at)));
+                field_data.push((tr("Updated").into(), fmt_time(entry.updated_at)));
+                field_data.push((tr("Source").into(), entry.source.clone()));
                 if let Some(ref host) = entry.hostname {
-                    field_data.push(("Host".into(), host.clone()));
+                    field_data.push((tr("Host").into(), host.clone()));
                 }
                 if entry.num_messages > 0 {
-                    field_data.push(("Messages".into(), entry.num_messages.to_string()));
+                    field_data.push((tr("Messages").into(), entry.num_messages.to_string()));
                 }
                 let max_w = content_width.saturating_sub(4 + 12) as usize;
                 if let Some(recap) = entry.last_recap.as_deref().map(str::trim)
                     && !recap.is_empty()
                 {
-                    field_data.push(("Recap".into(), truncate_str(recap, max_w)));
+                    field_data.push((tr("Recap").into(), truncate_str(recap, max_w)));
                 }
                 if let Some(last_turn) = entry.last_turn_summary.as_deref().map(str::trim)
                     && !last_turn.is_empty()
                 {
-                    field_data.push(("Last turn".into(), truncate_str(last_turn, max_w)));
+                    field_data.push((tr("Last turn").into(), truncate_str(last_turn, max_w)));
                 }
                 if let Some(ref detail) = entry.card_detail {
                     field_data.push((
-                        "Turns".into(),
+                        tr("Turns").into(),
                         format!(
                             "{}    {}  {}",
                             detail.turn_count,
@@ -727,7 +730,7 @@ pub(crate) fn build_session_entry_data(
                     ));
                     if !detail.first_prompt_preview.is_empty() {
                         let preview = truncate_str(&detail.first_prompt_preview, max_w);
-                        field_data.push(("Prompt".into(), preview));
+                        field_data.push((tr("Prompt").into(), preview));
                     }
                 }
             }
@@ -845,7 +848,7 @@ pub(crate) fn build_content_entry_data(
             let mut field_data = Vec::new();
             if is_expanded {
                 field_data.push(("ID".into(), h.session_id.clone()));
-                field_data.push(("CWD".into(), h.cwd.clone()));
+                field_data.push((tr("CWD").into(), h.cwd.clone()));
             }
             let snippet_preview = h.snippet.as_deref().and_then(|s| {
                 let line = s.lines().find(|l| !l.trim().is_empty())?;
@@ -919,20 +922,28 @@ pub(crate) fn hidden_external_hint(
 }
 /// Format a timestamp as a human-readable relative time.
 pub(crate) fn format_time_ago(dt: chrono::DateTime<chrono::Utc>) -> String {
+    use unicode_width::UnicodeWidthStr;
+
     let now = chrono::Utc::now();
     let duration = now.signed_duration_since(dt);
+
+    // LOCAL: 相对时间只在渲染出口翻译（规约：存键不译）；复用 memory_modal 同族既有键，
+    // 键保留命名占位符形态，查表后再代入数字。数字不进键，中文语序可自由移动。
     let raw = if duration.num_minutes() < 1 {
-        "just now".to_string()
+        tr("just now").to_string()
     } else if duration.num_minutes() < 60 {
-        format!("{}m ago", duration.num_minutes())
+        tr("{mins}m ago").replace("{mins}", &duration.num_minutes().to_string())
     } else if duration.num_hours() < 24 {
-        format!("{}h ago", duration.num_hours())
+        tr("{hours}h ago").replace("{hours}", &duration.num_hours().to_string())
     } else if duration.num_days() < 30 {
-        format!("{}d ago", duration.num_days())
+        tr("{days}d ago").replace("{days}", &duration.num_days().to_string())
     } else {
-        format!("{}mo ago", duration.num_days() / 30)
+        tr("{months}mo ago").replace("{months}", &(duration.num_days() / 30).to_string())
     };
-    format!("{:>8}", raw)
+    // Right-align to fixed display width so the column doesn't jump
+    // (unicode-width, not char count: CJK glyphs are double-width).
+    let pad = 8usize.saturating_sub(raw.width());
+    format!("{}{}", " ".repeat(pad), raw)
 }
 #[cfg(test)]
 mod tests {

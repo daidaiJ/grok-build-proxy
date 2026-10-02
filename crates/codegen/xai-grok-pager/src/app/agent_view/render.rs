@@ -16,6 +16,7 @@ use crate::scrollback::text_selection::{
     ResolvedSelectionBoundaries, ResolvedSelectionModel, render_active_selection_overlay,
     render_block_drag_overlay, render_persistent_selection_overlay,
 };
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::agent::AgentViewLayoutParams;
 use crate::views::btw_overlay::BTW_OVERLAY_ENTRY_IDX;
@@ -539,16 +540,16 @@ impl AgentView {
             left_spans.push(Span::styled(counter, hint_style));
         }
         left_spans.push(Span::styled("\u{2191}/\u{2193}", hint_key));
-        left_spans.push(Span::styled(" navigate", hint_style));
+        left_spans.push(Span::styled(format!(" {}", tr("navigate")), hint_style));
         if qv.questions.len() > 1 {
             left_spans.push(Span::styled(" \u{b7} ", hint_style));
             left_spans.push(Span::styled("\u{2190}/\u{2192}", hint_key));
-            left_spans.push(Span::styled(" question", hint_style));
+            left_spans.push(Span::styled(format!(" {}", tr("question")), hint_style));
         }
         if !qv.is_prompt_blocked() {
             left_spans.push(Span::styled(" \u{b7} ", hint_style));
             left_spans.push(Span::styled("y", hint_key));
-            left_spans.push(Span::styled(" copy", hint_style));
+            left_spans.push(Span::styled(format!(" {}", tr("copy")), hint_style));
         }
         left_spans
     }
@@ -682,7 +683,7 @@ impl AgentView {
             .session
             .models
             .current_model_name()
-            .unwrap_or_else(|| "unknown".to_string());
+            .unwrap_or_else(|| tr("unknown").to_string());
         let effective_plan = self.plan_mode_pending.unwrap_or(self.plan_mode_active);
         let casual_commenting = self.is_casual_commenting();
         let prompt_focused = if self.plan_approval_view.is_some() {
@@ -747,13 +748,13 @@ impl AgentView {
                     .as_ref()
                     .is_some_and(|pav| pav.focus == PlanApprovalFocus::Commenting)
             {
-                Some("Type your comment...")
+                Some(tr("Type your comment..."))
             } else if self
                 .plan_approval_view
                 .as_ref()
                 .is_some_and(|pav| pav.focus == PlanApprovalFocus::Prompt)
             {
-                Some("Type revision notes...")
+                Some(tr("Type revision notes..."))
             } else {
                 None
             },
@@ -1257,7 +1258,7 @@ impl AgentView {
             if self.hit_plan_button.hovered {
                 plan_style = plan_style.add_modifier(ratatui::style::Modifier::BOLD);
             }
-            status.push("plan", Line::from(Span::styled("plan", plan_style)));
+            status.push("plan", Line::from(Span::styled(tr("plan"), plan_style)));
         }
         if let Some(ref goal) = self.goal_state {
             let tick = self.tasks.tick_count() as usize;
@@ -1542,8 +1543,8 @@ impl AgentView {
                 let query = search.query();
                 let counter = match search.current_index() {
                     Some(i) => Some(format!("{}/{}", i + 1, search.match_count())),
-                    None if search.has_error() => Some("bad pattern".to_string()),
-                    None if !query.is_empty() => Some("no matches".to_string()),
+                    None if search.has_error() => Some(tr("bad pattern").to_string()),
+                    None if !query.is_empty() => Some(tr("no matches").to_string()),
                     None => None,
                 };
                 let counter_width = counter
@@ -2208,10 +2209,10 @@ impl AgentView {
             buf.set_string(
                 content_x + 2,
                 rec_area.y,
-                "Recording",
+                tr("Recording"),
                 Style::default().fg(theme.accent_error).bg(bg),
             );
-            let stop_str = "[stop]";
+            let stop_str = tr("[stop]");
             let stop_w = unicode_width::UnicodeWidthStr::width(stop_str) as u16;
             let stop_x = rec_area.x
                 + rec_area
@@ -2264,15 +2265,19 @@ impl AgentView {
             };
             Some(if approval_is_commenting || casual_commenting {
                 commenting_label = match commenting_range {
-                    Some(r) if r.len() == 1 => format!("commenting L{}", r.start),
-                    Some(r) => format!("commenting L{}-{}", r.start, r.end - 1),
-                    None => "commenting".to_string(),
+                    Some(r) if r.len() == 1 => {
+                        tr_str("commenting L{line}").replace("{line}", &r.start.to_string())
+                    }
+                    Some(r) => tr_str("commenting L{start}-{end}")
+                        .replace("{start}", &r.start.to_string())
+                        .replace("{end}", &(r.end - 1).to_string()),
+                    None => tr("commenting").to_string(),
                 };
                 commenting_label.as_str()
             } else if self.plan_approval_view.is_some() {
-                "plan approval"
+                tr("plan approval")
             } else {
-                "plan"
+                tr("plan")
             })
         } else {
             self.published_mode_label()
@@ -2305,7 +2310,7 @@ impl AgentView {
             },
             PromptMode::EditingQueued { id, .. } => {
                 let pos = self.session.queue_position(*id).map(|i| i + 1).unwrap_or(1);
-                editing_label = format!("editing queued #{pos}");
+                editing_label = tr_str("editing queued #{pos}").replace("{pos}", &pos.to_string());
                 PromptInfo {
                     model_name: &editing_label,
                     flags: &flags,
@@ -2642,11 +2647,11 @@ impl AgentView {
                     buf.set_line_safe(content_x, footer_y, &left_line, avail_w);
                     let is_last = qv.active_tab >= qv.questions.len().saturating_sub(1);
                     let enter_label = if qv.is_on_freeform_row() {
-                        "edit"
+                        tr("edit")
                     } else if is_last {
-                        "submit"
+                        tr("submit")
                     } else {
-                        "select"
+                        tr("select")
                     };
                     let btn_key = "Enter";
                     let btn_bg = theme.bg_base;
@@ -2656,7 +2661,9 @@ impl AgentView {
                         .add_modifier(Modifier::BOLD);
                     let blabel_style = Style::default().fg(theme.gray).bg(btn_bg);
                     let bpad_style = Style::default().bg(btn_bg);
-                    let bw = (1 + btn_key.len() + 1 + enter_label.len() + 1) as u16;
+                    // LOCAL: 译文宽度按显示列宽计（中文非 ASCII）
+                    let label_w = unicode_width::UnicodeWidthStr::width(enter_label) as u16;
+                    let bw = (1 + btn_key.len() + 1 + label_w as usize + 1) as u16;
                     let btn_x = footer_x + footer_w.saturating_sub(3).saturating_sub(bw);
                     if btn_x > content_x {
                         buf.set_span_safe(btn_x, footer_y, &Span::styled(" ", bpad_style), 1);
@@ -2672,10 +2679,10 @@ impl AgentView {
                             cx + 1,
                             footer_y,
                             &Span::styled(enter_label, blabel_style),
-                            enter_label.len() as u16,
+                            label_w,
                         );
                         buf.set_span_safe(
-                            cx + 1 + enter_label.len() as u16,
+                            cx + 1 + label_w,
                             footer_y,
                             &Span::styled(" ", bpad_style),
                             1,
@@ -2980,8 +2987,8 @@ impl AgentView {
                             hint_w,
                         );
                     }
-                    let label = " history ";
-                    let label_w = label.len() as u16;
+                    let label = format!(" {} ", tr("history"));
+                    let label_w = unicode_width::UnicodeWidthStr::width(label.as_str()) as u16;
                     if label_w + 2 <= panel_width {
                         buf.set_line_safe(
                             panel_x + 1,
@@ -3005,9 +3012,9 @@ impl AgentView {
                     let msg_y = top_border_y + 1;
                     if msg_y < bottom_border_y {
                         let message = if self.prompt_history_loading() {
-                            "  Loading..."
+                            format!("  {}", tr("Loading..."))
                         } else {
-                            "  no matching history"
+                            format!("  {}", tr("no matching history"))
                         };
                         buf.set_string_safe(
                             items_x,
@@ -3422,7 +3429,7 @@ impl AgentView {
                 let dim_style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
                 let border_style = Style::default().fg(theme.gray_dim).bg(theme.bg_base);
                 let title_spans: Vec<ratatui::text::Span> = if viewer.loading {
-                    let name = viewer.title.as_deref().unwrap_or("Loading...");
+                    let name = viewer.title.as_deref().unwrap_or(tr("Loading..."));
                     vec![
                         ratatui::text::Span::styled("\u{2500} ", border_style),
                         ratatui::text::Span::styled(name.to_owned(), title_style),
@@ -3476,7 +3483,7 @@ impl AgentView {
                                 .copied()
                                 .unwrap_or(""),
                         };
-                        let loading = format!("{} Loading...", frame);
+                        let loading = format!("{} {}", frame, tr("Loading..."));
                         let lw = loading.width() as u16;
                         let lx = popup_rect.x + 1 + inner_cols.saturating_sub(lw) / 2;
                         let ly = popup_rect.y + 1 + inner_rows / 2;
@@ -3518,14 +3525,17 @@ impl AgentView {
                                     viewer.image_width, viewer.image_height, viewer.mime_type,
                                 )),
                                 ratatui::text::Line::from(""),
-                                ratatui::text::Line::from("  Press Esc to close"),
+                                ratatui::text::Line::from(format!(
+                                    "  {}",
+                                    tr("Press Esc to close")
+                                )),
                             ];
                             ratatui::widgets::Paragraph::new(meta_lines)
                                 .style(Style::default().fg(theme.gray_dim).bg(theme.bg_base))
                                 .render(inner_rect, buf);
                         } else {
-                            let loading = "Loading...";
-                            let lw = loading.len() as u16;
+                            let loading = tr("Loading...");
+                            let lw = unicode_width::UnicodeWidthStr::width(loading) as u16;
                             let lx = inner_rect.x + inner_cols.saturating_sub(lw) / 2;
                             let ly = inner_rect.y + inner_rows / 2;
                             buf.set_span_safe(
@@ -3818,7 +3828,9 @@ impl AgentView {
                     }
                     let n = viewer.list_state.copy_range().map(|r| r.len()).unwrap_or(1);
                     let s = if n == 1 { "" } else { "s" };
-                    let status = format!("Selected: {n} line{s}");
+                    let status = tr_str("Selected: {n} line{s}")
+                        .replace("{n}", &n.to_string())
+                        .replace("{s}", s);
                     let status_style = Style::default().fg(theme.text_secondary).bg(theme.bg_base);
                     buf.set_string(content_x, status_y, &status, status_style);
                 }
@@ -3994,10 +4006,10 @@ impl AgentView {
                             0 => "",
                             n => spinner_frames.get(tick % n).copied().unwrap_or(""),
                         };
-                        let label = format!("{spinner} Loading...");
+                        let label = format!("{spinner} {}", tr("Loading..."));
                         let cy = rect.y + rect.height / 2;
                         buf.set_string_safe(
-                            center_x(label.len()),
+                            center_x(unicode_width::UnicodeWidthStr::width(label.as_str())),
                             cy,
                             &label,
                             Style::default().fg(theme.gray_dim),
@@ -4038,11 +4050,15 @@ impl AgentView {
                                     dur_s as u32 % 60,
                                 )
                             } else {
-                                "[Play]".to_string()
+                                tr("[Play]").to_string()
                             };
-                            let open_label = "[Open]";
+                            let open_label = tr("[Open]");
+                            // LOCAL: 译文宽度按显示列宽计（中文非 ASCII）
+                            let play_w =
+                                unicode_width::UnicodeWidthStr::width(play_label.as_str()) as u16;
+                            let open_w = unicode_width::UnicodeWidthStr::width(open_label) as u16;
                             let gap = 3u16;
-                            let total = play_label.len() as u16 + gap + open_label.len() as u16;
+                            let total = play_w + gap + open_w;
                             let start_x = rect.x + rect.width.saturating_sub(total) / 2;
                             buf.set_string_safe(
                                 start_x,
@@ -4055,13 +4071,13 @@ impl AgentView {
                                     Rect {
                                         x: start_x,
                                         y: button_y,
-                                        width: play_label.len() as u16,
+                                        width: play_w,
                                         height: 1,
                                     },
                                     path.clone(),
                                 ));
                             }
-                            let open_x = start_x + play_label.len() as u16 + gap;
+                            let open_x = start_x + play_w + gap;
                             buf.set_string_safe(
                                 open_x,
                                 button_y,
@@ -4072,7 +4088,7 @@ impl AgentView {
                                 Rect {
                                     x: open_x,
                                     y: button_y,
-                                    width: open_label.len() as u16,
+                                    width: open_w,
                                     height: 1,
                                 },
                                 path.clone(),
@@ -4083,10 +4099,13 @@ impl AgentView {
                             .media_areas
                             .push((rect, path.clone()));
                         if button_visible {
-                            let open_label = "[Open]";
-                            let copy_label = "[Copy]";
+                            let open_label = tr("[Open]");
+                            let copy_label = tr("[Copy]");
+                            // LOCAL: 译文宽度按显示列宽计（中文非 ASCII）
+                            let open_w = unicode_width::UnicodeWidthStr::width(open_label) as u16;
+                            let copy_w = unicode_width::UnicodeWidthStr::width(copy_label) as u16;
                             let gap = 3u16;
-                            let total = open_label.len() as u16 + gap + copy_label.len() as u16;
+                            let total = open_w + gap + copy_w;
                             let start_x = rect.x + rect.width.saturating_sub(total) / 2;
                             buf.set_string_safe(
                                 start_x,
@@ -4098,12 +4117,12 @@ impl AgentView {
                                 Rect {
                                     x: start_x,
                                     y: button_y,
-                                    width: open_label.len() as u16,
+                                    width: open_w,
                                     height: 1,
                                 },
                                 path.clone(),
                             ));
-                            let copy_x = start_x + open_label.len() as u16 + gap;
+                            let copy_x = start_x + open_w + gap;
                             buf.set_string_safe(
                                 copy_x,
                                 button_y,
@@ -4114,7 +4133,7 @@ impl AgentView {
                                 Rect {
                                     x: copy_x,
                                     y: button_y,
-                                    width: copy_label.len() as u16,
+                                    width: copy_w,
                                     height: 1,
                                 },
                                 path.clone(),
