@@ -1,0 +1,4520 @@
+## app/acp_handler/background.rs
+  [plain] x6
+    20: () 'Bash'
+    293: () 'find_session_match returned an existing AgentId'
+    315: () 'loop'
+    347: () 'find_session_match returned an existing AgentId'
+    370: () 'loop'
+    398: () 'find_session_match returned an existing AgentId'
+  [fmt] x1
+    431: (format) 'Scheduled task expired: \\"{head}\\" ({}). Recurring tasks auto-expire after {} days; re-create it if still n...'
+  [id] x1
+  [cmp] x5
+  [log] x4
+
+## app/acp_handler/follow_ups.rs
+  [plain] x2
+    24: () 'promptId'
+    29: () '_meta'
+  [cmp] x1
+
+## app/acp_handler/interactions.rs
+  [plain] x11
+    148: () 'Cancelled serialization should not fail'
+    160: () '/doctor fix was cancelled because another question opened.'
+    166: () 'The blocked-prompt card was replaced by another question. Your prompt is still held at the front of the queue.'
+    172: () '/fork'
+    173: () '/new'
+    174: () 'credit-limit upsell'
+    175: () 'SuperGrok upsell'
+    176: () 'model switch'
+    177: () '/delete'
+    178: () '/doctor fix'
+    180: () 'blocked prompt'
+  [fmt] x4
+    25: (format) 'Invalid params: {e}'
+    106: (format) 'Invalid params: {e}'
+    183: (format) '{cmd} cancelled because another question opened.'
+    233: (format) 'Invalid exit_plan_mode params: {e}'
+  [cmp] x2
+  [log] x13
+
+## app/acp_handler/mcp.rs
+  [plain] x2
+    18: () 'camelCase'
+    54: () 'camelCase'
+  [cmp] x1
+  [log] x2
+
+## app/acp_handler/mod.rs
+  [plain] x6
+    177: () 'find_session_match returned an existing AgentId'
+    414: () 'find_session_match returned an existing AgentId'
+    420: () 'find_session_match returned an existing subagent_views key'
+    465: () 'pager'
+    485: () 'unknown'
+    525: () 'builtin'
+  [fmt] x1
+    677: (format) 'Method not found: {unknown}'
+  [id] x4
+  [cmp] x31
+  [log] x12
+
+## app/acp_handler/permissions.rs
+  [plain] x10
+    49: () 'Grok'
+    188: () 'Child session (untracked):'
+    235: () 'Allow Execute?'
+    254: () 'Allow Edit?'
+    263: () 'Allow Edit?'
+    264: () 'Allow Execute?'
+    265: () 'Allow Delete?'
+    266: () 'Allow?'
+    335: (matches) 'UseTool'
+    335: (matches) 'MCPTool'
+  [fmt] x8
+    184: (format) 'Subagent \\"{}\\" ({}):'
+    234: (format) 'Allow `{bin}`?'
+    247: (format) 'Allow Edit to {}?'
+    250: (format) 'Allow {}?'
+    258: (format) 'Allow {}?'
+    287: (format) '{stripped} (on your machine)?'
+    289: (format) '{title} (on your machine)'
+    358: (format) '… (+{hidden} more lines)'
+  [id] x3
+  [cmp] x7
+  [log] x6
+
+## app/acp_handler/prompt_origin.rs
+  [plain] x3
+    48: () 'rate limited'
+    139: () 'error'
+    144: () 'error'
+  [id] x1
+  [cmp] x4
+  [test] x1
+
+## app/acp_handler/queue.rs
+  [plain] x11
+    24: () 'camelCase'
+    27: () 'Option::is_none'
+    29: () 'Option::is_none'
+    31: () 'Option::is_none'
+    34: () 'Option::is_none'
+    37: () 'Option::is_none'
+    40: () 'Option::is_none'
+    43: () 'Option::is_none'
+    46: () '_meta'
+    46: () 'Option::is_none'
+    172: () 'prompt'
+  [id] x1
+  [log] x12
+  [test] x16
+
+## app/acp_handler/session_notification.rs
+  [plain] x5
+    221: () 'find_session_match returned an existing AgentId'
+    375: (matches) 'error'
+    520: () 'cancelled'
+    1088: () 'model auto-switched: previous model unavailable'
+    1307: () 'No active session'
+  [fmt] x4
+    21: (format) '{event_name} hook ({name})'
+    22: (format) '{event_name} hook'
+    26: (format) '{subject} failed, ignored'
+    28: (format) '{subject} failed, ignored: {error}'
+  [id] x4
+  [cmp] x14
+  [log] x29
+
+## app/acp_handler/settings.rs
+  [plain] x6
+    119: () 'GROK_PRIVACY_NOTICE_ROLLOUT'
+    123: () 'GROK_PRIVACY_BANNER_RESHOW_DAYS'
+    185: () 'GROK_SESSION_PICKER_GROUPED'
+    350: () 'ask'
+    368: () 'auto'
+    391: () 'serialize yolo_mode_changed params'
+  [id] x6
+  [cmp] x4
+  [log] x10
+  [test] x43
+
+## app/acp_handler/subagent_activity.rs
+  [plain] x1
+    48: () 'Waiting'
+  [id] x1
+
+## app/acp_handler/workflow_ingest.rs
+  [plain] x1
+    21: () 'failed'
+  [cmp] x11
+
+## app/actions.rs
+  [plain] x11
+    966: () 'default'
+    967: () 'ask'
+    968: () 'auto'
+    1103: () 'off'
+    1110: () 'Off'
+    1139: () 'mouse'
+    1172: () 'agent'
+    1173: () 'dashboard'
+    1174: () 'peek'
+    2180: () 'camelCase'
+    2188: () 'std::ops::Not::not'
+  [id] x5
+  [cmp] x4
+  [test] x16
+
+## app/agent.rs
+  [plain] x18
+    35: () 'prompt'
+    36: () 'command'
+    117: () 'Compacting'
+    118: () 'Creating worktree'
+    119: () 'Restoring session in worktree'
+    120: () 'Restoring code'
+    121: () 'Forking session'
+    127: () '/compact'
+    128: () 'worktree'
+    129: () 'worktree'
+    130: () 'restore'
+    131: () 'fork'
+    142: () '[monitor] '
+    366: () 'Paused'
+    367: () 'Paused (back-off)'
+    368: () 'Paused (no progress)'
+    369: () 'Paused (error)'
+    370: () 'Paused (verification blocked)'
+  [id] x1
+  [cmp] x13
+  [test] x165
+
+## app/agent_view/cta.rs
+  [test] x123
+
+## app/agent_view/input.rs
+  [test] x122
+
+## app/agent_view/interactions.rs
+  [test] x131
+
+## app/agent_view/jump.rs
+  [test] x3
+
+## app/agent_view/key_owner.rs
+  [plain] x13
+    23: () 'permission'
+    24: () 'cancel turn'
+    25: () 'question'
+    26: () 'elicitation'
+    31: () 'Tab/Space'
+    81: () 'dismiss'
+    82: () 'back'
+    83: () 'cancel'
+    84: () 'unselect'
+    85: () 'dashboard'
+    86: () 'scrollback'
+    87: () 'keep running'
+    88: () 'dismiss'
+  [id] x1
+
+## app/agent_view/links.rs
+  [test] x326
+
+## app/agent_view/media.rs
+  [plain] x4
+    422: () 'Opening in default app\\u{2026}'
+    425: () 'Could not open file'
+    447: () 'Loading video\\u{2026}'
+    514: () 'Copied image'
+  [fmt] x2
+    132: (format) '{transmit}{place}'
+    223: (format) '{transmit_esc}{place_esc}'
+  [id] x5
+  [log] x2
+  [test] x23
+
+## app/agent_view/mod.rs
+  [plain] x10
+    392: () 'Save a memory note... (Enter for newline, Shift+Enter to save)'
+    394: () 'Save a memory note... (Shift+Enter for multiline)'
+    402: () 'Run shell command'
+    403: () 'Save memory note'
+    456: () 'macos'
+    456: () 'windows'
+    462: () 'macos'
+    466: () 'macos'
+    474: () 'macos'
+    479: () 'macos'
+  [id] x3
+  [test] x243
+
+## app/agent_view/modals.rs
+  [test] x357
+
+## app/agent_view/notices.rs
+  [test] x17
+
+## app/agent_view/panes.rs
+  [plain] x7
+    364: () 'Run'
+    397: () 'Monitor'
+    415: () 'Loop'
+    588: () 'collapse'
+    590: () 'expand'
+    593: () 'show all'
+    603: () 'prompt'
+  [fmt] x1
+    974: (format) '/workflow stop {name}'
+  [test] x20
+
+## app/agent_view/paste.rs
+  [test] x306
+
+## app/agent_view/plan.rs
+  [test] x96
+
+## app/agent_view/prompt.rs
+  [test] x133
+
+## app/agent_view/prompt_stash.rs
+  [plain] x4
+    42: () 'Stashed'
+    80: () 'Draft stashed. Press the stash key again to restore it.'
+    115: () 'Stashed draft restored.'
+    162: () 'Stashed draft restored.'
+  [fmt] x2
+    36: (format) '! {text}'
+    54: (format) '{STASH_CAPTION} · {title}'
+  [test] x73
+
+## app/agent_view/queue.rs
+  [test] x145
+
+## app/agent_view/render.rs
+  [plain] x99
+    144: () 'save comment'
+    145: () 'cancel'
+    152: () 'request changes'
+    153: () 'plan'
+    154: () 'back'
+    158: () 'approve'
+    159: () 'plan'
+    160: () 'back'
+    166: () 'copy plan'
+    167: () 'prompt'
+    180: () 'back'
+    192: () 'nav'
+    193: () 'accept'
+    194: () 'drill'
+    198: () 'submit'
+    200: () 'next answer'
+    204: () 'next answer'
+    206: () 'dismiss'
+    223: () 'collapse'
+    225: () 'expand'
+    231: () 'send'
+    237: () 'save'
+    248: () 'select'
+    250: () 'next option'
+    253: () 'scope'
+    256: () 'edit pattern'
+    260: () 'cancel'
+    309: () 'select'
+    310: () 'next choice'
+    311: () 'confirm'
+    320: () 'accept / toggle'
+    321: () 'decline'
+    322: () 'cancel'
+    323: () 'next field'
+    342: () 'save comment'
+    343: () 'cancel'
+    472: () 'prompt'
+    509: () 'stop'
+    524: () 'prev/next agent'
+    527: () 'dashboard'
+    601: () 'completed'
+    608: () 'completed'
+    617: () 'completed'
+    972: () '\\u{25CF} '
+    1522: () 'plan'
+    1528: () 'goal'
+    1542: () 'mcp'
+    1572: () 'context'
+    2196: () 'idle'
+    2758: () '(\\u{25cb}) '
+    2888: () 'Enter'
+    3531: () 'edit'
+    3532: () 'delete'
+    3535: () 'send'
+    3537: () 'approve'
+    3539: () 'copy plan'
+    3540: () 'quit plan'
+    3541: () 'prompt'
+    3545: () 'comment'
+    3546: () 'copy plan'
+    3549: () 'send'
+    3551: () 'approve'
+    3553: () 'quit plan'
+    3555: () 'nav'
+    3557: () 'select'
+    3558: () 'prompt'
+    3571: () 'edit'
+    3572: () 'delete'
+    3573: () 'copy plan'
+    3577: () 'comment'
+    3578: () 'copy plan'
+    3582: () 'send'
+    3585: () 'nav'
+    3587: () 'select'
+    3588: () 'fullscreen'
+    3589: () 'search'
+    3590: () 'close'
+    3593: () 'confirm'
+    3595: () 'nav'
+    3597: () 'select'
+    3598: () 'clear'
+    3600: () 'copy'
+    3601: () 'filename'
+    3603: () 'goto'
+    3604: () 'search'
+    3605: () 'cancel'
+    3783: () 'close'
+    3820: () 'pause'
+    3820: () 'play'
+    3822: () 'close'
+    3824: () 'back'
+    3825: () 'fwd'
+    3882: () 'quit'
+    3883: () 'fire'
+    4162: () 'submit'
+    4163: () 'cancel'
+    4167: () 'dismiss'
+    4173: () 'clear search'
+    4174: () 'keep filter'
+  [fmt] x12
+    642: (format) ' {icon}'
+    671: (format) '{type_label} '
+    676: (format) ' {meta}'
+    733: (format) '{activity} \\u{00b7} '
+    1495: (format) '{truncated}\\u{2026}'
+    1593: (format) '{icon} {}'
+    1595: (format) '{icon} {b}'
+    1618: (format) '{}:{profile} '
+    2531: (format) '{model_id} ({eff})'
+    3211: (format) '{result_count}'
+    4231: (format) '{spinner} {}'
+    4594: (format) ' {msg} '
+  [id] x6
+  [cmp] x10
+  [log] x3
+  [wrapped] x39
+  [test] x91
+
+## app/agent_view/rewind.rs
+  [test] x13
+
+## app/agent_view/selection.rs
+  [log] x14
+  [test] x226
+
+## app/agent_view/session.rs
+  [test] x231
+
+## app/agent_view/shell_completion.rs
+  [test] x156
+
+## app/agent_view/viewer.rs
+  [plain] x2
+    1202: () 'collapse'
+    1203: () 'expand'
+  [fmt] x2
+    306: (format) '{}{suffix}'
+    307: (format) '@{path_display}'
+  [id] x1
+
+## app/agent_view/workflows_overlay.rs
+  [test] x108
+
+## app/app_view.rs
+  [plain] x21
+    164: () 'ask'
+    165: () 'always'
+    166: () 'never'
+    508: () 'GROK_ESC_DOUBLE_PRESS_MS'
+    521: () 'usage'
+    521: () 'imagine'
+    521: () 'voice'
+    1268: () 'admin'
+    1455: () '.git'
+    2636: () 'close this session'
+    2998: () 'new in worktree'
+    3047: () 'quit'
+    3427: () 'cancelled'
+    3472: () 'click'
+    3511: () 'Resume session'
+    3529: () 'delete'
+    3635: () 'local'
+    3664: () 'local'
+    4012: () 'Release Notes'
+    4239: () 'Release Notes'
+    5848: (cfg) 'macos'
+  [fmt] x1
+    4556: (format) '{model_name_base} ({eff})'
+  [id] x41
+  [cmp] x5
+  [log] x3
+  [wrapped] x12
+
+## app/bundle.rs
+  [plain] x4
+    26: () 'camelCase'
+    43: () 'camelCase'
+    58: () 'camelCase'
+    66: () 'camelCase'
+  [test] x24
+
+## app/cli.rs
+  [plain] x99
+    29: () 'oauth'
+    29: () 'oidc'
+    35: () 'oauth'
+    105: () 'stable'
+    105: () 'enterprise'
+    108: () 'alpha'
+    108: () 'enterprise'
+    111: () 'alpha'
+    111: () 'stable'
+    157: () 'CMD'
+    228: () 'list'
+    240: () 'URL'
+    243: () 'DIR'
+    249: () 'leader'
+    260: () 'reauth'
+    261: () '--reauthenticate'
+    262: () 'false'
+    266: () 'model'
+    266: () 'MODEL'
+    271: () 'effort'
+    272: () 'EFFORT'
+    277: () 'yolo'
+    280: () 'PATH'
+    285: () 'DIR'
+    293: () 'leader'
+    357: () 'GROK_AGENT_SECRET'
+    399: () 'grok'
+    401: () 'Grok Build TUI'
+    420: () 'version'
+    430: () 'PATH'
+    436: () 'debug'
+    441: () 'FILE'
+    449: () 'yolo'
+    454: () 'trust'
+    458: () 'allow'
+    459: () 'allowedTools'
+    460: () 'RULE'
+    466: () 'deny'
+    467: () 'disallowedTools'
+    468: () 'RULE'
+    475: () 'single'
+    476: () 'print'
+    477: () 'PROMPT'
+    485: () 'JSON'
+    486: () 'single'
+    493: () 'PATH'
+    494: () 'single'
+    503: () 'plain'
+    512: () 'SCHEMA'
+    515: () 'model'
+    515: () 'MODEL'
+    520: () 'effort'
+    521: () 'EFFORT'
+    526: () 'rules'
+    531: () 'MODE'
+    535: () 'DETAIL'
+    541: () 'PROMPT'
+    548: () 'resume'
+    550: () 'SESSION_ID_OR_TITLE'
+    558: () 'load'
+    559: () 'SESSION_ID'
+    575: () 'continue'
+    583: () 'SESSION_ID'
+    590: () 'worktree'
+    594: () 'ref'
+    594: () 'worktree'
+    611: () 'CWD'
+    613: () 'chat'
+    620: () 'SERVER_ID'
+    622: () 'chat'
+    627: () 'PATH'
+    627: () 'chat'
+    655: () 'agent'
+    655: () 'NAME'
+    658: () 'agents'
+    658: () 'JSON'
+    661: () 'tools'
+    661: () 'TOOLS'
+    664: () 'TOOLS'
+    676: () 'MODE'
+    695: () 'SECS'
+    703: () 'GROK_SANDBOX'
+    703: () 'PROFILE'
+    706: () 'MODE'
+    712: () 'MODE'
+    715: () 'terminal'
+    732: () 'installer'
+    732: () 'VALUE'
+    740: () 'minimal'
+    745: () 'fullscreen'
+    745: () 'minimal'
+    748: () 'GROK_LOG_SAMPLING'
+    754: () 'oauth'
+    760: () 'leader'
+    764: () 'PROMPT'
+    765: () 'single'
+    820: () '--experimental-memory'
+    822: () '--no-memory'
+    836: () 'grok'
+  [id] x84
+  [cmp] x2
+  [log] x4
+  [test] x256
+
+## app/command_catalog.rs
+  [id] x5
+  [log] x5
+
+## app/connect_timeout.rs
+  [plain] x1
+    9: () 'GROK_CONNECT_UI_TIMEOUT_SECS'
+  [log] x1
+  [test] x1
+
+## app/consent.rs
+  [plain] x2
+    285: () 'Updates to our terms'
+    292: () 'Got it'
+  [fmt] x1
+    318: (format) '{label}[{}]'
+  [id] x1
+  [cmp] x1
+  [log] x1
+
+## app/csi_filter.rs
+  [log] x1
+  [test] x9
+
+## app/deferred_subagent_finishes.rs
+  [test] x63
+
+## app/dispatch/auth.rs
+  [plain] x5
+    49: () 'No login method available'
+    340: () 'Re-authenticated. Retrying\\u{2026}'
+    412: () 'device'
+    413: () 'command'
+    414: () 'loopback'
+  [fmt] x7
+    454: (format) '{server_name}: setup schema is not supported in this UI'
+    461: (format) '{server_name}: {e}'
+    463: (format) 'Auth failed: {e}'
+    465: (format) '{server_name} auth failed: {e}'
+    505: (format) '{server_name} setup failed: {e}'
+    509: (format) 'Authenticating {server_name}...'
+    516: (format) '{server_name}: no active session for authentication'
+  [cmp] x1
+  [log] x2
+
+## app/dispatch/billing.rs
+  [plain] x32
+    29: () 'https://grok.com/supergrok?referrer=grok-build'
+    32: () 'https://grok.com?_s=usage'
+    106: () 'You hit your weekly limit.'
+    107: () 'Upgrade to a higher tier for more usage'
+    108: () 'Buy more credits'
+    109: () 'Purchase credits to keep using Grok Build'
+    114: () 'You\\u{2019}ve hit your spending cap.'
+    115: () 'Upgrade to a higher tier for more credits'
+    116: () 'Increase limit'
+    117: () 'Raise your pay-as-you-go spending cap'
+    122: () 'You\\u{2019}ve hit the credit limit for your plan.'
+    123: () 'Upgrade to a higher tier for more credits'
+    124: () 'Pay as you go'
+    125: () 'Enable pay-as-you-go credits for on-demand usage'
+    143: () 'Upgrade tier'
+    158: () 'Try Again'
+    159: () 'Resubmit the last prompt once you have usage again'
+    230: () 'You hit your free usage limit.'
+    235: () 'Unlock all features with SuperGrok.'
+    249: () 'Upgrade to SuperGrok'
+    250: () 'For everyday coding and productivity tasks'
+    255: () 'Upgrade to SuperGrok Plus'
+    256: () 'Significantly higher usage and rate limits'
+    261: () 'Upgrade to SuperGrok Heavy'
+    262: () 'Get the most out of Grok Build. Highest usage limits.'
+    345: () 'No billing data available.'
+    464: () 'a higher tier'
+    505: () 'No prompt to retry.'
+    508: () 'No prompt to retry.'
+    523: () 'Trying again\\u{2026}'
+    540: () 'https://grok.com/supergrok?referrer=grok-build'
+    544: () 'referrer'
+  [fmt] x3
+    174: (format) 'credit-limit-upsell-{}'
+    276: (format) '{modal_id_prefix}-{}'
+    466: (format) 'Subscription upgraded to {tier_name}. Retrying\\u{2026}'
+  [id] x8
+  [cmp] x4
+  [log] x7
+
+## app/dispatch/cta.rs
+  [plain] x1
+    103: () 'unsupported'
+  [fmt] x1
+    89: (format) 'plugins/{name}'
+  [id] x5
+  [cmp] x1
+  [log] x1
+
+## app/dispatch/ctx.rs
+  [plain] x4
+    12: () 'No active session'
+    221: () 'auto'
+    224: (matches) 'auto'
+    227: () 'ask'
+  [id] x3
+  [log] x1
+
+## app/dispatch/dashboard.rs
+  [plain] x53
+    135: () 'auto'
+    178: () 'Agent dashboard is disabled in this configuration'
+    184: () 'Sign in to open the dashboard'
+    192: () 'Answer the terms notice to open the dashboard'
+    198: () 'Answer the folder-trust question to open the dashboard'
+    387: () 'build'
+    418: () 'Session not found locally'
+    482: () 'Session no longer exists'
+    512: () 'Subagent no longer running'
+    703: () 'Not a git repository: worktrees need one'
+    720: () 'Select a session first'
+    731: () 'Session no longer exists'
+    735: () 'checked above'
+    955: () 'Open the dashboard (/dashboard) to change location'
+    1021: () 'Open the dashboard (/dashboard) to change location'
+    1051: () '.git'
+    1106: () "Not a git repository: can't create a worktree here"
+    1269: () 'Type a prompt to dispatch a session'
+    1312: () 'prompt'
+    1470: () 'auto'
+    1586: () 'No plan to show on the dashboard'
+    1600: () 'Open a session to run /doctor.'
+    1704: () "Can't change a subagent's mode"
+    1713: () 'Session no longer exists'
+    1754: () "Can't reply to a subagent"
+    1762: () 'Session no longer exists'
+    1788: () 'Session no longer exists'
+    1901: () 'Session is no longer in the workspace'
+    1902: () 'Dashboard workspace is read-only'
+    1903: () "Session isn't saved to the workspace yet"
+    1941: () "Subagent rows can't be renamed"
+    1943: () 'Load the session before renaming'
+    2130: () 'Stop the session before deleting'
+    2173: () 'Session is no longer in the list'
+    2178: () "Deleting chat conversations isn't supported yet"
+    2186: () 'Stop the session before deleting'
+    2387: () 'Stop the session before deleting'
+    2391: () 'No session history to delete'
+    2395: () 'Deleting session\\u{2026}'
+    2397: () 'current'
+    2404: () "Subagent rows can't be deleted from the dashboard"
+    2415: () 'Session is no longer in the list'
+    2419: () "Deleting chat conversations isn't supported yet"
+    2423: () 'Stop the session before deleting'
+    2426: () 'Deleting session\\u{2026}'
+    2428: () 'local'
+    2478: () 'Session became active; stop it before archiving'
+    2485: () "Subagent rows can't be archived from the dashboard"
+    2741: () 'Row no longer exists'
+    2753: () 'Permission has changed: re-open peek'
+    2800: () 'Row no longer exists'
+    2812: () 'Permission has changed: re-open peek'
+    2867: () 'Row no longer exists'
+  [fmt] x8
+    687: (format) '{} Session closed'
+    983: (format) '{}  (current)'
+    1032: (format) 'Not a directory: {}'
+    1035: (format) 'Not a directory: {}'
+    1074: (format) '\\u{2192} {display}'
+    1280: (format) 'Prompt too long ({chars} chars / {} bytes; max ~64 KiB)'
+    1423: (format) '/{token} requires SuperGrok: upgrade at {}'
+    1447: (format) '/{name} only works in a session'
+  [id] x5
+  [cmp] x3
+  [log] x2
+
+## app/dispatch/dashboard_telemetry.rs
+  [plain] x3
+    26: () 'subagent'
+    27: () 'roster'
+    28: () 'workspace'
+  [id] x1
+
+## app/dispatch/import_claude.rs
+  [plain] x2
+    22: () 'No Claude settings found to import.'
+    44: () 'No items selected.'
+  [fmt] x3
+    53: (format) '\\nImported {} of {} setting(s).'
+    58: (format) '\\n  Updated: {}'
+    64: (format) 'Failed to import Claude settings: {}'
+  [cmp] x3
+  [log] x3
+
+## app/dispatch/inline_feedback.rs
+  [plain] x4
+    16: () 'Could not save the feedback draft right now (another process has it open); the report stays queued. Send yo...'
+    112: () 'No active session'
+    120: () 'No active session'
+    160: () ' (its image was dropped)'
+  [fmt] x12
+    57: (format) '{over_count} over the {MAX_FEEDBACK_IMAGES}-image limit'
+    62: (format) "{unsupported} in a format feedback can't carry (PNG, JPEG, or GIF only)"
+    67: (format) '{too_large} over the size limit ({} MB each, {} MB combined)'
+    73: (format) '{unreadable} unreadable'
+    77: (format) 'Dropped {dropped} image{plural} from the feedback: {}.'
+    123: (format) 'Could not save the local feedback draft: {other}'
+    135: (format) 'Could not save feedback draft images: {error}'
+    137: (format) '{notice} {error}'
+    161: (format) ' (its {count} images were dropped)'
+    163: (format) '{failure}\\nNot sent: {report}{images_note}'
+    174: (format) '{report}{chip_gap}{separator}'
+    190: (format) '{failure}; {refused} image{plural} could not be restored.'
+
+## app/dispatch/interject.rs
+  [plain] x3
+    64: () 'Interjection sent'
+    125: () 'Reconnecting, please wait...'
+    153: () 'prompt'
+  [id] x1
+  [log] x2
+  [test] x25
+
+## app/dispatch/jump.rs
+  [plain] x1
+    23: () 'Nothing to jump to yet'
+
+## app/dispatch/modes.rs
+  [plain] x68
+    41: () 'Already in plan mode. Use /view-plan to view the current plan.'
+    55: () 'plan'
+    170: () 'Plan mode'
+    212: () 'auto'
+    213: () 'ask'
+    224: () 'auto'
+    239: () 'auto'
+    261: () 'ask'
+    310: () 'plan'
+    314: () 'default'
+    331: () 'default'
+    331: () 'default'
+    332: () 'auto'
+    332: () 'auto'
+    333: () 'ask'
+    381: () 'ask'
+    462: () '\\u{2713} Permission mode: Auto (classifier)'
+    463: () '\\u{2713} Permission mode: Ask'
+    464: () '\\u{2713} Permission mode: Default'
+    472: () '\\u{26A0} Always-approve ON: plan mode still blocks file edits until you exit plan mode'
+    478: () '\\u{26A0} Always-approve ON: all tool actions auto-run'
+    481: () 'Always-approve'
+    554: () 'ask'
+    558: () 'ask'
+    620: () 'Plan'
+    633: () 'auto'
+    634: () 'Auto'
+    636: () 'auto'
+    638: () 'ask'
+    642: () 'Normal'
+    644: () 'ask'
+    649: () 'Always-Approve'
+    657: () 'ask'
+    661: () 'Normal'
+    663: () 'ask'
+    668: () 'Always-Approve'
+    677: () 'ask'
+    678: () 'Normal'
+    680: () 'ask'
+    689: () 'Always-Approve'
+    700: () 'auto'
+    701: () 'Auto'
+    703: () 'auto'
+    712: () 'ask'
+    713: () 'Normal'
+    715: () 'ask'
+    746: () 'Plan'
+    761: () 'ask'
+    765: () 'Normal'
+    779: () 'ask'
+    789: () 'Always-Approve'
+    807: () 'auto'
+    810: () 'Auto'
+    821: () 'auto'
+    831: () 'ask'
+    835: () 'Normal'
+    839: () 'ask'
+    848: () 'Always-Approve'
+    860: () 'ask'
+    863: () 'Normal'
+    867: () 'ask'
+    877: () 'Always-Approve'
+    894: () 'auto'
+    897: () 'Auto'
+    908: () 'auto'
+    923: () 'ask'
+    926: () 'Normal'
+    940: () 'ask'
+  [id] x12
+  [log] x29
+
+## app/dispatch/notes.rs
+  [plain] x15
+    22: () 'Thanks for the feedback! The Grok Build team is on it.'
+    57: () 'Use `/feedback <text>` in minimal mode, or run without --minimal to open the feedback form.'
+    67: () 'Stop voice input before opening the feedback form'
+    204: () 'Wait for an earlier feedback trace upload to finish, then try again.'
+    232: () 'Choose a type before sending this draft.'
+    375: () 'modal'
+    417: () 'Please provide feedback text.'
+    580: () 'Please provide a memory note.'
+    671: () 'Saving memory note...'
+    747: () 'Recent prompts:'
+    757: () 'Recent files:'
+    822: () "Couldn't generate recap"
+    824: () 'No messages yet'
+    854: () 'Session recap is not enabled'
+    921: () 'Memory note saved'
+  [fmt] x4
+    275: (format) '{choice:?}'
+    737: (format) 'CWD: {}'
+    741: (format) 'Branch: {branch}'
+    928: (format) "Couldn't save memory note: {error}"
+  [id] x5
+  [log] x11
+
+## app/dispatch/permissions.rs
+  [cmp] x2
+  [log] x1
+  [test] x10
+
+## app/dispatch/prompt.rs
+  [plain] x13
+    31: () 'Reconnecting, please wait...'
+    139: () 'Close the current question before applying this fix.'
+    145: () 'Apply this fix?'
+    148: () 'Apply'
+    149: () 'Make the changes shown above.'
+    154: () 'Cancel'
+    155: () 'Do not change the configuration.'
+    960: () 'session_id is_some checked'
+    984: () 'prompt'
+    1098: () 'session_id is_some checked'
+    1107: () 'bash'
+    1445: () 'Turn complete.'
+    1505: () 'Grok'
+  [fmt] x3
+    858: (format) 'provisional-{}'
+    1443: (format) 'Turn complete in {}.'
+    1450: (format) 'Error: {err}'
+  [id] x5
+  [cmp] x3
+  [log] x27
+
+## app/dispatch/prompt_ack.rs
+  [plain] x5
+    20: () 'Prompt not accepted, text restored'
+    21: () 'Prompt not accepted, turn stopped'
+    28: () 'Your text is back in the input box; press Enter to retry.'
+    31: () 'Your text was placed above your draft in the input box; press Enter to retry.'
+    34: () 'The turn was stopped; send the prompt again to retry.'
+  [fmt] x1
+    38: (format) 'The agent did not accept your prompt within {limit_secs}s. {recovery} If this keeps happening, run /feedback.'
+  [id] x2
+  [log] x11
+
+## app/dispatch/queue.rs
+  [plain] x6
+    126: () 'Images removed (skill prompt)'
+    716: () 'segments non-empty'
+    717: () 'segments non-empty'
+    718: () 'segments non-empty'
+    793: () 'prompt'
+    1123: () 'Open the session to run this command'
+  [id] x12
+  [cmp] x6
+  [log] x15
+  [test] x476
+
+## app/dispatch/rewind.rs
+  [plain] x3
+    418: () 'unknown error'
+    458: () 'Reverted conversation'
+    530: () 'No undoable prompts'
+  [fmt] x1
+    499: (format) '\\n{text}'
+  [id] x2
+
+## app/dispatch/router.rs
+  [plain] x19
+    299: (matches) 'local'
+    299: (matches) 'remote'
+    299: (matches) 'both'
+    648: () 'scroll log: off'
+    658: () 'off'
+    1174: () 'Opening in default app\\u{2026}'
+    1176: () 'Could not open file'
+    1189: () 'Opening in default app\\u{2026}'
+    1191: () 'Could not open file'
+    1263: () "External sessions can't be deleted"
+    1267: () "Deleting chat conversations isn't supported yet"
+    1270: (matches) 'local'
+    1270: (matches) 'remote'
+    1270: (matches) 'both'
+    1276: () 'Cannot delete session: dashboard workspace is read-only'
+    1279: () 'Deleting session\\u{2026}'
+    1324: () 'This fix was cancelled because the session changed. Run `/doctor fix` again.'
+    1343: () 'Fix cancelled.'
+    1363: () '/memory'
+  [fmt] x4
+    250: (format) 'Local workspace: {err}'
+    647: (format) 'scroll log: recording to {}'
+    660: (format) 'debug toggles: scroll {} \\u{00b7} fps {} \\u{00b7} log {}. Toggle with /debug <scroll|fps|log>'
+    1333: (format) 'Applying {}…'
+  [id] x4
+  [cmp] x3
+  [log] x4
+
+## app/dispatch/session/foreign.rs
+  [plain] x5
+    173: () 'session list'
+    185: () 'No sessions found for this directory'
+    204: () 'No sessions in this directory. Showing other sessions from this repository.'
+    206: () 'No sessions in this directory. Showing sessions from other directories.'
+    229: () 'session list failure'
+  [fmt] x1
+    234: (format) "Couldn't load sessions: {error}"
+  [id] x4
+  [log] x3
+
+## app/dispatch/session/fork.rs
+  [plain] x20
+    26: () '/fork only works inside a session'
+    35: () 'Cannot fork: session is still being created'
+    40: () 'Cannot create worktree: not in a git repository'
+    76: () 'Always worktree'
+    77: () 'Use worktree and stop asking (reset in config.toml)'
+    82: () 'Never worktree'
+    83: () 'Skip worktree and stop asking (reset in config.toml)'
+    103: () 'Finish answering the current question first'
+    108: () 'Yes'
+    109: () 'Fork in a new isolated git worktree'
+    115: () 'Fork in the current cwd'
+    122: () 'Run this fork in an isolated git worktree?'
+    127: () 'agent present (re-borrow)'
+    154: () 'Cannot fork: session not yet created'
+    164: () 'Forked'
+    173: () 'just-inserted agent missing'
+    206: () 'Creating worktree\\u{2026}'
+    342: () 'fork placeholder agent'
+    387: () 'WorktreeForked'
+    468: () 'ForkSessionReady'
+  [fmt] x8
+    130: (format) 'fork-{}'
+    163: (format) 'Forked: {d}'
+    310: (format) 'Session {session_id} (forked from {parent_sid}), use {cmd} to switch between sessions'
+    313: (format) 'Session {session_id} (forked from {parent_sid})'
+    318: (format) '{header}\\n  (both agents share cwd)'
+    403: (format) 'Worktree ready: {}'
+    413: (format) '\\u{2713} Code restored: {s}'
+    417: (format) '\\u{26A0} Code restore failed: {s}'
+  [log] x1
+
+## app/dispatch/session/lifecycle.rs
+  [plain] x22
+    201: () 'Finish answering the current question first'
+    206: () 'Yes'
+    207: () 'New session in a new isolated git worktree'
+    213: () 'New session in the current cwd'
+    220: () 'Start the new session in an isolated git worktree?'
+    225: () 'agent present (re-borrow)'
+    258: () 'Finish answering the current question first'
+    266: () 'Yes'
+    273: () 'Continue the current session'
+    280: () 'agent present (re-borrow)'
+    516: () 'Remove history and return to the dashboard'
+    518: () 'Remove history and return home'
+    524: () 'No active session to delete'
+    528: () 'Finish answering the current question first'
+    532: () 'Delete this session permanently?'
+    536: () 'Delete'
+    542: () 'Cancel'
+    543: () 'Keep the session'
+    586: () 'No active session to delete'
+    592: () 'Cannot delete session: dashboard workspace is read-only'
+    611: () 'Deleting session\\u{2026}'
+    613: () 'current'
+  [fmt] x16
+    124: (format) '--effort/--reasoning-effort: {}'
+    228: (format) 'new-session-{}'
+    262: (format) 'Switching to {model_name} requires starting a new session. Continue?'
+    267: (format) 'Start a new session with {model_name}'
+    283: (format) 'agent-type-mismatch-{}'
+    331: (format) 'Local workspace unavailable ({err}); using sandbox'
+    552: (format) 'delete-session-{}'
+    1326: (format) 'Session {}, use {cmd} to switch between sessions'
+    1331: (format) 'Session: {}'
+    1468: (format) 'Worktree ready: {}'
+    1618: (format) '\\n{draft_text}'
+    1632: (format) 'Session creation failed: {error}'
+    1709: (format) 'Cannot create worktree: {error}'
+    1763: (format) 'Switched to {display_name} ({eff} effort)'
+    1765: (format) 'Switched to {display_name}'
+    1789: (format) "Couldn't switch model: {msg}"
+  [id] x9
+  [log] x7
+
+## app/dispatch/session/load.rs
+  [plain] x14
+    433: () 'Restoring session from remote...'
+    440: () 'Session not found locally'
+    468: () "External sessions can't be resumed in a worktree"
+    513: () "Chat conversations can't be resumed in a worktree"
+    978: () 'conversation'
+    1047: () 'Restoring session from remote...'
+    1213: () 'SessionLoaded'
+    1355: () 'SessionLoadFailed'
+    1387: () 'debounce expiry'
+    1430: () 'card detail'
+    1473: () 'SessionRestored'
+    1524: () 'SessionRestoreFailed'
+    1548: () 'deep search results'
+    1601: () "Chat conversations can't be resumed in a worktree"
+  [fmt] x8
+    175: (format) 'Restoring code for session {}...'
+    177: (format) 'Loading session {}...'
+    1088: (format) 'Restoring session {session_id} from remote...'
+    1243: (format) '\\u{2713} Code restored: {s}'
+    1247: (format) '\\u{26A0} Code restore failed: {s}'
+    1369: (format) "Couldn't load session: {error}"
+    1500: (format) 'Session restored. Loading {local_session_id}...'
+    1533: (format) "Couldn't restore session: {error}"
+  [id] x25
+  [cmp] x6
+  [log] x5
+
+## app/dispatch/session/modal.rs
+  [plain] x3
+    42: () 'Cannot close the only session -- use /home to exit'
+    85: () "Couldn't rename session: title must not be blank"
+    116: () 'Chat conversations have no auto-title to restore'
+  [id] x1
+
+## app/dispatch/session/picker_routing.rs
+  [log] x2
+
+## app/dispatch/settings/setters.rs
+  [plain] x39
+    27: () 'Multiline'
+    49: () 'Multiline'
+    125: () 'minimal'
+    126: () 'fullscreen'
+    126: () 'full'
+    210: () 'Voice shortcut'
+    304: () 'Vim scrollback'
+    417: () 'Thinking blocks'
+    455: () 'Group tool calls'
+    498: () 'Collapsed edit blocks'
+    530: () 'Prompt suggestions'
+    659: () 'Invert scroll'
+    727: () 'Respect manual folds'
+    822: () '\\u{2713} Compact mode: off (auto-compact active on small terminal)'
+    824: () 'Compact mode'
+    856: () 'Timestamps'
+    888: () 'Timeline sidebar'
+    910: () 'Snap prompt to top on send'
+    934: () 'Confirm before rewind'
+    959: () 'Combine queued prompts'
+    995: () 'Queue'
+    996: () 'Steer'
+    1035: () 'Disable vim input mode'
+    1095: () 'Undo hint'
+    1110: () 'Plan mode hint'
+    1125: () 'Image input hint'
+    1140: () 'Send now hint'
+    1155: () 'Small screen hint'
+    1170: () 'Word select hint'
+    1185: () 'Copy and export hint'
+    1200: () 'SSH wrap hint'
+    1302: () 'Theme'
+    1306: () 'theme'
+    1405: () 'Auto dark theme'
+    1518: () 'Auto light theme'
+    1745: () '\\u{2713} Default model: cleared'
+    1761: () '\\u{2713} Default model: cleared'
+    1857: () '\\u{2713} Fork secondary model: already at default'
+    1869: () '\\u{2713} Fork secondary model: cleared'
+  [fmt] x26
+    79: (format) '\\u{2713} Mermaid: {}'
+    111: (format) '\\u{2713} Screen mode: {canonical} (restart to apply)'
+    148: (format) '\\u{2713} Hunk tracker: {canonical} (restart to apply)'
+    179: (format) '\\u{2713} Voice capture: {canonical}'
+    264: (format) '\\u{2713} Voice language: System ({effective})'
+    267: (format) '\\u{2713} Voice language: {name}'
+    337: (format) '{} (restart to apply)'
+    338: (format) 'Remember tool approvals'
+    374: (format) '{} (restart to apply)'
+    375: (format) 'Ask-Question timeout'
+    561: (format) '\\u{2713} Text selection: {}'
+    594: (format) '\\u{2713} Scroll speed: {clamped}'
+    628: (format) '\\u{2713} Scroll input: {}'
+    692: (format) '\\u{2713} Scroll lines: {clamped}'
+    772: (format) '\\u{2713} Default selected permission: {}'
+    998: (format) '\\u{2713} Follow-up behavior: {label}'
+    1214: (format) '\\u{2713} {label}: {value}'
+    1607: (format) '\\u{2713} Default model: {value}'
+    1783: (format) '\\u{2713} Fork secondary model: {value}'
+    1917: (format) '\\u{2713} Max thoughts width: {clamped}'
+    1965: (format) '{} (restart to apply)'
+    1966: (format) 'Show tips'
+    1991: (format) '{} (restart to apply)'
+    1992: (format) 'Auto-update'
+    2029: (format) '{} (restart to apply)'
+    2030: (format) 'Match display refresh rate'
+  [id] x53
+  [cmp] x7
+  [log] x191
+
+## app/dispatch/settings/ui.rs
+  [plain] x14
+    30: () 'off'
+    421: () 'Vim mode: on'
+    423: () 'Vim mode: off'
+    507: () 'Mouse reporting on'
+    692: () 'theme'
+    705: () 'ask'
+    708: () 'auto'
+    711: () 'default'
+    738: () 'off'
+    786: () 'Settings rolled back, but local state may be out of sync: restart to reload'
+    840: () 'theme'
+    849: () 'ask'
+    862: () 'auto'
+    871: () 'auto'
+  [fmt] x2
+    31: (format) '\\u{2713} {label}: {value}'
+    362: (format) '{}: already at default'
+  [id] x116
+  [log] x38
+
+## app/dispatch/status.rs
+  [plain] x9
+    17: () 'Session sharing is temporarily disabled'
+    278: () '\\u{2717} Cannot change: Zero Data Retention enabled'
+    286: () 'admin'
+    288: () '\\u{2717} Data sharing is controlled by your team admin'
+    342: () 'server error (see logs for details)'
+    396: () 'Session usage is unavailable until the session starts.'
+    480: () 'https://grok.com/?_s=usage'
+    563: () 'Grok'
+    690: () 'unknown'
+  [fmt] x3
+    457: (format) 'Please check your usage on {url}'
+    493: (format) 'Update available: v{latest_version}. Restart to apply.'
+    621: (format) "\\u{2717} Couldn't update coding data sharing: {scrubbed}"
+  [log] x12
+
+## app/dispatch/task_result.rs
+  [plain] x24
+    91: () 'Feedback was sent, but the stored draft could not be deleted. Delete it manually; do not resend.'
+    94: () 'Feedback was saved locally but was not sent. The draft was kept.'
+    97: () 'The remote outcome is unknown. The draft was kept; do not resend it yet.'
+    99: () 'The remote outcome is unknown. The draft was kept; do not resend it yet.'
+    102: () 'Try Shift+Insert to paste selected text'
+    137: () 'Could not archive session: dashboard workspace is read-only'
+    145: () 'Dashboard workspace changed; refreshing'
+    180: () 'Dashboard workspace is read-only in this Grok version'
+    184: () 'Dashboard workspace writer failed; reopening'
+    188: () 'Could not save dashboard layout'
+    297: () "Couldn't read clipboard text"
+    298: () "Couldn't read clipboard contents"
+    299: () "Couldn't paste clipboard contents"
+    828: () 'SessionRestoreProgress'
+    908: () '\\u{2717} Could not save your answer, so this notice returns next launch'
+    930: () 'cancelled'
+    1041: () 'This fix was cancelled because the session changed. Run `/doctor fix` again.'
+    1402: () 'Session title reset to auto'
+    1419: () 'Session title reset to auto'
+    1457: () 'Session deleted, but dashboard membership could not be removed'
+    1459: () 'Session deleted'
+    1626: () 'Feedback was enqueued, but the response did not arrive in time. The send may still complete; do not resend ...'
+    1664: () 'Feedback was saved locally but was not sent. The draft was kept.'
+    1698: () 'Feedback was enqueued, but the response did not arrive in time. The send may still complete; do not resend ...'
+  [fmt] x27
+    141: (format) 'Could not load dashboard workspace: {error}'
+    159: (format) 'Could not sync {count} dashboard session{}'
+    175: (format) 'Could not archive {count} dashboard session{}'
+    575: (format) 'Billing error: {error}'
+    887: (format) 'Send now failed. Requeued: {error}'
+    896: (format) "Couldn't save preferred model: {err} (still active for this session)"
+    1058: (format) 'This fix configures your local computer, not this SSH session.\\nOn your local computer, run: {command}'
+    1068: (format) 'Could not prepare the fix: {error}'
+    1078: (format) 'Could not apply the fix: {error}'
+    1276: (format) 'Session shared: {share_url}'
+    1286: (format) "Couldn't share session: {error}"
+    1357: (format) "Couldn't load session info: {error}"
+    1381: (format) 'Session renamed to \\"{safe}\\"'
+    1391: (format) "Couldn't rename session: {error}"
+    1427: (format) "Couldn't reset session title: {error}"
+    1548: (format) "Couldn't delete session: {error}"
+    1579: (format) "Couldn't load context info: {error}"
+    1606: (format) "Couldn't load session usage: {error}"
+    1764: (format) "Couldn't send feedback: {error}. The draft was kept."
+    1772: (format) "Couldn't send feedback: {error}"
+    1885: (format) "Couldn't upload a session trace; your feedback was still sent. {error}"
+    1945: (format) '{kind}: {name}'
+    1959: (format) "Couldn't load entry: {error}"
+    2011: (format) 'Interjection failed. Requeued: {error}'
+    2092: (format) 'Undo failed: {error}'
+    2161: (format) '\\u{2717} Could not save {key}: {scrubbed}'
+    2171: (format) '\\u{2717} Could not save {key}: {scrubbed}'
+  [cmp] x4
+  [log] x24
+
+## app/dispatch/transcript.rs
+  [plain] x14
+    75: () 'No assistant messages to copy'
+    96: () 'Assistant message is empty'
+    166: () 'No conversation content to export'
+    247: () 'No conversation transcript to view yet'
+    437: () 'hooks'
+    438: () 'plugins'
+    439: () 'marketplace'
+    440: () 'skills'
+    441: () 'workflows'
+    442: () 'mcps'
+    450: () 'personas'
+    565: () 'agentType'
+    604: () 'No input events recorded yet.'
+    639: () 'logs'
+  [fmt] x27
+    81: (format) 'Only {} assistant {} available to copy'
+    84: (format) 'message'
+    86: (format) 'messages'
+    106: (format) 'Copied to {}{stats}'
+    113: (format) 'Failed to write file: {e}'
+    124: (format) 'Copied to clipboard (also saved to {}){stats}'
+    127: (format) 'Copied to clipboard{stats}'
+    133: (format) 'Clipboard unreachable: wrote {}{stats}'
+    140: (format) 'Copy failed{stats}'
+    178: (format) 'Failed to create directory: {e}'
+    185: (format) 'Conversation exported to {}'
+    194: (format) 'Failed to write file: {}'
+    206: (format) 'Conversation copied to clipboard (also saved to {}){stats}'
+    209: (format) 'Conversation copied to clipboard{stats}'
+    212: (format) 'Clipboard unreachable: conversation written to {}{stats}'
+    216: (format) 'Conversation copy failed{stats}'
+    253: (format) 'grok-transcript-{}.md'
+    262: (format) 'Failed to write transcript: {e}'
+    457: (format) '/{name} only works in a session. Open an agent first.'
+    633: (format) 'Failed to serialize input log: {e}'
+    642: (format) 'input-debug-{ts}.json'
+    648: (format) 'Input log ({entry_count} events) → {display_path}'
+    651: (format) 'input debug dump: {entry_count} events, {time_span_ms}ms span'
+    657: (format) 'Failed to write input log: {e}'
+    747: (format) '{name} (v{old} \\u{2192} v{new})'
+    752: (format) '{} and {} more'
+    757: (format) '{} Plugins auto-updated: {summary}.'
+  [id] x2
+
+## app/dispatch/turn.rs
+  [plain] x2
+    41: () 'ask'
+    615: () 'cancelled'
+  [id] x14
+  [cmp] x1
+  [log] x16
+
+## app/dispatch/voice.rs
+  [fmt] x1
+    66: (format) '/voice requires SuperGrok: upgrade at {}'
+
+## app/display_refresh_startup.rs
+  [plain] x5
+    74: () 'GROK_MIN_DRAW_MS'
+    76: () 'GROK_SCROLL_CADENCE_MS'
+    132: () 'skipped'
+    132: () 'none'
+    132: () 'disabled'
+  [log] x3
+  [test] x11
+
+## app/edit_highlight_worker.rs
+  [plain] x5
+    121: () 'spawn edit-hl thread'
+    216: () 'just created'
+    260: () 'runtime just ensured'
+    277: () 'job send failed'
+    339: () 'result channel disconnected'
+  [id] x2
+  [log] x6
+  [test] x49
+
+## app/effects/helpers.rs
+  [plain] x91
+    65: () 'agent response complete'
+    68: () 'agent response failed'
+    100: () 'serialize mcp/list params'
+    112: () "couldn't load server list"
+    275: () 'ACP error:'
+    275: () 'error:'
+    276: () 'ACP request failed:'
+    276: () 'request failed:'
+    277: () 'JSON-RPC error'
+    277: () 'request error'
+    278: () 'request'
+    279: () 'ExtRequest'
+    279: () 'request'
+    280: () 'ExtNotification'
+    280: () 'notification'
+    281: () 'Authentication required: '
+    282: () 'Authentication failed: '
+    365: () 'GROK_AGENT'
+    372: () 'agentProfile'
+    373: () 'GROK_AGENT'
+    380: () 'agentProfile'
+    390: () 'askUserQuestion'
+    392: () 'yoloMode'
+    394: () 'autoMode'
+    408: () 'envId'
+    426: () 'agentProfile'
+    439: () 'attach'
+    440: () 'own'
+    442: () 'mode'
+    448: () 'cwd'
+    465: () 'cwd'
+    516: () 'attach'
+    588: () 'user'
+    607: () '<user_query>'
+    644: () 'serialize auth/logout params'
+    660: () 'serialize auth/cancel params'
+    675: () 'serialize check_subscription params'
+    715: () 'serialize check_subscription params'
+    754: () 'auth completed'
+    763: () 'auth failed'
+    788: () 'Bool'
+    796: () 'Bool'
+    804: () 'Bool'
+    812: () 'Bool'
+    820: () 'Bool'
+    828: () 'Bool'
+    836: () 'Bool'
+    844: () 'Enum'
+    852: () 'Bool'
+    860: () 'Bool'
+    868: () 'Bool'
+    876: () 'Bool'
+    885: () 'Bool'
+    894: () 'Bool'
+    903: () 'Bool'
+    913: () 'Bool'
+    923: () 'Bool'
+    932: () 'Bool'
+    940: () 'theme'
+    940: () 'Enum'
+    948: () 'Enum'
+    956: () 'Enum'
+    964: () 'String'
+    972: () 'Int'
+    980: () 'Enum'
+    988: () 'Bool'
+    997: () 'Bool'
+    1006: () 'Int'
+    1014: () 'Enum'
+    1023: () 'Enum'
+    1034: () 'Bool'
+    1042: () 'Bool'
+    1053: () 'Bool'
+    1064: () 'Bool'
+    1072: () 'Bool'
+    1080: () 'Bool'
+    1088: () 'Bool'
+    1096: () 'Enum'
+    1104: () 'Bool'
+    1115: () 'Enum'
+    1123: () 'Enum'
+    1131: () 'Enum'
+    1139: () 'Bool'
+    1147: () 'Enum'
+    1155: () 'Enum'
+    1163: () 'Int'
+    1171: () 'Bool'
+    1179: () 'Bool'
+    1187: () 'String'
+    1215: () 'serialize yolo_mode_changed params'
+    1436: () 'serialize auto-topup params'
+  [fmt] x4
+    115: (format) "couldn't load server list: {e}"
+    290: (format) '{truncated}...'
+    783: (format) 'persist_setting({key}) expected {expected}, got {got:?}'
+    1193: (format) 'unknown setting key for persist: `{other}`'
+  [id] x89
+  [cmp] x72
+  [log] x31
+
+## app/effects/mod.rs
+  [plain] x160
+    51: () 'camelCase'
+    54: () 'Option::is_none'
+    56: () 'Option::is_none'
+    92: () 'yoloMode'
+    93: () 'autoMode'
+    122: () 'pager quit'
+    213: () 'modelId'
+    217: () 'sessionId'
+    269: () 'Session creation'
+    337: () 'modelId'
+    341: () 'sessionId'
+    439: () 'Worktree session creation'
+    495: () 'Session loading'
+    685: () 'query'
+    687: () 'allowRelax'
+    690: () '_meta'
+    707: () 'serialize session list params'
+    790: () 'serialize roster list params'
+    807: () 'parse error'
+    834: () 'serialize session list params'
+    1074: () 'Failed to load configuration.'
+    1086: () 'Downloading session archives...'
+    1097: () 'Restoring code...'
+    1106: () 'Restoring memory...'
+    1109: () 'Restoring session state...'
+    1120: () 'Restore incomplete'
+    1122: () 'Restore complete'
+    1304: () 'sendNow'
+    1369: () 'PromptBlockMeta serializes'
+    1468: () 'serialize toggle_plan_mode params'
+    1489: () 'serialize queue/remove params'
+    1509: () 'serialize queue/reorder params'
+    1528: () 'serialize queue/clear params'
+    1549: () 'serialize queue/edit params'
+    1569: () 'serialize queue/hold_edit params'
+    1589: () 'serialize queue/release_edit params'
+    1608: () 'newText'
+    1613: () 'serialize queue/interject params'
+    1654: () 'prompt submitted'
+    1687: () 'sessionId'
+    1693: () 'userContext'
+    1701: () 'serialize compact params'
+    1722: () 'serialize prompt_history params'
+    1771: () 'serialize kill params'
+    1804: () 'serialize cancel params'
+    1833: () 'serialize scheduler delete params'
+    1853: () 'serialize background params'
+    2190: () 'serialize params'
+    2212: () 'memory fullscreen'
+    2237: () 'worktree mode'
+    2325: () 'serialize auth_url params'
+    2365: () 'serialize auth code params'
+    2377: () 'auth failed'
+    2400: () 'serialize mcp/list params'
+    2414: () "couldn't load server list"
+    2443: () 'serialize mcp/auth_trigger params'
+    2456: () 'unknown'
+    2471: () 'setup required'
+    2510: () 'serialize mcp/setup params'
+    2531: () 'setup failed'
+    2554: () 'serialize hooks/list params'
+    2567: () "couldn't load hooks"
+    2591: () 'serialize plugins/list params'
+    2604: () "couldn't load plugins"
+    2629: () 'serialize hooks/action params'
+    2642: () "couldn't complete hooks action"
+    2671: () 'serialize plugins/action params'
+    2684: () "couldn't complete plugins action"
+    2712: () 'serialize marketplace/list params'
+    2725: () "couldn't load marketplace"
+    2753: () 'serialize marketplace/list params'
+    2766: () "couldn't load marketplace"
+    2794: () 'serialize skills/list params'
+    2809: () "couldn't load skills"
+    2833: () 'serialize workflows/list params'
+    2846: () "couldn't load workflows"
+    2877: () 'serialize skills/toggle params'
+    2892: () "couldn't toggle skill"
+    2897: () 'serialize empty params'
+    2933: () 'serialize marketplace/list params'
+    2994: () 'serialize marketplace/action params'
+    3025: () 'serialize notify-updates params'
+    3047: () 'serialize marketplace/action params'
+    3062: () "couldn't complete marketplace action"
+    3106: () 'serialize marketplace/action params'
+    3121: () "couldn't complete marketplace action"
+    3152: () 'serialize plugins/action params'
+    3165: () "couldn't complete plugins action"
+    3232: () 'serialize mcp/upsert params'
+    3261: () 'serialize mcp/delete params'
+    3291: () 'serialize mcp/toggle params'
+    3323: () 'serialize mcp/toggle_tool params'
+    3352: () 'serialize share session params'
+    3365: () 'unknown error'
+    3384: () "couldn't share session"
+    3535: () 'camelCase'
+    3548: () 'serialize delete params'
+    3599: () 'x.ai/privacy/setCodingDataRetention'
+    3603: () 'serialize params'
+    3918: () 'feedback draft list timed out'
+    3977: () 'feedback draft load timed out'
+    4025: () 'feedback draft delete timed out'
+    4081: () 'feedback draft update timed out'
+    4155: () 'trace upload timed out'
+    4180: () 'serialize memory/rewrite params'
+    4249: () 'serialize btw params'
+    4262: () 'No response'
+    4292: () 'serialize recap params'
+    4332: () 'serialize interject params'
+    4362: () 'serialize bundle/entry/get params'
+    4375: () 'unknown error'
+    4394: () "couldn't load entry"
+    4416: () 'serialize bundle/status params'
+    4429: () 'unknown error'
+    4452: () "couldn't fetch bundle status"
+    4475: () 'serialize commands/list params'
+    4515: () 'serialize rewind/points params'
+    4530: () 'unknown error'
+    4575: () 'serialize rewind/execute params'
+    4632: () 'serialize deep search params'
+    4719: () 'serialize fork params'
+    4747: () 'fork response missing newSessionId'
+    4811: () 'serialize billing params'
+    4878: () 'GROK_CLI_CHAT_PROXY_BASE_URL'
+    4907: () 'serialize billing params'
+    4996: () 'serialize suggest params'
+    5034: () 'x.ai/suggestPrompt'
+    5036: () 'serialize suggestPrompt params'
+    5073: () 'serialize session/info params'
+    5084: () 'invalid session info response'
+    5090: () 'session info response missing result'
+    5104: () 'serialize session/usage params'
+    5111: () 'not supported by this agent version'
+    5121: () 'invalid session usage response'
+    5131: () 'reset session title'
+    5133: () 'rename session'
+    5138: () 'serialize rename params'
+    5202: () 'Title'
+    5205: () 'Shell version'
+    5209: () 'Session ID'
+    5211: () 'Conversation ID'
+    5213: () 'Working directory'
+    5214: () 'unknown'
+    5221: () 'Model'
+    5225: () 'Model Hash'
+    5228: () 'API Backend'
+    5231: () 'Sandbox'
+    5233: () 'Turn'
+    5236: () 'Context'
+    5273: () '  Auth method: API key (XAI_API_KEY)\\n'
+    5275: () '  Auth method: API key\\n'
+    5281: () '  Auth method: OAuth\\n'
+    5314: () 'promptId'
+    5316: () 'screenMode'
+    5328: () 'cancelSubagents'
+    5336: () 'rewindIfNoOutput'
+    5337: () 'rewindIfPristine'
+    5338: () 'promptId'
+    5369: () 'content'
+    5370: () 'serialize interject content'
+  [fmt] x55
+    463: (format) "couldn't create session in worktree: {e}"
+    904: (format) 'workspace loader task failed: {error}'
+    985: (format) 'workspace writer task failed: {error}'
+    1021: (format) 'workspace refresh task failed: {error}'
+    1091: (format) 'Downloads finished ({}).'
+    1103: (format) 'Code restored ({detail}).'
+    1115: (format) 'Session state restored ({detail}).'
+    1127: (format) '{status} ({}m{:02}s).'
+    1133: (format) '{status} ({elapsed_secs}s).'
+    2074: (format) 'Could not prepare the fix: {error}'
+    2089: (format) 'Could not apply the fix: {error}'
+    2420: (format) "couldn't load server list: {e}"
+    2481: (format) 'auth status: {status}'
+    2487: (format) 'authentication failed: {e}'
+    2535: (format) 'setup failed: {e}'
+    2571: (format) "couldn't load hooks: {e}"
+    2608: (format) "couldn't load plugins: {e}"
+    2648: (format) "couldn't complete hooks action: {e}"
+    2690: (format) "couldn't complete plugins action: {e}"
+    2731: (format) "couldn't load marketplace: {e}"
+    2772: (format) "couldn't load marketplace: {e}"
+    2813: (format) "couldn't load skills: {e}"
+    2852: (format) "couldn't load workflows: {e}"
+    2906: (format) "couldn't toggle skill: {e}"
+    3069: (format) "couldn't complete marketplace action: {e}"
+    3128: (format) "couldn't complete marketplace action: {e}"
+    3171: (format) "couldn't complete plugins action: {e}"
+    3268: (format) "couldn't delete server: {e}"
+    3330: (format) "couldn't toggle tool: {e}"
+    3393: (format) "couldn't share session: {e}"
+    3582: (format) "couldn't delete session: {e}"
+    3615: (format) 'malformed response: {e}'
+    3775: (format) "couldn't serialize feedback: {e}"
+    3826: (format) "couldn't decode feedback response: {error}"
+    3851: (format) "couldn't send feedback: {e}"
+    3886: (format) "couldn't serialize feedback draft list: {error}"
+    3945: (format) "couldn't serialize feedback draft get: {error}"
+    4003: (format) "couldn't serialize feedback draft delete: {error}"
+    4059: (format) "couldn't serialize feedback draft update: {error}"
+    4118: (format) "couldn't serialize trace upload: {e}"
+    4228: (format) 'task join error: {e}'
+    4307: (format) 'recap request failed: {e}'
+    4345: (format) "couldn't send interjection: {e}"
+    4402: (format) "couldn't load entry: {e}"
+    4460: (format) "couldn't fetch bundle status: {e}"
+    4549: (format) 'invalid response: {e}'
+    4600: (format) 'invalid response: {e}'
+    4730: (format) 'fork failed: {msg}'
+    4755: (format) 'fork failed: {e}'
+    4839: (format) 'Parse error: {e}'
+    4928: (format) 'Parse error: {e}'
+    5078: (format) "couldn't fetch session info: {e}"
+    5154: (format) "couldn't {verb}: {e}"
+    5237: (format) '{} / {} tokens ({}%)'
+    5278: (format) '{method}  Run `grok login` to use your SuperGrok subscription instead.\\n'
+  [id] x92
+  [cmp] x61
+  [log] x194
+
+## app/effects/session_list.rs
+  [plain] x14
+    50: () "Couldn't load your chats: log in with /login"
+    51: () "Couldn't load conversations: retry"
+    60: () 'unknown error'
+    63: () 'result'
+    76: () 'timeout'
+    87: () 'repo'
+    88: () 'all'
+    115: () 'sessions'
+    145: () 'chat'
+    206: () 'conversation'
+    210: () 'local'
+    277: () 'Untitled'
+    312: () 'local'
+    326: () 'local'
+  [fmt] x2
+    104: (format) 'session list parse task failed: {error}'
+    323: (format) "couldn't resolve local sessions: {error}"
+  [id] x2
+  [cmp] x42
+  [log] x1
+
+## app/error_display.rs
+  [plain] x105
+    232: () 'Bad request'
+    234: () 'The server rejected this request.'
+    237: () 'Request denied'
+    239: () "You don't have permission to do this."
+    242: () 'Not found'
+    243: () 'Run /model to pick another.'
+    244: () "This model isn't available."
+    247: () 'Request timed out'
+    248: () 'Try again shortly.'
+    249: () 'The server took too long to respond.'
+    252: () 'Conflict'
+    253: () 'Try again.'
+    254: () 'The request conflicted with the current state.'
+    257: () 'Request too large'
+    258: () 'Try a smaller prompt or run /compact.'
+    262: () 'Rate limited'
+    263: () 'Try again later.'
+    264: () "You've hit the rate limit for your plan."
+    267: () 'Service unavailable'
+    268: () 'The service is busy. Wait a minute and send again.'
+    272: () 'Request failed'
+    274: () 'The request did not complete successfully.'
+    277: () 'Request failed'
+    279: () 'The server rejected this request.'
+    282: () 'Server error'
+    283: () 'Something went wrong on our side. Wait a minute and send again.'
+    295: () 'No response from the model'
+    296: () 'Try sending again.'
+    297: () 'It may be stuck.'
+    300: () 'Empty response'
+    301: () 'Try sending again.'
+    302: () 'The model returned no content.'
+    305: () "Couldn't read the response"
+    306: () 'Try sending again.'
+    310: () 'Connection failed'
+    311: () 'Check your network and try again.'
+    315: () 'Response truncated'
+    317: () 'The model hit its output limit.'
+    320: () 'Rate limited'
+    321: () 'Try again later.'
+    322: () "You've hit the rate limit for your plan."
+    325: () 'Server error'
+    326: () 'Something went wrong on our side. Wait a minute and send again.'
+    330: () 'Authentication temporarily unavailable'
+    331: () 'Try sending again in a moment.'
+    335: () 'Request failed'
+    336: () 'Try sending again.'
+    337: () 'Something went wrong.'
+    398: () 'status '
+    399: () 'status '
+    406: () 'Unauthorized ('
+    407: () 'Forbidden ('
+    408: () 'Not Found ('
+    409: () 'Bad Request ('
+    410: () 'Payment Required ('
+    411: () 'Too Many Requests ('
+    412: () 'Internal Server Error ('
+    413: () 'Bad Gateway ('
+    414: () 'Service Unavailable ('
+    415: () 'Gateway Timeout ('
+    416: () 'Payload Too Large ('
+    417: () 'Request Entity Too Large ('
+    418: () 'Server error ('
+    419: () 'Request denied ('
+    420: () 'Request failed ('
+    421: () 'Not found ('
+    422: () 'Bad request ('
+    423: () 'Request too large ('
+    424: () 'Service unavailable ('
+    425: () 'Rate limited ('
+    426: () 'Request timed out ('
+    427: () 'Conflict ('
+    494: () '\\n\\n  Model:'
+    494: () '\\n  Model:'
+    494: () '\\n\\nModel:'
+    494: () '\\nModel:'
+    508: () ' retries: '
+    512: () 'API error (status '
+    513: () 'API error (status '
+    520: () ' from http'
+    521: () ' from '
+    603: (matches) 'internal server error'
+    604: (matches) 'internal error'
+    605: (matches) 'server error'
+    606: (matches) 'forbidden'
+    607: (matches) 'unauthorized'
+    608: (matches) 'bad request'
+    609: (matches) 'not found'
+    610: (matches) 'error'
+    611: (matches) 'unknown error'
+    612: (matches) 'unknown'
+    613: (matches) 'none'
+    615: (matches) 'request error'
+    616: (matches) 'model does not exist'
+    617: (matches) 'model not found'
+    618: (matches) 'too many requests'
+    619: (matches) 'payment required'
+    620: (matches) 'gateway timeout'
+    621: (matches) 'request timeout'
+    622: (matches) 'conflict'
+    623: (matches) 'service unavailable'
+    624: (matches) 'bad gateway'
+    625: (matches) 'payload too large'
+    626: (matches) 'request entity too large'
+    627: (matches) 'overloaded'
+  [fmt] x6
+    90: (format) '{headline}: {detail}'
+    126: (format) '{headline} | {base}'
+    134: (format) 'Retrying (attempt {attempt})...'
+    135: (format) 'Retrying ({attempt}/{max_retries})'
+    288: (format) '{prefix} ({code})'
+    359: (format) '{}. {action}'
+  [cmp] x18
+  [test] x82
+
+## app/event_loop.rs
+  [plain] x47
+    206: () 'startup type-ahead captured'
+    228: () 'startup type-ahead replayed'
+    328: () 'cursor'
+    450: () 'terminal input reader did not park before suspend'
+    460: () 'terminal writer did not drain before suspend'
+    774: () 'Editor is waiting for a safe terminal handoff'
+    775: () 'Transcript is waiting for a safe terminal handoff'
+    882: () 'invalid editor command'
+    937: () 'PAGER'
+    940: () 'less'
+    957: () 'less'
+    963: (matches) '--RAW-CONTROL-CHARS'
+    963: (matches) '--raw-control-chars'
+    1065: () 'Switched to minimal mode · /fullscreen to go back'
+    1080: () 'Switched to fullscreen mode · /minimal to go back'
+    1161: () 'pager started'
+    1192: () 'Switched to minimal mode · /fullscreen to go back'
+    1194: () 'Switched to fullscreen mode · /minimal to go back'
+    1213: () 'auto'
+    1274: () '--agents'
+    1275: () '--tools'
+    1276: () '--disallowed-tools'
+    1277: () '--max-turns'
+    1278: () '--memory-flush'
+    1303: () 'GROK_PRIVACY_NOTICE_ROLLOUT'
+    1310: () 'GROK_PRIVACY_BANNER_RESHOW_DAYS'
+    1326: () 'GROK_PLUGIN_CTA'
+    1332: () 'GROK_WORKSPACE_DASHBOARD'
+    1340: () 'GROK_SESSION_PICKER_GROUPED'
+    1644: () '.git'
+    1749: () 'auto'
+    1876: () 'startup type-ahead dropped (startup screen pending)'
+    2178: () 'GROK_OPEN_DASHBOARD_AT_STARTUP'
+    2180: () 'GROK_OPEN_DASHBOARD_AT_STARTUP'
+    2384: () 'Voice could not start. Restart Grok.'
+    2609: () 'terminal output failed'
+    2959: () 'watch'
+    3144: () 'autoMode'
+    3254: () 'Reconnected. Reloading session...'
+    3256: () 'Reconnected. Re-initializing...'
+    3335: () 'Reconnected.'
+    3337: () 'Session restored. In-progress tools and terminals were lost.'
+    3339: () 'Session restore failed. Kept the existing transcript.'
+    3389: () 'Voice stopped unexpectedly. Try again.'
+    3654: () 'linux'
+    3775: () 'focus'
+    4056: () 'windows'
+  [fmt] x3
+    1100: (format) "Couldn't switch to {} mode: {reason}"
+    3073: (format) 'Disconnected. Reconnecting... (attempt {attempt})'
+    3261: (format) 'Connection failed: {error}'
+  [id] x12
+  [cmp] x13
+  [log] x51
+  [test] x237
+
+## app/event_loop_stall.rs
+  [id] x1
+
+## app/exit_timeout.rs
+  [plain] x2
+    9: () 'GROK_EXIT_TIMEOUT_SECS'
+    11: () 'GROK_TEST_HOLD_TEARDOWN_SECS'
+  [id] x2
+  [test] x1
+
+## app/external_editor.rs
+  [plain] x13
+    13: () 'External prompt editing is not available while the draft has attachments.'
+    15: () 'External prompt editing is not available while voice input is active.'
+    17: () 'External prompt editing is not available while a paste is still being processed.'
+    19: () 'External prompt editing was cancelled because another input surface became active.'
+    21: () 'Could not open the draft in an external editor; the original draft was kept.'
+    22: () 'External prompt editor failed; the original draft was kept.'
+    24: () 'External prompt editor exited unsuccessfully; the original draft was kept.'
+    26: () 'External prompt editor saved invalid UTF-8; the original draft was kept.'
+    28: () 'External prompt editor saved a draft larger than 4 MiB; the original draft was kept.'
+    30: () 'The draft changed while the external editor was open; the newer draft was kept.'
+    126: () 'could not parse $VISUAL or $EDITOR'
+    138: () 'VISUAL'
+    139: () 'EDITOR'
+  [fmt] x1
+    78: (format) 'grok-prompt-{}.md'
+  [log] x6
+  [test] x53
+
+## app/foreign_sessions.rs
+  [plain] x12
+    266: () 'claude'
+    267: () 'codex'
+    268: () 'cursor'
+    274: () 'Claude Code'
+    275: () 'Codex'
+    276: () 'Cursor'
+    312: () 'bundled'
+    313: () 'skills'
+    315: () 'SKILL.md'
+    316: () 'skills'
+    316: () 'SKILL.md'
+    327: () 'chat'
+  [fmt] x1
+    305: (format) '/{} {native_id}'
+  [id] x3
+  [cmp] x4
+  [test] x59
+
+## app/inline_edit.rs
+  [plain] x1
+    48: () 'InlineEditState'
+  [id] x2
+  [test] x27
+
+## app/leader_cluster/mod.rs
+  [plain] x25
+    154: () 'client has no agent view yet'
+    173: () 'session/new completes'
+    183: () 'session id set'
+    192: () 'session/load completes'
+    208: () 'turn completes'
+    272: () 'mock server'
+    278: () 'GROK_HOME'
+    279: () 'GROK_CLI_CHAT_PROXY_BASE_URL'
+    280: () 'GROK_XAI_API_BASE_URL'
+    281: () 'XAI_API_KEY'
+    282: () 'GROK_TELEMETRY_ENABLED'
+    282: () 'false'
+    283: () 'GROK_FEEDBACK_ENABLED'
+    283: () 'false'
+    284: () 'GROK_TRACE_UPLOAD'
+    284: () 'false'
+    295: () 'stamp cluster flock'
+    325: () 'lock'
+    401: () 'client connect'
+    414: () 'cluster client connect'
+    446: () 'bridge spawn'
+    452: () 'initialize'
+    477: () 'initialize through bridge'
+    480: () 'authenticate'
+    488: () 'authenticate through bridge'
+  [id] x5
+  [cmp] x3
+  [log] x16
+
+## app/leader_cluster/scenarios.rs
+  [plain] x24
+    6: () 'CLUSTER_SENTINEL_T1'
+    7: () 'CLUSTER_SENTINEL_T2'
+    13: () 'leader-cluster: needs single-process isolation (process-global env + grok_home OnceLock in the shared lib t...'
+    31: () 'replay reaches viewer'
+    45: () 'again'
+    46: () 'turn 2 fans out'
+    75: () 'leader-cluster: needs single-process isolation (process-global env + grok_home OnceLock in the shared lib t...'
+    95: () 'viewer replay lands'
+    118: () 'again'
+    124: () 'live turn fans out to all'
+    154: () 'leader-cluster: needs single-process isolation (process-global env + grok_home OnceLock in the shared lib t...'
+    197: () 'reattach replay lands'
+    229: () 'leader-cluster: needs single-process isolation (process-global env + grok_home OnceLock in the shared lib t...'
+    248: () 'reconnecting client'
+    267: () 'reconnect re-initialize'
+    278: () 're-initialize after reconnect'
+    280: () 'reconnect re-authenticate'
+    288: () 're-authenticate after reconnect'
+    303: () 'reconnecting tab exists'
+    312: () 'cursor'
+    323: () 'reconnect session/load'
+    334: () 'reload replay lands'
+    357: () 'after crash'
+    370: () 'sessions'
+  [fmt] x8
+    24: (format) '{T1} first turn.'
+    44: (format) '{T2} second turn.'
+    86: (format) '{T1} fan-out seed.'
+    92: (format) 'cluster-viewer-{i}'
+    117: (format) '{T2} fan-out live.'
+    165: (format) '{T1} durable turn.'
+    240: (format) '{T1} pre-crash turn.'
+    356: (format) '{T2} post-crash turn.'
+  [id] x9
+  [cmp] x1
+  [log] x16
+
+## app/mermaid_worker.rs
+  [plain] x2
+    56: () '__mermaid-render'
+    60: () 'mermaid'
+  [id] x2
+  [test] x311
+
+## app/mod.rs
+  [plain] x15
+    327: () 'Ctrl+r to enable mouse reporting and restore TUI features'
+    329: () '/toggle-mouse-reporting to enable mouse reporting and restore TUI features'
+    375: () 'fullscreen'
+    376: () 'inline'
+    377: () 'minimal'
+    860: () 'GROK_HUNK_TRACKER'
+    976: () 'failed to spawn the term-writer thread'
+    1006: () 'startup connect budget from env'
+    1024: () 'tui'
+    1055: () 'set on the use_leader path'
+    1220: () '🐼 Code together, cola together — thanks for pairing with Panda! (/feedback)'
+    1281: () 'system'
+    1331: () 'system'
+    1536: () 'unsupported'
+    1790: () 'grok'
+  [fmt] x8
+    1179: (writeln) '{msg}'
+    1212: (writeln) '{FAREWELL}'
+    1241: (writeln) 'Resume this session with:'
+    1243: (writeln) '  grok --minimal --resume {}'
+    1245: (writeln) '  grok --resume {}'
+    1255: (writeln) 'Failed to relaunch in requested mode: {error}'
+    1256: (writeln) 'Resume this session with:'
+    1793: (format) '{} - grok'
+  [id] x6
+  [cmp] x4
+  [log] x26
+  [test] x254
+
+## app/modals.rs
+  [plain] x1
+    57: (matches) 'model'
+  [test] x126
+
+## app/mode_switch.rs
+  [plain] x3
+    84: () 'terminal input reader did not park before the mode switch'
+    91: () 'terminal writer did not drain before the mode switch'
+    195: () 'inline is not a switch target'
+  [fmt] x3
+    93: (format) 'terminal writer failed: {error}'
+    169: (format) 'inline viewport probe failed: {error}'
+    190: (format) 'fullscreen viewport rebuild failed: {error}'
+  [log] x1
+  [test] x23
+
+## app/mouse.rs
+  [plain] x1
+    178: () 'Tip: Ctrl+G toggles the tasks pane'
+  [fmt] x1
+    575: (format) '/workflow stop {name}'
+  [log] x10
+  [test] x78
+
+## app/prompt_ack.rs
+  [plain] x1
+    14: () 'GROK_PROMPT_ACK_TIMEOUT_SECS'
+  [id] x2
+
+## app/queue_edit.rs
+  [plain] x8
+    23: () 'Still queueing, try again in a moment'
+    94: () 'Editing a queued prompt: press Enter to save, Esc to discard'
+    226: () 'Queued prompt is no longer in the queue'
+    314: () 'Queued prompt is no longer in the queue'
+    478: () "Can't send this mid-turn: it runs when the current turn ends"
+    482: () 'Queued prompt is no longer in the queue'
+    491: () "Images can't be attached when editing a shared queued prompt"
+    573: () 'Queued prompt is no longer in the queue'
+  [test] x199
+
+## app/roster.rs
+  [plain] x1
+    36: () 'camelCase'
+  [id] x1
+  [cmp] x1
+  [test] x26
+
+## app/screen_mode_relaunch.rs
+  [plain] x28
+    20: () 'GROK_SCREEN_MODE'
+    86: (matches) '--minimal'
+    87: (matches) '--fullscreen'
+    88: (matches) '--continue'
+    90: (matches) '--fork-session'
+    91: (matches) '--restore-code'
+    113: (matches) '--resume'
+    115: (matches) '--load'
+    116: (matches) '--session-id'
+    118: (matches) '--worktree'
+    120: (matches) '--worktree-ref'
+    121: (matches) '--ref'
+    139: () 'peeked value present'
+    151: () '--resume'
+    155: () '--minimal'
+    157: () '--fullscreen'
+    163: () 'GROK_SCREEN_MODE_SWITCH'
+    166: () 'exec'
+    172: () 'minimal'
+    174: () 'fullscreen'
+    182: () '--minimal'
+    184: () '--fullscreen'
+    203: () '/fullscreen'
+    205: () '/minimal'
+    246: () 'screen-mode relaunch unsupported on this platform'
+    259: () 'minimal'
+    261: () 'fullscreen'
+    261: () 'full'
+  [fmt] x6
+    36: (format) '--{long}'
+    39: (format) '--{alias}'
+    42: (format) '-{short}'
+    45: (format) '-{alias}'
+    186: (format) '{GROK_SCREEN_MODE_ENV}={mode} grok {flag} --resume {session_id}'
+    216: (format) 'failed to exec relaunch: {err}'
+  [cmp] x6
+  [log] x1
+  [test] x206
+
+## app/session_load_barrier.rs
+  [plain] x3
+    121: () 'isReplay'
+    126: () 'sessionId'
+    128: () '_meta'
+  [test] x52
+
+## app/session_startup.rs
+  [plain] x28
+    13: () 'traceparent'
+    94: () 'newSessionId'
+    97: () 'sourceWorkspaceDir'
+    105: () 'sessions'
+    114: () 'worktree'
+    134: () '.git'
+    306: () '--fork-session is not supported with --chat'
+    308: () '--restore-code is not supported with --chat'
+    330: () 'GROK_CHAT_LOCAL_WORKSPACE'
+    332: () 'GROK_CHAT_LOCAL_WORKSPACE_CWD'
+    334: () 'GROK_CHAT_LOCAL_WORKSPACE_MODE'
+    336: () 'GROK_CHAT_LOCAL_WORKSPACE_SERVER_ID'
+    338: () 'GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME'
+    341: () 'GROK_CHAT_LOCAL_WORKSPACE_ACK'
+    345: () 'Local workspace runs tools on this machine (FS confined to <cwd>).'
+    350: () 'local-workspace flags/env require --chat'
+    353: () 'local-workspace cwd may not be / or $HOME unless GROK_CHAT_LOCAL_WORKSPACE_ALLOW_HOME=1'
+    359: () 'local-workspace requires interactive confirm, GROK_CHAT_LOCAL_WORKSPACE_ACK=1, or an ack file'
+    363: () 'GROK_CHAT_LOCAL_WORKSPACE_ADVERTISED_TOOLS'
+    417: (matches) 'true'
+    417: (matches) 'TRUE'
+    417: (matches) 'yes'
+    417: (matches) 'YES'
+    562: () '<session cwd>'
+    577: (matches) 'yes'
+    577: (matches) 'YES'
+    821: () 'Snapshot code will not be restored into the worktree; pass --restore-code to restore it.'
+    1294: () 'Failed to restore session from remote: conversation history was unavailable.'
+  [fmt] x10
+    203: (write) 'Error: --session-id can only be used with --continue or --resume if --fork-session is also specified.'
+    207: (write) 'Error: --fork-session requires --resume or --continue.'
+    212: (write) 'Error: --fork-session cannot be combined with --worktree.'
+    1137: (format) 'Session {:?} not found locally, restoring conversation from remote...'
+    1215: (format) '  Restored conversation as local session {local_session_id}'
+    1228: (format) 'Remote restore timed out after {}s; continuing with conversation {local_session_id}.'
+    1233: (format) 'Remote restore failed ({e:#}); continuing with conversation {local_session_id}.'
+    1237: (format) 'Remote restore incomplete; continuing with conversation {local_session_id}.'
+    1286: (format) 'Timed out restoring session from remote after {}s. Conversation cannot be recovered.'
+    1291: (format) 'Failed to restore session from remote: {e}'
+  [id] x35
+  [cmp] x11
+  [log] x52
+  [test] x365
+
+## app/session_title_resolve.rs
+  [fmt] x2
+    145: (format) "couldn't resume worktree session: {detail}"
+    147: (format) '{msg}; {}'
+  [id] x1
+  [log] x1
+
+## app/signal_handler.rs
+  [log] x2
+  [test] x2
+
+## app/startup_failure.rs
+  [fmt] x2
+    104: (write) 'startup timed out after {}'
+    108: (write) 'startup cancelled before an agent was ready'
+
+## app/startup_failure/render.rs
+  [plain] x22
+    10: () 'Mode'
+    11: () 'Version'
+    16: () 'Steps'
+    18: () 'Try'
+    33: () 'Log'
+    60: () 'No startup step had begun.'
+    101: () 'none'
+    140: () 'Start Grok again.'
+    141: () 'Check your network connection, then start Grok again.'
+    152: () 'grok leader kill'
+    160: () 'reading your local configuration'
+    161: () "checking your organization's managed policy"
+    162: () 'loading your account settings'
+    163: () 'reading the list of available models'
+    164: () 'starting the local agent'
+    165: () 'connecting to the shared leader'
+    166: () 'waiting for the agent to respond'
+    167: () 'refreshing your sign-in'
+    168: () 'preparing the interface'
+    169: () 'creating the session'
+    183: () 'local agent'
+    184: () 'shared leader'
+  [fmt] x8
+    22: (format) "Couldn't start Grok: startup timed out after {}.\\n\\n{explanation}"
+    28: (format) 'Startup cancelled while connecting to the {}.'
+    59: (format) 'The longest step was {doing}.'
+    66: (write) ' Grok spent the first {} on the {target}.'
+    94: (format) '{}={}{still_running}'
+    114: (format) '  {:<column_width$} '
+    114: (format) '{label}:'
+    177: (format) '{}, then {target}'
+
+## app/status_blocks.rs
+  [fmt] x5
+    65: (format) ' · {phase}'
+    68: (format) '  {:<9}{} · {}{phase}{agents}  ({})'
+    108: (format) '{type_label} · {desc}'
+    111: (format) '  {status:<9}{label}  ({})'
+    145: (format) '  {status:<9}{kind} · {one_line}  ({})'
+  [cmp] x13
+  [wrapped] x36
+  [test] x27
+
+## app/status_line.rs
+  [plain] x4
+    200: () 'a change needs the rebuild the caller was going to force'
+    236: () 'dropping the flag loses the redraw it was asking for'
+    301: () 'the effect must be dispatched, or the row waits forever on a run that never started'
+    336: () 'the disposition carries the refresh failure the caller must log'
+  [id] x1
+  [log] x2
+
+## app/status_line/command.rs
+  [plain] x5
+    263: () 'BASH_ENV'
+    264: () 'ENV'
+    266: () 'GIT_OPTIONAL_LOCKS'
+    267: () 'COLUMNS'
+    268: () 'LINES'
+  [fmt] x6
+    52: (format) '[status line: {error}]'
+    71: (write) 'could not start the script: {e}'
+    72: (write) 'could not wait for the script: {e}'
+    74: (write) "could not encode Grok's payload: {e}"
+    76: (write) 'exit {code}'
+    241: (format) '{}/{rest}'
+  [id] x3
+  [log] x5
+  [wrapped] x2
+
+## app/status_line/metrics.rs
+  [plain] x1
+    54: () 'unset'
+  [id] x1
+
+## app/status_line_policy.rs
+  [plain] x2
+    370: () 'status_line: refresh run failed; keeping the last output'
+    381: () 'status_line: refresh run failed; painting the error'
+  [id] x1
+  [log] x2
+
+## app/subagent.rs
+  [plain] x12
+    706: () 'resumed'
+    772: () 'dropping the detached state destroys the only in-memory copy; eviction must drop it explicitly'
+    907: () 'general'
+    914: () 'resumed'
+    914: () 'resumed'
+    915: () 'forked'
+    915: () 'forked'
+    959: () 'general'
+    991: () 'Thinking'
+    992: () 'Responding'
+    1001: () 'Running tool'
+    1019: () 'Compacting'
+  [fmt] x4
+    982: (format) ' ({bare})'
+    1007: (format) 'Running: {first_line}'
+    1011: (format) 'Running: {first_line}'
+    1014: (format) 'Running: {truncated}\\u{2026}'
+  [id] x3
+  [cmp] x2
+  [log] x1
+  [test] x11
+
+## app/subagent/lifecycle.rs
+  [test] x2
+
+## app/subscription.rs
+  [plain] x2
+    50: () 'free'
+    58: () 'GROK_SUBSCRIPTION_WATCH_INTERVAL_SECS'
+  [id] x5
+  [log] x11
+  [test] x41
+
+## app/turn_completion.rs
+  [plain] x14
+    22: () 'cancelTrigger'
+    24: () 'cancellationCategory'
+    27: () 'cancellationContext'
+    125: () 'unknown error'
+    199: () 'A hook blocked the last prompt — the queue is paused'
+    245: () 'Prompt blocked by a hook — it is held at the front of the queue'
+    255: () 'a hook'
+    281: () 'Edit'
+    282: () 'Fix your prompt'
+    287: () 'Resend'
+    288: () 'Send it unchanged. The hook may block it again.'
+    293: () 'Discard'
+    294: () 'Remove it from the queue'
+    390: () 'exact'
+  [fmt] x3
+    261: (format) 'Prompt blocked by {short_hook_name}'
+    273: (format) '\\n\\n{waiting} more prompt{} waiting (queue paused).'
+    302: (format) 'prompt-blocked-{row_id}'
+  [id] x6
+  [cmp] x8
+  [log] x12
+  [wrapped] x1
+
+## app/workspace_layout.rs
+  [plain] x2
+    390: () 'workspace capacity bounds every explicit layout rank'
+    396: () 'workspace capacity keeps layout ranks in range'
+  [id] x1
+
+## app/workspace_membership.rs
+  [id] x1
+
+## app/workspace_sync.rs
+  [plain] x2
+    40: () 'Could not archive session: dashboard workspace is read-only'
+    48: () 'Could not archive session: invalid session id'
+  [log] x1
+  [test] x23
+
+## app/workspace_test_fixtures.rs
+  [plain] x1
+    31: () '/tmp'
+  [id] x1
+
+## app/worktree_session.rs
+  [plain] x8
+    23: () 'lowercase'
+    110: () 'label'
+    113: () 'gitRef'
+    132: () 'restoreCode'
+    135: () 'gitRef'
+    165: () 'worktreePath'
+    183: () 'worktreePath'
+    258: () 'Worktree session resume'
+  [fmt] x4
+    62: (format) 'pager-{}'
+    157: (format) 'response missing {key}'
+    208: (format) "couldn't create worktree: {detail}"
+    284: (format) '{message} (worktree {} was created and is still on disk; remove it with `grok worktree rm`)'
+  [id] x2
+  [cmp] x5
+  [log] x9
+  [test] x69
+
+## app/x10_filter.rs
+  [log] x1
+
+## app/xt_filter.rs
+  [log] x1
+  [test] x15
+
+## slash/acp_command.rs
+  [plain] x1
+    58: () 'pluginName'
+  [fmt] x1
+    134: (format) 'Malformed skill metadata for /{}'
+  [cmp] x2
+  [test] x89
+
+## slash/command.rs
+  [plain] x5
+    102: (matches) 'cancelled'
+    108: (matches) 'interrupted'
+    108: (matches) 'complete'
+    108: (matches) 'failed'
+    108: (matches) 'cancelled'
+  [fmt] x1
+    206: (format) 'skill · {source}'
+  [id] x2
+  [cmp] x3
+
+## slash/commands/always_approve.rs
+  [plain] x2
+    17: () 'Toggle always-approve mode (skip all permission prompts)'
+    18: () '/always-approve'
+  [id] x1
+  [test] x1
+
+## slash/commands/announcements.rs
+  [plain] x13
+    6: () 'Usage: /announcements hide | show'
+    12: () 'announcements'
+    13: () 'Show or hide announcements'
+    14: () '/announcements hide | show'
+    17: () 'hide|show'
+    23: () 'hide'
+    24: () 'hide'
+    25: () 'hide'
+    26: () 'Hide the announcement banner'
+    29: () 'show'
+    30: () 'show'
+    31: () 'show'
+    32: () 'Show the announcement banner'
+  [cmp] x2
+  [test] x14
+
+## slash/commands/auto.rs
+  [plain] x3
+    18: () 'auto'
+    19: () 'Toggle auto mode (classifier approves safe tools)'
+    20: () '/auto'
+  [test] x1
+
+## slash/commands/btw.rs
+  [plain] x4
+    12: () 'btw'
+    13: () 'Ask a side question without interrupting'
+    14: () '/btw <question>'
+    18: () '<question>'
+
+## slash/commands/cd.rs
+  [plain] x3
+    15: () 'Change the working directory for new agents'
+    16: () '/cd [path]'
+    21: () 'path'
+  [test] x5
+
+## slash/commands/compact.rs
+  [plain] x5
+    11: () 'compact'
+    12: () 'Compact conversation history'
+    13: () '/compact compaction instructions'
+    17: () 'compaction instructions'
+    23: () '/compact'
+  [fmt] x1
+    25: (format) '/compact {}'
+
+## slash/commands/compact_mode.rs
+  [plain] x2
+    17: () 'Toggle compact UI (less padding, more content)'
+    18: () '/compact-mode'
+  [id] x1
+
+## slash/commands/config_agents.rs
+  [plain] x3
+    12: () 'agents'
+    13: () 'Manage agent definitions'
+    14: () '/config-agents'
+  [id] x1
+
+## slash/commands/context.rs
+  [plain] x4
+    11: () 'context'
+    12: () 'View context usage'
+    13: () '/context'
+    19: () 'No active session'
+
+## slash/commands/copy.rs
+  [plain] x5
+    18: () 'copy'
+    19: () 'Copy last response to clipboard or file (/copy [N] [file])'
+    20: () '/copy [N] [file]'
+    23: () '[N] [file]'
+    50: () 'Usage: /copy [N] [file] where N is 1 (latest), 2, 3, ...'
+  [test] x9
+
+## slash/commands/dashboard.rs
+  [plain] x5
+    19: () 'dashboard'
+    23: () 'sessions'
+    24: () 'Open the Agent Dashboard'
+    25: () '/dashboard'
+    27: () 'minimal is single-session'
+  [id] x1
+  [test] x3
+
+## slash/commands/debug.rs
+  [plain] x10
+    26: () 'scroll'
+    26: () 'Toggle the scroll-diagnostics HUD'
+    27: () 'fps'
+    27: () 'Toggle the FPS overlay'
+    28: () 'log'
+    28: () 'Toggle the scroll flight recorder (JSONL)'
+    36: () 'debug'
+    37: () 'Toggle debug overlays'
+    38: () '/debug [scroll|fps|log]'
+    40: () 'scroll | fps | log'
+  [fmt] x1
+    71: (format) "Unknown /debug option '{other}'. Usage: /debug [scroll|fps|log]"
+  [cmp] x3
+  [test] x16
+
+## slash/commands/delete.rs
+  [plain] x4
+    10: () 'delete'
+    11: () 'Delete this session'
+    12: () '/delete'
+    18: () 'No active session to delete'
+
+## slash/commands/docs.rs
+  [plain] x21
+    20: () 'docs'
+    21: () 'howto'
+    21: () 'guides'
+    22: () 'Open How-to Guides or online Build docs'
+    23: () '/docs [web|title]'
+    26: () '[web|title]'
+    35: () 'Browse in-TUI How-to Guides'
+    38: () 'web'
+    39: () 'web'
+    40: () 'web'
+    41: () 'Open docs.x.ai/build in the browser'
+    76: (matches) 'howto'
+    76: (matches) 'guides'
+    76: (matches) 'guide'
+    76: (matches) 'list'
+    76: (matches) 'tui'
+    83: (matches) 'web'
+    83: (matches) 'online'
+    83: (matches) 'browser'
+    83: (matches) 'site'
+    83: (matches) 'www'
+  [fmt] x2
+    48: (format) 'Open \\"{title}\\"'
+    67: (format) 'Unknown docs target {trimmed:?}. Try /docs, /docs web, or a guide title (e.g. /docs Getting Started).'
+  [id] x5
+  [test] x22
+
+## slash/commands/doctor.rs
+  [plain] x11
+    10: () 'Usage: /doctor [fix [ssh-wrap|tmux-clipboard|dcs-passthrough|tmux-extended-keys]]'
+    45: () 'doctor'
+    47: () 'Check this session and show available fixes'
+    48: () '/doctor [fix [FIX]]'
+    51: () '[fix [FIX]]'
+    78: () 'fix'
+    79: () 'fix'
+    80: () 'fix'
+    81: () 'Show automatic fixes available here'
+    89: () 'fix'
+    90: () 'fix'
+  [fmt] x3
+    70: (format) 'fix {handle} {id}'
+    71: (format) 'fix {handle}'
+    92: (format) '{error}\\n{USAGE}'
+  [id] x3
+  [cmp] x3
+  [test] x33
+
+## slash/commands/edit_prompt.rs
+  [plain] x3
+    14: () 'Open an external editor for an empty prompt; use the command palette to preserve a draft'
+    15: () '/edit-prompt'
+    21: () 'No active session'
+  [id] x1
+  [test] x2
+
+## slash/commands/effort.rs
+  [plain] x6
+    16: () 'effort'
+    17: () 'Set reasoning effort for the current model'
+    19: () '/effort <level>'
+    23: () '<level>'
+    42: () 'No active model'
+    58: () '<level>'
+  [fmt] x2
+    55: (format) ' (current: {e})'
+    62: (format) 'Usage: /effort <{levels}>{current}'
+  [test] x81
+
+## slash/commands/effort_levels.rs
+  [plain] x1
+    58: () ' (active)'
+  [fmt] x2
+    64: (format) '{}{active_suffix}'
+    65: (format) '{sort_prefix} {insert_text}'
+  [wrapped] x7
+
+## slash/commands/exit.rs
+  [plain] x6
+    9: (matches) 'exit'
+    9: (matches) 'quit'
+    17: () 'quit'
+    18: () 'exit'
+    19: () 'Quit the application'
+    20: () '/quit'
+  [test] x10
+
+## slash/commands/expand.rs
+  [plain] x5
+    17: () 'expand'
+    18: () 'Re-print the last collapsed block, fully expanded (minimal mode)'
+    19: () '/expand'
+    22: () 'press Tab to focus the scrollback, then → on the block'
+    28: () 'No active session'
+  [test] x2
+
+## slash/commands/export.rs
+  [plain] x7
+    22: () 'export'
+    23: () 'Export the current conversation to a file or clipboard'
+    24: () '/export [filename]'
+    28: () '[filename]'
+    38: () 'No active session to export'
+    111: () 'directory'
+    113: () 'file'
+  [fmt] x3
+    107: (format) '{name_str}{suffix}'
+    108: (format) '{typed_prefix}{name_str}'
+    109: (format) '{typed_prefix}{name_str}{suffix}'
+  [test] x8
+
+## slash/commands/feedback.rs
+  [plain] x8
+    35: () 'feedback'
+    36: () 'Send feedback about the current session'
+    37: () '/feedback [text]'
+    39: () '[feedback text]'
+    52: () 'Use `/feedback <text>` in minimal mode, or run without --minimal to open the feedback form.'
+    55: () 'Stop voice input before opening the feedback form'
+    68: () 'pending'
+    79: () 'other'
+  [fmt] x1
+    70: (format) '/feedback {user_text}'
+  [id] x3
+  [cmp] x1
+  [log] x3
+  [test] x14
+
+## slash/commands/find.rs
+  [plain] x5
+    14: () 'find'
+    15: () 'Search the conversation scrollback'
+    16: () '/find [text]'
+    20: () "minimal has no scrollback pane: use your terminal's own search"
+    22: () '[text]'
+  [test] x4
+
+## slash/commands/fork.rs
+  [plain] x9
+    35: () '--worktree and --no-worktree are mutually exclusive'
+    38: () '--worktree specified twice'
+    45: () '--worktree and --no-worktree are mutually exclusive'
+    48: () '--no-worktree specified twice'
+    54: () '--at is not supported in this version'
+    75: () 'fork'
+    76: () 'Branch the current session into a peer agent'
+    77: () '/fork [--worktree|--no-worktree] [directive]'
+    81: () '[directive]'
+  [cmp] x2
+  [test] x55
+
+## slash/commands/gboom.rs
+  [plain] x3
+    16: () 'gboom'
+    18: () 'Hidden easter egg'
+    19: () '/gboom'
+  [fmt] x1
+    33: (format) '/gboom {args}'
+
+## slash/commands/help.rs
+  [plain] x3
+    14: () 'help'
+    15: () 'Browse commands and keyboard shortcuts'
+    16: () '/help'
+
+## slash/commands/history.rs
+  [plain] x3
+    15: () 'history'
+    16: () 'Search prompt history'
+    17: () '/history'
+  [test] x3
+
+## slash/commands/home.rs
+  [plain] x4
+    10: () 'home'
+    11: () 'welcome'
+    12: () 'Return to the welcome screen'
+    13: () '/home'
+
+## slash/commands/imagine.rs
+  [plain] x3
+    15: () 'Generate an image from a text description'
+    16: () '/imagine <description>'
+    19: () 'description of the image to generate'
+  [fmt] x1
+    30: (format) '/imagine {prompt}'
+  [test] x7
+
+## slash/commands/imagine_video.rs
+  [plain] x3
+    16: () 'Generate a video from a text description'
+    17: () '/imagine-video <description>'
+    20: () 'description of the video to generate'
+  [fmt] x1
+    31: (format) '/imagine-video {prompt}'
+  [test] x10
+
+## slash/commands/import_claude.rs
+  [plain] x2
+    16: () 'Open the Claude settings import modal'
+    17: () '/import-claude'
+  [id] x1
+  [log] x1
+
+## slash/commands/jump.rs
+  [plain] x4
+    9: () 'jump'
+    10: () 'Jump to a turn in the conversation'
+    11: () '/jump'
+    14: () "minimal scrolls with your terminal's native scrollback"
+
+## slash/commands/lang.rs
+  [plain] x4
+    13: () 'lang'
+    14: () 'Switch UI language (Chinese/English)'
+    15: () '/lang [zh|en]'
+    42: () 'UI language switched to English'
+  [fmt] x1
+    32: (format) '{}: /lang [zh|en]（未知参数 “{other}”）'
+  [cmp] x2
+  [wrapped] x1
+
+## slash/commands/login.rs
+  [plain] x3
+    8: () 'login'
+    9: () 'Log in or re-authenticate with your account'
+    10: () '/login'
+
+## slash/commands/logout.rs
+  [plain] x3
+    10: () 'logout'
+    11: () 'Log out and return to the login screen'
+    12: () '/logout'
+
+## slash/commands/loop_cmd.rs
+  [plain] x10
+    50: () 'every 1 second'
+    57: () 'every 1 minute'
+    64: () 'every 1 hour'
+    71: () 'every 1 day'
+    82: () 'loop'
+    83: () 'Run a prompt on a recurring interval'
+    84: () '/loop [interval] <prompt>'
+    87: () '[interval] <prompt>'
+    102: () 'scheduling…'
+    115: () 'loop'
+  [fmt] x6
+    52: (format) 'every {n} seconds'
+    59: (format) 'every {n} minutes'
+    66: (format) 'every {n} hours'
+    73: (format) 'every {n} days'
+    76: (format) 'every {token}'
+    106: (format) '/loop {args}'
+  [test] x57
+
+## slash/commands/mcps.rs
+  [plain] x3
+    8: () 'mcps'
+    9: () 'Show MCP server status'
+    10: () '/mcps'
+
+## slash/commands/mod.rs
+  [test] x116
+
+## slash/commands/model.rs
+  [plain] x5
+    19: () 'model'
+    21: () 'Switch the active model'
+    22: () '/model <name> [effort]'
+    28: () '<model> [effort]'
+    46: () 'Usage: /model <name> [effort]'
+  [fmt] x3
+    76: (format) 'Unknown model: {trimmed}'
+    134: (format) '{} (current)'
+    171: (format) '{model_name} {}'
+  [test] x66
+
+## slash/commands/multiline.rs
+  [plain] x3
+    18: () 'multiline'
+    20: () 'Toggle multiline input mode (swap Enter and Shift+Enter)'
+    21: () '/multiline'
+  [test] x8
+
+## slash/commands/new.rs
+  [plain] x4
+    11: () 'new'
+    12: () 'clear'
+    13: () 'Start a new session'
+    14: () '/new'
+
+## slash/commands/personas.rs
+  [plain] x3
+    12: () 'personas'
+    13: () 'Manage personas (create, edit, delete)'
+    14: () '/personas'
+
+## slash/commands/plan.rs
+  [plain] x4
+    13: () 'plan'
+    14: () 'Enter plan mode'
+    15: () '/plan [description]'
+    20: () '[description]'
+  [test] x14
+
+## slash/commands/plugin.rs
+  [plain] x13
+    16: () 'hooks'
+    17: () 'View hooks'
+    18: () '/hooks'
+    34: () 'plugins'
+    35: () 'plugin'
+    36: () 'View plugins'
+    37: () '/plugins'
+    53: () 'marketplace'
+    54: () 'View marketplace'
+    55: () '/marketplace'
+    71: () 'skills'
+    72: () 'View skills'
+    73: () '/skills'
+
+## slash/commands/privacy.rs
+  [plain] x3
+    13: () 'privacy'
+    15: () 'Open coding data, retention, and training settings'
+    16: () '/privacy'
+  [id] x1
+  [test] x11
+
+## slash/commands/queue.rs
+  [plain] x4
+    15: () 'queue'
+    16: () 'List the prompts queued behind the running turn'
+    17: () '/queue'
+    23: () 'No active session'
+  [test] x2
+
+## slash/commands/recap.rs
+  [plain] x4
+    14: () 'recap'
+    15: () 'summarize'
+    16: () 'Summarize the session so far'
+    17: () '/recap'
+
+## slash/commands/release_notes.rs
+  [plain] x5
+    9: () 'changelog'
+    10: () 'View release notes for the current version'
+    11: () '/release-notes'
+    18: () 'Release Notes'
+    21: () 'No release notes available (offline).'
+  [id] x1
+  [test] x3
+
+## slash/commands/remember.rs
+  [plain] x4
+    9: () 'remember'
+    10: () 'Save a memory note'
+    11: () '/remember [text]'
+    13: () '[memory note text]'
+
+## slash/commands/rename.rs
+  [plain] x9
+    13: () 'rename'
+    14: () 'title'
+    15: () 'Rename the current session'
+    16: () '/rename <title> | --auto'
+    20: () '<title>'
+    39: () 'current title'
+    45: () 'No active session'
+    56: () '--auto takes no title'
+    60: () 'Usage: /rename <new title> | --auto'
+  [fmt] x1
+    64: (format) 'title too long (max {MAX_TITLE_SCALARS} characters)'
+  [cmp] x3
+  [test] x68
+
+## slash/commands/resume.rs
+  [plain] x3
+    10: () 'resume'
+    11: () 'Resume a previous session'
+    12: () '/resume'
+
+## slash/commands/rewind.rs
+  [plain] x4
+    8: () 'rewind'
+    9: () 'undo'
+    10: () 'Rewind to a previous turn'
+    11: () '/rewind'
+
+## slash/commands/screen_mode_switch.rs
+  [plain] x5
+    26: () 'minimal'
+    28: () 'fullscreen'
+    39: () 'full'
+    54: () '/minimal'
+    56: () '/fullscreen'
+  [fmt] x1
+    75: (format) 'No active session to reopen in {} mode'
+  [wrapped] x2
+  [test] x3
+
+## slash/commands/scroll_debug.rs
+  [plain] x2
+    16: () 'Toggle the scroll-diagnostics HUD'
+    17: () '/scroll-debug'
+  [fmt] x1
+    28: (format) '/scroll-debug {args}'
+  [id] x1
+
+## slash/commands/session_info.rs
+  [plain] x3
+    12: () 'Show session info'
+    13: () '/session-info'
+    19: () 'No active session'
+  [id] x1
+
+## slash/commands/settings_cmd.rs
+  [plain] x6
+    13: () 'settings'
+    14: () 'config'
+    14: () 'preferences'
+    14: () 'prefs'
+    15: () 'Open the settings modal'
+    16: () '/settings'
+  [test] x9
+
+## slash/commands/share.rs
+  [plain] x4
+    8: () 'share'
+    9: () 'Share this session via URL'
+    10: () '/share'
+    16: () 'Session sharing is temporarily disabled'
+
+## slash/commands/stats.rs
+  [plain] x3
+    27: () 'stats'
+    28: () 'Show model usage stats and compression savings'
+    29: () '/stats [5h|day|week]'
+  [fmt] x3
+    45: (format) 'Unknown argument: {arg}. Use /stats [5h|day|week]'
+    136: (format) 'ttft p50/p90 {}'
+    140: (format) 'tps p50/p90 {}'
+  [wrapped] x12
+  [test] x48
+
+## slash/commands/tasks.rs
+  [plain] x4
+    14: () 'tasks'
+    15: () 'List background tasks, subagents, and scheduled tasks'
+    16: () '/tasks'
+    22: () 'No active session'
+  [test] x2
+
+## slash/commands/theme.rs
+  [plain] x7
+    31: () 'theme'
+    33: () 'Switch the color theme'
+    34: () '/theme <name>'
+    38: () "minimal renders with your terminal's own palette"
+    40: () '<theme>'
+    78: () 'auto'
+    80: () 'auto'
+  [fmt] x3
+    81: (format) '{}{auto_active}'
+    95: (format) '{}{active}'
+    128: (format) 'Unknown theme: {}. Available: auto, {}'
+  [wrapped] x3
+  [test] x69
+
+## slash/commands/timeline.rs
+  [plain] x4
+    13: () 'timeline'
+    14: () 'Toggle the timeline sidebar'
+    15: () '/timeline'
+    17: () 'the timeline rail needs the interactive scrollback pane'
+
+## slash/commands/timestamps.rs
+  [plain] x3
+    12: () 'timestamps'
+    13: () 'Toggle message timestamps on/off'
+    14: () '/timestamps'
+  [id] x1
+
+## slash/commands/toggle_mouse_reporting.rs
+  [plain] x2
+    20: () 'Toggle terminal mouse reporting (native click-drag copy/paste)'
+    21: () '/toggle-mouse-reporting'
+  [id] x1
+
+## slash/commands/transcript.rs
+  [plain] x5
+    16: () 'transcript'
+    17: () 'log'
+    18: () 'View the conversation transcript in your pager ($PAGER)'
+    19: () '/transcript'
+    25: () 'No active session to view'
+  [test] x3
+
+## slash/commands/tutorial.rs
+  [plain] x6
+    15: () 'tutorial'
+    16: () 'tour'
+    16: () 'onboarding'
+    17: () 'Quick tips to get the most out of Grok Build'
+    18: () '/tutorial'
+    21: () 'the tutorial overlay needs fullscreen'
+
+## slash/commands/usage.rs
+  [plain] x14
+    31: () 'GROK_AUTH_PROVIDER_COMMAND'
+    51: () 'usage'
+    52: () 'cost'
+    53: () 'View usage'
+    54: () '/usage [show|manage]'
+    73: () 'show'
+    74: () 'show'
+    75: () 'show'
+    76: () 'View usage'
+    79: () 'manage'
+    80: () 'manage'
+    81: () 'manage'
+    82: () 'Manage billing'
+    89: () '/usage is not available.'
+  [fmt] x2
+    95: (format) 'Unknown argument: {arg}. Use /usage'
+    102: (format) 'Unknown argument: {arg}. Use /usage show or /usage manage'
+  [cmp] x3
+
+## slash/commands/view_plan.rs
+  [plain] x2
+    13: () 'View the current plan'
+    14: () '/view-plan'
+  [id] x3
+
+## slash/commands/vim_mode.rs
+  [plain] x2
+    15: () 'Toggle vim-style scrollback keybindings (j/k, h/l, g/G, y/Y, …)'
+    16: () '/vim-mode'
+  [id] x1
+
+## slash/commands/voice.rs
+  [plain] x2
+    20: () 'voice'
+    21: () '/voice'
+  [wrapped] x2
+
+## slash/commands/workflow.rs
+  [plain] x23
+    46: (matches) 'pause'
+    46: (matches) 'resume'
+    46: (matches) 'stop'
+    46: (matches) 'save'
+    73: () '--agent-budget'
+    74: () 'Set the cumulative child-agent cap (1–1,024)'
+    79: () '--effort'
+    337: () 'runs'
+    338: () 'Show workflow runs (dashboard; text overview in minimal)'
+    340: () 'pause'
+    340: () 'Pause a running workflow'
+    341: () 'resume'
+    341: () 'Resume a paused workflow'
+    342: () 'stop'
+    342: () 'Stop a workflow run'
+    343: () 'save'
+    343: () "Save a run's script as a named workflow"
+    351: () 'workflow'
+    353: () 'Launch a saved workflow, list runs, or manage a run (pause, resume, stop, save)'
+    354: () '/workflow'
+    358: () '<name> [--agent-budget N] [--effort LEVEL] [args] | runs | pause|resume|stop|save [name]'
+    423: () 'runs'
+    427: () '/workflow'
+  [fmt] x12
+    31: (format) '{op} '
+    139: (format) '{base} {}'
+    140: (format) '{base} {} '
+    155: (format) '{} — {option_description}'
+    158: (format) '{} {canonical}'
+    159: (format) '{}={canonical}'
+    162: (format) '{} {canonical}'
+    163: (format) '{base} {argument} {} {}'
+    164: (format) '{base} {argument} '
+    292: (format) '{name} {completed_args}'
+    323: (format) '{op} {}'
+    429: (format) '/workflow {args}'
+  [id] x1
+  [cmp] x5
+
+## slash/commands/workflows.rs
+  [plain] x3
+    13: () 'workflows'
+    14: () 'Browse installed workflows'
+    15: () '/workflows'
+
+## slash/matcher.rs
+  [test] x29
+
+## slash/mod.rs
+  [test] x476
+
+## slash/mode_support.rs
+  [plain] x4
+    40: () 'minimal'
+    40: () '/fullscreen'
+    41: () 'fullscreen'
+    41: () '/minimal'
+  [id] x1
+  [cmp] x8
+  [wrapped] x2
+
+## slash/mru.rs
+  [id] x1
+  [log] x2
+  [test] x18
+
+## slash/registry.rs
+  [plain] x16
+    22: () 'help'
+    142: () 'dashboard'
+    143: () 'recap'
+    145: () 'voice'
+    147: () 'auto'
+    151: () 'share'
+    298: () 'hooks'
+    298: () 'plugins'
+    327: () 'share'
+    329: () 'share'
+    331: () 'share'
+    340: () 'dashboard'
+    346: () 'recap'
+    352: () 'voice'
+    360: () 'auto'
+    362: () 'auto'
+  [fmt] x1
+    79: (format) '/{key}'
+  [id] x6
+  [test] x271
+
+## views/agent.rs
+  [plain] x42
+    707: () 'prompt'
+    708: () 'Space'
+    747: () 'hide done'
+    747: () 'show done'
+    755: () 'navigate'
+    759: () 'open'
+    762: () 'kill'
+    769: () 'delete row'
+    770: () 'edit'
+    771: () 'reorder'
+    772: () 'copy'
+    782: () 'save'
+    784: () 'cancel'
+    794: () 'nav'
+    799: () 'page'
+    801: () 'select'
+    802: () 'cancel'
+    812: () 'queue'
+    812: () 'send'
+    815: () 'expand'
+    821: () 'send now'
+    825: () 'newline'
+    828: () 'lines'
+    832: () 'accept suggestion'
+    836: () 'mode'
+    854: () 'view'
+    857: () 'copy output'
+    860: () 'kill'
+    864: () 'hide done'
+    864: () 'show done'
+    890: () 'cancel'
+    916: () 'copy'
+    921: () 'expand'
+    927: () 'expand'
+    938: () 'expand'
+    960: () 'open'
+    968: () 'nav'
+    976: () 'turn'
+    996: () 'copy'
+    1005: () 'kill'
+    1008: () 'back'
+    1027: () 'send to bg'
+  [fmt] x1
+    534: (format) '[ {label} ]'
+  [id] x3
+  [cmp] x1
+  [test] x154
+
+## views/agent_status.rs
+  [fmt] x9
+    66: (format) ' {SEPARATOR} '
+    159: (format) '{prefix}P {}'
+    177: (format) '{sign}{}'
+    180: (format) '{sign}{}'
+    249: (format) '{attempt}/{max}'
+    303: (format) '{frame} {chip_name}: {label}'
+    305: (format) '{chip_name}: {label}'
+    312: (format) '  {tokens_display}  {elapsed_str}'
+    337: (format) 'MCP ({}/{})'
+  [wrapped] x13
+  [test] x44
+
+## views/agents_modal.rs
+  [plain] x4
+    38: () 'Agents'
+    39: () 'Personas'
+    139: () 'user'
+    140: () 'project'
+  [test] x297
+
+## views/announcements.rs
+  [plain] x4
+    40: () 'hide: /announcements hide'
+    42: () '[hide]'
+    112: () 'critical'
+    116: () 'promo'
+  [fmt] x3
+    54: (format) '[{label}]'
+    77: (format) '[{label}]'
+    93: (format) ' {caption}'
+  [test] x265
+
+## views/block_viewer/mod.rs
+  [fmt] x3
+    1233: (format) '--- a/{path}\\n'
+    1234: (format) '+++ b/{path}\\n'
+    1267: (format) '@@ -{old_start},{old_count} +{new_start},{new_count} @@\\n'
+  [id] x1
+  [wrapped] x17
+
+## views/block_viewer/selection.rs
+  [fmt] x1
+    62: (format) '> {line}'
+
+## views/btw_overlay.rs
+  [plain] x4
+    258: () '[Esc]'
+    277: () '[Esc]'
+    290: () ' [Esc] '
+    299: () '/btw '
+  [fmt] x6
+    271: (format) '{pos}-{end}/{total}  \\u{2191}\\u{2193}  [Esc]'
+    274: (format) '{pos}-{end}/{total}  [Esc]'
+    282: (format) ' {hint} '
+    305: (format) '{title_prefix}{question}'
+    322: (format) ' {truncated} '
+    363: (format) '{spinner} '
+  [wrapped] x1
+  [test] x80
+
+## views/completion_dropdown.rs
+  [test] x20
+
+## views/context_bar.rs
+  [plain] x1
+    22: () 'MAX %'
+  [fmt] x2
+    24: (format) '{pct:.2}%'
+    26: (format) '{pct:.1}%'
+  [test] x11
+
+## views/credit_bar.rs
+  [plain] x4
+    41: () 'Weekly limit'
+    42: () 'Monthly limit'
+    43: () 'Usage'
+    238: () 'non-chat credit_bar_line always renders'
+  [fmt] x8
+    87: (format) '${dollars:.0}'
+    89: (format) '${dollars:.2}'
+    104: (format) '{}: {reset}'
+    139: (format) '${used:.2}'
+    140: (format) '${cap:.2}'
+    201: (format) '{}: {remaining}%'
+    201: (format) '{label} left'
+    260: (format) '{}: {pct:.0}%'
+  [cmp] x4
+  [wrapped] x9
+  [test] x56
+
+## views/dashboard/actions_focus.rs
+  [id] x1
+
+## views/dashboard/chrome.rs
+  [plain] x6
+    77: () 'awaiting'
+    82: () 'working'
+    84: () 'idle'
+    90: () 'done'
+    96: () 'failed'
+    363: () '/resume'
+  [fmt] x1
+    110: (format) ' {count} {}'
+  [id] x1
+  [wrapped] x6
+
+## views/dashboard/layout.rs
+  [id] x1
+
+## views/dashboard/mod.rs
+  [test] x9
+
+## views/dashboard/peek.rs
+  [plain] x33
+    264: () '__other__'
+    264: () 'Other'
+    304: () 'Subagent'
+    760: () 'Thinking'
+    761: () 'Response'
+    762: () 'Compacting'
+    763: () 'Retrying'
+    768: () 'Working'
+    769: () 'Preparing'
+    772: () 'Working'
+    788: () 'Response'
+    791: () 'Thinking'
+    791: () 'Thought'
+    795: () 'Bash'
+    796: () 'Read'
+    797: () 'Edit'
+    798: () 'List'
+    799: () 'Search'
+    800: () 'Fetch'
+    801: () 'Web search'
+    802: () 'Tool search'
+    803: () 'Tool'
+    804: () 'Memory'
+    805: () 'Message'
+    806: () 'Skill'
+    807: () 'Tool'
+    813: () 'Subagent'
+    814: () 'Workflow'
+    815: () 'Task'
+    816: () 'Btw'
+    817: () 'Context'
+    825: () 'Working'
+    827: () 'Idle'
+  [fmt] x2
+    544: (format) '{marker}{}. '
+    590: (format) '{marker}{}. {}'
+  [cmp] x2
+  [wrapped] x13
+  [test] x192
+
+## views/dashboard/peek_tail.rs
+  [test] x71
+
+## views/dashboard/render.rs
+  [plain] x5
+    505: () 'rename: '
+    737: () '[worktree:on]'
+    739: () '[worktree:off]'
+    1934: () 'Pending:'
+    2887: () 'stop this session'
+  [fmt] x13
+    826: (format) '{}: {name}'
+    1413: (format) ' {count}'
+    1564: (format) '{glyph} {label} {count}'
+    1796: (format) '{age:>6}'
+    1875: (format) ' \\u{00B7} {sub}'
+    1896: (format) ' [{label}]'
+    2124: (format) '{marker} {indent}{icon} '
+    2176: (format) '{marker} {indent}{icon} {label}'
+    2286: (format) ' {err} '
+    2321: (format) '{} ({effort})'
+    2661: (format) '{item_count}'
+    3380: (format) ' \\u{2771} {title_label} '
+    3640: (format) '{cur}/{total}'
+  [id] x1
+  [cmp] x2
+  [wrapped] x101
+
+## views/dashboard/row.rs
+  [plain] x17
+    17: () 'New session'
+    70: () 'worktree'
+    73: () 'pinned'
+    74: () 'failed'
+    415: () 'Awaiting input'
+    416: () 'Working'
+    490: () 'monitor'
+    491: () 'loop'
+    492: () 'task'
+    501: () 'failed'
+    501: () 'cancelled'
+    501: () 'error'
+    764: () 'Pending: question'
+    823: () 'Awaiting your input'
+    832: () 'Loading…'
+    836: () 'Working'
+    860: () 'Working'
+  [fmt] x5
+    330: (format) '__more_{}'
+    569: (format) '{NEW_SESSION_LABEL} #{short}'
+    648: (format) '{label} · {desc}'
+    760: (format) 'Pending: {}'
+    808: (format) '{name} {}'
+  [id] x1
+  [cmp] x3
+  [wrapped] x4
+  [test] x151
+
+## views/dashboard/state.rs
+  [plain] x40
+    225: () 'Awaiting'
+    226: () 'Working'
+    227: () 'Idle'
+    228: () 'Inactive'
+    229: () 'Done'
+    230: () 'Failed'
+    245: () 'stop'
+    246: () 'archive'
+    247: () 'close'
+    254: () 'archive this session'
+    255: () 'close this session'
+    791: () '.git'
+    1392: () 'send'
+    1393: () 'create'
+    1394: () 'open previous'
+    1395: () 'disable worktree'
+    1396: () 'enable worktree'
+    2470: () 'Pasted image discarded: reply switched to a question'
+    2495: () 'Pasted image discarded: reply switched to a question'
+    2567: () 'Reply canceled: peek panel changed'
+    2571: () 'Reply canceled: answer the question first'
+    4391: () 'needsinput'
+    4391: () 'needs'
+    4392: () 'working'
+    4392: () 'busy'
+    4394: () 'inactive'
+    4395: () 'completed'
+    4396: () 'failed'
+    4396: () 'errored'
+    4396: () 'cancelled'
+    4438: () 'directory'
+    4464: () 'no grok home'
+    4488: () 'dashboard'
+    4492: () 'enabled'
+    4493: () 'grouping'
+    4494: () 'state'
+    4495: () 'directory'
+    4501: () 'pinned'
+    4506: () 'reorder'
+    4508: () 'onboarding'
+  [fmt] x7
+    138: (format) 'top:{session_id}'
+    142: (format) 'sub:{parent_session_id}:{child_session_id}'
+    930: (format) '{trimmed}\\\\'
+    1323: (format) '{} {msg}'
+    2662: (format) 'No such option (only {n_opts} available)'
+    4371: (format) '#{rest}'
+    4518: (format) 'toml.dashboard.tmp.{pid}'
+  [id] x1
+  [cmp] x17
+  [log] x6
+
+## views/dashboard/test_support.rs
+  [plain] x1
+    31: () '/tmp'
+
+## views/dashboard/usage_modal.rs
+  [id] x1
+
+## views/dock/layout.rs
+  [test] x8
+
+## views/dock/mod.rs
+  [plain] x1
+    33: () '[stop]'
+  [test] x280
+
+## views/elicitation_view/render.rs
+  [fmt] x5
+    550: (format) '({reason})'
+    554: (format) '{shortcut} '
+    608: (format) '{mark} '
+    667: (format) '{shortcut} '
+    670: (format) '{marker} '
+  [wrapped] x14
+
+## views/elicitation_view/state.rs
+  [plain] x2
+    277: (matches) 'http'
+    277: (matches) 'https'
+  [log] x4
+  [wrapped] x7
+
+## views/extensions_modal.rs
+  [plain] x9
+    212: () 'Project'
+    216: () 'User'
+    224: () 'Bundled'
+    228: () 'Server'
+    237: () 'Config'
+    244: () 'Project'
+    248: () 'User'
+    259: () 'Bundled'
+    263: () 'Server'
+  [fmt] x5
+    92: (format) 'on:{}{matcher}'
+    99: (format) '{}{rest}'
+    220: (format) 'Plugin: {plugin_name}'
+    253: (format) 'Plugin: {}'
+    254: (format) 'unknown'
+  [test] x1030
+
+## views/extensions_modal/workflows_picker_rows.rs
+  [plain] x1
+    7: () 'No workflows available. Ask Grok to help make you one!'
+  [fmt] x1
+    41: (format) '{}: {msg}'
+  [wrapped] x3
+  [test] x18
+
+## views/feedback_modal/drafts.rs
+  [plain] x6
+    231: () 'Sending draft…'
+    245: () 'Feedback was sent, but the stored draft could not be deleted. Delete it manually; do not resend.'
+    274: () 'The remote outcome is unknown. The latest text was copied to the clipboard. Saving it back to this draft; c...'
+    283: () 'The remote outcome is unknown. The latest text was copied to the clipboard. Close and do not resend.'
+    302: () 'The remote outcome is unknown. The latest text was saved to this draft and copied to the clipboard. Close a...'
+    306: () 'The remote outcome is unknown. The latest text was copied to the clipboard, but it could not be saved to th...'
+
+## views/feedback_modal/enum_picker.rs
+  [plain] x4
+    98: () '↑↓ move'
+    103: () 'type filter'
+    108: () 'Enter select'
+    113: () 'Esc back'
+
+## views/feedback_modal/mod.rs
+  [plain] x4
+    33: () 'Write'
+    33: () 'Drafts'
+    39: () 'Add feedback text or an image before sending.'
+    643: () "Couldn't restore one feedback image; the original file was kept."
+  [id] x1
+  [log] x1
+  [wrapped] x20
+
+## views/feedback_modal/render.rs
+  [plain] x20
+    115: () '↑↓/j k move'
+    120: () '/ search'
+    125: () 'Enter open'
+    130: () 'd delete'
+    274: () 'Unclassified'
+    275: () 'Other'
+    388: () 'Enter submit'
+    393: () 'Esc cancel'
+    400: () 'Esc close'
+    406: () 'Esc close'
+    414: () 'Enter submit'
+    419: () '↑/Tab labels'
+    424: () 'Esc cancel'
+    433: () '↑↓ move'
+    438: () '←→ value'
+    443: () 'Enter edit'
+    448: () 'Tab done'
+    457: () 'Enter select'
+    462: () 'Esc back'
+    478: () 'Feedback'
+  [fmt] x2
+    276: (format) '{marker} {type} · {task}{failure} · {preview}'
+    360: (format) '{marker} {}. {}'
+  [wrapped] x12
+
+## views/file_search/context.rs
+  [test] x61
+
+## views/file_search/line_viewer.rs
+  [fmt] x3
+    129: (format) '{:>width$} '
+    297: (format) '{pad} '
+    364: (format) '  {text_line}'
+  [test] x54
+
+## views/file_search/state.rs
+  [test] x27
+
+## views/fps_hud.rs
+  [plain] x3
+    47: () 'GROK_FPS'
+    103: () 'fps:- p50:- p95:-'
+    144: () 'fps debug  (/debug fps)'
+  [fmt] x1
+    115: (format) 'fps:{fps:.0} p50:{p50:.1}ms p95:{p95:.1}ms'
+  [test] x10
+
+## views/goal_detail.rs
+  [plain] x13
+    77: () 'Active'
+    83: () 'Failed'
+    84: () 'Interrupted'
+    85: () 'Budget Limited'
+    86: () 'Complete'
+    244: () '(unavailable)'
+    253: () 'Achieved'
+    254: () 'Not Achieved'
+    255: () 'Not yet evaluated'
+    583: () 'Interrupted'
+    585: () 'Failed'
+    1003: () 'Esc: close  /goal clear, then start a new goal'
+    1005: () 'Esc: close  /goal resume | pause | status | clear'
+  [fmt] x15
+    62: (format) '{hours}h{mins:02}m'
+    64: (format) '{mins}m{secs:02}s'
+    66: (format) '{secs}s'
+    327: (format) '{ago} ago'
+    491: (format) '{frame} '
+    507: (format) ' {spinner_prefix}{objective} '
+    638: (format) '{tokens_str} / {budget_str} tokens'
+    640: (format) '{tokens_str} tokens'
+    646: (format) '{}{budget_display}{pct_display}  {}{elapsed_str}'
+    652: (format) '{}{budget_display}  {}{elapsed_str}'
+    807: (format) '{}{ctx}%'
+    810: (format) '{}{turns}'
+    813: (format) '{}{tools}'
+    846: (format) '  {id}  {tokens_str}'
+    985: (format) '  {ts_display}  '
+  [cmp] x21
+  [wrapped] x48
+  [test] x248
+
+## views/history_search.rs
+  [id] x1
+  [log] x1
+  [test] x29
+
+## views/import_claude_modal.rs
+  [plain] x14
+    116: () 'Permissions'
+    117: () 'Env vars'
+    118: () 'MCP servers'
+    119: () 'Hooks'
+    120: () 'Paths'
+    580: () '\\u{2191}\\u{2193} navigate'
+    585: () 'space toggle'
+    590: () '\\u{2190}\\u{2192} fold'
+    595: () 'a all'
+    600: () 'n none'
+    610: () 'Esc cancel'
+    616: () 'Import Claude settings'
+    702: () 'Global  ~/.grok/config.toml'
+    730: () '.grok'
+  [fmt] x9
+    701: (format) 'scope:{:?}'
+    728: (format) 'scope:{:?}'
+    790: (format) 'type:{scope:?}:{kind:?}'
+    805: (format) 'type:{:?}:{:?}'
+    1002: (format) '{action:5} {tool}({pattern})'
+    1005: (format) '{key} = {value:?}'
+    1016: (format) ' timeout={}s'
+    1018: (format) '{event}  matcher={m} → {command}{t}'
+    1026: (format) '{kind_str}: {path}'
+  [wrapped] x7
+  [test] x44
+
+## views/jump.rs
+  [fmt] x1
+    123: (format) '{:>ord_width$} '
+  [wrapped] x2
+  [test] x2
+
+## views/list_pane/layout.rs
+  [log] x1
+
+## views/list_pane/render.rs
+  [wrapped] x7
+  [test] x118
+
+## views/list_pane/state/mod.rs
+  [plain] x1
+    184: () 'comment: '
+  [id] x1
+
+## views/location.rs
+  [plain] x1
+    15: () 'worktree '
+  [fmt] x1
+    67: (format) '{display}{suffix}'
+  [cmp] x1
+  [wrapped] x2
+  [test] x28
+
+## views/managed_connectors_wait.rs
+  [id] x1
+  [wrapped] x4
+
+## views/mcps_modal.rs
+  [plain] x11
+    123: () 'managed'
+    138: () 'camelCase'
+    144: () 'camelCase'
+    153: () 'type'
+    164: () 'camelCase'
+    190: () 'type'
+    309: () 'ready'
+    310: () 'initializing'
+    311: () 'setuprequired'
+    343: () 'managedGateway'
+    347: () 'local'
+  [fmt] x3
+    44: (format) 'mcp-section:plugin:{name}'
+    73: (format) '{MANAGED_SECTION_CONNECTORS_URL}?teamId={}'
+    96: (format) '[{url}]'
+  [id] x3
+  [cmp] x7
+  [wrapped] x10
+  [test] x90
+
+## views/memory_modal.rs
+  [test] x94
+
+## views/modal.rs
+  [plain] x54
+    394: () 'Session'
+    398: () 'Ctrl+N'
+    403: () 'Ctrl+P → worktree'
+    408: () '/dashboard'
+    409: () '/dashboard'
+    413: () '/home'
+    418: () '/delete'
+    419: () '/delete'
+    423: () '/resume'
+    424: () '/resume'
+    428: () '/share'
+    429: () '/share'
+    433: () '/rename '
+    434: () '/rename '
+    438: () '/session-info'
+    439: () '/session-info'
+    443: () '/feedback'
+    454: () 'Context'
+    458: () '/compact'
+    459: () '/compact'
+    463: () '/context'
+    464: () '/context'
+    468: () '/view-plan'
+    469: () '/view-plan'
+    473: () '/memory'
+    480: () 'Model & Input'
+    484: () '/model'
+    485: () '/model '
+    489: () '/always-approve'
+    490: () '/always-approve'
+    494: () '/multiline'
+    495: () '/multiline'
+    499: () 'Ctrl+G'
+    506: () 'Tools'
+    510: () '/hooks'
+    517: () '/plugins'
+    524: () '/marketplace'
+    531: () '/skills'
+    538: () '/workflows'
+    545: () '/mcps'
+    552: () '/config-agents'
+    559: () 'Other'
+    563: () '/theme'
+    564: () '/theme '
+    574: () 'Ctrl+X'
+    576: () 'Ctrl+.'
+    582: () '/docs'
+    587: () '/tutorial'
+    588: () '/tutorial'
+    592: () 'Ctrl+Q'
+    618: () '/edit-prompt'
+    707: () 'model'
+    708: () 'model'
+    709: () 'theme'
+  [fmt] x3
+    972: (format) '{num} '
+    973: (format) '({marker}) '
+    1071: (format) '{prefix}{}'
+  [id] x1
+  [cmp] x4
+  [wrapped] x81
+  [test] x57
+
+## views/modal_window.rs
+  [plain] x1
+    195: () 'i search'
+  [fmt] x1
+    647: (format) '{key} {rest_tr}'
+  [test] x57
+
+## views/new_worktree_dialog.rs
+  [plain] x3
+    17: () 'Name (optional): '
+    144: () 'enter'
+    151: () 'esc'
+  [wrapped] x4
+  [test] x13
+
+## views/overlay_list.rs
+  [test] x6
+
+## views/permission_view.rs
+  [plain] x8
+    785: () 'Esc'
+    809: () 'Enter'
+    813: () 'Esc'
+    1117: () 'powershell'
+    1117: () 'bash'
+    1120: () 'bash'
+    1258: () 'json'
+    1276: () 'Ctrl-F'
+  [id] x3
+  [log] x2
+  [wrapped] x11
+  [test] x311
+
+## views/persona_detail.rs
+  [plain] x21
+    51: () 'Name'
+    52: () 'Description'
+    53: () 'Model'
+    54: () 'Effort'
+    55: () 'Isolation'
+    56: () 'Instructions'
+    57: () 'Instr. file'
+    179: () 'file'
+    214: () 'inputs'
+    215: () 'outputs'
+    244: () 'bundled'
+    329: () 'name'
+    330: () 'description'
+    331: () 'instructions'
+    333: () 'model'
+    699: () 'Enter save'
+    704: () 'Esc cancel'
+    711: () 'j/k nav'
+    717: () 'e edit field'
+    724: () 'i $EDITOR'
+    730: () 'Esc back'
+  [fmt] x1
+    648: (format) '{:indent$}{desc_line}'
+  [id] x3
+  [cmp] x4
+  [log] x1
+  [wrapped] x26
+
+## views/picker.rs
+  [plain] x5
+    184: () ' search: '
+    2439: () 'e/Shift+e'
+    2455: () 'space'
+    2726: () 'picker'
+    2730: () 'picker'
+  [fmt] x1
+    1971: (format) '{frame} {}'
+  [cmp] x1
+  [wrapped] x9
+  [test] x84
+
+## views/plan_approval_view.rs
+  [plain] x4
+    170: () 'ExitPlanModeExtResponse serialization should not fail'
+    188: () 'approved'
+    192: () 'abandoned'
+    196: () 'cancelled'
+  [fmt] x7
+    136: (format) '{label}\\n{snippets}\\n\\n{}\\n{}'
+    148: (format) '{}\\n{text}'
+    206: (format) '@plan.md:{}'
+    209: (format) '@plan.md:{}-{}'
+    214: (format) '{range}\\n{}'
+    237: (format) '> {line}'
+    256: (format) '{label}\\n{snippets}\\n\\n{}\\n{}'
+  [wrapped] x12
+  [test] x59
+
+## views/privacy_banner.rs
+  [plain] x12
+    14: () 'Help improve Grok'
+    30: () 'Read '
+    31: () 'Terms'
+    32: () ' and '
+    33: () 'Privacy Policy'
+    37: () 'Terms'
+    38: () ' and '
+    39: () 'Privacy Policy'
+    42: () 'Terms'
+    44: () 'Privacy'
+    48: () '[Opt out]'
+    49: () '[Opt in]'
+  [id] x2
+  [test] x13
+
+## views/prompt_suggestion.rs
+  [plain] x2
+    18: () 'GROK_PROMPT_SUGGESTIONS'
+    21: () 'GROK_PROMPT_SUGGESTIONS_MODEL'
+  [test] x32
+
+## views/prompt_widget/mod.rs
+  [plain] x2
+    2864: () 'enter'
+    3604: () '\\[Image #\\d+(?::|\\])'
+  [fmt] x7
+    400: (format) '{trimmed}\\u{2026}'
+    2081: (format) '@{path}'
+    2114: (format) '@{path}'
+    2372: (format) 'Image #{display_number}'
+    3040: (format) ' {caption} '
+    3760: (format) '{:.1} MB'
+    3762: (format) '{} KB'
+  [id] x4
+  [cmp] x4
+  [log] x4
+  [wrapped] x11
+
+## views/question_view.rs
+  [plain] x3
+    835: () 'Other'
+    890: () 'AskUserQuestionExtResponse serialization should not fail'
+    1756: () 'Ctrl-F'
+  [fmt] x9
+    1323: (format) '{shortcut_ch}'
+    1351: (format) '{num_str} '
+    1352: (format) '{checkbox} '
+    1371: (format) '{num_str} '
+    1372: (format) '{radio} '
+    1383: (format) '{label:<width$}'
+    1416: (format) '{label:<width$}'
+    1489: (format) '{marker} '
+    1515: (format) '{num_str} '
+  [wrapped] x2
+  [test] x150
+
+## views/queue_pane.rs
+  [cmp] x3
+  [wrapped] x5
+  [test] x148
+
+## views/rewind.rs
+  [plain] x13
+    14: () 'promptIndex'
+    16: () 'createdAt'
+    18: () 'numFileSnapshots'
+    20: () 'promptPreview'
+    22: () 'hasFileChanges'
+    28: () 'rewindPoints'
+    35: () 'targetPromptIndex'
+    37: () 'revertedFiles'
+    39: () 'cleanFiles'
+    47: () 'promptText'
+    54: () 'conflictType'
+    556: () 'Esc'
+    557: () 'Bksp'
+  [fmt] x4
+    467: (format) '{truncated}\\u{2026}'
+    471: (format) '{prefix}{preview_trunc}{suffix}'
+    606: (format) '{key_display:<4}'
+    607: (format) '({marker}) '
+  [wrapped] x14
+  [test] x7
+
+## views/scroll_debug_hud.rs
+  [plain] x5
+    41: () 'GROK_SCROLL_DEBUG'
+    83: () 'scroll debug  (/scroll-debug)'
+    121: () 'stream:- kind:- ev:-'
+    122: () 'avg:- accel:- gap:-'
+    123: () 'desired:- applied:- backlog:-'
+  [fmt] x9
+    84: (format) 'term:{} mux:{}'
+    86: (format) 'mode:{} inv:{} speed:x{:.2}'
+    92: (format) 'ept:{} lpt:{}/{} vp:{} cap:{} cad:{}ms'
+    103: (format) 'stream:live kind:{}{} ev:{}'
+    109: (format) 'avg:{} accel:x{:.2} gap:{}ms'
+    116: (format) 'desired:{:+.1} applied:{:+} backlog:{:+}'
+    127: (format) 'carry:{:+.2} flush:{}ms clock:{}'
+    135: (format) 'last:{} ev:{} ln:{:+}'
+    139: (format) 'view:{}/{} h:{} follow:{} bot:{}'
+  [id] x1
+  [test] x3
+
+## views/session_picker.rs
+  [plain] x4
+    119: () 'local'
+    297: () 'headless'
+    976: () '{hidden} external session hidden \\u{b7} f to show'
+    978: () '{hidden} external sessions hidden \\u{b7} f to show'
+  [fmt] x1
+    917: (format) '{truncated}...'
+  [cmp] x10
+  [wrapped] x29
+  [test] x167
+
+## views/session_picker_surface.rs
+  [plain] x4
+    20: () 'Open session'
+    134: () '\\u{2191}\\u{2193} nav'
+    139: () 'Enter select'
+    144: () 'Esc close'
+
+## views/session_title.rs
+  [fmt] x1
+    147: (format) '{head}...'
+  [cmp] x4
+  [wrapped] x7
+  [test] x48
+
+## views/settings_modal/input.rs
+  [log] x16
+
+## views/settings_modal/render.rs
+  [plain] x45
+    335: () 'y reset'
+    340: () 'n cancel'
+    345: () 'Esc cancel'
+    350: () 'F2 cancel'
+    436: () 'Tip · Ask Grok: \\"change theme to grokday\\" or \\"what does compact mode do?\\"'
+    437: () 'Tip · Ask Grok to change a setting'
+    848: () ' \\u{25CF}  '
+    849: () ' \\u{25CB}  '
+    1515: () '\\u{2190}/\\u{2192} step'
+    1516: () '\\u{2190}/\\u{2192} step'
+    1517: () '\\u{2191}/\\u{2193} step'
+    1517: () '\\u{2190}/\\u{2192} step'
+    2105: () ' \\u{00B7} Admin Managed'
+    2107: () 'ZDR'
+    2608: () 'Enter toggle'
+    2609: () 'Enter edit'
+    2613: () '\\u{2191}/\\u{2193}/j/k nav'
+    2618: () 'g/G top/btm'
+    2625: () 'Space toggle'
+    2637: () '\\u{2192} expand'
+    2642: () '/ search'
+    2649: () 'd reset'
+    2655: () 'F2/Esc close'
+    2665: () 'type to filter'
+    2670: () '\\u{2191}/\\u{2193} nav'
+    2675: () 'Backspace edit'
+    2680: () 'Enter commit'
+    2685: () 'Esc clear'
+    2697: () '\\u{2191}/\\u{2193} try'
+    2699: () '\\u{2191}/\\u{2193} nav'
+    2701: () 'Esc revert'
+    2701: () 'Esc cancel'
+    2712: () 'Enter select'
+    2717: () 'double-click select'
+    2730: () 'd reset'
+    2752: () 'Enter commit'
+    2757: () 'Esc cancel'
+    2762: () 'd reset'
+    2770: () 'type to edit'
+    2775: () '\\u{2190}/\\u{2192} cursor'
+    2780: () 'Enter commit'
+    2785: () 'Esc cancel'
+    2792: () '\\u{2191}/\\u{2193}/j/k nav'
+    2797: () 'Space/Enter toggle'
+    2802: () 'Esc back'
+  [fmt] x6
+    482: (format) '{prefix}\\"{q_disp}\\"'
+    601: (format) ' {label} '
+    2318: (format) '{triangle} {}'
+    2393: (format) '{triangle} {label_text}'
+    2527: (format) ' !   {label_truncated} {}'
+    2569: (format) '{triangle} {}'
+  [cmp] x1
+  [log] x6
+  [wrapped] x13
+
+## views/settings_modal/state.rs
+  [plain] x4
+    23: () 'Settings'
+    1037: () 'Value cannot be empty'
+    1039: () 'Value cannot contain whitespace'
+    1051: () 'Model catalog still loading, try again'
+  [fmt] x1
+    1059: (format) 'Unknown model: \\"{buffer}\\"'
+  [id] x3
+  [cmp] x75
+  [log] x7
+
+## views/shortcuts_bar.rs
+  [fmt] x1
+    304: (format) '{text} '
+  [wrapped] x1
+  [test] x48
+
+## views/shortcuts_help.rs
+  [plain] x25
+    73: () 'Essentials'
+    74: () 'Input'
+    75: () 'Conversation Navigation'
+    76: () 'Conversation Actions'
+    77: () 'Panels'
+    78: () 'Session'
+    79: () 'Dashboard'
+    88: () 'windows'
+    95: () 'macos'
+    101: () 'windows'
+    101: () 'macos'
+    258: () 'search'
+    259: () 'Search scrollback'
+    271: () 'search'
+    272: () '/find'
+    273: () 'Search scrollback'
+    300: () 'paste'
+    301: () 'Paste images (and text) from the clipboard'
+    302: () 'windows'
+    306: () 'undo'
+    307: () 'Undo the last prompt edit'
+    311: () 'redo'
+    312: () 'Redo the last undone prompt edit'
+    319: () 'history'
+    320: () 'Prompt history'
+  [id] x1
+  [log] x1
+  [wrapped] x15
+
+## views/slash_dropdown.rs
+  [test] x72
+
+## views/stats_modal.rs
+  [plain] x6
+    31: () 'a all models'
+    162: () 'Compression'
+    325: () 'Tab switch'
+    330: () '\\u{2191}/\\u{2193} scroll'
+    343: () 'y copy'
+    348: () 'Esc close'
+  [wrapped] x21
+  [test] x43
+
+## views/status_line/mod.rs
+  [fmt] x1
+    60: (format) '{kept}\\u{2026}'
+  [log] x1
+
+## views/status_line/sanitize.rs
+  [plain] x2
+    215: () 'http'
+    215: () 'https'
+  [id] x1
+  [log] x1
+
+## views/status_line/segments.rs
+  [fmt] x9
+    34: (format) '{scaled}{suffix}'
+    115: (format) '{pct}% ctx'
+    121: (format) '${usd:.2}'
+    154: (format) 'miss {}'
+    169: (format) 'in {} out {}'
+    183: (format) 'cache {:.1}%'
+    193: (format) 'think {:.1}%'
+    203: (format) '{ttft_ms}ms ttft'
+    206: (format) '{tps:.1} tok/s'
+  [id] x1
+
+## views/subagent_catalog_pane.rs
+  [plain] x6
+    131: () 'Personas'
+    131: () 'persona'
+    132: () 'Roles'
+    132: () 'role'
+    133: () 'Agents'
+    133: () 'agent'
+  [fmt] x2
+    159: (format) '  {item}'
+    163: (format) '  {item}'
+  [cmp] x2
+  [wrapped] x1
+  [test] x43
+
+## views/suggestion_controller/mod.rs
+  [plain] x3
+    307: () 'GROK_SUGGESTIONS'
+    309: () 'GROK_SUGGESTIONS_AI'
+    310: () 'GROK_SUGGESTIONS_AI_MODEL'
+  [cmp] x17
+
+## views/tasks_pane.rs
+  [plain] x16
+    48: () 'powershell'
+    48: () 'bash'
+    51: () 'bash'
+    174: () 'Workflows'
+    175: () 'Subagents'
+    176: () 'Tasks'
+    177: () 'Watchers'
+    266: () 'Monitor'
+    287: () 'Task '
+    358: () 'completed'
+    416: () 'agent:'
+    496: () 'workflow:'
+    589: () 'sched:'
+    608: () '\\u{25BE} '
+    696: () 'header:'
+    1657: () 'completed'
+  [fmt] x28
+    60: (format) '{command}\\n'
+    128: (format) '({count}{suffix})'
+    132: (format) '({}.{}k{suffix})'
+    135: (format) '({}k{suffix})'
+    139: (format) '({}.{}M{suffix})'
+    141: (format) '({}M{suffix})'
+    274: (format) '{tag} {text}'
+    276: (format) '{tag} '
+    295: (format) '{prefix}{one_line}'
+    305: (format) '{first_line}\\u{2026}'
+    396: (format) '{type_label}{type_sep}'
+    401: (format) ' \\u{00b7} {activity}'
+    408: (format) '{type_label} {model_suffix}'
+    409: (format) '{type_label} {description}'
+    410: (format) '{type_label} {description} {model_suffix}'
+    489: (format) ' \\u{00b7} {suffix}'
+    494: (format) '{} {} {suffix}'
+    618: (format) ' {count}'
+    1445: (format) '{elapsed} '
+    1514: (format) '{elapsed} '
+    1523: (format) '{elapsed} '
+    1532: (format) '{elapsed} '
+    1546: (format) '{badge} '
+    1654: (format) '{elapsed} '
+    1662: (format) '{elapsed} '
+    1670: (format) '{elapsed} '
+    1761: (format) '{model_text} '
+    1770: (format) '{badge} '
+  [cmp] x4
+  [wrapped] x17
+  [test] x243
+
+## views/todo_pane.rs
+  [wrapped] x4
+  [test] x4
+
+## views/turn_status.rs
+  [plain] x5
+    140: () 'command'
+    141: () 'monitor'
+    142: () 'loop'
+    143: () 'subagent'
+    144: () 'workflow'
+  [fmt] x3
+    127: (write) '{count} {translated}{plural}'
+    272: (format) '{label}{parked_suffix}'
+    767: (format) '{tokens}'
+  [cmp] x14
+  [wrapped] x21
+  [test] x79
+
+## views/tutorial.rs
+  [plain] x3
+    300: () 'Quick tips to get the most out of Grok Build.'
+    301: () "Pick a topic. Esc when you're done."
+    416: () 'Welcome to Grok Build'
+  [wrapped] x9
+  [test] x12
+
+## views/usage_modal.rs
+  [plain] x8
+    50: () 'Context usage'
+    51: () 'Usage limit'
+    52: () 'Session info'
+    567: () 'Tab switch'
+    572: () '\\u{2191}/\\u{2193} scroll'
+    579: () 'c copy session ID'
+    588: () 'y copy all'
+    594: () 'Esc close'
+  [fmt] x7
+    864: (format) '{}: {error}'
+    901: (format) '{}: {error}'
+    938: (format) '{} ({tier})'
+    964: (format) '{}: {reset}'
+    988: (format) '{used:.2}'
+    989: (format) '{cap:.2}'
+    999: (format) '{}: {error}'
+  [cmp] x3
+  [wrapped] x18
+  [test] x92
+
+## views/welcome/consent.rs
+  [plain] x2
+    30: () 'Enlarge the window to read this notice'
+    31: () 'Window too small'
+  [id] x1
+  [wrapped] x2
+
+## views/welcome/hero_box.rs
+  [plain] x2
+    31: () 'Code together, cola together — thanks for pairing with Panda! (/feedback)'
+    482: () 'critical'
+  [fmt] x2
+    450: (format) '[{label}]'
+    560: (format) ' \\u{2022} {truncated}'
+  [id] x5
+  [wrapped] x1
+  [test] x45
+
+## views/welcome/logo.rs
+  [log] x2
+  [test] x5
+
+## views/welcome/mod.rs
+  [plain] x36
+    59: () 'ctrl+d'
+    61: () 'ctrl+q'
+    565: () 'Grok Build  '
+    585: () 'Grok Build  '
+    1085: () 'A browser window will open for authentication.'
+    1087: () 'Approve in your browser to finish signing in.'
+    1089: () 'Make sure your browser shows this code.'
+    1103: () "If it doesn't open, click "
+    1104: () 'here'
+    1105: () ' to copy.'
+    1139: () 'Copying not working? Click here to show full URL.'
+    1286: () 'ctrl+q'
+    1526: () 'enter'
+    1742: () 'ctrl+g'
+    1743: () 'ctrl+l'
+    1744: () 'ctrl+d'
+    1744: () 'ctrl+q'
+    1792: () 'ctrl+w'
+    1793: () 'ctrl+r'
+    1794: () 'ctrl+d'
+    1794: () 'ctrl+q'
+    1795: () 'ctrl+i  [x]'
+    2050: () 'Free'
+    2113: () 'https://grok.com/supergrok?referrer=grok-build'
+    2186: () 'ctrl+u'
+    2244: () 'ctrl+u'
+    2482: () 'ctrl+w'
+    2485: () 'back'
+    2486: () 'select'
+    2491: () 'worktree'
+    2499: () 'navigate'
+    2508: () 'confirm delete'
+    2515: () 'cancel'
+    2523: () 'filter'
+    2530: () 'delete'
+    2556: () 'delete'
+  [fmt] x2
+    548: (format) '{}{tier}'
+    1658: (format) '\\u{2022} {truncated}'
+  [id] x15
+  [cmp] x7
+  [wrapped] x46
+  [test] x204
+
+## views/welcome/prompt.rs
+  [wrapped] x1
+  [test] x11
+
+## views/welcome/toast.rs
+  [fmt] x1
+    31: (format) ' {body} '
+  [test] x17
+
+## views/welcome/top_bar.rs
+  [fmt] x1
+    55: (format) '{icon} {branch}'
+
+## views/welcome/workspace_mode.rs
+  [plain] x14
+    39: () 'Sandbox'
+    40: () 'Local workspace'
+    46: () 'backend sandbox'
+    47: () 'this machine · Computer Hub'
+    65: () 'chat'
+    66: () 'build'
+    305: () '  ctrl+e'
+    405: () 'kept'
+    405: () 'cleared'
+    436: () 'kept'
+    462: () 'confirmed'
+    723: () 'cli stamp kept'
+    777: () 'own stamp override'
+    826: () 'GROK_HOME'
+  [id] x10
+  [cmp] x1
+  [log] x22
+  [wrapped] x7
+  [test] x20
+
+## views/witty_phrases.rs
+  [plain] x53
+    21: () "I'm Feeling Lucky"
+    22: () 'Shipping awesomeness... '
+    23: () 'Painting the serifs back on...'
+    24: () 'Consulting the digital spirits...'
+    25: () 'Reticulating splines...'
+    26: () 'Generating witty retort...'
+    27: () 'Polishing the algorithms...'
+    28: () "Don't rush perfection (or my code)..."
+    29: () 'Brewing fresh bytes...'
+    30: () 'Counting electrons...'
+    31: () 'Engaging cognitive processors...'
+    32: () 'Checking for syntax errors in the universe...'
+    33: () 'One moment, optimizing humor...'
+    34: () 'Untangling neural nets...'
+    35: () 'Compiling brilliance...'
+    36: () 'Loading wit.exe...'
+    37: () 'Preparing a witty response...'
+    38: () "Just a sec, I'm debugging reality..."
+    39: () 'Crafting a response worthy of your patience...'
+    40: () 'Resolving dependencies... and existential crises...'
+    41: () 'Garbage collecting... be right back...'
+    42: () 'Converting coffee into code...'
+    43: () 'Looking for a misplaced semicolon...'
+    44: () 'Pre-heating the servers...'
+    45: () 'Loading the next great idea...'
+    46: () "Just a moment, I'm in the zone..."
+    47: () "Hold tight, I'm crafting a masterpiece..."
+    48: () 'Warp speed engaged...'
+    49: () "Don't panic..."
+    50: () 'Following the white rabbit...'
+    51: () 'The truth is in here... somewhere...'
+    52: () 'Loading... Do a barrel roll!'
+    53: () 'Finding a suitable loading screen pun...'
+    54: () 'Distracting you with this witty phrase...'
+    55: () 'Almost there... probably...'
+    56: () 'Hmmm... let me think...'
+    57: () "That's not a bug, it's an undocumented feature..."
+    58: () 'Engage.'
+    59: () "I'll be back... with an answer."
+    60: () 'Letting the thoughts marinate...'
+    61: () 'Initiating thoughtful gaze...'
+    62: () 'Dividing by zero... just kidding!'
+    63: () 'Buffering... because even AIs need a moment.'
+    64: () 'Entangling quantum particles for a faster response...'
+    65: () 'Recalibrating the humor-o-meter.'
+    66: () 'Enhancing... Enhancing... Still loading.'
+    67: () 'Have you tried turning it off and on again? (The loading screen, not me.)'
+    68: () 'Constructing additional pylons...'
+    69: () "New line? That's Ctrl+J."
+    88: () '只要我不写代码，代码就没有 Bug...'
+    89: () '正在把 Bug 转化为 Feature...'
+    90: () '只要我不尴尬，Bug 就追不上我...'
+    100: () '愿你的代码永无 Bug，愿你的梦想终将成真...'
+  [test] x4
+
+## views/workflows.rs
+  [plain] x19
+    64: (matches) 'interrupted'
+    64: (matches) 'complete'
+    64: (matches) 'failed'
+    64: (matches) 'cancelled'
+    82: (matches) 'blocked'
+    83: (matches) 'failed'
+    84: (matches) 'cancelled'
+    452: () 'done'
+    454: () 'active'
+    459: () 'All agents'
+    459: () 'active'
+    494: () 'failed'
+    513: () '{done}/{total} agent'
+    515: () '{done}/{total} agents'
+    625: () '{done}/{total} phase'
+    627: () '{done}/{total} phases'
+    652: (matches) 'cancelled'
+    652: (matches) 'cleared'
+    872: () 'active'
+  [fmt] x7
+    634: (format) '{phase_part} · {} · {}'
+    643: (format) '{glyph} {}'
+    695: (format) '{glyph} '
+    892: (format) '● {done_in}/{agents_in}'
+    894: (format) '{done_in}/{agents_in}'
+    965: (format) 'agent'
+    972: (format) 'agent'
+  [id] x4
+  [cmp] x28
+  [wrapped] x22
+  [test] x200
+

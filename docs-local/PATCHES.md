@@ -1715,3 +1715,77 @@ env-var setter 一律住默认组（同 env 变量的守卫与 setter 必须同�
 
 已知后续项（不在本补丁）：`xai-grok-pager` crate 内 `serial(GROK_HOME)` 命名组用法
 约 40 处，若其与同 crate 默认组 GROK_HOME setter 混用则存在同类碎片化，需单独审计。
+
+## 十六期补丁（2026-10-02：TUI 英文残留 i18n 计划外扫尾，T3）
+
+> **计划外扫尾**：stats-modal-todo.md 的 T3（全仓 i18n 扫尾），不在 P0–P4 计划内，
+> 是 P0–P4 完工后的漏网复核。分支 `feat/local-stats-modal-i18n`（与 T1/T2 同分支）。
+
+### 方法（先扫描后动手，零编译静态扫描）
+
+- 新工具 `scripts-local/i18n_sweep.py`：注释剥离 + 字符串掩码做括号/宏结构扫描，
+  按宏上下文预分类（plain/fmt/cmp/log/id/test/wrapped），输出按文件分组清单。
+  陷阱留档：对字符串做空白化后再数括号会被 `"}"`、`\u{2026}` 等字面量破坏配对
+  （permission_view.rs 的 `#[cfg(test)]` 区间因此漏判）——结构扫描必须用掩码跳过字面量内部。
+- 复扫产物：`docs-local/i18n-sweep-classified-2026-10-02.txt`（施工前分类清单）、
+  `docs-local/i18n-sweep-rescan-2026-10-02.txt`（施工后复核）。
+- 施工流程沿用 ui-i18n-plan.md 规约 8：分批派遣子代理（每批 ≤3~4 视图文件）只改视图文件
+  并回报 (en, zh)，主会话单写者统一合并进 `i18n.rs` → 查重 → 一轮编译。
+
+### 施工面与结果
+
+- **翻译表 +157 组**（1417 → 1574 组），覆盖 22 个文件、约 180 处渲染点接线。
+- 主要补线区域：
+  - **modal 页脚 shortcut rest 键**：Shortcut 标签由 `modal_window.rs:638
+    shortcut_label_i18n()` 集中翻译（首空格切分、键帽保留英文、rest 查表）——
+    本次补齐 rest 键缺口（switch/scroll/all models/copy session ID/copy all/
+    edit field/$EDITOR/scope/prev/next agent/dashboard/fullscreen/pause/play/
+    close this session/new in worktree/Release Notes 等）。
+  - **turn_status**：活动名词（command/monitor/loop/subagent/workflow/task）经
+    渲染出口 tr_str 查表；中文命中（≠原文键）即跳过复数 "s"（中文无复数）。
+    状态词族（Cancelling…/Verifying…/Compacting…/Running…/Waiting…/Starting session…）
+    与排队提示整键。
+  - **rewind 对话确认**、**session_picker 展开卡片字段标签**（第二渲染路径）、
+    **welcome 窗口提示/占位符**、**dashboard chrome 按钮/徽章**、
+    **extensions 分组头**（出口 tr_group_label 已接线、键缺失）、
+    **plan_approval formatter 固定段**、**privacy_banner 按钮+LEGAL 分段**
+    （热区宽度改按译文 `UnicodeWidthStr::width`，与 LEGAL 分段同一约束），
+    **prompt_widget 粘贴/图片提示**（具名占位符 `{n}`/`{size}` 沿用 turn_status 先例）、
+    **announcements 隐藏按钮**（paint 出口加参数统一译文与预留宽度）、
+    **app 层 chrome**（status_blocks 用量块/任务队列、agent_view 状态徽章与媒体按钮、
+    app_view 浮层标题兜底）。
+- **关键机制发现**：大量扫描 plain 命中实为「存英文键 + 渲染出口 tr/tr_str」的
+  规约 1 正确模式（agent.rs 页脚 HintItem→shortcuts_bar.rs:291、dashboard 状态词→
+  render.rs 出口、goal_detail 状态族、session_info_fields 单源双消费等），本次逐一
+  核实出口后豁免，未双重包裹。
+
+### 书面豁免台账（按口径不译，复扫残留的主体）
+
+| 类别 | 代表 | 依据 |
+|---|---|---|
+| 一次性命令结果/错误 | toast、`No active session`、`couldn't …`、effects 层 ~70 条 | ui-i18n-plan 口径 |
+| 协议/内部键 | `x.ai/*` 方法名、json! 键、serde rename、`allow-always-command`、`completed` 比较、TOML 键 | 翻译破坏匹配 |
+| 协议文本匹配器 | `sanitize_user_error` 改写表、磁盘满标记 | 匹配入站英文错误 |
+| 键帽/符号 | `Esc`/`Ctrl+N`/`↑/↓`、`●`、`[worktree:on]`（`.len()` 计宽 ASCII 假设） | 口径 + 布局约束 |
+| 调试 HUD | fps_hud、scroll_debug_hud | 口径 |
+| 技术缩写/极窄槽位 | `MAX %`（5 列固定槽）、`ttft`/`ctx`（状态行紧凑段）、`ZDR`、`camelCase` | 宽度/术语 |
+| 双词表设计 | witty_phrases（EN/ZH 各自成表，非查表翻译） | W-Z 专题设计 |
+| 品牌/命令/URL | `Grok Build`、`/resume`、`grok.com`、env 名 | 口径 |
+
+### 已知风格残留（记录不阻塞）
+
+- `Verifying`/`Compacting`（无省略号，历史键）与新键 `Verifying…`/`Compacting…`
+  并存，中文分别为「验证中」与「正在验证…」——下次触碰对应文件时可统一。
+- status_blocks 的 `{status:<9}` 列按字符数填充，中文显示更宽有轻微漂移（纯 scrollback 文本，可接受）。
+
+### 验证
+
+- `cargo check -p xai-grok-pager --all-targets`：exit 0。**教训**：前两轮只跑
+  `cargo check`（不编译 `#[cfg(test)]` 区），agent 在测试区的一次宽度改动
+  （render.rs `bw` 计算混 usize/u16）漏检，被 ctest 的测试二进制编译拦下——
+  凡改动可能波及测试区（rustfmt 递归、测试模块内接线），验证一律加 `--all-targets`。
+- 复扫：plain 2578 → 2460、wrapped 657 → 829（+172 处包裹；其中 ~40 条 fmt 模板
+  迁入 wrapped）；剩余 plain 均落在上表豁免类。
+- 定点 rustfmt 21+1 文件（`workflows_picker_rows.rs` 顺带 4 行格式修复）。
+- `ctest.sh -p xai-grok-pager --lib slash::`：**405 passed / 0 failed**（含翻译表
+  纯数据测试 `translations_table_covers_known_keys_without_duplicates` 的键唯一性断言）。

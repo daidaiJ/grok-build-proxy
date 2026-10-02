@@ -74,10 +74,11 @@
   TTL 生存曲线与 429 滑窗限流夹逼。全被动零 token 成本；`GROK_LIMIT_PROBE=0` 关闭。
   T3 主动探测（idle sweep 补 >1h 长尾、多前缀容量测试）未做。
 - [`docs-local/stats-modal-todo.md`](docs-local/stats-modal-todo.md) — `/stats` 加时间窗
-  option（5h/day/week/month）+ 输出改成 Grok 自制窗口样式（对齐 agents / usage limit 面板）
+  option（5h/day/week）+ 输出改成 Grok 自制窗口样式（对齐 agents / usage limit 面板）
   + TUI 残留英文说明 i18n 扫尾。分支 `feat/local-stats-modal-i18n`，基线 `86a6e1d`。
-  **T1/T2 已施工完成并提交**（见该文档头部状态），剩 **T3 全仓英文残留 i18n 扫尾**
-  （先静态扫描出清单→分批 ≤3 文件→统一进 i18n.rs→一轮编译；2026-10-02 复核仍待做）。
+  **T1/T2/T3 全部施工完成（2026-10-02）**：T3 扫尾见 PATCHES.md 十六期（+157 组键、
+  22 文件接线、豁免台账在案，扫描器 `scripts-local/i18n_sweep.py`；已 rebase 到
+  10-02 main 重验证）。待办 = 活回合 `/lang zh` 抽查（发版后在新客户端看）。
   文档内含现状锚点、改动点、验收标准与纪律要求。
 - [`docs-local/webdav-sync-todo.md`](docs-local/webdav-sync-todo.md) — WebDAV 同步（用量 +
   主机无关配置，服务端按机器分子目录）+ `/sync` 选择恢复/同步。**评估完成、未开工**；分期
