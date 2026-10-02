@@ -97,7 +97,10 @@
 - [`docs-local/upstream-responses-event-compat.md`](docs-local/upstream-responses-event-compat.md)
   — 第三方网关（Command Code）发非标 `response.reasoning.delta` 事件，撞上 async-openai
   的 serde 严格枚举 → 流式解析中止、整轮失败且不重试。含抓包、本仓库落点、三个修复
-  选项与未验证项。**尚未修**，当前以配置侧绕过（该模型改用 `chat_completions`）。
+  选项与未验证项。**已修（2026-10-02，选项 C 流层方言归一化：`fix/local-responses-event-dialect`
+  已合 main，登记 PATCHES.md，sampler 291/0）**。遗留：活体验证未做（需把受影响模型
+  切回 `api_backend = "responses"` 实跑带推理请求；本机配置仍 chat_completions）；
+  该网关其他非标事件名未穷举，归一化 miss 会打 warn 日志可发现。
 - [`docs-local/model-limits-config.md`](docs-local/model-limits-config.md)
   — 自定义模型 `context_window` / `max_completion_tokens` 的兜底语义（三个兜底值分属
   不同代码路径，含锚点）与「不烧 token 拿真实上限」的查法（OpenRouter 目录 /
@@ -126,13 +129,28 @@
   分支拟 P1 `feat/local-workflow-context-edit` / P2 `feat/local-deferred-tool-exposure`。
   基线：2026-09-30 `main` `95aad87`（pi 基线 `0.99.1`，2026-09-29）。
 - [`docs-local/kimicode-port/`](docs-local/kimicode-port/README.md) — **kimicode
-  （Kimi Code CLI）特性移植预研（调研完成，未选型）**：对照 MoonshotAI/kimi-code
+  （Kimi Code CLI）特性移植预研（选型完成，P1 待拍板开工）**：对照 MoonshotAI/kimi-code
   （main `21406fb`，2026-09-30）与 fork 现状。头号候选 = `/rewind` 从破坏性截断升级
-  wire 分支树 undo（非破坏分支 + 原 prompt 放回 + compaction 边界精确可算）；次选 =
-  `select_tools` 延迟工具声明（并入 workflow-pi-port P2 对照定稿，公告流 +
+  wire 分支树 undo；**2026-10-02 摸底已出设计原型
+  [rewind-branch-undo.md](docs-local/kimicode-port/rewind-branch-undo.md)**：推翻"缺
+  journal"前提——fork `updates.jsonl` 已是 append-only + `RewindMarker` 分支标记
+  （sqlite-journal/session-events 均非会话历史，原判有误），D1 推荐 = RewindMarker
+  SwitchEdge 化（非新建 journal），prompt 放回编辑器 fork 已有等价物，真差距 = 分支
+  可往返 + 旧分支点可见 + 边界预计算；T1–T3 合计 5–7 人天，分支拟 `feat/local-rewind-branch-undo`。
+  次选 = `select_tools` 延迟工具声明（并入 workflow-pi-port P2 对照定稿，公告流 +
   历史 schema 持续剥离两点待吸收）；再次 = 子 agent 结果信封（stop_reason→next_step
   映射 + resume 同会话）与委托图约束。hooks/插件市场/持久化/ACP 判定已有不移植
   （决策 D2–D5）。本地 clone `D:\CODE\ai\kimi-code`。基线：2026-10-01 `main` `2b8adae`。
+- [`docs-local/step-code-port/`](docs-local/step-code-port/survey.md) — **Step-Code
+  （阶跃星辰 stepfun-ai/Step-Code）特性移植预研（调研完成，未选型）**：TS monorepo
+  （MIT，573 星，本地 clone `D:\CODE\ai\Step-Code`，基线 `519e4de4` 2026-09-30）。
+  头部候选：P1 bash 命令 AST 静态安全分析（三态判定 + `analysisIncomplete` 不冒充
+  安全，fork 无命令内容静态分析，headless 安全基座）；P2 会话分支树 + 离开分支自动
+  摘要（branch summarization + summary-overflow 降源，与 kimicode-port P1 同题互补，
+  决策 D2 = 并入该专题对照定稿）；P3 不完整流恢复注入（projection-only 续作指令，
+  ≤1 人天小件）；P4 子 agent env 防递归 + 输出驱动 idle watchdog（待核实 fork spawn
+  链路，决策 D4）。fork 已有面（goal/plan/todo/MCP 导入/secret 脱敏/steer 机制）已
+  在对照矩阵澄清防重复建设。分支拟 P1 `feat/local-shell-command-analysis`。
 
 ## 🔄 Handoff 摘要
 

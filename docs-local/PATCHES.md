@@ -1819,3 +1819,29 @@ status_blocks 用量块的两个快照失配，根因是整串格式里的**对�
 修复 = 恢复 main 原始整串为键（`{}`→具名占位符在 replace 后不可见，测试构建输出
 字节级还原）+ 中文译文按 18 列标签宽补空格。终轮 **10032 passed / 0 failed**。
 教训：带列对齐的格式串必须整键保留填充（规约 5 的变体）；快照测试是这类回归的兜底。
+
+## Responses 流事件方言归一化（2026-10-02，分支 `fix/local-responses-event-dialect`）
+
+> 背景：[`upstream-responses-event-compat.md`](upstream-responses-event-compat.md) 修复选项 C。
+> Command Code 网关对 reasoning 增量发 `response.reasoning.delta`（规范名
+> `response.reasoning_text.delta`），撞 async-openai `ResponseStreamEvent` 严格枚举 →
+> 解析中止、带推理请求整轮失败且不重试（`request_task.rs:808` 刻意不重试）。
+
+### 改动面（本仓库内，不动 async-openai fork）
+
+- `xai-grok-sampler/src/client.rs`：新增 `RESPONSE_EVENT_DIALECT_ALIASES` 方言表 +
+  `rewrite_dialect_event_name()`；接进 `deserialize_response_event()` 现有 sanitize
+  重试分支（先归一化事件名 → 再走原有未知工具剥离 → `from_value` 严格反序列化）。
+- 设计约束（遵守 compat 文档「只做事件名归一化」）：① 方言表是封闭常量，未知事件名
+  仍走原 `Serialization(first_err)` 失败路径（测试锁定）；② 载荷字段不放宽，归一化后
+  反序列化失败照样报错；③ 归一化命中打 `tracing::warn!`（含原始事件名），新方言可从
+  日志发现后进表。
+- 单测 2 条：`deserialize_response_event_normalizes_gateway_reasoning_delta_dialect`
+  （Command Code 抓包原载荷）、`deserialize_response_event_unknown_event_name_still_fails`。
+
+### 验证与遗留
+
+- `ctest.sh -p xai-grok-sampler --lib`：291 passed / 0 failed。
+- 遗留（= compat 文档「未验证项」顺延）：活体验证需把某个受影响模型切回
+  `api_backend = "responses"` 实跑一轮带推理请求（本机当前已统一 chat_completions，
+  未切回）；Command Code 是否还发其他非标事件名未穷举，命中 warn 日志可发现。
