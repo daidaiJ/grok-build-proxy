@@ -2773,14 +2773,22 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Session usage: no model calls yet in this session.",
             "会话用量：本会话还没有模型调用。",
         ),
-        ("  Input tokens:", "  输入 tokens:"),
-        ("({} cached)", "（其中缓存 {}）"),
-        ("  Output tokens:", "  输出 tokens:"),
-        ("({} reasoning)", "（其中推理 {}）"),
-        ("  Total tokens:", "  总 tokens:"),
-        ("  Model calls:", "  模型调用:"),
-        ("API time:", "API 耗时:"),
-        ("  Cost:", "  费用:"),
+        // 整串格式成键：对齐填充在键内，中文译文按 18 列标签宽补空格保持值列对齐
+        // （"  Input tokens:   " 等 = 18 列；"  输入 tokens:" = 14 列 + 4 空格，余同）
+        (
+            "  Input tokens:   {n} ({c} cached)",
+            "  输入 tokens:    {n}（其中缓存 {c}）",
+        ),
+        (
+            "  Output tokens:  {n} ({r} reasoning)",
+            "  输出 tokens:    {n}（其中推理 {r}）",
+        ),
+        ("  Total tokens:   {n}", "  总 tokens:      {n}"),
+        (
+            "  Model calls:    {n} · API time: {d}",
+            "  模型调用:       {n} · API 耗时: {d}",
+        ),
+        ("  Cost:           {c}", "  费用:           {c}"),
         ("  By model:", "  按模型分列:"),
         (
             "    {model}: {in} in / {out} out · {cost}",

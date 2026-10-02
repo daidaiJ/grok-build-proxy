@@ -194,31 +194,30 @@ pub(crate) fn session_usage_block_text(
     }
 
     let mut rows = Vec::new();
-    rows.push(format!(
-        "{} {} {}",
-        tr("  Input tokens:"),
-        group_thousands(t.input_tokens),
-        tr_str("({} cached)").replace("{}", &group_thousands(t.cached_read_tokens)),
-    ));
-    rows.push(format!(
-        "{} {} {}",
-        tr("  Output tokens:"),
-        group_thousands(t.output_tokens),
-        tr_str("({} reasoning)").replace("{}", &group_thousands(t.reasoning_tokens)),
-    ));
-    rows.push(format!(
-        "{} {}",
-        tr("  Total tokens:"),
-        group_thousands(t.total_tokens)
-    ));
-    rows.push(format!(
-        "{} {} · {} {}",
-        tr("  Model calls:"),
-        group_thousands(t.model_calls),
-        tr("API time:"),
-        format_duration(std::time::Duration::from_millis(t.api_duration_ms)),
-    ));
-    rows.push(format!("{} {}", tr("  Cost:"), format_cost(t)));
+    // LOCAL(i18n): 整串格式成键（对齐填充在键内，测试构建下 replace 后与原输出
+    // 字节一致）；中文译文按 18 列标签宽补空格，保持值列对齐。
+    rows.push(
+        tr_str("  Input tokens:   {n} ({c} cached)")
+            .replace("{n}", &group_thousands(t.input_tokens))
+            .replace("{c}", &group_thousands(t.cached_read_tokens)),
+    );
+    rows.push(
+        tr_str("  Output tokens:  {n} ({r} reasoning)")
+            .replace("{n}", &group_thousands(t.output_tokens))
+            .replace("{r}", &group_thousands(t.reasoning_tokens)),
+    );
+    rows.push(
+        tr_str("  Total tokens:   {n}").replace("{n}", &group_thousands(t.total_tokens)),
+    );
+    rows.push(
+        tr_str("  Model calls:    {n} · API time: {d}")
+            .replace("{n}", &group_thousands(t.model_calls))
+            .replace(
+                "{d}",
+                &format_duration(std::time::Duration::from_millis(t.api_duration_ms)),
+            ),
+    );
+    rows.push(tr_str("  Cost:           {c}").replace("{c}", &format_cost(t)));
 
     if usage.model_usage.len() > 1 {
         rows.push(tr("  By model:").to_string());

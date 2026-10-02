@@ -1789,3 +1789,33 @@ env-var setter 一律住默认组（同 env 变量的守卫与 setter 必须同�
 - 定点 rustfmt 21+1 文件（`workflows_picker_rows.rs` 顺带 4 行格式修复）。
 - `ctest.sh -p xai-grok-pager --lib slash::`：**405 passed / 0 failed**（含翻译表
   纯数据测试 `translations_table_covers_known_keys_without_duplicates` 的键唯一性断言）。
+
+### 后记：rebase 到 2026-10-02 main（集成验证）
+
+分支基点是 09-20 的 main，与发版线差 81 个提交（含 v1.0.37 上游同步、usage-quota、
+perf-ttft 等大批合并）。合入改为 rebase 重放，冲突裁定原则 = **以 main 演进版为基准、
+扫尾改动作薄层重放**：
+
+- `stats_modal.rs`：main 的 perf-ttft 已把性能指标拆成 p50/p90 四行（组合键
+  "ttft p50/p90"/"tps p50/p90" 失效）——拆分键 "ttft p50"/"ttft p90"/"tps p50"/
+  "tps p90" 取代（首字延迟/生成速度 p50、p90），复制行改由标签键组合。
+- `app_view.rs`：main 侧结构性重写，整取 main 后按复扫补回 6 处接线
+  （PromptFlag plan/auto、(session) 兜底、两个 toast、Session closed 模板拆分）；
+  其余 plain 命中核实为存键+集中出口（shortcuts_bar/modal title/picker）。
+- `agent_view/render.rs`：4 个结构冲突取 main（上游 spinner 边界检查重写），
+  Loading... 接线重放；其余提示词词族核实键全在表（存键+出口译）。
+- `extensions_modal.rs`：main 的 `hooks.get(hi)` 边界检查与本批 tr_hook_row_label 合并。
+- `turn_status.rs` / `session_picker.rs` / `i18n.rs`：格式级冲突，取 main 结构 + 本批
+  tr/宽度修正重放；i18n.rs 保留 main 的 usage-quota 键块（并集）。
+
+复扫（rebase 后）：plain 2506 / wrapped 821。较 rebase 前 +46 条，全部来自 main
+81 个提交的新代码（dashboard/row_title、slash/commands/memory_ops、
+agent_view/subagent_takeover 等新文件），**非本批回归**——main 自身的未接线存量，
+留待下批扫尾。
+
+集成后全量验证补记：`ctest.sh -p xai-grok-pager --lib` 首轮 10030/2 failed——
+status_blocks 用量块的两个快照失配，根因是整串格式里的**对齐填充在成键时被丢**
+（"  Input tokens:   {} ({} cached)" 的三格列对齐），W5-N 拆成了 label+值两段。
+修复 = 恢复 main 原始整串为键（`{}`→具名占位符在 replace 后不可见，测试构建输出
+字节级还原）+ 中文译文按 18 列标签宽补空格。终轮 **10032 passed / 0 failed**。
+教训：带列对齐的格式串必须整键保留填充（规约 5 的变体）；快照测试是这类回归的兜底。

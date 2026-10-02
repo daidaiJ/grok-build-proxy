@@ -7,6 +7,7 @@ use crate::acp::model_state::ModelState;
 use crate::actions::{ActionId, ActionRegistry, When};
 use crate::app::consent::ConsentState;
 use crate::appearance::AppearanceConfig;
+use crate::slash::i18n::tr;
 use crate::input::KeyboardNormalizer;
 use crate::input::key::KeyShortcut;
 use crate::input::line_editor::{LineEditOutcome, LineEditor};
@@ -4482,7 +4483,7 @@ impl AppView {
                             match welcome_mode {
                                 Some((true, _, _)) => {
                                     flags_vec.push(crate::views::prompt_widget::PromptFlag {
-                                        text: "plan",
+                                        text: tr("plan"),
                                         color: Some(theme.accent_plan),
                                         bold: false,
                                     });
@@ -4496,7 +4497,7 @@ impl AppView {
                                 }
                                 Some((false, false, true)) if welcome_auto_gate => {
                                     flags_vec.push(crate::views::prompt_widget::PromptFlag {
-                                        text: "auto",
+                                        text: tr("auto"),
                                         color: Some(theme.accent_system),
                                         bold: false,
                                     });
@@ -4901,8 +4902,9 @@ impl AppView {
                                     dashboard.close_popup();
                                     if dashboard.error_toast.is_none() {
                                         dashboard.error_toast = Some(format!(
-                                            "{} Session closed",
-                                            crate::glyphs::check_mark()
+                                            "{} {}",
+                                            crate::glyphs::check_mark(),
+                                            tr("Session closed")
                                         ));
                                     }
                                 }
@@ -4957,7 +4959,7 @@ impl AppView {
                                         let title = agents
                                             .get(&agent_id)
                                             .map(crate::views::session_title::entry_title)
-                                            .unwrap_or_else(|| "(session)".to_string());
+                                            .unwrap_or_else(|| tr("(session)").to_string());
                                         let (cursor, post_flush, drawn) =
                                             crate::views::dashboard::render_popup_overlay(
                                                 f.buffer_mut(),
@@ -5510,7 +5512,7 @@ impl AppView {
                         agent.toast = None;
                     }
                     None => {
-                        agent.show_toast("Video playback requires ffmpeg");
+                        agent.show_toast(tr("Video playback requires ffmpeg"));
                     }
                 }
                 needs_redraw = true;
@@ -5645,7 +5647,7 @@ impl AppView {
                     | Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                         agent.image_viewer = None;
                         agent.image_load_rx = None;
-                        agent.toast = Some(("Couldn't load image preview".into(), 6));
+                        agent.toast = Some((tr("Couldn't load image preview").into(), 6));
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 }
