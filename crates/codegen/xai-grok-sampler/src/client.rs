@@ -89,13 +89,44 @@ impl GrokRequestHeaders<'_> {
     }
 }
 
+/// Known non-standard Responses event `type` names that third-party gateways emit,
+/// mapped to the official event name they stand for. Only the name is rewritten;
+/// the payload must still deserialize strictly into the official variant, so
+/// genuine corruption keeps failing as `Serialization`.
+/// See docs-local/upstream-responses-event-compat.md.
+const RESPONSE_EVENT_DIALECT_ALIASES: &[(&str, &str)] = &[
+    // Command Code gateway emits a single `response.reasoning.delta` where the spec
+    // splits reasoning increments into `response.reasoning_text.delta` /
+    // `response.reasoning_summary_text.delta`; the captured payload matches the former.
+    ("response.reasoning.delta", "response.reasoning_text.delta"),
+];
+
+/// Rewrite a known dialect event `type` in place.
+/// Returns the official name it was rewritten to, or `None` if the `type` is not in the alias table.
+fn rewrite_dialect_event_name(value: &mut serde_json::Value) -> Option<&'static str> {
+    let type_str = value.get("type")?.as_str()?;
+    let official = RESPONSE_EVENT_DIALECT_ALIASES
+        .iter()
+        .find(|(dialect, _)| *dialect == type_str)
+        .map(|(_, official)| *official)?;
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert(
+            "type".to_owned(),
+            serde_json::Value::String(official.to_owned()),
+        );
+    }
+    Some(official)
+}
+
 /// Deserialize a Responses SSE event, stripping unknown tools and rewriting terminal `total_tokens` from `context_details`.
 pub(crate) fn deserialize_response_event(data: &str) -> Result<rs::ResponseStreamEvent> {
     let mut event = match serde_json::from_str::<rs::ResponseStreamEvent>(data) {
         Ok(event) => event,
         Err(first_err) => {
-            // Try sanitizing: parse as Value, strip unknown tools, retry.
+            // Try sanitizing: parse as Value, normalize known gateway dialect event names,
+            // strip unknown tools, retry.
             if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(data) {
+                let dialect_renamed = rewrite_dialect_event_name(&mut value);
                 // Strip tools that async_openai's rs::Tool can't deserialize (e.g., xAI-specific "x_search")
                 // Instead of maintaining a hardcoded allowlist, try deserializing each tool entry; if it fails, drop it
                 if let Some(tools) = value
@@ -105,6 +136,13 @@ pub(crate) fn deserialize_response_event(data: &str) -> Result<rs::ResponseStrea
                     tools.retain(|t| serde_json::from_value::<rs::Tool>(t.clone()).is_ok());
                 }
                 if let Ok(mut event) = serde_json::from_value::<rs::ResponseStreamEvent>(value) {
+                    if let Some(official) = dialect_renamed {
+                        tracing::warn!(
+                            official_event = official,
+                            raw_data = %data,
+                            "Normalized non-standard Responses event name from gateway"
+                        );
+                    }
                     apply_terminal_event_overrides(&mut event, data);
                     return Ok(event);
                 }
@@ -3549,6 +3587,45 @@ mod tests {
         assert_eq!(usage.output_tokens_details.reasoning_tokens, 388);
         // total_tokens is rewritten to ctx.input + ctx.output (5022 + 571), not the wire's cumulative total (6714)
         assert_eq!(usage.total_tokens, 5_593);
+    }
+
+    /// Command Code gateway emits `response.reasoning.delta` where the spec says
+    /// `response.reasoning_text.delta` (captured 2026-09-22, see
+    /// docs-local/upstream-responses-event-compat.md). The event name is rewritten
+    /// in the sanitize retry; the payload deserializes as the official variant.
+    #[test]
+    fn deserialize_response_event_normalizes_gateway_reasoning_delta_dialect() {
+        let sse = r#"{
+            "type": "response.reasoning.delta",
+            "sequence_number": 3,
+            "item_id": "rs_123",
+            "output_index": 0,
+            "content_index": 0,
+            "delta": "We"
+        }"#;
+        let event = deserialize_response_event(sse).expect("dialect event parses");
+        let rs::ResponseStreamEvent::ResponseReasoningTextDelta(e) = event else {
+            panic!("expected ResponseReasoningTextDelta");
+        };
+        assert_eq!(e.delta, "We");
+        assert_eq!(e.item_id, "rs_123");
+        assert_eq!(e.content_index, 0);
+    }
+
+    /// Normalization is a fixed alias table, not a general relaxation of the strict
+    /// event enum: unknown event names keep failing as `Serialization`.
+    #[test]
+    fn deserialize_response_event_unknown_event_name_still_fails() {
+        let sse = r#"{
+            "type": "response.definitely_not_a_real_event.delta",
+            "sequence_number": 1,
+            "delta": "x"
+        }"#;
+        let err = deserialize_response_event(sse).expect_err("unknown event name must fail");
+        assert!(
+            matches!(err, SamplingError::Serialization(_)),
+            "expected Serialization error, got {err:?}"
+        );
     }
 
     #[test]
