@@ -31,6 +31,10 @@ pub fn env_parse<T: std::str::FromStr>(key: &str, default: T) -> T {
 /// RAII guard for a single environment variable in `#[serial]` tests. Restoring rather than always unsetting avoids
 /// clobbering vars a parent process/harness set (e.g. `RUST_LOG`). Callers MUST be `#[serial_test::serial]`. The `unsafe`
 /// `set_var`/`remove_var` are sound only when no other thread accesses the environment concurrently.
+///
+/// The caller must be in the DEFAULT serial group: a named group such as `#[serial(MY_KEY)]` does
+/// not exclude default-group tests, so a named-key env guard still races every default-group setter
+/// of the same variable (CI 2026-10-02: a `serial(GROK_HOME)` test raced plain-serial GROK_HOME setters).
 pub struct EnvGuard {
     key: &'static str,
     prior: Option<OsString>,

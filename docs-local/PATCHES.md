@@ -1689,3 +1689,29 @@ row_activity 8 / scheduled_next 7 / tasks_pane 59 / workflows 62）全绿，152 
 
 重放注意：全部为调用点包 `tr()` 级改动，上游若再重构这些渲染函数，按
 `sync-2026-09-23-i18n-lost.txt`（已标注处置结果）逐条核对。
+
+## serial 锁组竞态修复——consent 测试回归默认组（2026-10-02，分支 `fix/local-grok-home-serial-lock`）
+
+现象：CI run 36960784460 偶发挂一例——`xai-grok-shell` 的
+`util/config/consent_tests.rs::set_consent_answer_is_monotonic_per_account`
+（`load_from_disk must see the consent persist wrote`，left `{}` right `{"tos": ...}`）。
+
+根因：serial_test 的**命名组与默认组互不排斥**——`#[serial(GROK_HOME)]` 只与本组内
+测试互斥，不挡默认组（`#[serial]` 无参）测试。该 consent 测试虽用命名组守着 GROK_HOME，
+却与默认组约 69 个经 `EnvGuard::set("GROK_HOME", ...)` 翻转变量的测试并发执行，对方切到
+自己的空 tempdir 时 `load_from_disk` 读到空目录 → 断言左空右有。crate 既定约定是
+env-var setter 一律住默认组（同 env 变量的守卫与 setter 必须同组才互斥）。
+
+改动（两处均为同步文件）：
+
+- `crates/codegen/xai-grok-shell/src/util/config/consent_tests.rs`：该测试属性
+  `#[serial_test::serial(GROK_HOME)]` 改回 `#[serial_test::serial]`（默认组），
+  并加 3 行注释说明"env guard 必须默认组"的不变量与本次 CI 事故出处。
+- `crates/codegen/xai-grok-test-support/src/env.rs`：`EnvGuard` 文档注释补 4 行，
+  点名调用方必须位于**默认** serial 组（命名组不排斥默认组，命名键 guard 仍会与
+  同变量的默认组 setter 竞态）。
+
+重放注意：上游同步冲掉后，若该测试属性又被改回 `serial(GROK_HOME)` 命名组，按本条重放。
+
+已知后续项（不在本补丁）：`xai-grok-pager` crate 内 `serial(GROK_HOME)` 命名组用法
+约 40 处，若其与同 crate 默认组 GROK_HOME setter 混用则存在同类碎片化，需单独审计。
