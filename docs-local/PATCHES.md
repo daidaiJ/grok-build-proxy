@@ -1661,3 +1661,31 @@ quota_estimate 8/8 过）；`ctest.sh -p xai-grok-pager --lib` **9614 过/0 挂*
   `cc 1.2.48` 在 rustc 1.94 上编译失败（`tempfile.rs` 里
   `find_msvc_tools::windows_sys::FILE_ATTRIBUTE_TEMPORARY` 类型不匹配）；
   本机解析到 `cc 1.5.1` + `find-msvc-tools 0.1.14` 通过。
+
+## 上游同步 i18n 丢失站点补回（2026-10-02，分支 `feat/local-sync-i18n-restore`）
+
+按 `docs-local/sync-2026-09-23-i18n-lost.txt` 的"搬迁"类条目，在 v1.0.37 同步后
+的新落点重放 `tr()`（中文表键均已存在，零新增键）：
+
+- `crates/codegen/xai-grok-pager/src/views/dashboard/row_title.rs`：`New session`
+  回退标题（宽模式头部 + 窄模式新增同款检测）、`failed` 徽标（`FAILED_LABEL` 常量
+  拆成 `FAILED_SEP` + `tr("failed")`，宽度计算同步改动态）、`bg` 回退 chip。
+- `crates/codegen/xai-grok-pager/src/views/dashboard/row_activity.rs`：进行中命令
+  `cmd.display_name()` 包 `tr()`。
+- `crates/codegen/xai-grok-pager/src/views/scheduled_next.rs`：`(due now)` /
+  `(next in {})`。
+- `crates/codegen/xai-grok-pager/src/views/tasks_pane.rs`：`(running)` / `(starting)`。
+- `crates/codegen/xai-grok-pager/src/views/workflows.rs`：`activity_label()` 的
+  `{n} agent` / `{n} agents` / `running`，动态状态串走 `tr_str`。
+
+删除类条目核实：站点已随上游移除（`Subagent not loaded`、`[Dashboard]` overlay、
+memory_modal 相对时间、dock tab_hint、location `format_cwd_parts`、
+`{tools} tools · {toks} tok · {turns} turns`、subagent worktree 后缀、
+`… {} more` 溢出行、subagent_catalog_pane 整文件），无需补回；memory `t toggle`
+上游已自行改键且调用点带 `tr()`。
+
+验证：`ctest.sh -p xai-grok-pager --lib` 五过滤（dashboard::row_title 16 /
+row_activity 8 / scheduled_next 7 / tasks_pane 59 / workflows 62）全绿，152 过 0 挂。
+
+重放注意：全部为调用点包 `tr()` 级改动，上游若再重构这些渲染函数，按
+`sync-2026-09-23-i18n-lost.txt`（已标注处置结果）逐条核对。

@@ -40,9 +40,10 @@
   **待办**：① 活回合（TUI 实跑）验证（发 tag 时未做）② ~~Linux CI 一条新用例失败~~ 已收口：
   根因是 CI 无 ripgrep（该用例的 grep 根本没 spawn 成功，`exit -1` + 空 stdout 被记成
   `source_status = failed`），已在 `ci-setup` 增 `Install ripgrep (Linux)`；`1b9d5fc9` 复跑
-  `build` 36402142384 双 job success、该用例转为 ok；详见同步文档"已收口"节 ③ 34 处 i18n 丢失站点按
-  [`sync-2026-09-23-i18n-lost.txt`](docs-local/sync-2026-09-23-i18n-lost.txt) 补回
-  ④ 下次同步前把本条并入 handoff 摘要，并把 `upstream` 分支移到 `f0e3be1`。
+  `build` 36402142384 双 job success、该用例转为 ok；详见同步文档"已收口"节
+  ③ ~~34 处 i18n 丢失站点~~ 已收口（2026-10-02）：搬迁类在 `feat/local-sync-i18n-restore`
+  新落点重放 `tr()`（五文件，登记 PATCHES.md），删除类核实站点已移除；五过滤 152 过 0 挂
+  ④ ~~`upstream` 标记分支~~ 已建（2026-10-02，`f0e3be1`）；剩余：下次同步前把本条并入 handoff 摘要。
 
 - [`docs-local/quota-pct-jump-audit.md`](docs-local/quota-pct-jump-audit.md) — 统一池
   周用量 7%→76% 跳变排查记录（2026-W39）：本机四步排查（pct 轨迹 / 账本聚合 /

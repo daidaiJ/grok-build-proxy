@@ -69,12 +69,17 @@ rustc 1.94 上编译失败（`cc/src/tempfile.rs` 把 `find_msvc_tools::windows_
   实现了同一语义（配置 `[agent] name` 显式时不再合成 plan/ask-user profile）。合并后本地补丁撤销，
   `PATCHES.md` 对应条目同步标记为已由上游覆盖。
 
-## i18n 待补清单
+## i18n 待补清单（✅ 2026-10-02 已补回）
 
 > 合并把纯文案本地化让位给上游新结构：上游删除/搬迁的界面代码里，本地 `tr()` 包裹未随行迁移。
 > 下列站点在中文模式下会回落到英文，等 i18n 收尾批次补键或按新落点重放。
+>
+> **已收口（2026-10-02，分支 `feat/local-sync-i18n-restore`）**：搬迁类在新落点重放 `tr()`
+> （row_title / row_activity / scheduled_next / tasks_pane / workflows 五文件，见
+> `PATCHES.md` 对应条目）；删除类逐条核实站点已随上游移除，无需补回。
+> 五过滤 lib 测试 152 过 0 挂。
 
-完整清单（34 条）：[`sync-2026-09-23-i18n-lost.txt`](sync-2026-09-23-i18n-lost.txt)。集中在
+完整清单（34 条，已标注处置结果）：[`sync-2026-09-23-i18n-lost.txt`](sync-2026-09-23-i18n-lost.txt)。集中在
 `views/dashboard/{render,row}.rs`（标题栏与活动行搬到上游新模块 `row_title.rs` / `row_activity.rs`）、
 `views/tasks_pane.rs`（活动文案搬进 `run.activity_label()`）、`views/memory_modal.rs`（相对时间格式上游改紧凑方案）、
 `views/dock/mod.rs`（`Section::tab_hint` 上游删除）。
