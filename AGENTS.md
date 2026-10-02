@@ -43,7 +43,7 @@
   `build` 36402142384 双 job success、该用例转为 ok；详见同步文档"已收口"节
   ③ ~~34 处 i18n 丢失站点~~ 已收口（2026-10-02）：搬迁类在 `feat/local-sync-i18n-restore`
   新落点重放 `tr()`（五文件，登记 PATCHES.md），删除类核实站点已移除；五过滤 152 过 0 挂
-  ④ ~~`upstream` 标记分支~~ 已建（2026-10-02，`f0e3be1`）；剩余：下次同步前把本条并入 handoff 摘要。
+  ④ ~~`upstream` 标记分支~~ 已建（2026-10-02，`f0e3be1`）并已并入 Handoff 摘要（见下），本条全部收口。
 
 - [`docs-local/quota-pct-jump-audit.md`](docs-local/quota-pct-jump-audit.md) — 统一池
   周用量 7%→76% 跳变排查记录（2026-W39）：本机四步排查（pct 轨迹 / 账本聚合 /
@@ -152,6 +152,16 @@
   活回合正向 + 落盘扫描 + 回归三项证据见 handoff §5 / §13）
 - **详情指针：** [`docs-local/archive/think-split-quoted-marker-fold.md`](docs-local/archive/think-split-quoted-marker-fold.md)
   （⚠️ 原 `.handoff/` 目录从未入库、已不存在，archive 内该文是唯一完整记录）
+
+### upstream 标记分支 — 已建（下次上游同步的 diff 基准）
+
+- **当前状态：** 本地分支 `upstream` 指向 `xai-org/grok-build` main `f0e3be1`（2026-09-23 快照），
+  即上次同步（`v1.0.37`）的基线。
+- **下次同步用法：** 同步前先把该分支快进到上游新 main（`git fetch upstream main:upstream`，
+  免 checkout 的 fast-forward），再以
+  `git diff upstream...main` 圈定本 fork 的本地改动面；冲突裁定与验证流程沿用
+  [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) 的既定打法
+  （52 冲突人工裁定、LOCAL 补丁按 PATCHES.md 重放、白名单 crate lib 测试门禁）。
 
 ### 未验证事项
 
