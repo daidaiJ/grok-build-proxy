@@ -8,6 +8,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 
 use crate::app::agent::ScheduledTaskInfo;
+use crate::slash::i18n::tr;
 use crate::util::{format_duration, parse_schedule_interval_secs};
 
 /// ` (next in 2m5s)`, ` (due now)`, or empty when no fire time can be derived.
@@ -39,8 +40,9 @@ fn suffix(
     };
     match remaining {
         None => String::new(),
-        Some(d) if d.is_zero() => " (due now)".to_owned(),
-        Some(d) => format!(" (next in {})", format_duration(d)),
+        // LOCAL(i18n): 固定片段整键成表，前导空格是键的一部分
+        Some(d) if d.is_zero() => tr(" (due now)").to_owned(),
+        Some(d) => tr(" (next in {})").replace("{}", &format_duration(d)),
     }
 }
 

@@ -486,9 +486,9 @@ impl TaskEntry {
         };
         let is_provisional = info.task_id.starts_with("provisional-");
         let suffix = if linked_running {
-            " (running)".to_owned()
+            tr(" (running)").to_owned()
         } else if is_provisional {
-            " (starting)".to_owned()
+            tr(" (starting)").to_owned()
         } else {
             super::scheduled_next::next_suffix(info, now)
         };

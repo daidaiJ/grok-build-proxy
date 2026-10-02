@@ -8,6 +8,7 @@ use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
 use crate::render::line_utils::truncate_str;
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::dashboard::row::{DashboardRow, NEW_SESSION_LABEL, RowBadge};
 
@@ -25,7 +26,7 @@ impl RowTitle<'_> {
             .as_deref()
             .map_or(0, |sub| 3 + sub.width());
         let failed_width = if self.row.badges.contains(&RowBadge::Failed) {
-            FAILED_LABEL.width()
+            FAILED_SEP.width() + tr("failed").width()
         } else {
             0
         };
@@ -41,7 +42,7 @@ impl RowTitle<'_> {
                 .strip_prefix(NEW_SESSION_LABEL)
                 .filter(|rest| rest.starts_with(" #"));
             if let Some(suffix) = dim_suffix {
-                let head = truncate_str(NEW_SESSION_LABEL, usize::from(area.width));
+                let head = truncate_str(tr(NEW_SESSION_LABEL), usize::from(area.width));
                 cx = buf
                     .set_stringn(cx, area.y, head, usize::from(area.width), label_style)
                     .0;
@@ -75,7 +76,7 @@ impl RowTitle<'_> {
                     .0;
             }
             if row.badges.contains(&RowBadge::Failed)
-                && area.right().saturating_sub(cx) >= FAILED_LABEL.width() as u16
+                && area.right().saturating_sub(cx) >= (FAILED_SEP.width() + tr("failed").width()) as u16
             {
                 paint_failed(buf, cx, area.y, theme, bg);
             }
@@ -85,7 +86,17 @@ impl RowTitle<'_> {
 
     pub(crate) fn render_narrow(&self, buf: &mut Buffer, area: Rect) -> u16 {
         let (area, chip_w) = self.reserve_chips(buf, area, self.row.label.width());
-        let label = truncate_str(&self.row.label, usize::from(area.width));
+        // LOCAL(i18n): 窄模式回退标题同宽模式——检测 " #<id>" 后缀，头部翻译
+        let label_src = match self
+            .row
+            .label
+            .strip_prefix(NEW_SESSION_LABEL)
+            .filter(|rest| rest.starts_with(" #"))
+        {
+            Some(rest) => format!("{}{}", tr(NEW_SESSION_LABEL), rest),
+            None => self.row.label.clone(),
+        };
+        let label = truncate_str(&label_src, usize::from(area.width));
         buf.set_stringn(
             area.x,
             area.y,
@@ -179,10 +190,10 @@ impl RowTitle<'_> {
             }
         }
         if total > 0 {
-            if let Some(chips) = choose(Line::raw(format!("{total} bg"))) {
+            if let Some(chips) = choose(Line::raw(format!("{total} {}", tr("bg")))) {
                 return chips;
             }
-            if let Some(chips) = choose(Line::raw("bg")) {
+            if let Some(chips) = choose(Line::raw(tr("bg"))) {
                 return chips;
             }
         }
@@ -197,7 +208,7 @@ enum ChipLabels {
 }
 
 const CHIP_SEP: &str = " · ";
-const FAILED_LABEL: &str = " · failed";
+const FAILED_SEP: &str = " · ";
 
 pub(crate) fn has_counted_live_work(badges: &[RowBadge]) -> bool {
     badges.iter().any(|badge| match badge {
@@ -210,14 +221,14 @@ pub(crate) fn has_counted_live_work(badges: &[RowBadge]) -> bool {
 }
 
 fn paint_failed(buf: &mut Buffer, x: u16, y: u16, theme: &Theme, bg: Color) {
-    let sep = " · ";
+    let sep = FAILED_SEP;
     let cx = buf
         .set_stringn(x, y, sep, sep.width(), theme.dim().bg(bg))
         .0;
     buf.set_string(
         cx,
         y,
-        "failed",
+        tr("failed"),
         Style::default().bg(bg).fg(theme.accent_error),
     );
 }

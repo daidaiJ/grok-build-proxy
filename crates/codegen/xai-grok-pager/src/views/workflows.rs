@@ -106,17 +106,19 @@ impl WorkflowRunSnapshot {
                 .filter(|p| !p.is_empty());
             let agents = match self.active_agent_count() {
                 0 => None,
-                1 => Some("1 agent".to_owned()),
-                n => Some(format!("{n} agents")),
+                // LOCAL(i18n): 复用既有复数模板键 "{n} agent"/"{n} agents"
+                1 => Some(tr("{n} agent").replace("{n}", "1")),
+                n => Some(tr("{n} agents").replace("{n}", &n.to_string())),
             };
             match (phase, agents) {
                 (Some(p), Some(a)) => format!("{p} · {a}"),
                 (Some(p), None) => p.to_owned(),
                 (None, Some(a)) => a,
-                (None, None) => "running".to_owned(),
+                (None, None) => tr("running").to_owned(),
             }
         } else {
-            self.status.replace('_', " ")
+            // LOCAL(i18n): 动态状态串走 tr_str，未命中原样返回英文
+            tr_str(&self.status.replace('_', " "))
         }
     }
 

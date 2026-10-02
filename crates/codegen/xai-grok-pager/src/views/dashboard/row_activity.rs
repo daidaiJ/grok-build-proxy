@@ -2,6 +2,7 @@
 
 use crate::app::agent_view::AgentView;
 use crate::app::subagent::format_activity_label;
+use crate::slash::i18n::tr;
 use crate::views::dashboard::row::{RowBadge, sanitize};
 use crate::views::dashboard::state::RowState;
 
@@ -82,7 +83,7 @@ pub(crate) fn top_level_activity(agent: &AgentView, state: RowState) -> Option<S
         RowState::NeedsInput => Some("Awaiting your input".to_owned()),
         RowState::Working if has_live_parent_activity(agent) => {
             if let Some(cmd) = agent.session.state.command_in_flight() {
-                Some(format!("{}…", cmd.display_name()))
+                Some(format!("{}…", tr(cmd.display_name())))
             } else if let Some(activity) = agent.resolve_turn_activity() {
                 Some(sanitize(&format_activity_label(&activity)))
             } else if agent.session.loading_replay {
