@@ -15,6 +15,7 @@ use super::{
 };
 use crate::app::consent::{BodyCell, BodyRow, ConsentLegibility, ConsentNotice, row_cols, wrap};
 use crate::render::SafeBuf;
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 
 /// Widest the body is allowed to run, so a long line stays readable on a wide terminal.
@@ -61,10 +62,11 @@ pub fn render_consent(
         paint_body(message, buf, theme, &rows, hovered_link)
     } else {
         // Title dropped: on a screen this small, why the notice is unreadable matters more.
+        // LOCAL: i18n 查表（测试构建 tr 旁路回英文，consent_tests 的英文断言不受影响）
         let text = if message.width < NARROW_COLS {
-            TOO_SMALL_NARROW
+            tr(TOO_SMALL_NARROW)
         } else {
-            TOO_SMALL
+            tr(TOO_SMALL)
         };
         paint_centered(message, buf, Style::default().fg(theme.gray), text);
         Vec::new()
@@ -73,9 +75,9 @@ pub fn render_consent(
     // Accept is refused while the body is unread, so the row is withheld rather than offered and ignored
     // Quit stays, or the screen would show no way out at all
     let menu_items: &[(&str, &str)] = if legibility.can_accept() {
-        &[("a", notice.accept_label.as_str()), ("q", "Quit")]
+        &[("a", notice.accept_label.as_str()), ("q", tr("Quit"))]
     } else {
-        &[("q", "Quit")]
+        &[("q", tr("Quit"))]
     };
     let menu_area = inset_horizontal(layout.menu, prompt::prompt_inset(compact));
     let menu_rects = render_menu(menu_area, buf, theme, menu_items, selected, None, 0);

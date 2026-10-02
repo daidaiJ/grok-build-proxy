@@ -967,8 +967,8 @@ impl QueuePane {
                 let mut right = inner.x + inner.width;
                 let fits = |right: u16, w: u16| right.checked_sub(w).filter(|&x| x >= inner.x);
 
-                let cancel_label = "[cancel]";
-                let cancel_w = cancel_label.len() as u16;
+                let cancel_label = tr("[cancel]");
+                let cancel_w = cancel_label.width() as u16;
                 if entry.capabilities.can_delete()
                     && let Some(cancel_x) = fits(right, cancel_w)
                 {
@@ -983,15 +983,15 @@ impl QueuePane {
                         .bind(Rect::new(cancel_x, screen_y, cancel_w, 1), entry.id);
                 }
 
-                let interject_label = "[Send now]";
-                let interject_w = interject_label.len() as u16;
+                let interject_label = tr("[Send now]");
+                let interject_w = interject_label.width() as u16;
                 let show_send_now = can_send_now && entry.capabilities.can_send_now();
 
                 // [edit] always paints; keyboard `e` works either way. Flush to
                 // neighbours so the queued message cannot leak through a gap.
                 // Drop [edit] if [Send now] fits alone but not with [edit].
-                let edit_label = "[edit]";
-                let edit_w = edit_label.len() as u16;
+                let edit_label = tr("[edit]");
+                let edit_w = edit_label.width() as u16;
                 let send_now_fits_alone = show_send_now && fits(right, interject_w).is_some();
                 if entry.capabilities.can_edit()
                     && (!send_now_fits_alone || fits(right, interject_w + edit_w).is_some())

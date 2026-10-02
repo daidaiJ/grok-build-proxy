@@ -4,8 +4,8 @@
 //! 表中无对应键的字符串（含 ACP/技能等运行时文案）原样透传。
 //! 语言是进程级状态：默认中文，`/lang` 切换，`GROK_LANG=en` 可在启动时改默认。
 
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 /// UI 显示语言。
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -46,10 +46,13 @@ fn seed_lang() -> Lang {
         _ if test_context() => Lang::En,
         _ => Lang::Zh,
     };
-    LANG.store(match lang {
-        Lang::Zh => 1,
-        Lang::En => 2,
-    }, Ordering::Relaxed);
+    LANG.store(
+        match lang {
+            Lang::Zh => 1,
+            Lang::En => 2,
+        },
+        Ordering::Relaxed,
+    );
     lang
 }
 
@@ -58,10 +61,13 @@ pub fn current_lang() -> Lang {
 }
 
 pub fn set_lang(lang: Lang) {
-    LANG.store(match lang {
-        Lang::Zh => 1,
-        Lang::En => 2,
-    }, Ordering::Relaxed);
+    LANG.store(
+        match lang {
+            Lang::Zh => 1,
+            Lang::En => 2,
+        },
+        Ordering::Relaxed,
+    );
 }
 
 /// LOCAL: 测试构建下翻译查表整体旁路。
@@ -91,12 +97,9 @@ pub fn tr_str(text: &str) -> String {
 
 /// 查表：命中返回译文（&'static str），未命中返回 None。
 fn table_lookup(text: &str) -> Option<&'static str> {
-    static TABLE: OnceLock<&[( &'static str, &'static str)]> = OnceLock::new();
+    static TABLE: OnceLock<&[(&'static str, &'static str)]> = OnceLock::new();
     let table = TABLE.get_or_init(translations);
-    table
-        .iter()
-        .find(|(en, _)| *en == text)
-        .map(|(_, zh)| *zh)
+    table.iter().find(|(en, _)| *en == text).map(|(_, zh)| *zh)
 }
 
 fn translations() -> &'static [(&'static str, &'static str)] {
@@ -111,9 +114,15 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Toggle auto mode (classifier approves safe tools)",
             "切换自动模式（由分类器自动批准安全工具）",
         ),
-        ("Ask a side question without interrupting", "旁路提问，不打断当前任务"),
+        (
+            "Ask a side question without interrupting",
+            "旁路提问，不打断当前任务",
+        ),
         ("Compact conversation history", "压缩对话历史"),
-        ("Change the working directory for new agents", "更改新代理的工作目录"),
+        (
+            "Change the working directory for new agents",
+            "更改新代理的工作目录",
+        ),
         (
             "Toggle compact UI (less padding, more content)",
             "切换紧凑界面（更少留白，更多内容）",
@@ -127,19 +136,31 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Open the Agent Dashboard", "打开代理仪表盘"),
         ("Toggle debug overlays", "切换调试浮层"),
         ("Delete this session", "删除当前会话"),
-        ("Open How-to Guides or online Build docs", "打开使用指南或在线 Build 文档"),
+        (
+            "Open How-to Guides or online Build docs",
+            "打开使用指南或在线 Build 文档",
+        ),
         ("Browse in-TUI How-to Guides", "在 TUI 内浏览使用指南"),
-        ("Open docs.x.ai/build in the browser", "在浏览器中打开 docs.x.ai/build"),
+        (
+            "Open docs.x.ai/build in the browser",
+            "在浏览器中打开 docs.x.ai/build",
+        ),
         (
             "Check this session and show available fixes",
             "检查当前会话并显示可用修复",
         ),
-        ("Show automatic fixes available here", "显示此处可用的自动修复"),
+        (
+            "Show automatic fixes available here",
+            "显示此处可用的自动修复",
+        ),
         (
             "Open an external editor for an empty prompt; use the command palette to preserve a draft",
             "用外部编辑器编辑空提示词；用命令面板可保留草稿",
         ),
-        ("Set reasoning effort for the current model", "设置当前模型的推理强度"),
+        (
+            "Set reasoning effort for the current model",
+            "设置当前模型的推理强度",
+        ),
         (
             "Re-print the last collapsed block, fully expanded (minimal mode)",
             "重新完整展开上一个折叠块（极简模式）",
@@ -149,20 +170,44 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Export the current conversation to a file or clipboard",
             "将当前对话导出到文件或剪贴板",
         ),
-        ("Send feedback about the current session", "反馈当前会话的问题"),
+        (
+            "Send feedback about the current session",
+            "反馈当前会话的问题",
+        ),
         ("Search the conversation scrollback", "搜索对话回滚缓冲"),
-        ("Branch the current session into a peer agent", "将当前会话分叉为对等代理"),
+        (
+            "Branch the current session into a peer agent",
+            "将当前会话分叉为对等代理",
+        ),
         ("Hidden easter egg", "隐藏彩蛋"),
         ("Browse commands and keyboard shortcuts", "浏览命令与快捷键"),
         ("Search prompt history", "搜索提示词历史"),
         ("Return to the welcome screen", "返回欢迎界面"),
-        ("Generate an image from a text description", "根据文字描述生成图片"),
-        ("Open the Claude settings import modal", "打开 Claude 设置导入窗口"),
-        ("Generate a video from a text description", "根据文字描述生成视频"),
+        (
+            "Generate an image from a text description",
+            "根据文字描述生成图片",
+        ),
+        (
+            "Open the Claude settings import modal",
+            "打开 Claude 设置导入窗口",
+        ),
+        (
+            "Generate a video from a text description",
+            "根据文字描述生成视频",
+        ),
         ("Jump to a turn in the conversation", "跳转到对话中的某一轮"),
-        ("Log in or re-authenticate with your account", "登录或重新验证账号"),
-        ("Log out and return to the login screen", "登出并返回登录界面"),
-        ("Run a prompt on a recurring interval", "按周期重复执行提示词"),
+        (
+            "Log in or re-authenticate with your account",
+            "登录或重新验证账号",
+        ),
+        (
+            "Log out and return to the login screen",
+            "登出并返回登录界面",
+        ),
+        (
+            "Run a prompt on a recurring interval",
+            "按周期重复执行提示词",
+        ),
         ("Show MCP server status", "显示 MCP 服务器状态"),
         ("Switch the active model", "切换当前模型"),
         (
@@ -170,17 +215,29 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "切换多行输入模式（交换 Enter 与 Shift+Enter）",
         ),
         ("Start a new session", "开始新会话"),
-        ("Manage personas (create, edit, delete)", "管理人格（创建、编辑、删除）"),
+        (
+            "Manage personas (create, edit, delete)",
+            "管理人格（创建、编辑、删除）",
+        ),
         ("Enter plan mode", "进入计划模式"),
         ("View hooks", "查看钩子"),
         ("View plugins", "查看插件"),
         ("View marketplace", "查看插件市场"),
         ("View skills", "查看技能"),
-        ("Open coding data, retention, and training settings", "打开数据、保留与训练设置"),
-        ("List the prompts queued behind the running turn", "查看排队等待的提示词"),
+        (
+            "Open coding data, retention, and training settings",
+            "打开数据、保留与训练设置",
+        ),
+        (
+            "List the prompts queued behind the running turn",
+            "查看排队等待的提示词",
+        ),
         ("Summarize the session so far", "总结目前为止的会话"),
         ("Save a memory note", "保存一条记忆"),
-        ("View release notes for the current version", "查看当前版本的更新日志"),
+        (
+            "View release notes for the current version",
+            "查看当前版本的更新日志",
+        ),
         ("Resume a previous session", "恢复之前的会话"),
         ("Rename the current session", "重命名当前会话"),
         ("Rewind to a previous turn", "回退到之前的某一轮"),
@@ -188,7 +245,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Share this session via URL", "通过 URL 分享当前会话"),
         ("Open the settings modal", "打开设置窗口"),
         ("Show session info", "显示会话信息"),
-        ("List background tasks, subagents, and scheduled tasks", "列出后台任务、子代理与定时任务"),
+        (
+            "List background tasks, subagents, and scheduled tasks",
+            "列出后台任务、子代理与定时任务",
+        ),
         ("Toggle the timeline sidebar", "切换时间线侧栏"),
         ("Switch the color theme", "切换配色主题"),
         ("Toggle message timestamps on/off", "开关消息时间戳"),
@@ -200,13 +260,19 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "View the conversation transcript in your pager ($PAGER)",
             "在系统分页器 ($PAGER) 中查看对话记录",
         ),
-        ("Quick tips to get the most out of Grok Build", "善用 Grok Build 的快速技巧"),
+        (
+            "Quick tips to get the most out of Grok Build",
+            "善用 Grok Build 的快速技巧",
+        ),
         ("View usage", "查看用量"),
         (
             "Show model usage stats and compression savings",
             "查看模型用量统计与压缩收益",
         ),
-        ("Model usage (aggregated by model)", "模型用量（按 model 聚合）"),
+        (
+            "Model usage (aggregated by model)",
+            "模型用量（按 model 聚合）",
+        ),
         ("Model usage", "模型用量"),
         // -- 时间窗标签页（/stats 模态窗口；标签即窗口名） --
         ("Last 5h", "近 5 小时"),
@@ -220,7 +286,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         (" all models", " 全部 model"),
         (" copy", " 复制"),
         // 卡片折叠提示整句成键，计数在运行时插值
-        ("\u{2026} +{n} more (press a to show all)", "\u{2026} 另有 {n} 个（按 a 显示全部）"),
+        (
+            "\u{2026} +{n} more (press a to show all)",
+            "\u{2026} 另有 {n} 个（按 a 显示全部）",
+        ),
         // -- 卡片指标 --
         ("no calls in this window", "该时间窗内没有调用"),
         ("calls", "次调用"),
@@ -388,18 +457,39 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Toggle minimal output style overlay (applies to this session only if set before the first model call; afterwards it takes effect from the next session)",
             "切换极简输出风格覆盖层（首次模型调用前切换对本会话生效；之后切换从下一次会话启动起生效）",
         ),
-        ("Flush conversation memory to disk now", "立即把会话记忆写入磁盘"),
+        (
+            "Flush conversation memory to disk now",
+            "立即把会话记忆写入磁盘",
+        ),
         (
             "Run memory consolidation (merge session logs into organized topics)",
             "运行记忆整理（把会话日志合并为有条目的主题）",
         ),
-        ("Browse, view, and manage your memories", "浏览、查看和管理记忆"),
-        ("Show context window usage and session stats", "显示上下文窗口用量与会话统计"),
-        ("Trust this project for hook execution", "信任当前项目以执行钩子"),
+        (
+            "Browse, view, and manage your memories",
+            "浏览、查看和管理记忆",
+        ),
+        (
+            "Show context window usage and session stats",
+            "显示上下文窗口用量与会话统计",
+        ),
+        (
+            "Trust this project for hook execution",
+            "信任当前项目以执行钩子",
+        ),
         ("Show hooks loaded in this session", "显示本会话加载的钩子"),
-        ("Add a custom hook file or directory", "添加自定义钩子文件或目录"),
-        ("Remove a custom hook file or directory path", "移除自定义钩子文件或目录路径"),
-        ("Remove trust for the current project", "取消对当前项目的信任"),
+        (
+            "Add a custom hook file or directory",
+            "添加自定义钩子文件或目录",
+        ),
+        (
+            "Remove a custom hook file or directory path",
+            "移除自定义钩子文件或目录路径",
+        ),
+        (
+            "Remove trust for the current project",
+            "取消对当前项目的信任",
+        ),
         (
             "Manage plugins (list, reload, trust, add, remove)",
             "管理插件（列出、重载、信任、添加、移除）",
@@ -416,13 +506,19 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Research with bounded parallel agents, cross-check evidence, and write a cited report",
             "用有上限的并行代理做研究，交叉验证证据并写出带引用的报告",
         ),
-        ("Set, manage, or check an autonomous goal", "设置、管理或检查自治目标"),
+        (
+            "Set, manage, or check an autonomous goal",
+            "设置、管理或检查自治目标",
+        ),
         (
             "optional context about what to preserve",
             "可选：说明要保留哪些内容",
         ),
         ("path to hook file or directory", "钩子文件或目录的路径"),
-        ("list | reload | trust <path> | add <path> | remove <path>", "list | reload | trust <路径> | add <路径> | remove <路径>"),
+        (
+            "list | reload | trust <path> | add <path> | remove <path>",
+            "list | reload | trust <路径> | add <路径> | remove <路径>",
+        ),
         ("<query>", "<查询>"),
         (
             "<objective> [--budget <tokens>] | status | pause | resume | clear",
@@ -441,11 +537,26 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("bundled", "捆绑"),
         ("built-in", "内置"),
         // -- /agents 弹窗（agents_modal.rs） --
-        ("\u{2500}\u{2500} Built-in \u{2500}\u{2500}", "\u{2500}\u{2500} 内置 \u{2500}\u{2500}"),
-        ("\u{2500}\u{2500} Project \u{2500}\u{2500}", "\u{2500}\u{2500} 项目 \u{2500}\u{2500}"),
-        ("\u{2500}\u{2500} User \u{2500}\u{2500}", "\u{2500}\u{2500} 用户 \u{2500}\u{2500}"),
-        ("\u{2500}\u{2500} Bundled \u{2500}\u{2500}", "\u{2500}\u{2500} 捆绑 \u{2500}\u{2500}"),
-        ("\u{2500}\u{2500} Plugins \u{2500}\u{2500}", "\u{2500}\u{2500} 插件 \u{2500}\u{2500}"),
+        (
+            "\u{2500}\u{2500} Built-in \u{2500}\u{2500}",
+            "\u{2500}\u{2500} 内置 \u{2500}\u{2500}",
+        ),
+        (
+            "\u{2500}\u{2500} Project \u{2500}\u{2500}",
+            "\u{2500}\u{2500} 项目 \u{2500}\u{2500}",
+        ),
+        (
+            "\u{2500}\u{2500} User \u{2500}\u{2500}",
+            "\u{2500}\u{2500} 用户 \u{2500}\u{2500}",
+        ),
+        (
+            "\u{2500}\u{2500} Bundled \u{2500}\u{2500}",
+            "\u{2500}\u{2500} 捆绑 \u{2500}\u{2500}",
+        ),
+        (
+            "\u{2500}\u{2500} Plugins \u{2500}\u{2500}",
+            "\u{2500}\u{2500} 插件 \u{2500}\u{2500}",
+        ),
         (" built-in ", " 内置 "),
         (" project ", " 项目 "),
         (" user ", " 用户 "),
@@ -527,30 +638,57 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "人格文件不在已知的人格目录中",
         ),
         ("Failed to delete persona file", "删除人格文件失败"),
-        ("Could not read or parse config.toml", "无法读取或解析 config.toml"),
+        (
+            "Could not read or parse config.toml",
+            "无法读取或解析 config.toml",
+        ),
         ("Failed to write config.toml", "写入 config.toml 失败"),
         // -- 内置 agent 描述（/agents 列表展示经 tr_str 查表；原文见 xai-grok-agent config.rs） --
-        ("Grok Build agent for software engineering tasks.", "面向软件工程任务的 Grok Build 代理。"),
-        ("Grok Build agent with concise output format.", "简洁输出格式的 Grok Build 代理。"),
-        ("Grok Build agent with plan mode support.", "支持计划模式的 Grok Build 代理。"),
-        ("Grok Build agent with plan mode (no subagents).", "支持计划模式（无子代理）的 Grok Build 代理。"),
-        ("Grok Build agent with ask-user-question tool.", "带向用户提问工具的 Grok Build 代理。"),
+        (
+            "Grok Build agent for software engineering tasks.",
+            "面向软件工程任务的 Grok Build 代理。",
+        ),
+        (
+            "Grok Build agent with concise output format.",
+            "简洁输出格式的 Grok Build 代理。",
+        ),
+        (
+            "Grok Build agent with plan mode support.",
+            "支持计划模式的 Grok Build 代理。",
+        ),
+        (
+            "Grok Build agent with plan mode (no subagents).",
+            "支持计划模式（无子代理）的 Grok Build 代理。",
+        ),
+        (
+            "Grok Build agent with ask-user-question tool.",
+            "带向用户提问工具的 Grok Build 代理。",
+        ),
         ("Codex toolset and prompt", "Codex 工具集与提示词"),
         (
             "OpenCode toolset — opencode-style tools and parameter conventions",
             "OpenCode 工具集——opencode 风格的工具与参数约定",
         ),
-        ("Web browsing and interaction agent.", "网页浏览与交互代理。"),
+        (
+            "Web browsing and interaction agent.",
+            "网页浏览与交互代理。",
+        ),
         (
             "GrokBuild orchestrator that delegates coding to specialized subagents",
             "把编码任务分派给专职子代理的 GrokBuild 编排代理",
         ),
-        ("General purpose agent for multi-step tasks.", "处理多步任务的通用代理。"),
+        (
+            "General purpose agent for multi-step tasks.",
+            "处理多步任务的通用代理。",
+        ),
         (
             "Fast, read-only agent specialized for codebase exploration.",
             "快速只读代理，专长代码库探索。",
         ),
-        ("Software architect for planning implementation strategies.", "规划实现策略的软件架构代理。"),
+        (
+            "Software architect for planning implementation strategies.",
+            "规划实现策略的软件架构代理。",
+        ),
         // -- 人格详情弹窗（persona_detail.rs） --
         ("persona", "人格"),
         ("Name", "名称"),
@@ -567,7 +705,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Save failed", "保存失败"),
         ("Bundled personas are read-only", "捆绑人格只读"),
         ("This field cannot be edited inline", "该字段不支持内联编辑"),
-        ("Multiline values must be edited in the source file", "多行值请到源文件中编辑"),
+        (
+            "Multiline values must be edited in the source file",
+            "多行值请到源文件中编辑",
+        ),
         ("No source file", "没有源文件"),
         ("No source file to save to", "没有可保存的源文件"),
         ("Failed to read file", "读取文件失败"),
@@ -638,7 +779,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Tip · Ask Grok about the docs ({docs_path}), e.g. \"how do I set up MCP?\"",
             "提示 · 就这些文档向 Grok 提问（{docs_path}），例如“如何设置 MCP？”",
         ),
-        ("Tip · Ask Grok about the docs · {docs_path}", "提示 · 就这些文档向 Grok 提问 · {docs_path}"),
+        (
+            "Tip · Ask Grok about the docs · {docs_path}",
+            "提示 · 就这些文档向 Grok 提问 · {docs_path}",
+        ),
         ("Tip · {docs_path}", "提示 · {docs_path}"),
         ("Tip · ", "提示 · "),
         ("Tip", "提示"),
@@ -647,17 +791,26 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Esc close", "Esc 关闭"),
         ("\u{2191}/\u{2193} scroll", "\u{2191}/\u{2193} 滚动"),
         ("Esc back", "Esc 返回"),
-        ("Subagents are still running. Stop them?", "子代理仍在运行。要停止它们吗？"),
+        (
+            "Subagents are still running. Stop them?",
+            "子代理仍在运行。要停止它们吗？",
+        ),
         ("1 subagent running", "1 个子代理正在运行"),
         ("{} subagents running", "{} 个子代理正在运行"),
         ("Tier: ", "级别: "),
         ("Logged in with API key", "已用 API key 登录"),
         ("Login with {}", "使用 {} 登录"),
         ("Switch account", "切换账号"),
-        ("Grok Build is not yet available for this account.", "Grok Build 尚未对此账号开放。"),
+        (
+            "Grok Build is not yet available for this account.",
+            "Grok Build 尚未对此账号开放。",
+        ),
         ("Yes, proceed", "是，继续"),
         ("No, quit", "否，退出"),
-        ("Do you trust the contents of this directory?", "是否信任此目录中的内容？"),
+        (
+            "Do you trust the contents of this directory?",
+            "是否信任此目录中的内容？",
+        ),
         (
             "Grok Build may run or modify contents in this directory,",
             "Grok Build 可能会运行或修改此目录中的内容，",
@@ -666,17 +819,32 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("If it doesn't open, click ", "若未能打开，请点击 "),
         ("here", "这里"),
         (" to copy.", " 复制。"),
-        ("Copying not working? Click here to show full URL.", "复制不生效？点击这里显示完整 URL。"),
+        (
+            "Copying not working? Click here to show full URL.",
+            "复制不生效？点击这里显示完整 URL。",
+        ),
         ("copied!", "已复制！"),
         ("copy sent: verify paste", "已发送复制指令：请确认粘贴"),
         ("copy failed", "复制失败"),
-        ("Select the URL below with your mouse and copy manually.", "请用鼠标选中下方 URL 并手动复制。"),
+        (
+            "Select the URL below with your mouse and copy manually.",
+            "请用鼠标选中下方 URL 并手动复制。",
+        ),
         ("go back", "返回"),
         ("Waiting for login to complete...", "等待登录完成…"),
         ("Waiting for approval...", "等待批准…"),
-        ("A browser window will open for authentication.", "将打开浏览器窗口进行身份验证。"),
-        ("Approve in your browser to finish signing in.", "在浏览器中批准以完成登录。"),
-        ("Make sure your browser shows this code.", "请确认浏览器中显示的是此代码。"),
+        (
+            "A browser window will open for authentication.",
+            "将打开浏览器窗口进行身份验证。",
+        ),
+        (
+            "Approve in your browser to finish signing in.",
+            "在浏览器中批准以完成登录。",
+        ),
+        (
+            "Make sure your browser shows this code.",
+            "请确认浏览器中显示的是此代码。",
+        ),
         ("Waiting for auth URL...", "等待认证 URL…"),
         ("Connecting...", "连接中…"),
         ("Changelog", "更新日志"),
@@ -688,11 +856,17 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("[Refresh]", "[刷新]"),
         ("SuperGrok subscription required", "需要 SuperGrok 订阅"),
         ("Update: ", "更新: "),
-        ("v{ver} available, press {key_name} to restart", "v{ver} 可用，按 {key_name} 重启以更新"),
+        (
+            "v{ver} available, press {key_name} to restart",
+            "v{ver} 可用，按 {key_name} 重启以更新",
+        ),
         ("moments ago", "刚刚"),
         ("{mins}m ago", "{mins} 分钟前"),
         ("Coming from ", "来自 "),
-        ("? Resume your session from {when} using ", "？可从{when}的会话恢复，按 "),
+        (
+            "? Resume your session from {when} using ",
+            "？可从{when}的会话恢复，按 ",
+        ),
         ("match", "匹配"),
         ("Paste your token here...", "在此粘贴 token…"),
         ("worktree", "工作树"),
@@ -705,8 +879,14 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ),
         ("Read ", "阅读 "),
         (" and ", " 与 "),
-        ("Searching session content\u{2026}", "正在搜索会话内容\u{2026}"),
-        ("Extended search results (remote and local sessions)", "扩展搜索结果（远程与本地会话）"),
+        (
+            "Searching session content\u{2026}",
+            "正在搜索会话内容\u{2026}",
+        ),
+        (
+            "Extended search results (remote and local sessions)",
+            "扩展搜索结果（远程与本地会话）",
+        ),
         (
             "{hidden} external session hidden \u{b7} f to show",
             "已隐藏 {hidden} 个外部会话 \u{b7} 按 f 显示",
@@ -724,7 +904,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("All", "全部"),
         ("Open session", "打开会话"),
         ("Host: ", "主机："),
-        ("Punycode host: check it is the site you expect", "Punycode 主机：请确认这是你预期的网站"),
+        (
+            "Punycode host: check it is the site you expect",
+            "Punycode 主机：请确认这是你预期的网站",
+        ),
         ("Waiting for the server to confirm…", "等待服务器确认…"),
         ("Accept", "接受"),
         ("Decline", "拒绝"),
@@ -748,18 +931,30 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "type a command pattern to allow (e.g. gh api repos/*)",
             "输入要允许的命令模式（如 gh api repos/*）",
         ),
-        ("\u{2717} matches everything, won't be saved", "\u{2717} 匹配所有命令，不会保存"),
+        (
+            "\u{2717} matches everything, won't be saved",
+            "\u{2717} 匹配所有命令，不会保存",
+        ),
         (" cancel", " 取消"),
         ("\u{2713} matches this command", "\u{2713} 匹配当前命令"),
-        ("\u{2717} won't match this command", "\u{2717} 不匹配当前命令"),
+        (
+            "\u{2717} won't match this command",
+            "\u{2717} 不匹配当前命令",
+        ),
         ("\u{26a0} very broad", "\u{26a0} 范围过大"),
         (" save  ", " 保存  "),
         (" to expand", " 展开查看全文"),
-        ("No, reject (type to add feedback)", "否，拒绝（可输入反馈说明）"),
+        (
+            "No, reject (type to add feedback)",
+            "否，拒绝（可输入反馈说明）",
+        ),
         ("all tools from", "来自以下服务器的所有工具:"),
         ("Type your answer here", "在此输入你的回答"),
         ("Waiting on plan approval", "等待计划批准"),
-        ("No plan written: approve or request changes", "尚未写入计划：请批准或请求修改"),
+        (
+            "No plan written: approve or request changes",
+            "尚未写入计划：请批准或请求修改",
+        ),
         (
             "# No plan written yet\n\nThe agent exited plan mode without writing a plan.\n\n- **Approve**: leave plan mode and start implementing\n- **Request changes**: send the agent back to planning\n- **Quit**: abandon and turn plan mode off\n",
             "# 尚未写入计划
@@ -786,7 +981,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Tip · Ask Grok: \"change theme to grokday\" or \"what does compact mode do?\"",
             "提示 · 问 Grok：“把主题换成 grokday”或“紧凑模式有什么用？”",
         ),
-        ("Tip · Ask Grok to change a setting", "提示 · 让 Grok 修改一项设置"),
+        (
+            "Tip · Ask Grok to change a setting",
+            "提示 · 让 Grok 修改一项设置",
+        ),
         ("Unknown model: \"{}\"", "未知模型：“{}”"),
         ("Managed by your team admin.", "由你的团队管理员管理。"),
         // -- settings 页脚快捷键 rest 键（shortcut_label_i18n 按首空格后的说明部分查表） --
@@ -840,7 +1038,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Scroll lines", "滚动行数"),
         ("Invert scroll", "反转滚动方向"),
         ("Text selection", "文字选择"),
-        ("Coding data, retention, and training", "编码数据、保留与训练"),
+        (
+            "Coding data, retention, and training",
+            "编码数据、保留与训练",
+        ),
         ("Default selected permission", "默认选中权限项"),
         ("Ask-Question timeout", "提问工具超时"),
         ("Plan mode", "计划模式"),
@@ -860,56 +1061,203 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("SSH wrap", "SSH 包装"),
         ("Fork secondary model", "分叉副模型"),
         // -- settings registry · meta.description --
-        ("Reduce padding around messages for more content density. Auto-enabled while the terminal is 20 rows or shorter.", "减少消息四周留白，提高内容密度。终端高度不超过 20 行时自动启用。"),
-        ("How plain grok opens next time: Fullscreen (default when unset) or Minimal. Writes [ui] screen_mode in config.toml. Restart required. Switch this session only with /minimal or /fullscreen.", "下次启动普通 grok 的方式：全屏（未设置时默认）或极简。写入 config.toml 的 [ui] screen_mode。需重启。仅切换当前会话请用 /minimal 或 /fullscreen。"),
-        ("Show clock time next to user messages and agent responses.", "在用户消息和代理回复旁显示时钟时间。"),
-        ("Per-turn tick rail in place of the scrollbar: hover previews a turn, click jumps to it.", "用每轮刻度栏取代滚动条：悬停预览某一轮，点击跳转。"),
-        ("When you send a prompt, scroll it to the top of the screen so the response starts on a fresh page (default). Turn off to leave the scroll position unchanged when you send.", "发送提示词时将其滚动到屏幕顶部，让回复从新的一页开始（默认）。关闭后发送时保持滚动位置不变。"),
-        ("Merge consecutive plain follow-ups into one model turn (TUI shows one bubble each). Stops at bash, slash commands, cron, expanded skills, image follow-ups, or a row under edit. Default off; applies on local drain and shell promote.", "把连续的普通追问合并为一轮模型调用（TUI 各显示一个气泡）。遇到 bash、斜杠命令、cron、展开的技能、图片追问或正在编辑的行即停止。默认关闭；在本地排队消化和 shell 提升时生效。"),
-        ("What to do with messages you send while a turn is running. Queue waits for the turn to finish; Steer injects them mid-turn at the next tool batch or model step. Default: Queue.", "回合运行期间发送消息的处理方式。队列（Queue）等待当前回合结束；转向（Steer）在下一个工具批次或模型步骤中途注入。默认：队列。"),
-        ("Ask before rewinding conversation history. Turn off to rewind immediately when you pick a turn.", "回退对话历史前先确认。关闭后选中某一轮立即回退。"),
-        ("Use plain readline-style input instead of vim keys in the prompt. Experimental.", "提示词输入使用普通 readline 风格，而非 vim 键位。实验性。"),
-        ("Enable vim keys (h/j/k/l, gg/G, /) for navigating the scrollback. Does not affect the input prompt.", "启用 vim 键位（h/j/k/l、gg/G、/）浏览回滚缓冲。不影响输入提示词。"),
+        (
+            "Reduce padding around messages for more content density. Auto-enabled while the terminal is 20 rows or shorter.",
+            "减少消息四周留白，提高内容密度。终端高度不超过 20 行时自动启用。",
+        ),
+        (
+            "How plain grok opens next time: Fullscreen (default when unset) or Minimal. Writes [ui] screen_mode in config.toml. Restart required. Switch this session only with /minimal or /fullscreen.",
+            "下次启动普通 grok 的方式：全屏（未设置时默认）或极简。写入 config.toml 的 [ui] screen_mode。需重启。仅切换当前会话请用 /minimal 或 /fullscreen。",
+        ),
+        (
+            "Show clock time next to user messages and agent responses.",
+            "在用户消息和代理回复旁显示时钟时间。",
+        ),
+        (
+            "Per-turn tick rail in place of the scrollbar: hover previews a turn, click jumps to it.",
+            "用每轮刻度栏取代滚动条：悬停预览某一轮，点击跳转。",
+        ),
+        (
+            "When you send a prompt, scroll it to the top of the screen so the response starts on a fresh page (default). Turn off to leave the scroll position unchanged when you send.",
+            "发送提示词时将其滚动到屏幕顶部，让回复从新的一页开始（默认）。关闭后发送时保持滚动位置不变。",
+        ),
+        (
+            "Merge consecutive plain follow-ups into one model turn (TUI shows one bubble each). Stops at bash, slash commands, cron, expanded skills, image follow-ups, or a row under edit. Default off; applies on local drain and shell promote.",
+            "把连续的普通追问合并为一轮模型调用（TUI 各显示一个气泡）。遇到 bash、斜杠命令、cron、展开的技能、图片追问或正在编辑的行即停止。默认关闭；在本地排队消化和 shell 提升时生效。",
+        ),
+        (
+            "What to do with messages you send while a turn is running. Queue waits for the turn to finish; Steer injects them mid-turn at the next tool batch or model step. Default: Queue.",
+            "回合运行期间发送消息的处理方式。队列（Queue）等待当前回合结束；转向（Steer）在下一个工具批次或模型步骤中途注入。默认：队列。",
+        ),
+        (
+            "Ask before rewinding conversation history. Turn off to rewind immediately when you pick a turn.",
+            "回退对话历史前先确认。关闭后选中某一轮立即回退。",
+        ),
+        (
+            "Use plain readline-style input instead of vim keys in the prompt. Experimental.",
+            "提示词输入使用普通 readline 风格，而非 vim 键位。实验性。",
+        ),
+        (
+            "Enable vim keys (h/j/k/l, gg/G, /) for navigating the scrollback. Does not affect the input prompt.",
+            "启用 vim 键位（h/j/k/l、gg/G、/）浏览回滚缓冲。不影响输入提示词。",
+        ),
         ("Color theme for the pager UI.", "TUI 界面的配色主题。"),
-        ("Theme to use when the system is in dark mode (only with theme=auto).", "系统处于深色模式时使用的主题（仅在 theme=auto 时生效）。"),
-        ("Theme to use when the system is in light mode (only with theme=auto).", "系统处于浅色模式时使用的主题（仅在 theme=auto 时生效）。"),
-        ("How ```mermaid code blocks are shown: auto/on add a clickable row to open the rendered diagram; off shows the raw source.", "```mermaid 代码块的展示方式：auto/on 会添加可点击行以打开渲染后的图；off 显示原始源码。"),
-        ("Default uses the agent's built-in behavior; Ask prompts for each tool action; Auto uses an LLM classifier for risky tools; Always approve grants all permissions automatically.", "Default 使用代理内置行为；Ask 对每个工具操作逐一询问；Auto 用 LLM 分类器判断高风险工具；Always approve 自动授予全部权限。"),
-        ("Show \"Always allow\" options in permission prompts so you can stop being re-asked about a specific command or tool. Applies in ask and auto; Always-approve still skips all prompts. Restart required.", "在权限确认中显示“总是允许”选项，不再重复询问特定命令或工具。作用于 ask 和 auto 模式；Always-approve 仍跳过所有确认。需重启。"),
-        ("When on, Enter inserts a newline and Shift+Enter sends. Resets each session.", "开启后 Enter 插入换行，Shift+Enter 发送。每次会话重置。"),
-        ("Model used for new sessions. Changing this also switches the active session. Pick `(no override)` to clear.", "新会话使用的模型。修改后同时切换当前会话。选择 `(no override)` 可清除。"),
-        ("Column width budget for the agent's thoughts panel (40-500, default 120).", "代理思考面板的列宽预算（40-500，默认 120）。"),
-        ("Show agent thinking/reasoning blocks in the scrollback while streaming.", "流式输出时在回滚缓冲中显示代理的思考/推理块。"),
-        ("After each turn, predict your likely next prompt and show it as ghost text in the input (Tab to accept). Uses a small model call per turn.", "每轮结束后预测你可能的下一条提示词，以幽灵文字显示在输入框（Tab 接受）。每轮消耗一次小模型调用。"),
-        ("Keep manually folded blocks as-is while streaming and stop auto-scroll when expanding a block. Experimental.", "流式输出时保持手动折叠的块不变，展开块时暂停自动滚动。实验性。"),
-        ("Fold consecutive read/search/list tool calls and subagent rows into one summary row; finished thoughts fold into the group too.", "把连续的读取/搜索/列目录工具调用和子代理行折叠成一条汇总行；完成的思考块也并入分组。"),
-        ("Show edits as one-line +N/-M diffstat summaries and merge back-to-back edits to the same file into one block; expand a row to see the diffs.", "把编辑显示为单行 +N/-M diffstat 摘要，并把同一文件的连续编辑合并为一块；展开行可查看 diff。"),
-        ("On high-refresh displays, the TUI will stream/scroll faster to match the display. Off keeps the classic ~60 Hz cadence. Restart required.", "高刷新率屏幕上，TUI 会加快流式/滚动以匹配屏幕。关闭则保持经典 ~60 Hz 节奏。需重启。"),
-        ("Mouse-wheel and trackpad scroll speed multiplier (1-100). Higher = faster.", "滚轮和触控板滚动速度倍率（1-100）。越大越快。"),
-        ("Force wheel or trackpad scroll behavior when auto-detection misreads your device.", "自动检测误判设备时，强制滚轮或触控板滚动行为。"),
-        ("Lines per scroll tick for both wheel and trackpad (1-10). Until set, each terminal's own profile applies.", "滚轮和触控板每次滚动的行数（1-10）。未设置时使用各终端自己的配置。"),
-        ("Reverse vertical scroll direction (natural scrolling).", "反转垂直滚动方向（自然滚动）。"),
-        ("How long in-app selection stays on screen and what double-click does (fold vs. select & copy a word). For your terminal or multiplexer's own selection, hold Shift while dragging (native copy).", "应用内选区在屏幕上保留多久，以及双击的行为（折叠还是选中并复制词）。终端或复用器自身的选区请按住 Shift 拖动（原生复制）。"),
-        ("Opt-in to provide SpaceXAI the ability to retain and train on coding data, e.g., prompts, traces, & metrics, for training and debugging purposes. We may still collect simple user metrics, e.g. how many times you use the product or a feature.", "选择启用后，允许 SpaceXAI 保留编码数据（如提示词、调用轨迹和指标）并用于训练和调试。我们仍可能收集简单的用户指标，例如产品或功能的使用次数。"),
-        ("Which row the cursor preselects on permission prompts.", "权限确认弹窗中光标默认预选的行。"),
-        ("When on, the ask_user_question tool will time out after a set period of time instead of infinitely blocking.", "开启后 ask_user_question 工具会在设定时限后超时，而不是无限阻塞。"),
-        ("When on, the agent summarises a plan before running tools or making edits.", "开启后代理在运行工具或修改文件前先总结一份计划。"),
-        ("Show the tip-of-the-day banner on startup. Restart required.", "启动时显示每日提示横幅。需重启。"),
-        ("Show brief, in-context keyboard hints as you work; toggle each one individually.", "工作中显示简短的场景化按键提示；可逐条开关。"),
-        ("Automatically download and install pager updates on startup. Restart required.", "启动时自动下载并安装 TUI 更新。需重启。"),
-        ("Which file changes the agent tracks as hunks. Off disables tracking (and LOC stats) entirely. Restart required.", "代理把哪些文件变更跟踪为 hunk。Off 完全关闭跟踪（含 LOC 统计）。需重启。"),
-        ("Enable the Ctrl+Space / F8 shortcut for voice dictation. When off, the keys are ignored; /voice still starts dictation.", "启用语音听写的 Ctrl+Space / F8 快捷键。关闭后按键被忽略；/voice 仍可开始听写。"),
-        ("How the voice chord (Ctrl+Space / F8) behaves: Toggle (press to start/stop) or Hold to talk (hold to record, release to stop; needs a Kitty-protocol terminal).", "语音组合键（Ctrl+Space / F8）的行为：Toggle（按一下开始/停止）或 Hold to talk（按住录音、松开停止；需要 Kitty 协议终端）。"),
-        ("Speech-to-text language for voice dictation (Grok STT). English by default; System uses your locale when supported. Sets formatting language for numbers and currencies.", "语音听写的语音转文字语言（Grok STT）。默认英语；System 在受支持时跟随系统区域。同时决定数字和货币的格式化语言。"),
-        ("Remind you that Ctrl+Z restores the prompt after you clear it.", "清空提示词后提醒你 Ctrl+Z 可恢复。"),
-        ("Suggest plan mode (Shift+Tab) when your prompt looks like a planning request.", "提示词像规划请求时建议进入计划模式（Shift+Tab）。"),
-        ("Offer to paste an image when one is on the clipboard and the model accepts images.", "剪贴板中有图片且模型支持图片时，提示可以粘贴。"),
-        ("After you queue a follow-up mid-turn, remind you that Enter on an empty prompt sends the top queued item now.", "回合中排队追问后，提醒你空提示词上按 Enter 会立即发送队首项。"),
-        ("Suggest /compact-mode once per run when the terminal is short on rows.", "终端行数不足时，每次运行提示一次 /compact-mode。"),
-        ("After double-clicking conversation text while Text selection is fold/nav, remind you that Word select lives in Settings.", "文字选择为 fold/nav 时双击对话文本后，提醒你词选择可在设置中开启。"),
-        ("After three nearby drag-copies of conversation text, remind you that /copy and /export exist.", "近距离拖选复制对话文本三次后，提醒你可用 /copy 和 /export。"),
-        ("Show a `/doctor` tip when an SSH session is not using `grok wrap`.", "SSH 会话未使用 `grok wrap` 时显示 `/doctor` 提示。"),
-        ("Model used for the secondary agent when forking. Pick `(no override)` to clear.", "分叉时副代理使用的模型。选择 `(no override)` 可清除。"),
+        (
+            "Theme to use when the system is in dark mode (only with theme=auto).",
+            "系统处于深色模式时使用的主题（仅在 theme=auto 时生效）。",
+        ),
+        (
+            "Theme to use when the system is in light mode (only with theme=auto).",
+            "系统处于浅色模式时使用的主题（仅在 theme=auto 时生效）。",
+        ),
+        (
+            "How ```mermaid code blocks are shown: auto/on add a clickable row to open the rendered diagram; off shows the raw source.",
+            "```mermaid 代码块的展示方式：auto/on 会添加可点击行以打开渲染后的图；off 显示原始源码。",
+        ),
+        (
+            "Default uses the agent's built-in behavior; Ask prompts for each tool action; Auto uses an LLM classifier for risky tools; Always approve grants all permissions automatically.",
+            "Default 使用代理内置行为；Ask 对每个工具操作逐一询问；Auto 用 LLM 分类器判断高风险工具；Always approve 自动授予全部权限。",
+        ),
+        (
+            "Show \"Always allow\" options in permission prompts so you can stop being re-asked about a specific command or tool. Applies in ask and auto; Always-approve still skips all prompts. Restart required.",
+            "在权限确认中显示“总是允许”选项，不再重复询问特定命令或工具。作用于 ask 和 auto 模式；Always-approve 仍跳过所有确认。需重启。",
+        ),
+        (
+            "When on, Enter inserts a newline and Shift+Enter sends. Resets each session.",
+            "开启后 Enter 插入换行，Shift+Enter 发送。每次会话重置。",
+        ),
+        (
+            "Model used for new sessions. Changing this also switches the active session. Pick `(no override)` to clear.",
+            "新会话使用的模型。修改后同时切换当前会话。选择 `(no override)` 可清除。",
+        ),
+        (
+            "Column width budget for the agent's thoughts panel (40-500, default 120).",
+            "代理思考面板的列宽预算（40-500，默认 120）。",
+        ),
+        (
+            "Show agent thinking/reasoning blocks in the scrollback while streaming.",
+            "流式输出时在回滚缓冲中显示代理的思考/推理块。",
+        ),
+        (
+            "After each turn, predict your likely next prompt and show it as ghost text in the input (Tab to accept). Uses a small model call per turn.",
+            "每轮结束后预测你可能的下一条提示词，以幽灵文字显示在输入框（Tab 接受）。每轮消耗一次小模型调用。",
+        ),
+        (
+            "Keep manually folded blocks as-is while streaming and stop auto-scroll when expanding a block. Experimental.",
+            "流式输出时保持手动折叠的块不变，展开块时暂停自动滚动。实验性。",
+        ),
+        (
+            "Fold consecutive read/search/list tool calls and subagent rows into one summary row; finished thoughts fold into the group too.",
+            "把连续的读取/搜索/列目录工具调用和子代理行折叠成一条汇总行；完成的思考块也并入分组。",
+        ),
+        (
+            "Show edits as one-line +N/-M diffstat summaries and merge back-to-back edits to the same file into one block; expand a row to see the diffs.",
+            "把编辑显示为单行 +N/-M diffstat 摘要，并把同一文件的连续编辑合并为一块；展开行可查看 diff。",
+        ),
+        (
+            "On high-refresh displays, the TUI will stream/scroll faster to match the display. Off keeps the classic ~60 Hz cadence. Restart required.",
+            "高刷新率屏幕上，TUI 会加快流式/滚动以匹配屏幕。关闭则保持经典 ~60 Hz 节奏。需重启。",
+        ),
+        (
+            "Mouse-wheel and trackpad scroll speed multiplier (1-100). Higher = faster.",
+            "滚轮和触控板滚动速度倍率（1-100）。越大越快。",
+        ),
+        (
+            "Force wheel or trackpad scroll behavior when auto-detection misreads your device.",
+            "自动检测误判设备时，强制滚轮或触控板滚动行为。",
+        ),
+        (
+            "Lines per scroll tick for both wheel and trackpad (1-10). Until set, each terminal's own profile applies.",
+            "滚轮和触控板每次滚动的行数（1-10）。未设置时使用各终端自己的配置。",
+        ),
+        (
+            "Reverse vertical scroll direction (natural scrolling).",
+            "反转垂直滚动方向（自然滚动）。",
+        ),
+        (
+            "How long in-app selection stays on screen and what double-click does (fold vs. select & copy a word). For your terminal or multiplexer's own selection, hold Shift while dragging (native copy).",
+            "应用内选区在屏幕上保留多久，以及双击的行为（折叠还是选中并复制词）。终端或复用器自身的选区请按住 Shift 拖动（原生复制）。",
+        ),
+        (
+            "Opt-in to provide SpaceXAI the ability to retain and train on coding data, e.g., prompts, traces, & metrics, for training and debugging purposes. We may still collect simple user metrics, e.g. how many times you use the product or a feature.",
+            "选择启用后，允许 SpaceXAI 保留编码数据（如提示词、调用轨迹和指标）并用于训练和调试。我们仍可能收集简单的用户指标，例如产品或功能的使用次数。",
+        ),
+        (
+            "Which row the cursor preselects on permission prompts.",
+            "权限确认弹窗中光标默认预选的行。",
+        ),
+        (
+            "When on, the ask_user_question tool will time out after a set period of time instead of infinitely blocking.",
+            "开启后 ask_user_question 工具会在设定时限后超时，而不是无限阻塞。",
+        ),
+        (
+            "When on, the agent summarises a plan before running tools or making edits.",
+            "开启后代理在运行工具或修改文件前先总结一份计划。",
+        ),
+        (
+            "Show the tip-of-the-day banner on startup. Restart required.",
+            "启动时显示每日提示横幅。需重启。",
+        ),
+        (
+            "Show brief, in-context keyboard hints as you work; toggle each one individually.",
+            "工作中显示简短的场景化按键提示；可逐条开关。",
+        ),
+        (
+            "Automatically download and install pager updates on startup. Restart required.",
+            "启动时自动下载并安装 TUI 更新。需重启。",
+        ),
+        (
+            "Which file changes the agent tracks as hunks. Off disables tracking (and LOC stats) entirely. Restart required.",
+            "代理把哪些文件变更跟踪为 hunk。Off 完全关闭跟踪（含 LOC 统计）。需重启。",
+        ),
+        (
+            "Enable the Ctrl+Space / F8 shortcut for voice dictation. When off, the keys are ignored; /voice still starts dictation.",
+            "启用语音听写的 Ctrl+Space / F8 快捷键。关闭后按键被忽略；/voice 仍可开始听写。",
+        ),
+        (
+            "How the voice chord (Ctrl+Space / F8) behaves: Toggle (press to start/stop) or Hold to talk (hold to record, release to stop; needs a Kitty-protocol terminal).",
+            "语音组合键（Ctrl+Space / F8）的行为：Toggle（按一下开始/停止）或 Hold to talk（按住录音、松开停止；需要 Kitty 协议终端）。",
+        ),
+        (
+            "Speech-to-text language for voice dictation (Grok STT). English by default; System uses your locale when supported. Sets formatting language for numbers and currencies.",
+            "语音听写的语音转文字语言（Grok STT）。默认英语；System 在受支持时跟随系统区域。同时决定数字和货币的格式化语言。",
+        ),
+        (
+            "Remind you that Ctrl+Z restores the prompt after you clear it.",
+            "清空提示词后提醒你 Ctrl+Z 可恢复。",
+        ),
+        (
+            "Suggest plan mode (Shift+Tab) when your prompt looks like a planning request.",
+            "提示词像规划请求时建议进入计划模式（Shift+Tab）。",
+        ),
+        (
+            "Offer to paste an image when one is on the clipboard and the model accepts images.",
+            "剪贴板中有图片且模型支持图片时，提示可以粘贴。",
+        ),
+        (
+            "After you queue a follow-up mid-turn, remind you that Enter on an empty prompt sends the top queued item now.",
+            "回合中排队追问后，提醒你空提示词上按 Enter 会立即发送队首项。",
+        ),
+        (
+            "Suggest /compact-mode once per run when the terminal is short on rows.",
+            "终端行数不足时，每次运行提示一次 /compact-mode。",
+        ),
+        (
+            "After double-clicking conversation text while Text selection is fold/nav, remind you that Word select lives in Settings.",
+            "文字选择为 fold/nav 时双击对话文本后，提醒你词选择可在设置中开启。",
+        ),
+        (
+            "After three nearby drag-copies of conversation text, remind you that /copy and /export exist.",
+            "近距离拖选复制对话文本三次后，提醒你可用 /copy 和 /export。",
+        ),
+        (
+            "Show a `/doctor` tip when an SSH session is not using `grok wrap`.",
+            "SSH 会话未使用 `grok wrap` 时显示 `/doctor` 提示。",
+        ),
+        (
+            "Model used for the secondary agent when forking. Pick `(no override)` to clear.",
+            "分叉时副代理使用的模型。选择 `(no override)` 可清除。",
+        ),
         // -- settings registry · 枚举选项 display --
         ("Auto", "自动"),
         ("Default", "默认"),
@@ -964,40 +1312,139 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Turkish", "土耳其语"),
         ("Vietnamese", "越南语"),
         // -- settings registry · 枚举选项 description --
-        ("Follow system dark/light appearance.", "跟随系统深色/浅色外观。"),
+        (
+            "Follow system dark/light appearance.",
+            "跟随系统深色/浅色外观。",
+        ),
         ("Neutral dark with magenta accent.", "中性深色，品红点缀。"),
-        ("Light theme for bright environments.", "明亮环境用的浅色主题。"),
-        ("Dark + blue-tinted; needs truecolor.", "深色偏蓝；需要真彩。"),
-        ("Muted dark with mauve accents; needs truecolor.", "低饱和深色，紫红点缀；需要真彩。"),
-        ("Deep dark with warm accents; needs truecolor.", "深黑底暖色点缀；需要真彩。"),
-        ("Terminal's own background and text colors.", "使用终端自身的背景与文字颜色。"),
-        ("Use the agent's default permission behavior (currently equivalent to Ask).", "使用代理的默认权限行为（当前等同于 Ask）。"),
-        ("Prompt for permission before tool actions.", "工具操作前请求权限。"),
-        ("LLM classifier approves safe tools; dangerous actions may still prompt or deny.", "由 LLM 分类器批准安全工具；危险操作仍可能询问或拒绝。"),
-        ("Auto-approve every tool action. Skips ALL permission prompts.", "自动批准所有工具操作。跳过全部权限确认。"),
-        ("Inherit the default model (no per-user override).", "继承默认模型（不做用户级覆盖）。"),
-        ("Agent runs tools and edits files directly (default).", "代理直接运行工具并修改文件（默认）。"),
-        ("Agent summarises a plan and asks for approval before running tools.", "代理先总结计划并请求批准，再运行工具。"),
-        ("Hold follow-ups until the current turn finishes.", "暂存追问，等当前回合结束。"),
-        ("Inject follow-ups mid-turn at the next tool or model step.", "在下一个工具批次或模型步骤中途注入追问。"),
-        ("Show diagrams with a clickable row to open/copy the rendered image.", "显示图表并附可点击行，可打开/复制渲染后的图片。"),
-        ("Same as auto: always show the clickable affordance row.", "与 auto 相同：总是显示可点击行。"),
-        ("Always show the raw Mermaid source as a code block.", "总是以代码块显示 Mermaid 原始源码。"),
-        ("Detect wheel vs trackpad per gesture from event timing. Default.", "按事件时序逐次判断滚轮/触控板。默认。"),
-        ("Always treat scrolling as wheel notches (fixed lines per tick).", "总是把滚动视为滚轮格（每次固定行数）。"),
-        ("Always treat scrolling as a trackpad (fractional accumulation).", "总是把滚动视为触控板（小数累计）。"),
-        ("Brief highlight on mouse-up, then clear. Double-click toggles fold. Default.", "松开鼠标时短暂高亮后清除。双击切换折叠。默认。"),
-        ("Keep the selection visible until Esc, click, or scroll. Double-click toggles fold.", "选区保持可见，直到 Esc、点击或滚动。双击切换折叠。"),
-        ("Double-click selects & copies a word, triple-click a paragraph; selection stays until dismissed.", "双击选中并复制词，三击选中段落；选区保持到手动取消。"),
-        ("Track only files the agent edits.", "只跟踪代理修改的文件。"),
-        ("Track every git-dirty file, including external edits.", "跟踪所有 git 脏文件，包括外部修改。"),
-        ("Disable hunk tracking entirely (default). Also disables LOC tracking.", "完全关闭 hunk 跟踪（默认）。同时关闭 LOC 统计。"),
-        ("Open plain grok in the standard fullscreen TUI. Default when unset.", "在标准全屏 TUI 中打开普通 grok。未设置时默认。"),
-        ("Open plain grok in scrollback-native (minimal) mode.", "以回滚原生（极简）模式打开普通 grok。"),
-        ("Ctrl+Space / F8 starts dictation; press again (or Esc/Enter) to stop.", "Ctrl+Space / F8 开始听写；再按一次（或 Esc/Enter）停止。"),
-        ("Hold Ctrl+Space / F8 to record, release to stop. Needs a Kitty-protocol terminal.", "按住 Ctrl+Space / F8 录音，松开停止。需要 Kitty 协议终端。"),
-        ("Use the system locale when it is a supported STT language; otherwise English.", "系统区域是受支持的 STT 语言时跟随系统，否则用英语。"),
-        ("Your team has Zero Data Retention.", "你的团队已启用零数据保留（ZDR）。"),
+        (
+            "Light theme for bright environments.",
+            "明亮环境用的浅色主题。",
+        ),
+        (
+            "Dark + blue-tinted; needs truecolor.",
+            "深色偏蓝；需要真彩。",
+        ),
+        (
+            "Muted dark with mauve accents; needs truecolor.",
+            "低饱和深色，紫红点缀；需要真彩。",
+        ),
+        (
+            "Deep dark with warm accents; needs truecolor.",
+            "深黑底暖色点缀；需要真彩。",
+        ),
+        (
+            "Terminal's own background and text colors.",
+            "使用终端自身的背景与文字颜色。",
+        ),
+        (
+            "Use the agent's default permission behavior (currently equivalent to Ask).",
+            "使用代理的默认权限行为（当前等同于 Ask）。",
+        ),
+        (
+            "Prompt for permission before tool actions.",
+            "工具操作前请求权限。",
+        ),
+        (
+            "LLM classifier approves safe tools; dangerous actions may still prompt or deny.",
+            "由 LLM 分类器批准安全工具；危险操作仍可能询问或拒绝。",
+        ),
+        (
+            "Auto-approve every tool action. Skips ALL permission prompts.",
+            "自动批准所有工具操作。跳过全部权限确认。",
+        ),
+        (
+            "Inherit the default model (no per-user override).",
+            "继承默认模型（不做用户级覆盖）。",
+        ),
+        (
+            "Agent runs tools and edits files directly (default).",
+            "代理直接运行工具并修改文件（默认）。",
+        ),
+        (
+            "Agent summarises a plan and asks for approval before running tools.",
+            "代理先总结计划并请求批准，再运行工具。",
+        ),
+        (
+            "Hold follow-ups until the current turn finishes.",
+            "暂存追问，等当前回合结束。",
+        ),
+        (
+            "Inject follow-ups mid-turn at the next tool or model step.",
+            "在下一个工具批次或模型步骤中途注入追问。",
+        ),
+        (
+            "Show diagrams with a clickable row to open/copy the rendered image.",
+            "显示图表并附可点击行，可打开/复制渲染后的图片。",
+        ),
+        (
+            "Same as auto: always show the clickable affordance row.",
+            "与 auto 相同：总是显示可点击行。",
+        ),
+        (
+            "Always show the raw Mermaid source as a code block.",
+            "总是以代码块显示 Mermaid 原始源码。",
+        ),
+        (
+            "Detect wheel vs trackpad per gesture from event timing. Default.",
+            "按事件时序逐次判断滚轮/触控板。默认。",
+        ),
+        (
+            "Always treat scrolling as wheel notches (fixed lines per tick).",
+            "总是把滚动视为滚轮格（每次固定行数）。",
+        ),
+        (
+            "Always treat scrolling as a trackpad (fractional accumulation).",
+            "总是把滚动视为触控板（小数累计）。",
+        ),
+        (
+            "Brief highlight on mouse-up, then clear. Double-click toggles fold. Default.",
+            "松开鼠标时短暂高亮后清除。双击切换折叠。默认。",
+        ),
+        (
+            "Keep the selection visible until Esc, click, or scroll. Double-click toggles fold.",
+            "选区保持可见，直到 Esc、点击或滚动。双击切换折叠。",
+        ),
+        (
+            "Double-click selects & copies a word, triple-click a paragraph; selection stays until dismissed.",
+            "双击选中并复制词，三击选中段落；选区保持到手动取消。",
+        ),
+        (
+            "Track only files the agent edits.",
+            "只跟踪代理修改的文件。",
+        ),
+        (
+            "Track every git-dirty file, including external edits.",
+            "跟踪所有 git 脏文件，包括外部修改。",
+        ),
+        (
+            "Disable hunk tracking entirely (default). Also disables LOC tracking.",
+            "完全关闭 hunk 跟踪（默认）。同时关闭 LOC 统计。",
+        ),
+        (
+            "Open plain grok in the standard fullscreen TUI. Default when unset.",
+            "在标准全屏 TUI 中打开普通 grok。未设置时默认。",
+        ),
+        (
+            "Open plain grok in scrollback-native (minimal) mode.",
+            "以回滚原生（极简）模式打开普通 grok。",
+        ),
+        (
+            "Ctrl+Space / F8 starts dictation; press again (or Esc/Enter) to stop.",
+            "Ctrl+Space / F8 开始听写；再按一次（或 Esc/Enter）停止。",
+        ),
+        (
+            "Hold Ctrl+Space / F8 to record, release to stop. Needs a Kitty-protocol terminal.",
+            "按住 Ctrl+Space / F8 录音，松开停止。需要 Kitty 协议终端。",
+        ),
+        (
+            "Use the system locale when it is a supported STT language; otherwise English.",
+            "系统区域是受支持的 STT 语言时跟随系统，否则用英语。",
+        ),
+        (
+            "Your team has Zero Data Retention.",
+            "你的团队已启用零数据保留（ZDR）。",
+        ),
         // -- P1 常用弹窗与帮助 · 快捷键速查表（shortcuts_help + ActionRegistry 渲染出口接线） --
         // 分类标题
         ("Essentials", "基础操作"),
@@ -1015,21 +1462,51 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("/ search", "/ 搜索"),
         ("Ctrl+./X close", "Ctrl+./X 关闭"),
         // 详情页变灰注记
-        ("(not active in current context)", "（在当前上下文中不可用）"),
+        (
+            "(not active in current context)",
+            "（在当前上下文中不可用）",
+        ),
         // 伪行（粘贴/撤销/重做/历史/搜索）说明
         ("Search scrollback", "搜索回滚缓冲"),
-        ("Paste images (and text) from the clipboard", "从剪贴板粘贴图片（和文本）"),
+        (
+            "Paste images (and text) from the clipboard",
+            "从剪贴板粘贴图片（和文本）",
+        ),
         ("Undo the last prompt edit", "撤销上一次提示词编辑"),
-        ("Redo the last undone prompt edit", "重做上一次撤销的提示词编辑"),
+        (
+            "Redo the last undone prompt edit",
+            "重做上一次撤销的提示词编辑",
+        ),
         ("Prompt history", "提示词历史"),
         // 多行 long_help 常量（粘贴按平台三种变体）
-        ("Undoes the last change in the prompt editor.\nCovers typing, deletes, line/word kills, and clearing a draft.", "撤销提示词编辑器中的上一次更改。\n涵盖输入、删除、按行/按词剪切以及清空草稿。"),
-        ("Redoes the last undone change in the prompt editor.\nThe second chord is the fallback for terminals that cannot send the first one.", "重做提示词编辑器中上一次被撤销的更改。\n第二组按键是为无法发送第一组按键的终端准备的备选方案。"),
-        ("Recalls previously sent prompts.\nPress Up on an empty prompt to browse earlier prompts, newest first; each move live-populates the composer so you can edit and resend.\nWith prompts queued, Up moves focus into the queue pane on the last row instead.\nRun /history to open a searchable history panel and filter by text.", "调出之前发送过的提示词。\n在空提示词上按 Up 浏览更早的提示词（最新在前）；每次移动都会实时填入输入框，便于编辑后重发。\n有排队提示词时，在最后一行按 Up 会把焦点移入队列面板。\n运行 /history 可打开可搜索的历史面板并按文字过滤。"),
-        ("Searches the conversation scrollback for text and jumps between matches.\nIn the prompt input, run /find to search. In vim mode, you can also press / while the scrollback is focused.\nType a query, then use n and N (or the arrow keys) to step through matches. Press Enter to jump to a match and Esc to dismiss.", "在对话回滚缓冲中搜索文本并在匹配项之间跳转。\n在提示词输入框中运行 /find 进行搜索；vim 模式下，回滚缓冲获得焦点时也可以按 /。\n输入查询词后，用 n 和 N（或方向键）在匹配项间逐步移动。按 Enter 跳到匹配项，按 Esc 关闭。"),
-        ("Pastes clipboard images into the prompt as chips, and plain text as typed.\nPrefer Ctrl+V. Use Alt+V as a fallback when Ctrl+V fails (some terminals or configs drop image clipboards; older Windows Terminal versions only pasted text).\nYou can also drag an image file from Explorer into the prompt.", "把剪贴板中的图片以附件片形式粘贴到提示词中，纯文本则按输入处理。\n优先用 Ctrl+V；Ctrl+V 失效时用 Alt+V 兜底（部分终端或配置会丢弃图片剪贴板；旧版 Windows Terminal 只能粘贴文本）。\n也可以把图片文件从资源管理器拖入提示词。"),
-        ("Pastes clipboard images into the prompt as chips, and plain text as typed.\nUse Ctrl+V for screenshots, browser \"Copy Image\", and file-manager image copies (many terminals swallow Cmd+V and never deliver it to the TUI).\nYou can also drag an image file into the prompt.", "把剪贴板中的图片以附件片形式粘贴到提示词中，纯文本则按输入处理。\n截图、浏览器“复制图像”和文件管理器的图像复制都用 Ctrl+V（许多终端会吞掉 Cmd+V，永远传不到 TUI）。\n也可以把图片文件拖入提示词。"),
-        ("Pastes clipboard images into the prompt as chips, and plain text as typed.\nUse Ctrl+V for screenshots, browser \"Copy Image\", and file-manager image copies.\nYou can also drag an image file into the prompt.", "把剪贴板中的图片以附件片形式粘贴到提示词中，纯文本则按输入处理。\n截图、浏览器“复制图像”和文件管理器的图像复制都用 Ctrl+V。\n也可以把图片文件拖入提示词。"),
+        (
+            "Undoes the last change in the prompt editor.\nCovers typing, deletes, line/word kills, and clearing a draft.",
+            "撤销提示词编辑器中的上一次更改。\n涵盖输入、删除、按行/按词剪切以及清空草稿。",
+        ),
+        (
+            "Redoes the last undone change in the prompt editor.\nThe second chord is the fallback for terminals that cannot send the first one.",
+            "重做提示词编辑器中上一次被撤销的更改。\n第二组按键是为无法发送第一组按键的终端准备的备选方案。",
+        ),
+        (
+            "Recalls previously sent prompts.\nPress Up on an empty prompt to browse earlier prompts, newest first; each move live-populates the composer so you can edit and resend.\nWith prompts queued, Up moves focus into the queue pane on the last row instead.\nRun /history to open a searchable history panel and filter by text.",
+            "调出之前发送过的提示词。\n在空提示词上按 Up 浏览更早的提示词（最新在前）；每次移动都会实时填入输入框，便于编辑后重发。\n有排队提示词时，在最后一行按 Up 会把焦点移入队列面板。\n运行 /history 可打开可搜索的历史面板并按文字过滤。",
+        ),
+        (
+            "Searches the conversation scrollback for text and jumps between matches.\nIn the prompt input, run /find to search. In vim mode, you can also press / while the scrollback is focused.\nType a query, then use n and N (or the arrow keys) to step through matches. Press Enter to jump to a match and Esc to dismiss.",
+            "在对话回滚缓冲中搜索文本并在匹配项之间跳转。\n在提示词输入框中运行 /find 进行搜索；vim 模式下，回滚缓冲获得焦点时也可以按 /。\n输入查询词后，用 n 和 N（或方向键）在匹配项间逐步移动。按 Enter 跳到匹配项，按 Esc 关闭。",
+        ),
+        (
+            "Pastes clipboard images into the prompt as chips, and plain text as typed.\nPrefer Ctrl+V. Use Alt+V as a fallback when Ctrl+V fails (some terminals or configs drop image clipboards; older Windows Terminal versions only pasted text).\nYou can also drag an image file from Explorer into the prompt.",
+            "把剪贴板中的图片以附件片形式粘贴到提示词中，纯文本则按输入处理。\n优先用 Ctrl+V；Ctrl+V 失效时用 Alt+V 兜底（部分终端或配置会丢弃图片剪贴板；旧版 Windows Terminal 只能粘贴文本）。\n也可以把图片文件从资源管理器拖入提示词。",
+        ),
+        (
+            "Pastes clipboard images into the prompt as chips, and plain text as typed.\nUse Ctrl+V for screenshots, browser \"Copy Image\", and file-manager image copies (many terminals swallow Cmd+V and never deliver it to the TUI).\nYou can also drag an image file into the prompt.",
+            "把剪贴板中的图片以附件片形式粘贴到提示词中，纯文本则按输入处理。\n截图、浏览器“复制图像”和文件管理器的图像复制都用 Ctrl+V（许多终端会吞掉 Cmd+V，永远传不到 TUI）。\n也可以把图片文件拖入提示词。",
+        ),
+        (
+            "Pastes clipboard images into the prompt as chips, and plain text as typed.\nUse Ctrl+V for screenshots, browser \"Copy Image\", and file-manager image copies.\nYou can also drag an image file into the prompt.",
+            "把剪贴板中的图片以附件片形式粘贴到提示词中，纯文本则按输入处理。\n截图、浏览器“复制图像”和文件管理器的图像复制都用 Ctrl+V。\n也可以把图片文件拖入提示词。",
+        ),
         // ActionRegistry short_help（def.description）
         ("Edit prompt in external editor", "在外部编辑器中编辑提示词"),
         ("Toggle tasks pane", "切换任务面板"),
@@ -1038,7 +1515,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Next turn", "下一轮"),
         ("Previous turn", "上一轮"),
         ("Jump to next turn at viewport top", "跳到视口顶部的下一轮"),
-        ("Jump to previous turn at viewport top", "跳到视口顶部的上一轮"),
+        (
+            "Jump to previous turn at viewport top",
+            "跳到视口顶部的上一轮",
+        ),
         ("Go to top", "回到顶部"),
         ("Go to bottom", "回到底部"),
         ("Scroll up one line", "上滚一行"),
@@ -1064,23 +1544,41 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Focus prompt", "聚焦提示词"),
         ("Focus scrollback", "聚焦回滚缓冲"),
         ("Cancel turn", "取消当前轮"),
-        ("Cycle mode (Normal / Plan / Always-approve)", "切换模式（正常/计划/总是批准）"),
+        (
+            "Cycle mode (Normal / Plan / Always-approve)",
+            "切换模式（正常/计划/总是批准）",
+        ),
         ("Toggle todo pane", "切换待办面板"),
         ("Toggle prompt queue", "切换提示词队列"),
         ("Open sessions", "打开会话列表"),
         ("Open extensions", "打开扩展管理"),
         ("Send running task to background", "把运行中的任务转到后台"),
-        ("Send now while running (cancels the current turn)", "运行中立即发送（取消当前轮）"),
-        ("Start voice dictation (Ctrl+Space / F8)", "开始语音输入 (Ctrl+Space / F8)"),
-        ("Voice dictation (Ctrl+Space / F8)", "语音输入 (Ctrl+Space / F8)"),
+        (
+            "Send now while running (cancels the current turn)",
+            "运行中立即发送（取消当前轮）",
+        ),
+        (
+            "Start voice dictation (Ctrl+Space / F8)",
+            "开始语音输入 (Ctrl+Space / F8)",
+        ),
+        (
+            "Voice dictation (Ctrl+Space / F8)",
+            "语音输入 (Ctrl+Space / F8)",
+        ),
         ("Toggle multiline", "切换多行输入"),
         ("Stash / pop prompt draft", "暂存/恢复提示词草稿"),
-        ("Shell mode (type ! on empty prompt)", "Shell 模式（空提示词上输入 !）"),
+        (
+            "Shell mode (type ! on empty prompt)",
+            "Shell 模式（空提示词上输入 !）",
+        ),
         ("Toggle always-approve", "切换总是批准"),
         ("New session", "新建会话"),
         ("Command palette", "命令面板"),
         ("Keyboard shortcuts", "键盘快捷键"),
-        ("Toggle mouse reporting (native copy/paste)", "切换鼠标上报（原生复制/粘贴）"),
+        (
+            "Toggle mouse reporting (native copy/paste)",
+            "切换鼠标上报（原生复制/粘贴）",
+        ),
         ("Select next row", "选择下一行"),
         ("Select previous row", "选择上一行"),
         ("Pin / unpin agent", "固定/取消固定代理"),
@@ -1092,55 +1590,190 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Reorder agent down", "下移代理"),
         ("Show shortcuts overlay", "显示快捷键浮层"),
         ("Close dashboard", "关闭仪表盘"),
-        ("Change working directory for new agents", "更改新代理的工作目录"),
-        ("Toggle worktree mode for new agents", "为新代理切换工作树模式"),
+        (
+            "Change working directory for new agents",
+            "更改新代理的工作目录",
+        ),
+        (
+            "Toggle worktree mode for new agents",
+            "为新代理切换工作树模式",
+        ),
         ("Back to dashboard", "返回仪表盘"),
         ("Previous session", "上一会话"),
         ("Next session", "下一会话"),
-        ("Stop agent, close session (back to dashboard)", "停止代理并关闭会话（返回仪表盘）"),
+        (
+            "Stop agent, close session (back to dashboard)",
+            "停止代理并关闭会话（返回仪表盘）",
+        ),
         // ActionRegistry long_help（def.long_help，整段一个键）
-        ("Opens the current prompt draft in $VISUAL or $EDITOR, falling back to vi when neither is set.\nSaving and closing the editor returns the updated text to the composer; it does not send the prompt.\nAvailable in minimal mode for ordinary attachment-free drafts.", "在 $VISUAL 或 $EDITOR 中打开当前提示词草稿，两者都未设置时回退到 vi。\n保存并关闭编辑器后，修改后的文本会回到输入框；不会发送提示词。\n极简模式下可用于普通的无附件草稿。"),
-        ("Shows or hides the tasks pane, which lists background tasks and their status.\nUse it to monitor or return to work you sent to the background with Ctrl+B.\nA side pane; toggle off to reclaim width.", "显示或隐藏任务面板，其中列出后台任务及其状态。\n用于查看或回到你用 Ctrl+B 转入后台的工作。\n这是一个侧边面板；关闭可收回宽度。"),
-        ("Folds or unfolds the selected scrollback entry to hide or show its full body.\nHandy for skimming long tool output or reasoning.\nRelated: E folds/unfolds every entry, Ctrl+E toggles all thinking blocks.", "折叠或展开选中的回滚条目，隐藏或显示其完整内容。\n适合快速浏览冗长的工具输出或推理。\n相关：E 折叠/展开所有条目，Ctrl+E 切换全部思考块。"),
-        ("Folds or unfolds every scrollback entry at once, unlike e which toggles only the selected row.\nCollapse a long transcript to scan headers, then expand it all back.\nThinking blocks have their own toggle, Ctrl+E.", "一次折叠或展开全部回滚条目，不同于只切换选中行的 e。\n先把长对话折叠起来浏览标题，再全部展开回去。\n思考块有独立开关 Ctrl+E。"),
-        ("Shows or hides the agent's reasoning (thinking) blocks across the whole transcript in one keypress.\nReveal how the agent reached an answer, or hide reasoning to focus on results.\nSeparate from E, which folds every entry regardless of type.", "一键显示或隐藏整个对话记录中代理的推理（思考）块。\n可以查看代理如何得出答案，或隐藏推理只看结果。\n与 E 不同，E 不分类型折叠所有条目。"),
-        ("Switches the selected entry between rendered markdown and its raw source text.\nUse it to copy exact markdown, inspect a link target, or see formatting the renderer hides.\nPress again to return to the rendered view.", "在渲染后的 markdown 与原始源文本之间切换选中条目。\n用于复制原始 markdown、查看链接目标，或看到渲染器隐藏的格式。\n再按一次返回渲染视图。"),
-        ("Copies the selected block's body to the clipboard: message text, full tool output, or a code block's contents.\nOffered only on blocks that support copy.\nFor just the command or file path, use Y instead.", "把选中块的正文复制到剪贴板：消息文本、完整工具输出或代码块内容。\n仅在支持复制的块上提供。\n只需命令或文件路径时请用 Y。"),
-        ("Copies only the block's identifier: a tool call's command line or a file block's path, not the body.\nHandy to re-run a command or paste a path elsewhere.\nUse lowercase y to copy the full content instead.", "只复制块的标识信息：工具调用的命令行或文件块的路径，不含正文。\n便于重跑命令或把路径粘贴到别处。\n要复制完整内容请用小写 y。"),
-        ("Opens the selected block in a focused, scrollable full-screen viewer.\nBest for long tool output, large files, or code you want to read away from the surrounding transcript.\nEsc returns to the conversation.", "在独立、可滚动的全屏查看器中打开选中块。\n适合冗长的工具输出、大文件，或想脱离上下文阅读的代码。\n按 Esc 返回对话。"),
-        ("Rewinds the conversation to an earlier turn, discarding later turns. File changes made after that turn are left as-is.\nPick a turn from the list; a running turn is offered for cancel first. When Confirm before rewind is on (default), each pick asks Yes / Yes, and don't ask again / No. Picking \"Yes, and don't ask again\" turns the setting off in /settings.\nDestructive: later turns are dropped.\nAlso reachable idle with an empty prompt via Esc Esc (within 800ms), same as `/rewind`.", "把对话回退到更早的一轮，丢弃之后的轮次。那一轮之后对文件的改动保持原样。\n从列表中挑选一轮；正在运行的轮会先提供取消选项。“回退前确认”开启时（默认），每次选择都会询问 是 / 是，且不再询问 / 否。选择“是，且不再询问”会在 /settings 中关闭该设置。\n有破坏性：之后的轮次会被丢弃。\n空闲且提示词为空时也可在 800ms 内按两次 Esc，等同 `/rewind`。"),
-        ("Terminates the background task owned by the selected task block (e.g. a long shell command sent to the background).\nReach for it to stop a runaway or no-longer-needed process.\nApplies only to a live task; finished ones are unaffected.", "终止选中任务块对应的后台任务（例如转入后台的长命令）。\n用于停掉失控或不再需要的进程。\n只对仍在运行的任务生效；已结束的不受影响。"),
-        ("Moves focus from the prompt to the scrollback so you can navigate the transcript.\nTab works in both simple and vim scrollback modes.\nEsc is reserved for the cancel / clear / rewind policy, not focus.", "把焦点从提示词移到回滚缓冲，以便浏览对话记录。\n简单模式和 vim 回滚模式下 Tab 都可用。\nEsc 保留给取消/清空/回退策略，不用于切换焦点。"),
-        ("Interrupts the agent's current turn and stops generation, keeping the session open.\nCtrl+C cancels when the prompt is empty; with a non-empty draft it clears the prompt first and leaves the turn running.\nEsc never cancels a turn; pressed mid-turn it shows a reminder to use Ctrl+C.\nIt stops the turn, not the app; use the quit shortcut to exit.", "打断代理当前轮并停止生成，会话保持打开。\n提示词为空时 Ctrl+C 取消当前轮；草稿非空时先清空提示词，当前轮继续运行。\nEsc 永不取消轮次；轮次进行中按 Esc 会提醒使用 Ctrl+C。\n它停止的是轮次而非程序；退出请用退出快捷键。"),
-        ("Steps the session mode: Normal -> Plan -> Always-Approve -> Normal.\nPlan keeps the agent planning first and writes no files; Always-Approve runs every tool call without asking.\nCtrl+O toggles auto-approve directly.", "依次切换会话模式：正常 -> 计划 -> 总是批准 -> 正常。\n计划模式让代理先做规划且不写文件；总是批准模式不询问地执行每个工具调用。\nCtrl+O 可直接切换自动批准。"),
-        ("Shows or hides the todo pane: the agent's live task checklist for the current work.\nWatch what it plans to do and what's left as the turn runs.\nA side pane; toggle it off to reclaim width.", "显示或隐藏待办面板：代理为当前工作维护的实时任务清单。\n在轮次进行中查看它计划做什么、还剩什么。\n这是一个侧边面板；关闭可收回宽度。"),
-        ("Shows or hides the prompt queue.\nThe queue lets you line up follow-up prompts while a turn is running; each is sent automatically when the agent finishes.\nLocal macOS VS Code family: Ctrl+4 primary (Ctrl+; / Ctrl+' alts). Otherwise Ctrl+; with Ctrl+' alt.", "显示或隐藏提示词队列。\n队列让你在轮次运行期间排队后续提示词；代理完成后会自动逐个发送。\n本地 macOS VS Code 家族：主键 Ctrl+4（备选 Ctrl+; / Ctrl+'）。其它环境为主键 Ctrl+;，备选 Ctrl+'。"),
-        ("Opens the session browser to resume or switch between past conversations.\nSelect one to reattach to its full history. `/resume` does the same.\nSeparate from the Agent Dashboard (Ctrl+\\), which manages many live agents at once.", "打开会话浏览器，恢复或切换到过去的对话。\n选中一个即可重新接入其完整历史。`/resume` 效果相同。\n与代理仪表盘 (Ctrl+\\) 不同，后者用于同时管理多个运行中的代理。"),
-        ("Opens the extensions manager for MCP servers and plugins: see what's connected and the tools they add.\nUse it to confirm an integration loaded or browse available tools.\nDistinct from settings, which holds general app options.", "打开 MCP 服务器与插件的扩展管理器：查看已接入的内容及其新增的工具。\n用于确认集成已加载或浏览可用工具。\n与设置不同，设置存放的是应用通用选项。"),
-        ("Detaches the running foreground Execute so it keeps working in the background while you read, queue prompts, or start something else.\nTrack background work with /tasks.\nOnly meaningful while a foreground Execute is actually running.", "把正在前台运行的 Execute 转入后台继续执行，你可以同时阅读、排队提示词或开始其它事情。\n用 /tasks 跟踪后台工作。\n仅在前台确有 Execute 正在运行时才有意义。"),
-        ("Detaches the running foreground Execute so it keeps working in the background while you read, queue prompts, or start something else.\nTrack and resume it from the tasks pane (Ctrl+G).\nOnly meaningful while a foreground Execute is actually running.", "把正在前台运行的 Execute 转入后台继续执行，你可以同时阅读、排队提示词或开始其它事情。\n在任务面板 (Ctrl+G) 中跟踪并回到它。\n仅在前台确有 Execute 正在运行时才有意义。"),
-        ("Sends a message to the agent mid-turn without cancelling it (interject), so you can steer or add context while it keeps working.\nPlain Enter while a turn is running queues a follow-up for later; this chord merges composer text into the current turn instead.\nWith an empty composer, bare Enter (or this chord) force-sends the top queued follow-up from the prompt: no need to focus the queue pane. On the queue pane, this chord force-sends the selected row.\nReach for it to correct course without losing the turn's progress.", "在轮次进行中向代理发送消息而不取消它（插话），让它在继续工作的同时接受你的引导或补充上下文。\n轮次运行时按普通 Enter 会把后续提示词排队等待；这个组合键则把输入框文本合并进当前轮。\n输入框为空时，直接按 Enter（或此组合键）会从提示词处强制发送队首的排队消息，无需聚焦队列面板；在队列面板上，此组合键强制发送选中行。\n用于在不丢失轮次进度的前提下纠正方向。"),
-        ("Microphone capture for dictation, bound to Ctrl+Space (or F8: handy where Ctrl+Space is taken, e.g. macOS input-source switching; use Fn+F8 on a laptop).\nBehavior follows the Voice capture setting: toggle (press to start, press again to stop) or hold-to-talk (hold to record, release to stop), where hold needs a Kitty-protocol terminal and falls back to toggle elsewhere. `/voice` toggles everywhere.\nSpeech is transcribed straight into the prompt.", "用于语音输入的麦克风采集，绑定 Ctrl+Space（或 F8：在 Ctrl+Space 被占用时很方便，如 macOS 输入法切换；笔记本上用 Fn+F8）。\n行为跟随语音采集设置：切换式（按一下开始，再按停止）或按住说话（按住录音，松开停止），按住说话需要支持 Kitty 协议的终端，其它终端回退为切换式。`/voice` 在所有终端都可切换。\n语音直接转写进提示词。"),
-        ("Toggles a persistent multi-line prompt so the editor stays expanded for composing longer messages.\nInsert newlines with Shift+Enter or Alt+Enter (or a trailing backslash); bare Enter still sends.\nCtrl+M toggles multiline in the prompt; off the prompt it opens the model picker.", "切换持久的多行提示词，让编辑器保持展开以便撰写更长的消息。\n用 Shift+Enter 或 Alt+Enter（或行尾反斜杠）插入换行；单独按 Enter 仍然发送。\n在提示词上 Ctrl+M 切换多行；离开提示词则打开模型选择器。"),
-        ("Stash your current prompt as a draft.\nCtrl+S sets the draft aside and clears the composer. Ctrl+S on an empty composer restores it. The draft also restores by itself after you send your next prompt. Use Alt+S if your terminal swallows Ctrl+S.\nOne draft at a time: a new stash replaces the old one.", "把当前提示词暂存为草稿。\nCtrl+S 收起草稿并清空输入框；输入框为空时按 Ctrl+S 恢复草稿。发送下一条提示词后草稿也会自动恢复。若终端吞掉 Ctrl+S，可用 Alt+S。\n一次只保留一份草稿：新的暂存会替换旧的。"),
-        ("Runs a shell command without leaving the chat: type ! at the start of an empty prompt, then the command.\nThe command output is captured into the scrollback.\nDelete the leading ! to go back to a normal prompt.", "不离开对话即可运行 shell 命令：在空提示词开头输入 !，然后输入命令。\n命令输出会被收入回滚缓冲。\n删掉开头的 ! 即可恢复普通提示词。"),
-        ("Turns auto-approve (YOLO) on or off for this session.\nWhile on, the agent runs every tool call (edits, shell, deletes) with no per-action confirmation.\nSame state as the Shift+Tab cycle's Always-Approve; use with care.", "为当前会话开启或关闭自动批准（YOLO）。\n开启后，代理执行每个工具调用（编辑、shell、删除）都无需逐项确认。\n与 Shift+Tab 循环中的总是批准是同一状态；请谨慎使用。"),
-        ("Starts a fresh session with empty scrollback and context.\nRequires confirmation: press it twice (the first press arms, the second starts)\nso you don't discard the current conversation by accident.", "开始一个回滚和上下文都为空的全新会话。\n需要确认：连按两次（第一次预备，第二次开始），\n以免误丢当前对话。"),
-        ("Exits the app. Requires confirmation: press twice in quick succession;\na lone press is treated as a stray key and ignored.\nBound to Ctrl+Q, with Ctrl+D as an alias (Ctrl+D is primary in VS Code's terminal).", "退出程序。需要确认：快速连按两次；\n单独一次会被当作误键忽略。\n绑定 Ctrl+Q，Ctrl+D 为别名（在 VS Code 终端中 Ctrl+D 为主键）。"),
-        ("Fuzzy-search every action and slash command, then run it by name.\nUseful when you don't remember a key binding.\nAlso opens with ? while the scrollback is focused.", "模糊搜索所有操作和斜杠命令，按名称运行。\n记不住快捷键时很有用。\n回滚缓冲获得焦点时也可按 ? 打开。"),
-        ("Opens this keyboard cheatsheet.\nBrowse with j/k, expand a row's inline help with e, or press Enter for a shortcut's full detail page.\nBound to both Ctrl+. and Ctrl+X; the bar advertises whichever your terminal sends reliably.", "打开这份键盘快捷键速查表。\n用 j/k 浏览，用 e 展开一行的内联说明，或按 Enter 查看快捷键的完整详情页。\n同时绑定 Ctrl+. 和 Ctrl+X；提示栏会展示你的终端能可靠发送的那个。"),
-        ("Opens the model picker to switch the model for this session; the choice applies to later turns.\nBound to Ctrl+M, but while the prompt is focused that chord toggles multiline instead.\nReach it from the scrollback or the command palette.", "打开模型选择器切换当前会话的模型；选择对之后的轮次生效。\n绑定 Ctrl+M，但提示词获得焦点时该组合键改为切换多行。\n可从回滚缓冲或命令面板进入。"),
-        ("Opens the Agent Dashboard: a list of all your running and recent agents to monitor and switch between.\nWorks from anywhere, including the welcome screen and inside a session.\nFrom there you can dispatch, attach, stop, group, and reorder agents.", "打开代理仪表盘：列出所有运行中和最近的代理，便于监控与切换。\n任何界面都可用，包括欢迎屏和会话内。\n在那里可以派发、接入、停止、分组和排序代理。"),
-        ("Pins or unpins the selected agent so it stays at the top of the list regardless of sorting or grouping.\nKeep the agents you care about in view as others come and go.\nPins persist across dashboard sessions.", "固定或取消固定选中的代理，使其无视排序和分组始终保持在列表顶部。\n在其它代理来来去去时，把你关心的代理留在视野内。\n固定状态跨仪表盘会话持久保存。"),
-        ("On a busy top-level row, Ctrl+X cancels the running turn. Once the row is idle, press Ctrl+X again within 2s to permanently delete the session.\nOn a subagent row, Ctrl+X kills the subagent.", "在忙碌的顶层行上，Ctrl+X 取消正在运行的轮次。行空闲后 2 秒内再按一次 Ctrl+X 可永久删除该会话。\n在子代理行上，Ctrl+X 终止该子代理。"),
-        ("Cycles the dispatch mode for agents you launch from the dashboard: Normal, Plan, then Always-Approve.\nPlan has new agents plan before changing files; Always-Approve runs their tools without prompting.\nMirrors the in-session Shift+Tab cycle, applied to new dispatches.", "切换从仪表盘启动的代理的派发模式：正常、计划、总是批准。\n计划模式让新代理先规划再改文件；总是批准模式不询问地运行其工具。\n对应会话内的 Shift+Tab 循环，作用于新派发的代理。"),
-        ("Switches the dashboard between a flat list and rows grouped by state, such as working versus idle.\nGrouping surfaces the agents that need attention; the flat list keeps a stable order.\nYour choice persists across sessions.", "在平铺列表与按状态分组的行之间切换仪表盘，例如运行中与空闲。\n分组能突出需要关注的代理；平铺列表保持稳定顺序。\n你的选择跨会话持久保存。"),
-        ("Closes the dashboard and returns to where you were.\nEsc is a cascade: it first dismisses an open peek or clears an active filter, and only exits once nothing else is pending.\nRebind this action to a different key to exit directly.", "关闭仪表盘并回到之前的位置。\nEsc 是级联的：先关闭已打开的预览或清除生效的过滤，等没有其它待处理时才退出。\n把此操作改绑到其它按键即可直接退出。"),
-        ("Toggles auto-approve (YOLO) for the selected agent right from the dashboard, without attaching to it.\nWhile on, that agent runs every tool call with no per-action confirmation.\nThe per-session equivalent is Ctrl+O inside a session.", "在仪表盘上直接切换选中代理的自动批准（YOLO），无需接入它的会话。\n开启后，该代理执行每个工具调用都无需逐项确认。\n会话内的等价操作是会话中的 Ctrl+O。"),
-        ("Opens a picker to set the working directory that newly dispatched dashboard agents run in.\nLaunch agents against a different repo or folder without leaving the dashboard.\nAffects new dispatches only, not agents already running.", "打开选择器，设置新派发的仪表盘代理的运行目录。\n不离开仪表盘即可让代理面向另一个仓库或文件夹工作。\n只影响新派发，不影响已在运行的代理。"),
-        ("Arms the next dashboard-dispatched agent to spawn in a fresh git worktree, isolating its work on a separate checkout.\nOnly applies when the working directory is a git repo.\nAffects newly dispatched agents, not ones already running.", "让下一个从仪表盘派发的代理在全新的 git 工作树中启动，把它的工作隔离在独立检出上。\n仅当工作目录是 git 仓库时生效。\n影响新派发的代理，不影响已在运行的代理。"),
-        ("Leaves the attached session overlay and returns to the dashboard list, without stopping the agent.\nAlso reachable via q on the scrollback, a neutral Esc, or the close button.\nTo stop the agent instead of just detaching, use Ctrl+X.", "离开已接入的会话浮层并返回仪表盘列表，不停止代理。\n也可以在回滚缓冲上按 q、按中性 Esc 或点关闭按钮到达。\n要在断开的同时停止代理，请用 Ctrl+X。"),
-        ("Inside a session overlay, stops the attached agent and closes it, returning you to the dashboard list.\nRequires confirmation: press Ctrl+X twice.\nCtrl+. still opens the cheatsheet here; only Ctrl+X is taken over by stop.", "在会话浮层内停止已接入的代理并关闭它，返回仪表盘列表。\n需要确认：按两次 Ctrl+X。\n此处 Ctrl+. 仍可打开快捷键速查表；只有 Ctrl+X 被停止操作接管。"),
+        (
+            "Opens the current prompt draft in $VISUAL or $EDITOR, falling back to vi when neither is set.\nSaving and closing the editor returns the updated text to the composer; it does not send the prompt.\nAvailable in minimal mode for ordinary attachment-free drafts.",
+            "在 $VISUAL 或 $EDITOR 中打开当前提示词草稿，两者都未设置时回退到 vi。\n保存并关闭编辑器后，修改后的文本会回到输入框；不会发送提示词。\n极简模式下可用于普通的无附件草稿。",
+        ),
+        (
+            "Shows or hides the tasks pane, which lists background tasks and their status.\nUse it to monitor or return to work you sent to the background with Ctrl+B.\nA side pane; toggle off to reclaim width.",
+            "显示或隐藏任务面板，其中列出后台任务及其状态。\n用于查看或回到你用 Ctrl+B 转入后台的工作。\n这是一个侧边面板；关闭可收回宽度。",
+        ),
+        (
+            "Folds or unfolds the selected scrollback entry to hide or show its full body.\nHandy for skimming long tool output or reasoning.\nRelated: E folds/unfolds every entry, Ctrl+E toggles all thinking blocks.",
+            "折叠或展开选中的回滚条目，隐藏或显示其完整内容。\n适合快速浏览冗长的工具输出或推理。\n相关：E 折叠/展开所有条目，Ctrl+E 切换全部思考块。",
+        ),
+        (
+            "Folds or unfolds every scrollback entry at once, unlike e which toggles only the selected row.\nCollapse a long transcript to scan headers, then expand it all back.\nThinking blocks have their own toggle, Ctrl+E.",
+            "一次折叠或展开全部回滚条目，不同于只切换选中行的 e。\n先把长对话折叠起来浏览标题，再全部展开回去。\n思考块有独立开关 Ctrl+E。",
+        ),
+        (
+            "Shows or hides the agent's reasoning (thinking) blocks across the whole transcript in one keypress.\nReveal how the agent reached an answer, or hide reasoning to focus on results.\nSeparate from E, which folds every entry regardless of type.",
+            "一键显示或隐藏整个对话记录中代理的推理（思考）块。\n可以查看代理如何得出答案，或隐藏推理只看结果。\n与 E 不同，E 不分类型折叠所有条目。",
+        ),
+        (
+            "Switches the selected entry between rendered markdown and its raw source text.\nUse it to copy exact markdown, inspect a link target, or see formatting the renderer hides.\nPress again to return to the rendered view.",
+            "在渲染后的 markdown 与原始源文本之间切换选中条目。\n用于复制原始 markdown、查看链接目标，或看到渲染器隐藏的格式。\n再按一次返回渲染视图。",
+        ),
+        (
+            "Copies the selected block's body to the clipboard: message text, full tool output, or a code block's contents.\nOffered only on blocks that support copy.\nFor just the command or file path, use Y instead.",
+            "把选中块的正文复制到剪贴板：消息文本、完整工具输出或代码块内容。\n仅在支持复制的块上提供。\n只需命令或文件路径时请用 Y。",
+        ),
+        (
+            "Copies only the block's identifier: a tool call's command line or a file block's path, not the body.\nHandy to re-run a command or paste a path elsewhere.\nUse lowercase y to copy the full content instead.",
+            "只复制块的标识信息：工具调用的命令行或文件块的路径，不含正文。\n便于重跑命令或把路径粘贴到别处。\n要复制完整内容请用小写 y。",
+        ),
+        (
+            "Opens the selected block in a focused, scrollable full-screen viewer.\nBest for long tool output, large files, or code you want to read away from the surrounding transcript.\nEsc returns to the conversation.",
+            "在独立、可滚动的全屏查看器中打开选中块。\n适合冗长的工具输出、大文件，或想脱离上下文阅读的代码。\n按 Esc 返回对话。",
+        ),
+        (
+            "Rewinds the conversation to an earlier turn, discarding later turns. File changes made after that turn are left as-is.\nPick a turn from the list; a running turn is offered for cancel first. When Confirm before rewind is on (default), each pick asks Yes / Yes, and don't ask again / No. Picking \"Yes, and don't ask again\" turns the setting off in /settings.\nDestructive: later turns are dropped.\nAlso reachable idle with an empty prompt via Esc Esc (within 800ms), same as `/rewind`.",
+            "把对话回退到更早的一轮，丢弃之后的轮次。那一轮之后对文件的改动保持原样。\n从列表中挑选一轮；正在运行的轮会先提供取消选项。“回退前确认”开启时（默认），每次选择都会询问 是 / 是，且不再询问 / 否。选择“是，且不再询问”会在 /settings 中关闭该设置。\n有破坏性：之后的轮次会被丢弃。\n空闲且提示词为空时也可在 800ms 内按两次 Esc，等同 `/rewind`。",
+        ),
+        (
+            "Terminates the background task owned by the selected task block (e.g. a long shell command sent to the background).\nReach for it to stop a runaway or no-longer-needed process.\nApplies only to a live task; finished ones are unaffected.",
+            "终止选中任务块对应的后台任务（例如转入后台的长命令）。\n用于停掉失控或不再需要的进程。\n只对仍在运行的任务生效；已结束的不受影响。",
+        ),
+        (
+            "Moves focus from the prompt to the scrollback so you can navigate the transcript.\nTab works in both simple and vim scrollback modes.\nEsc is reserved for the cancel / clear / rewind policy, not focus.",
+            "把焦点从提示词移到回滚缓冲，以便浏览对话记录。\n简单模式和 vim 回滚模式下 Tab 都可用。\nEsc 保留给取消/清空/回退策略，不用于切换焦点。",
+        ),
+        (
+            "Interrupts the agent's current turn and stops generation, keeping the session open.\nCtrl+C cancels when the prompt is empty; with a non-empty draft it clears the prompt first and leaves the turn running.\nEsc never cancels a turn; pressed mid-turn it shows a reminder to use Ctrl+C.\nIt stops the turn, not the app; use the quit shortcut to exit.",
+            "打断代理当前轮并停止生成，会话保持打开。\n提示词为空时 Ctrl+C 取消当前轮；草稿非空时先清空提示词，当前轮继续运行。\nEsc 永不取消轮次；轮次进行中按 Esc 会提醒使用 Ctrl+C。\n它停止的是轮次而非程序；退出请用退出快捷键。",
+        ),
+        (
+            "Steps the session mode: Normal -> Plan -> Always-Approve -> Normal.\nPlan keeps the agent planning first and writes no files; Always-Approve runs every tool call without asking.\nCtrl+O toggles auto-approve directly.",
+            "依次切换会话模式：正常 -> 计划 -> 总是批准 -> 正常。\n计划模式让代理先做规划且不写文件；总是批准模式不询问地执行每个工具调用。\nCtrl+O 可直接切换自动批准。",
+        ),
+        (
+            "Shows or hides the todo pane: the agent's live task checklist for the current work.\nWatch what it plans to do and what's left as the turn runs.\nA side pane; toggle it off to reclaim width.",
+            "显示或隐藏待办面板：代理为当前工作维护的实时任务清单。\n在轮次进行中查看它计划做什么、还剩什么。\n这是一个侧边面板；关闭可收回宽度。",
+        ),
+        (
+            "Shows or hides the prompt queue.\nThe queue lets you line up follow-up prompts while a turn is running; each is sent automatically when the agent finishes.\nLocal macOS VS Code family: Ctrl+4 primary (Ctrl+; / Ctrl+' alts). Otherwise Ctrl+; with Ctrl+' alt.",
+            "显示或隐藏提示词队列。\n队列让你在轮次运行期间排队后续提示词；代理完成后会自动逐个发送。\n本地 macOS VS Code 家族：主键 Ctrl+4（备选 Ctrl+; / Ctrl+'）。其它环境为主键 Ctrl+;，备选 Ctrl+'。",
+        ),
+        (
+            "Opens the session browser to resume or switch between past conversations.\nSelect one to reattach to its full history. `/resume` does the same.\nSeparate from the Agent Dashboard (Ctrl+\\), which manages many live agents at once.",
+            "打开会话浏览器，恢复或切换到过去的对话。\n选中一个即可重新接入其完整历史。`/resume` 效果相同。\n与代理仪表盘 (Ctrl+\\) 不同，后者用于同时管理多个运行中的代理。",
+        ),
+        (
+            "Opens the extensions manager for MCP servers and plugins: see what's connected and the tools they add.\nUse it to confirm an integration loaded or browse available tools.\nDistinct from settings, which holds general app options.",
+            "打开 MCP 服务器与插件的扩展管理器：查看已接入的内容及其新增的工具。\n用于确认集成已加载或浏览可用工具。\n与设置不同，设置存放的是应用通用选项。",
+        ),
+        (
+            "Detaches the running foreground Execute so it keeps working in the background while you read, queue prompts, or start something else.\nTrack background work with /tasks.\nOnly meaningful while a foreground Execute is actually running.",
+            "把正在前台运行的 Execute 转入后台继续执行，你可以同时阅读、排队提示词或开始其它事情。\n用 /tasks 跟踪后台工作。\n仅在前台确有 Execute 正在运行时才有意义。",
+        ),
+        (
+            "Detaches the running foreground Execute so it keeps working in the background while you read, queue prompts, or start something else.\nTrack and resume it from the tasks pane (Ctrl+G).\nOnly meaningful while a foreground Execute is actually running.",
+            "把正在前台运行的 Execute 转入后台继续执行，你可以同时阅读、排队提示词或开始其它事情。\n在任务面板 (Ctrl+G) 中跟踪并回到它。\n仅在前台确有 Execute 正在运行时才有意义。",
+        ),
+        (
+            "Sends a message to the agent mid-turn without cancelling it (interject), so you can steer or add context while it keeps working.\nPlain Enter while a turn is running queues a follow-up for later; this chord merges composer text into the current turn instead.\nWith an empty composer, bare Enter (or this chord) force-sends the top queued follow-up from the prompt: no need to focus the queue pane. On the queue pane, this chord force-sends the selected row.\nReach for it to correct course without losing the turn's progress.",
+            "在轮次进行中向代理发送消息而不取消它（插话），让它在继续工作的同时接受你的引导或补充上下文。\n轮次运行时按普通 Enter 会把后续提示词排队等待；这个组合键则把输入框文本合并进当前轮。\n输入框为空时，直接按 Enter（或此组合键）会从提示词处强制发送队首的排队消息，无需聚焦队列面板；在队列面板上，此组合键强制发送选中行。\n用于在不丢失轮次进度的前提下纠正方向。",
+        ),
+        (
+            "Microphone capture for dictation, bound to Ctrl+Space (or F8: handy where Ctrl+Space is taken, e.g. macOS input-source switching; use Fn+F8 on a laptop).\nBehavior follows the Voice capture setting: toggle (press to start, press again to stop) or hold-to-talk (hold to record, release to stop), where hold needs a Kitty-protocol terminal and falls back to toggle elsewhere. `/voice` toggles everywhere.\nSpeech is transcribed straight into the prompt.",
+            "用于语音输入的麦克风采集，绑定 Ctrl+Space（或 F8：在 Ctrl+Space 被占用时很方便，如 macOS 输入法切换；笔记本上用 Fn+F8）。\n行为跟随语音采集设置：切换式（按一下开始，再按停止）或按住说话（按住录音，松开停止），按住说话需要支持 Kitty 协议的终端，其它终端回退为切换式。`/voice` 在所有终端都可切换。\n语音直接转写进提示词。",
+        ),
+        (
+            "Toggles a persistent multi-line prompt so the editor stays expanded for composing longer messages.\nInsert newlines with Shift+Enter or Alt+Enter (or a trailing backslash); bare Enter still sends.\nCtrl+M toggles multiline in the prompt; off the prompt it opens the model picker.",
+            "切换持久的多行提示词，让编辑器保持展开以便撰写更长的消息。\n用 Shift+Enter 或 Alt+Enter（或行尾反斜杠）插入换行；单独按 Enter 仍然发送。\n在提示词上 Ctrl+M 切换多行；离开提示词则打开模型选择器。",
+        ),
+        (
+            "Stash your current prompt as a draft.\nCtrl+S sets the draft aside and clears the composer. Ctrl+S on an empty composer restores it. The draft also restores by itself after you send your next prompt. Use Alt+S if your terminal swallows Ctrl+S.\nOne draft at a time: a new stash replaces the old one.",
+            "把当前提示词暂存为草稿。\nCtrl+S 收起草稿并清空输入框；输入框为空时按 Ctrl+S 恢复草稿。发送下一条提示词后草稿也会自动恢复。若终端吞掉 Ctrl+S，可用 Alt+S。\n一次只保留一份草稿：新的暂存会替换旧的。",
+        ),
+        (
+            "Runs a shell command without leaving the chat: type ! at the start of an empty prompt, then the command.\nThe command output is captured into the scrollback.\nDelete the leading ! to go back to a normal prompt.",
+            "不离开对话即可运行 shell 命令：在空提示词开头输入 !，然后输入命令。\n命令输出会被收入回滚缓冲。\n删掉开头的 ! 即可恢复普通提示词。",
+        ),
+        (
+            "Turns auto-approve (YOLO) on or off for this session.\nWhile on, the agent runs every tool call (edits, shell, deletes) with no per-action confirmation.\nSame state as the Shift+Tab cycle's Always-Approve; use with care.",
+            "为当前会话开启或关闭自动批准（YOLO）。\n开启后，代理执行每个工具调用（编辑、shell、删除）都无需逐项确认。\n与 Shift+Tab 循环中的总是批准是同一状态；请谨慎使用。",
+        ),
+        (
+            "Starts a fresh session with empty scrollback and context.\nRequires confirmation: press it twice (the first press arms, the second starts)\nso you don't discard the current conversation by accident.",
+            "开始一个回滚和上下文都为空的全新会话。\n需要确认：连按两次（第一次预备，第二次开始），\n以免误丢当前对话。",
+        ),
+        (
+            "Exits the app. Requires confirmation: press twice in quick succession;\na lone press is treated as a stray key and ignored.\nBound to Ctrl+Q, with Ctrl+D as an alias (Ctrl+D is primary in VS Code's terminal).",
+            "退出程序。需要确认：快速连按两次；\n单独一次会被当作误键忽略。\n绑定 Ctrl+Q，Ctrl+D 为别名（在 VS Code 终端中 Ctrl+D 为主键）。",
+        ),
+        (
+            "Fuzzy-search every action and slash command, then run it by name.\nUseful when you don't remember a key binding.\nAlso opens with ? while the scrollback is focused.",
+            "模糊搜索所有操作和斜杠命令，按名称运行。\n记不住快捷键时很有用。\n回滚缓冲获得焦点时也可按 ? 打开。",
+        ),
+        (
+            "Opens this keyboard cheatsheet.\nBrowse with j/k, expand a row's inline help with e, or press Enter for a shortcut's full detail page.\nBound to both Ctrl+. and Ctrl+X; the bar advertises whichever your terminal sends reliably.",
+            "打开这份键盘快捷键速查表。\n用 j/k 浏览，用 e 展开一行的内联说明，或按 Enter 查看快捷键的完整详情页。\n同时绑定 Ctrl+. 和 Ctrl+X；提示栏会展示你的终端能可靠发送的那个。",
+        ),
+        (
+            "Opens the model picker to switch the model for this session; the choice applies to later turns.\nBound to Ctrl+M, but while the prompt is focused that chord toggles multiline instead.\nReach it from the scrollback or the command palette.",
+            "打开模型选择器切换当前会话的模型；选择对之后的轮次生效。\n绑定 Ctrl+M，但提示词获得焦点时该组合键改为切换多行。\n可从回滚缓冲或命令面板进入。",
+        ),
+        (
+            "Opens the Agent Dashboard: a list of all your running and recent agents to monitor and switch between.\nWorks from anywhere, including the welcome screen and inside a session.\nFrom there you can dispatch, attach, stop, group, and reorder agents.",
+            "打开代理仪表盘：列出所有运行中和最近的代理，便于监控与切换。\n任何界面都可用，包括欢迎屏和会话内。\n在那里可以派发、接入、停止、分组和排序代理。",
+        ),
+        (
+            "Pins or unpins the selected agent so it stays at the top of the list regardless of sorting or grouping.\nKeep the agents you care about in view as others come and go.\nPins persist across dashboard sessions.",
+            "固定或取消固定选中的代理，使其无视排序和分组始终保持在列表顶部。\n在其它代理来来去去时，把你关心的代理留在视野内。\n固定状态跨仪表盘会话持久保存。",
+        ),
+        (
+            "On a busy top-level row, Ctrl+X cancels the running turn. Once the row is idle, press Ctrl+X again within 2s to permanently delete the session.\nOn a subagent row, Ctrl+X kills the subagent.",
+            "在忙碌的顶层行上，Ctrl+X 取消正在运行的轮次。行空闲后 2 秒内再按一次 Ctrl+X 可永久删除该会话。\n在子代理行上，Ctrl+X 终止该子代理。",
+        ),
+        (
+            "Cycles the dispatch mode for agents you launch from the dashboard: Normal, Plan, then Always-Approve.\nPlan has new agents plan before changing files; Always-Approve runs their tools without prompting.\nMirrors the in-session Shift+Tab cycle, applied to new dispatches.",
+            "切换从仪表盘启动的代理的派发模式：正常、计划、总是批准。\n计划模式让新代理先规划再改文件；总是批准模式不询问地运行其工具。\n对应会话内的 Shift+Tab 循环，作用于新派发的代理。",
+        ),
+        (
+            "Switches the dashboard between a flat list and rows grouped by state, such as working versus idle.\nGrouping surfaces the agents that need attention; the flat list keeps a stable order.\nYour choice persists across sessions.",
+            "在平铺列表与按状态分组的行之间切换仪表盘，例如运行中与空闲。\n分组能突出需要关注的代理；平铺列表保持稳定顺序。\n你的选择跨会话持久保存。",
+        ),
+        (
+            "Closes the dashboard and returns to where you were.\nEsc is a cascade: it first dismisses an open peek or clears an active filter, and only exits once nothing else is pending.\nRebind this action to a different key to exit directly.",
+            "关闭仪表盘并回到之前的位置。\nEsc 是级联的：先关闭已打开的预览或清除生效的过滤，等没有其它待处理时才退出。\n把此操作改绑到其它按键即可直接退出。",
+        ),
+        (
+            "Toggles auto-approve (YOLO) for the selected agent right from the dashboard, without attaching to it.\nWhile on, that agent runs every tool call with no per-action confirmation.\nThe per-session equivalent is Ctrl+O inside a session.",
+            "在仪表盘上直接切换选中代理的自动批准（YOLO），无需接入它的会话。\n开启后，该代理执行每个工具调用都无需逐项确认。\n会话内的等价操作是会话中的 Ctrl+O。",
+        ),
+        (
+            "Opens a picker to set the working directory that newly dispatched dashboard agents run in.\nLaunch agents against a different repo or folder without leaving the dashboard.\nAffects new dispatches only, not agents already running.",
+            "打开选择器，设置新派发的仪表盘代理的运行目录。\n不离开仪表盘即可让代理面向另一个仓库或文件夹工作。\n只影响新派发，不影响已在运行的代理。",
+        ),
+        (
+            "Arms the next dashboard-dispatched agent to spawn in a fresh git worktree, isolating its work on a separate checkout.\nOnly applies when the working directory is a git repo.\nAffects newly dispatched agents, not ones already running.",
+            "让下一个从仪表盘派发的代理在全新的 git 工作树中启动，把它的工作隔离在独立检出上。\n仅当工作目录是 git 仓库时生效。\n影响新派发的代理，不影响已在运行的代理。",
+        ),
+        (
+            "Leaves the attached session overlay and returns to the dashboard list, without stopping the agent.\nAlso reachable via q on the scrollback, a neutral Esc, or the close button.\nTo stop the agent instead of just detaching, use Ctrl+X.",
+            "离开已接入的会话浮层并返回仪表盘列表，不停止代理。\n也可以在回滚缓冲上按 q、按中性 Esc 或点关闭按钮到达。\n要在断开的同时停止代理，请用 Ctrl+X。",
+        ),
+        (
+            "Inside a session overlay, stops the attached agent and closes it, returning you to the dashboard list.\nRequires confirmation: press Ctrl+X twice.\nCtrl+. still opens the cheatsheet here; only Ctrl+X is taken over by stop.",
+            "在会话浮层内停止已接入的代理并关闭它，返回仪表盘列表。\n需要确认：按两次 Ctrl+X。\n此处 Ctrl+. 仍可打开快捷键速查表；只有 Ctrl+X 被停止操作接管。",
+        ),
         // -- P1 常用弹窗与帮助 · 用量弹窗（usage_modal；标签页/页脚经 modal_window 查表） --
         ("Context usage", "上下文用量"),
         ("Usage limit", "用量限额"),
@@ -1153,7 +1786,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("No active session.", "无活动会话"),
         ("Loading context usage\u{2026}", "正在加载上下文用量…"),
         ("Couldn't load context usage", "无法加载上下文用量"),
-        ("Usage limits are managed by your team.", "用量限制由你的团队管理"),
+        (
+            "Usage limits are managed by your team.",
+            "用量限制由你的团队管理",
+        ),
         ("Please check your usage on {url}", "请前往 {url} 查看用量"),
         ("Couldn't load usage", "无法加载用量"),
         ("Loading usage\u{2026}", "正在加载用量…"),
@@ -1164,7 +1800,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Resets", "重置时间"),
         ("Credits", "积分"),
         ("Pay as you go: Enabled", "按量付费：已启用"),
-        ("Usage: ${used} / ${cap} per month", "每月用量：${used} / ${cap}"),
+        (
+            "Usage: ${used} / ${cap} per month",
+            "每月用量：${used} / ${cap}",
+        ),
         ("Couldn't load session info", "无法加载会话信息"),
         ("Loading session info\u{2026}", "正在加载会话信息…"),
         ("click or drag to copy", "点击或拖拽即可复制"),
@@ -1181,7 +1820,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Managed by grok.com ({})", "由 grok.com 管理 ({})"),
         ("Plugin: ", "插件："),
         ("Local ({})", "本地 ({})"),
-        ("Add, remove, or manage connectors. Ctrl+O to open or go to:", "添加、移除或管理连接器。按 Ctrl+O 打开或跳转："),
+        (
+            "Add, remove, or manage connectors. Ctrl+O to open or go to:",
+            "添加、移除或管理连接器。按 Ctrl+O 打开或跳转：",
+        ),
         ("ready", "就绪"),
         ("needs auth", "需要认证"),
         ("setup required", "需要配置"),
@@ -1189,8 +1831,14 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("initializing", "初始化中"),
         ("blocked by policy", "已被策略阻止"),
         // -- P1 常用弹窗与帮助 · 教程（tutorial + tutorial_docs 仅代码内 title/blurb） --
-        ("Quick tips to get the most out of Grok Build.", "善用 Grok Build 的快速技巧。"),
-        ("Pick a topic. Esc when you're done.", "选择一个主题。看完后按 Esc。"),
+        (
+            "Quick tips to get the most out of Grok Build.",
+            "善用 Grok Build 的快速技巧。",
+        ),
+        (
+            "Pick a topic. Esc when you're done.",
+            "选择一个主题。看完后按 Esc。",
+        ),
         ("Welcome to Grok Build", "欢迎使用 Grok Build"),
         ("{}/{} explored", "已浏览 {}/{}"),
         ("\u{2192} next: ", "→ 下一个："),
@@ -1201,7 +1849,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("d go deeper", "d 深入阅读"),
         ("Esc list", "Esc 返回列表"),
         // 教程主题标题
-        ("Coming from Claude, Cursor, or Codex?", "从 Claude、Cursor 或 Codex 转来？"),
+        (
+            "Coming from Claude, Cursor, or Codex?",
+            "从 Claude、Cursor 或 Codex 转来？",
+        ),
         ("Your First Prompt", "你的第一条提示词"),
         ("Attach Files, Images & Paste", "附件、图片与粘贴"),
         ("Finding Your Way Around", "熟悉界面"),
@@ -1211,14 +1862,23 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Make It Yours", "个性化设置"),
         ("Where to Go Next", "下一步去哪"),
         // 教程主题简介
-        ("your settings, rules & skills carry over", "设置、规则与技能可直接迁移"),
+        (
+            "your settings, rules & skills carry over",
+            "设置、规则与技能可直接迁移",
+        ),
         ("send, queue, cancel", "发送、排队、取消"),
         ("@files, line ranges, screenshots", "@文件、行范围、截图"),
         ("focus, scrollback, panes", "焦点、回滚缓冲、窗格"),
-        ("/help  /model  /resume  and Ctrl+P", "/help  /model  /resume  与 Ctrl+P"),
+        (
+            "/help  /model  /resume  and Ctrl+P",
+            "/help  /model  /resume  与 Ctrl+P",
+        ),
         ("isolated sessions on one repo", "同一仓库上的隔离会话"),
         ("review the approach before it acts", "先审方案再动手"),
-        ("just ask: AGENTS.md, memory, themes", "开口即可：AGENTS.md、记忆、主题"),
+        (
+            "just ask: AGENTS.md, memory, themes",
+            "开口即可：AGENTS.md、记忆、主题",
+        ),
         ("guides, feedback, and good habits", "指南、反馈与好习惯"),
         // Go deeper 指南页标题（go_deeper 索引键保持英文，此处仅供渲染出口查表）
         ("Project Rules (AGENTS.md)", "项目规则 (AGENTS.md)"),
@@ -1265,24 +1925,60 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("{days}d ago", "{days} 天前"),
         // -- P2 集成管理弹窗 · 反馈弹窗（feedback_modal：移出通知/trace 问句/标签行/空态/存储长句渲染出口/taxonomy 枚举） --
         // 移出通知（FeedbackModalDisplacement::notice，拼进 scrollback 系统通知）
-        ("Feedback closed because the turn-cancel prompt needs an answer.", "反馈弹窗已关闭：取消当前轮的确认需要回答。"),
-        ("Feedback closed because a plan is ready for approval.", "反馈弹窗已关闭：有计划等待批准。"),
-        ("Feedback closed because a permission request needs an answer.", "反馈弹窗已关闭：权限请求需要回答。"),
-        ("Feedback closed because the agent asked a question.", "反馈弹窗已关闭：代理提出了一个问题。"),
-        ("Feedback closed because another prompt needs an answer.", "反馈弹窗已关闭：另一个提示需要回答。"),
-        ("Feedback closed because a tool needs your input.", "反馈弹窗已关闭：某个工具需要你的输入。"),
-        ("Feedback closed because a hook blocked the prompt.", "反馈弹窗已关闭：提示词被钩子拦截。"),
+        (
+            "Feedback closed because the turn-cancel prompt needs an answer.",
+            "反馈弹窗已关闭：取消当前轮的确认需要回答。",
+        ),
+        (
+            "Feedback closed because a plan is ready for approval.",
+            "反馈弹窗已关闭：有计划等待批准。",
+        ),
+        (
+            "Feedback closed because a permission request needs an answer.",
+            "反馈弹窗已关闭：权限请求需要回答。",
+        ),
+        (
+            "Feedback closed because the agent asked a question.",
+            "反馈弹窗已关闭：代理提出了一个问题。",
+        ),
+        (
+            "Feedback closed because another prompt needs an answer.",
+            "反馈弹窗已关闭：另一个提示需要回答。",
+        ),
+        (
+            "Feedback closed because a tool needs your input.",
+            "反馈弹窗已关闭：某个工具需要你的输入。",
+        ),
+        (
+            "Feedback closed because a hook blocked the prompt.",
+            "反馈弹窗已关闭：提示词被钩子拦截。",
+        ),
         // 同一条通知的配套句（app/agent_view/modals.rs 拼接侧）
-        ("The feedback send is still in progress; its outcome will appear here.", "反馈发送仍在进行中；其结果会显示在这里。"),
+        (
+            "The feedback send is still in progress; its outcome will appear here.",
+            "反馈发送仍在进行中；其结果会显示在这里。",
+        ),
         ("Your draft was discarded.", "你的草稿已丢弃。"),
         // trace 选项与确认问句
         ("Send this session's trace", "发送本会话的追踪"),
         ("No, just the feedback", "否，只发送反馈"),
         ("No, and don't ask again", "否，且不再询问"),
-        ("Attach this session's trace to help us debug this bug?", "附上本会话的追踪，帮助我们调试这个 bug？"),
-        ("Attach this session's trace to give this idea context?", "附上本会话的追踪，为这条建议补充上下文？"),
-        ("Attach this session's trace to show what was missing?", "附上本会话的追踪，展示缺失了什么？"),
-        ("Attach this session's trace to your feedback?", "将本会话的追踪附到你的反馈中？"),
+        (
+            "Attach this session's trace to help us debug this bug?",
+            "附上本会话的追踪，帮助我们调试这个 bug？",
+        ),
+        (
+            "Attach this session's trace to give this idea context?",
+            "附上本会话的追踪，为这条建议补充上下文？",
+        ),
+        (
+            "Attach this session's trace to show what was missing?",
+            "附上本会话的追踪，展示缺失了什么？",
+        ),
+        (
+            "Attach this session's trace to your feedback?",
+            "将本会话的追踪附到你的反馈中？",
+        ),
         // 标签行与图片错误
         ("Type: ", "类型: "),
         ("Task: ", "任务: "),
@@ -1291,28 +1987,61 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Task: (choose)", "任务: （请选择）"),
         ("Dropped {n} invalid image(s).", "已丢弃 {n} 张无效图片。"),
         // render 出口：空态/确认问句/占位符
-        ("Discard the current Write composition and open the selected draft?", "放弃当前正在撰写的内容并打开选中的草稿？"),
+        (
+            "Discard the current Write composition and open the selected draft?",
+            "放弃当前正在撰写的内容并打开选中的草稿？",
+        ),
         ("y discard  |  n cancel", "y 放弃  |  n 取消"),
-        ("Delete the stored recovery copy? Your current edits will remain.", "删除已保存的恢复副本？你当前的编辑会保留。"),
+        (
+            "Delete the stored recovery copy? Your current edits will remain.",
+            "删除已保存的恢复副本？你当前的编辑会保留。",
+        ),
         ("Delete this feedback draft?", "删除这条反馈草稿？"),
         ("Deleting…", "删除中…"),
         ("y delete  |  n cancel", "y 删除  |  n 取消"),
-        ("Open Drafts to load saved feedback.", "打开草稿页以加载已保存的反馈。"),
+        (
+            "Open Drafts to load saved feedback.",
+            "打开草稿页以加载已保存的反馈。",
+        ),
         ("Loading drafts…", "正在加载草稿…"),
         ("Unclassified", "未分类"),
         ("No drafts.", "暂无草稿"),
         ("No matching drafts.", "没有匹配的草稿"),
-        ("One archive of this session is sent with this report only. Nothing is turned on for future sessions.", "仅随本次报告发送本会话的一份归档，不会为之后的会话开启任何共享。"),
+        (
+            "One archive of this session is sent with this report only. Nothing is turned on for future sessions.",
+            "仅随本次报告发送本会话的一份归档，不会为之后的会话开启任何共享。",
+        ),
         ("Tell us what happened", "告诉我们发生了什么"),
         // 存 state 的英文键（render 出口 tr_str 查表；与源码逐字符一致）
-        ("Add feedback text or an image before sending.", "发送前请输入反馈文字或添加图片。"),
-        ("Couldn't restore one feedback image; the original file was kept.", "无法恢复一张反馈图片；已保留原始文件。"),
+        (
+            "Add feedback text or an image before sending.",
+            "发送前请输入反馈文字或添加图片。",
+        ),
+        (
+            "Couldn't restore one feedback image; the original file was kept.",
+            "无法恢复一张反馈图片；已保留原始文件。",
+        ),
         ("Sending draft…", "草稿发送中…"),
-        ("Feedback was sent, but the stored draft could not be deleted. Delete it manually; do not resend.", "反馈已发送，但已保存的草稿未能删除。请手动删除；不要重发。"),
-        ("The remote outcome is unknown. The latest text was copied to the clipboard. Saving it back to this draft; close and do not resend.", "远端结果未知。最新文本已复制到剪贴板，正保存回此草稿；请关闭且不要重发。"),
-        ("The remote outcome is unknown. The latest text was copied to the clipboard. Close and do not resend.", "远端结果未知。最新文本已复制到剪贴板。请关闭且不要重发。"),
-        ("The remote outcome is unknown. The latest text was saved to this draft and copied to the clipboard. Close and do not resend.", "远端结果未知。最新文本已保存到此草稿并复制到剪贴板。请关闭且不要重发。"),
-        ("The remote outcome is unknown. The latest text was copied to the clipboard, but it could not be saved to the draft. Close and do not resend.", "远端结果未知。最新文本已复制到剪贴板，但未能保存到此草稿。请关闭且不要重发。"),
+        (
+            "Feedback was sent, but the stored draft could not be deleted. Delete it manually; do not resend.",
+            "反馈已发送，但已保存的草稿未能删除。请手动删除；不要重发。",
+        ),
+        (
+            "The remote outcome is unknown. The latest text was copied to the clipboard. Saving it back to this draft; close and do not resend.",
+            "远端结果未知。最新文本已复制到剪贴板，正保存回此草稿；请关闭且不要重发。",
+        ),
+        (
+            "The remote outcome is unknown. The latest text was copied to the clipboard. Close and do not resend.",
+            "远端结果未知。最新文本已复制到剪贴板。请关闭且不要重发。",
+        ),
+        (
+            "The remote outcome is unknown. The latest text was saved to this draft and copied to the clipboard. Close and do not resend.",
+            "远端结果未知。最新文本已保存到此草稿并复制到剪贴板。请关闭且不要重发。",
+        ),
+        (
+            "The remote outcome is unknown. The latest text was copied to the clipboard, but it could not be saved to the draft. Close and do not resend.",
+            "远端结果未知。最新文本已复制到剪贴板，但未能保存到此草稿。请关闭且不要重发。",
+        ),
         // 弹窗框架出口查表（modal_window：标题/标签页）与页脚 rest 键
         ("Feedback", "反馈"),
         ("Write", "撰写"),
@@ -1355,8 +2084,14 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("[disabled]", "[已禁用]"),
         ("Required", "必填项"),
         ("Select an option", "请选择一个选项"),
-        ("Expand this row (Enter), then select a {noun} row to {verb}.", "请先展开此行（Enter），再选择要{verb}的{noun}行。"),
-        ("Select a {noun} row to {verb}.", "请选择一个要{verb}的{noun}行。"),
+        (
+            "Expand this row (Enter), then select a {noun} row to {verb}.",
+            "请先展开此行（Enter），再选择要{verb}的{noun}行。",
+        ),
+        (
+            "Select a {noun} row to {verb}.",
+            "请选择一个要{verb}的{noun}行。",
+        ),
         ("hook", "钩子"),
         ("skill", "技能"),
         ("plugin", "插件"),
@@ -1408,7 +2143,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("blocked by policy — {reason}", "被策略阻止 — {reason}"),
         ("no tools — server is disabled", "无工具 — 服务器已禁用"),
         ("no tools —", "无工具 —"),
-        ("no tools (server may not be connected)", "无工具（服务器可能未连接）"),
+        (
+            "no tools (server may not be connected)",
+            "无工具（服务器可能未连接）",
+        ),
         ("{n} tools", "{n} 个工具"),
         ("{n} tools ({m} enabled)", "{n} 个工具（{m} 个已启用）"),
         ("Server", "服务器"),
@@ -1449,12 +2187,24 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         // 表单字段标签与占位符（MCP setup / input form，渲染出口 tr_str）
         ("Path", "路径"),
         ("URL / Command", "URL / 命令"),
-        ("owner/repo, URL, or local path", "owner/repo、URL 或本地路径"),
-        ("owner/repo, git URL, or local path", "owner/repo、git URL 或本地路径"),
-        ("https://... or command [args...]", "https://… 或命令 [参数…]"),
+        (
+            "owner/repo, URL, or local path",
+            "owner/repo、URL 或本地路径",
+        ),
+        (
+            "owner/repo, git URL, or local path",
+            "owner/repo、git URL 或本地路径",
+        ),
+        (
+            "https://... or command [args...]",
+            "https://… 或命令 [参数…]",
+        ),
         ("Auto generated by URL", "由 URL 自动生成"),
         ("when to use", "使用时机"),
-        ("No workflows available. Ask Grok to help make you one!", "暂无可用工作流。可以让 Grok 帮你创建一个！"),
+        (
+            "No workflows available. Ask Grok to help make you one!",
+            "暂无可用工作流。可以让 Grok 帮你创建一个！",
+        ),
         // modals.rs 侧：确认问句前缀/后缀键与静态提示（state 存英文键，渲染出口 tr_str / 构造期 tr）
         ("Cannot remove managed server ", "无法移除托管服务器 "),
         ("Remove MCP server ", "移除 MCP 服务器 "),
@@ -1463,8 +2213,14 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Uninstall marketplace plugin ", "卸载市场插件 "),
         ("Remove source ", "移除来源 "),
         ("and uninstall all its plugins?", "并卸载其全部插件？"),
-        ("This hook source is enforced by managed policy and cannot be removed.", "此钩子来源由托管策略强制执行，无法在此移除。"),
-        ("Only user-added hook directories can be removed here.", "只有用户添加的钩子目录才能在这里移除。"),
+        (
+            "This hook source is enforced by managed policy and cannot be removed.",
+            "此钩子来源由托管策略强制执行，无法在此移除。",
+        ),
+        (
+            "Only user-added hook directories can be removed here.",
+            "只有用户添加的钩子目录才能在这里移除。",
+        ),
         // -- P3 dashboard: chrome 状态 chip 与按钮（chrome.rs）--
         ("awaiting", "等待输入"),
         ("working", "进行中"),
@@ -1475,7 +2231,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Worktree", "工作树"),
         ("Disable Worktree", "停用工作树"),
         // -- P3 dashboard: row 行文案（row.rs；AgentCommand::display_name 组合处 tr）--
-        ("{tools} tools · {toks} tok · {turns} turns", "{tools} 个工具 · {toks} token · {turns} 轮"),
+        (
+            "{tools} tools · {toks} tok · {turns} turns",
+            "{tools} 个工具 · {toks} token · {turns} 轮",
+        ),
         ("Compacting", "压缩中"),
         ("Creating worktree", "创建工作树"),
         ("Restoring session in worktree", "在工作树中恢复会话"),
@@ -1494,13 +2253,28 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("{n} more", "还有 {n} 项"),
         ("Pending:", "待处理:"),
         ("Subagent not loaded", "子代理未加载"),
-        (" No sessions yet. Esc to dispatch one. ", " 还没有会话。按 Esc 派发一个。 "),
+        (
+            " No sessions yet. Esc to dispatch one. ",
+            " 还没有会话。按 Esc 派发一个。 ",
+        ),
         ("Loading sessions…", "正在加载会话…"),
-        ("No agents yet, type a prompt to start one.", "还没有代理，输入提示词即可启动一个。"),
+        (
+            "No agents yet, type a prompt to start one.",
+            "还没有代理，输入提示词即可启动一个。",
+        ),
         ("No matching rows.", "没有匹配的行。"),
-        ("No agents match `a:{n}`. Press Esc to clear the filter.", "没有代理匹配 `a:{n}`。按 Esc 清除过滤。"),
-        ("No agents in state `{state}`: press Esc to clear the filter.", "没有处于 `{state}` 状态的代理：按 Esc 清除过滤。"),
-        ("No rows match `{n}`: press Esc to clear the filter.", "没有行匹配 `{n}`：按 Esc 清除过滤。"),
+        (
+            "No agents match `a:{n}`. Press Esc to clear the filter.",
+            "没有代理匹配 `a:{n}`。按 Esc 清除过滤。",
+        ),
+        (
+            "No agents in state `{state}`: press Esc to clear the filter.",
+            "没有处于 `{state}` 状态的代理：按 Esc 清除过滤。",
+        ),
+        (
+            "No rows match `{n}`: press Esc to clear the filter.",
+            "没有行匹配 `{n}`：按 Esc 清除过滤。",
+        ),
         // -- P3 dashboard: render 横幅/派发框/徽标 --
         ("{n} agent", "{n} 个代理"),
         ("{n} working", "{n} 个进行中"),
@@ -1522,7 +2296,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("open previous", "打开上一会话"),
         ("disable worktree", "停用工作树"),
         ("enable worktree", "启用工作树"),
-        ("(terminal too small: Esc to close)", "（终端太小：按 Esc 关闭）"),
+        (
+            "(terminal too small: Esc to close)",
+            "（终端太小：按 Esc 关闭）",
+        ),
         ("[Dashboard]", "[仪表盘]"),
         ("Change directory", "更改目录"),
         (" path: ", " 路径: "),
@@ -1591,9 +2368,18 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("  Details: ", "  详情："),
         // -- P3 goal_detail: 提示行（/goal 子命令名保持原文）--
         ("Type /goal resume to continue", "输入 /goal resume 继续"),
-        ("Type /goal clear, then start a new goal", "输入 /goal clear，然后开始新目标"),
-        ("Esc: close  /goal clear, then start a new goal", "Esc：关闭  /goal clear 后开始新目标"),
-        ("Esc: close  /goal resume | pause | status | clear", "Esc：关闭  /goal resume | pause | status | clear"),
+        (
+            "Type /goal clear, then start a new goal",
+            "输入 /goal clear，然后开始新目标",
+        ),
+        (
+            "Esc: close  /goal clear, then start a new goal",
+            "Esc：关闭  /goal clear 后开始新目标",
+        ),
+        (
+            "Esc: close  /goal resume | pause | status | clear",
+            "Esc：关闭  /goal resume | pause | status | clear",
+        ),
         // -- P3 goal_detail: 事件文案（匹配键 goal_created 等不译，仅译展示值）--
         ("Goal created", "目标已创建"),
         ("Planning started", "开始规划"),
@@ -1652,8 +2438,14 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("enter open", "enter 打开"),
         ("esc close", "esc 关闭"),
         // -- P3 workflows: 空态 --
-        ("No workflow runs in this session yet.", "本会话尚无工作流运行。"),
-        ("Start one with /deep-research <query> or ask for a workflow.", "使用 /deep-research <查询> 启动一个，或直接要求编排一个工作流。"),
+        (
+            "No workflow runs in this session yet.",
+            "本会话尚无工作流运行。",
+        ),
+        (
+            "Start one with /deep-research <query> or ask for a workflow.",
+            "使用 /deep-research <查询> 启动一个，或直接要求编排一个工作流。",
+        ),
         ("No agents in this phase yet.", "该阶段暂无代理。"),
         // -- P3 workflows: 计数模板（单复数分键保英文正确，中文合并）--
         ("{done}/{total} phase", "{done}/{total} 个阶段"),
@@ -1785,7 +2577,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("auto (follow system)", "auto（跟随系统）"),
         (" (active)", "（生效中）"),
         ("Toggle the FPS overlay", "切换 FPS 浮层"),
-        ("Toggle the scroll flight recorder (JSONL)", "切换滚动飞行记录器（JSONL）"),
+        (
+            "Toggle the scroll flight recorder (JSONL)",
+            "切换滚动飞行记录器（JSONL）",
+        ),
         // -- P4 扫尾: mode_support 模式拒绝说明（why/instead 在消费点插值）--
         (
             "/{token} isn't available in {current} mode ({why}). Run {switch} to switch this session.",
@@ -1795,7 +2590,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "/{token} isn't available in {current} mode: {instead}.",
             "/{token} 在 {current} 模式下不可用：{instead}。",
         ),
-        ("You're already in {current} mode.", "你已处于 {current} 模式。"),
+        (
+            "You're already in {current} mode.",
+            "你已处于 {current} 模式。",
+        ),
         (
             "minimal scrolls with your terminal's native scrollback",
             "minimal 滚动使用终端原生回滚缓冲",
@@ -1813,11 +2611,241 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "the timeline rail needs the interactive scrollback pane",
             "时间线栏需要交互式回滚缓冲面板",
         ),
-        ("the tutorial overlay needs fullscreen", "教程浮层需要全屏模式"),
+        (
+            "the tutorial overlay needs fullscreen",
+            "教程浮层需要全屏模式",
+        ),
         (
             "press Tab to focus the scrollback, then → on the block",
             "按 Tab 聚焦回滚缓冲，再对块按 →",
         ),
+        // -- 十六期：T3 计划外扫尾（i18n-sweep 2026-10-02）--
+        // modal 页脚 shortcut_label_i18n 的 rest 键（键帽由出口保留）
+        ("switch", "切换"),
+        ("scroll", "滚动"),
+        ("all models", "全部 model"),
+        ("copy session ID", "复制会话 ID"),
+        ("copy all", "复制全部"),
+        // stats_modal 性能指标标签（屏显与复制文本共用）
+        ("ttft p50/p90", "首字延迟 p50/p90"),
+        ("tps p50/p90", "生成速度 p50/p90"),
+        // turn_status 活动名词（format_still_running 渲染出口 tr_str 查表）
+        ("command", "命令"),
+        ("monitor", "监视"),
+        ("loop", "循环"),
+        ("subagent", "子代理"),
+        ("workflow", "工作流"),
+        ("task", "任务"),
+        (" still running", " 仍在运行"),
+        // turn_status 状态行
+        (
+            "agent idle ~ waiting on your edit",
+            "代理空闲，等待你的编辑",
+        ),
+        (
+            " · {held_queue} queued, Enter to send now",
+            " · {held_queue} 条排队中，Enter 立即发送",
+        ),
+        (" · {held_queue} queued", " · {held_queue} 条排队中"),
+        (" · send a message to interrupt", " · 发送消息以中断"),
+        ("waiting{parked_suffix}", "等待中{parked_suffix}"),
+        (" [send to bg]", " [转入后台]"),
+        (" [stop]", " [停止]"),
+        (
+            "Waiting on answers for {detail}",
+            "等待以下问题的回答：{detail}",
+        ),
+        ("Search ", "搜索 "),
+        ("Fetch ", "抓取 "),
+        ("Run ", "运行 "),
+        ("Cancelling…", "正在取消…"),
+        ("Verifying…", "正在验证…"),
+        ("Compacting…", "正在压缩…"),
+        ("Running…", "运行中…"),
+        ("Waiting…", "等待中…"),
+        ("Starting session…", "正在启动会话…"),
+        // queue_pane 操作按钮
+        ("[cancel]", "[取消]"),
+        ("[Send now]", "[立即发送]"),
+        ("[edit]", "[编辑]"),
+        // rewind 对话确认（W2-D）
+        ("A turn is currently running.", "当前有轮次正在运行。"),
+        (
+            "Would you like to cancel it before rewinding?",
+            "回退前要先取消它吗？",
+        ),
+        ("Cancel turn and rewind", "取消轮次并回退"),
+        ("Let it finish", "等它跑完"),
+        ("Rewinding...", "正在回退..."),
+        ("this turn", "本轮"),
+        ("Rewind conversation to “", "将对话回退到 “"),
+        ("”?", "”？"),
+        ("Yes", "是"),
+        ("No", "否"),
+        ("Yes, and don't ask again", "是，且不再询问"),
+        ("Rewind failed", "回退失败"),
+        ("Dismiss", "知道了"),
+        // session_picker 字段标签（展开卡片第二渲染路径，W2-E）
+        ("CWD", "目录"),
+        ("Created", "创建时间"),
+        ("Updated", "更新时间"),
+        ("Host", "主机"),
+        ("Messages", "消息"),
+        ("Recap", "回顾"),
+        ("Last turn", "上一轮"),
+        ("Turns", "轮数"),
+        ("Prompt", "提示词"),
+        // welcome 窗口提示与占位符（W2-F）
+        (
+            "Enlarge the window to read this notice",
+            "放大窗口以阅读此通知",
+        ),
+        ("Window too small", "窗口太小"),
+        ("Type a message...", "输入消息…"),
+        // dashboard chrome 直出按钮（W3-H，与既有小写 "open previous" 同族同译）
+        ("Open Previous", "打开上一会话"),
+        // extensions_modal 分组头（渲染出口 tr_group_label 已接线，W4-K 补键）
+        ("Project", "项目"),
+        ("User", "用户"),
+        ("Bundled", "捆绑"),
+        ("on:", "触发："),
+        // plan_approval_view formatter 固定段与兜底文案（W4-L）
+        ("Proposed plan line {}:", "计划第 {} 行:"),
+        ("Proposed plan lines {}-{}:", "计划第 {}-{} 行:"),
+        ("Comment:", "评论："),
+        ("Additional feedback:", "补充反馈："),
+        ("> [plan content unavailable]", "> [计划内容不可用]"),
+        ("> [selected lines unavailable]", "> [所选行不可用]"),
+        // privacy_banner 操作按钮与 LEGAL 分段（W4-L，热区宽度随译文）
+        ("[Opt out]", "[退出]"),
+        ("[Opt in]", "[加入]"),
+        ("Terms", "条款"),
+        ("Privacy Policy", "隐私政策"),
+        (" & ", " 与 "),
+        // dashboard row 状态副行与 peek 的 "Pending: question" 尾段（W4-J）
+        (" question", " 问题"),
+        ("Awaiting input", "等待输入"),
+        // prompt_widget 粘贴/图片提示与占位符（W5-M，具名占位符沿用 turn_status 先例）
+        ("Image limit reached (max {})", "已达图片上限（最多 {}）"),
+        (
+            "Image too small ({w}×{h}). Must be at least {MIN_SIDE}×{MIN_SIDE} pixels.",
+            "图片太小（{w}×{h}）。至少需要 {MIN_SIDE}×{MIN_SIDE} 像素。",
+        ),
+        ("paste again", "再粘贴一次"),
+        (" or ", " 或 "),
+        ("double-click", "双击"),
+        ("Build anything", "构建任何东西"),
+        ("multiline", "多行"),
+        ("Pasted: {n} line{s}", "已粘贴: {n} 行"),
+        ("Pasted: {size}", "已粘贴: {size}"),
+        ("{byte_len} bytes", "{byte_len} 字节"),
+        // announcements 隐藏按钮与提示（W5-M）
+        ("[hide]", "[隐藏]"),
+        ("hide: /announcements hide", "隐藏: /announcements hide"),
+        // app 层 chrome：status_blocks 用量块与任务队列（W5-N）
+        ("Queue is empty.", "队列为空。"),
+        (
+            "Queued prompt{plural} ({count}):",
+            "排队提示词（{count}）：",
+        ),
+        ("Task{plural} ({count}):", "任务（{count}）："),
+        ("stopping", "停止中"),
+        ("scheduled", "已排期"),
+        (
+            "No background tasks, workflows, or subagents.",
+            "没有后台任务、工作流或子代理。",
+        ),
+        (
+            "Session usage: none recorded, but tracking is incomplete and may under-count.",
+            "会话用量：尚无记录，且统计不完整可能少计。",
+        ),
+        (
+            "Session usage: no model calls yet in this session.",
+            "会话用量：本会话还没有模型调用。",
+        ),
+        ("  Input tokens:", "  输入 tokens:"),
+        ("({} cached)", "（其中缓存 {}）"),
+        ("  Output tokens:", "  输出 tokens:"),
+        ("({} reasoning)", "（其中推理 {}）"),
+        ("  Total tokens:", "  总 tokens:"),
+        ("  Model calls:", "  模型调用:"),
+        ("API time:", "API 耗时:"),
+        ("  Cost:", "  费用:"),
+        ("  By model:", "  按模型分列:"),
+        (
+            "    {model}: {in} in / {out} out · {cost}",
+            "    {model}：输入 {in} / 输出 {out} · {cost}",
+        ),
+        (
+            "  Note: usage is incomplete and may under-count.",
+            "  注意：用量统计不完整，可能少计。",
+        ),
+        (
+            "Session usage (since start or last resume):",
+            "会话用量（自启动或上次 /resume 起）：",
+        ),
+        (
+            "not available (not reported for some calls)",
+            "不可用（部分调用未上报）",
+        ),
+        ("not available (not reported)", "不可用（未上报）"),
+        (
+            "  #{pos}  {first}  (+{extra} more line{plural})",
+            "  #{pos}  {first}（另有 {extra} 行）",
+        ),
+        ("  #{pos}  {first}", "  #{pos}  {first}"),
+        // app_view / agent_view chrome（W5-N）
+        ("(session)", "（会话）"),
+        ("Session closed", "会话已关闭"),
+        ("Video playback requires ffmpeg", "视频播放需要 ffmpeg"),
+        ("Couldn't load image preview", "无法加载图片预览"),
+        ("Waiting", "等待中"),
+        ("question", "问题"),
+        ("Type your comment...", "输入你的评论…"),
+        ("Type revision notes...", "输入修改说明…"),
+        ("sandbox", "沙箱"),
+        (" (worktree of {main_repo})", " （{main_repo} 的工作树）"),
+        ("bad pattern", "模式无效"),
+        ("no matches", "无匹配"),
+        ("Recording", "录制中"),
+        ("commenting L{line}", "评论 L{line}"),
+        ("commenting L{start}-{end}", "评论 L{start}-{end}"),
+        ("commenting", "评论中"),
+        ("plan approval", "计划审批"),
+        ("editing queued #{pos}", "编辑排队 #{pos}"),
+        ("Loading...", "加载中…"),
+        ("no matching history", "无匹配历史"),
+        ("Press Esc to close", "按 Esc 关闭"),
+        ("Selected: {n} line{s}", "已选中 {n} 行"),
+        ("[Play]", "[播放]"),
+        ("[Open]", "[打开]"),
+        ("[Copy]", "[复制]"),
+        // shortcuts_bar / modal 标题集中出口的 rest 键（W5-N）
+        ("scope", "范围"),
+        ("prev/next agent", "上/下个代理"),
+        ("dashboard", "仪表盘"),
+        ("fullscreen", "全屏"),
+        ("pause", "暂停"),
+        ("play", "播放"),
+        ("close this session", "关闭此会话"),
+        ("new in worktree", "新建于工作树"),
+        ("Release Notes", "发行说明"),
+        // import_claude_modal 权限动作词/路径类别（W3-G）
+        ("allow", "允许"),
+        ("deny", "拒绝"),
+        ("ask", "询问"),
+        ("skill dir", "技能目录"),
+        ("rule dir", "规则目录"),
+        // persona_detail 空值/折叠提示/io 类型（W3-G）
+        ("(empty)", "（空）"),
+        (
+            "  ... ({} more lines: e to expand, j/k to scroll)",
+            "  ...（还有 {} 行：e 展开，j/k 滚动）",
+        ),
+        ("file", "文件"),
+        // persona_detail 页脚 shortcut_label_i18n rest 键（W3-G）
+        ("edit field", "编辑字段"),
+        ("$EDITOR", "外部编辑器"),
     ]
 }
 

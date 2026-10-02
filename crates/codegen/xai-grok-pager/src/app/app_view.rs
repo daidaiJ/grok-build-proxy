@@ -15,6 +15,7 @@ use crate::key;
 use crate::notifications::NotificationService;
 use crate::render::draw::CursorState;
 use crate::scrollback::render::ScratchBuffer;
+use crate::slash::i18n::tr;
 use crate::views::prompt_widget::PromptWidget;
 use crate::views::welcome::WelcomePromptFocus;
 use agent_client_protocol as acp;
@@ -4514,28 +4515,28 @@ impl AppView {
                         match welcome_mode {
                             Some((true, _, _)) => {
                                 flags_vec.push(crate::views::prompt_widget::PromptFlag {
-                                    text: "plan",
+                                    text: tr("plan"),
                                     color: Some(theme.accent_plan),
                                     bold: false,
                                 });
                             }
                             Some((false, true, _)) => {
                                 flags_vec.push(crate::views::prompt_widget::PromptFlag {
-                                    text: "always-approve",
+                                    text: tr("always-approve"),
                                     color: None,
                                     bold: false,
                                 });
                             }
                             Some((false, false, true)) if welcome_auto_gate => {
                                 flags_vec.push(crate::views::prompt_widget::PromptFlag {
-                                    text: "auto",
+                                    text: tr("auto"),
                                     color: Some(theme.accent_system),
                                     bold: false,
                                 });
                             }
                             None if welcome_default_yolo => {
                                 flags_vec.push(crate::views::prompt_widget::PromptFlag {
-                                    text: "always-approve",
+                                    text: tr("always-approve"),
                                     color: None,
                                     bold: false,
                                 });
@@ -4808,7 +4809,7 @@ impl AppView {
                             let title = agents
                                 .get(&id)
                                 .map(crate::views::session_title::entry_title)
-                                .unwrap_or_else(|| "(session)".to_string());
+                                .unwrap_or_else(|| tr("(session)").to_string());
                             let (hover_prev, hover_next, hover_close) = self
                                 .dashboard
                                 .as_ref()
@@ -4952,8 +4953,9 @@ impl AppView {
                                 dashboard.close_popup();
                                 if dashboard.error_toast.is_none() {
                                     dashboard.error_toast = Some(format!(
-                                        "{} Session closed",
-                                        crate::glyphs::check_mark()
+                                        "{} {}",
+                                        crate::glyphs::check_mark(),
+                                        tr("Session closed")
                                     ));
                                 }
                             }
@@ -5003,7 +5005,7 @@ impl AppView {
                                     let title = agents
                                         .get(&agent_id)
                                         .map(crate::views::session_title::entry_title)
-                                        .unwrap_or_else(|| "(session)".to_string());
+                                        .unwrap_or_else(|| tr("(session)").to_string());
                                     let bundle_state = &self.bundle_state;
                                     let (cursor, post_flush, drawn) =
                                         crate::views::dashboard::render_popup_overlay(
@@ -5551,7 +5553,7 @@ impl AppView {
                         agent.toast = None;
                     }
                     None => {
-                        agent.show_toast("Video playback requires ffmpeg");
+                        agent.show_toast(tr("Video playback requires ffmpeg"));
                     }
                 }
                 needs_redraw = true;
@@ -5686,7 +5688,7 @@ impl AppView {
                     | Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                         agent.image_viewer = None;
                         agent.image_load_rx = None;
-                        agent.toast = Some(("Couldn't load image preview".into(), 6));
+                        agent.toast = Some((tr("Couldn't load image preview").into(), 6));
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 }

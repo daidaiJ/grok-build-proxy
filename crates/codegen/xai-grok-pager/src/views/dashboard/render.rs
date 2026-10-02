@@ -1263,7 +1263,14 @@ fn render_rows_with_grouping(
                 let selected = state.selected_section == Some(key);
                 let hovered = state.hovered_section == Some(key);
                 render_group_header(
-                    buf, line_rect, theme, tr("Pinned"), *count, collapsed, selected, hovered,
+                    buf,
+                    line_rect,
+                    theme,
+                    tr("Pinned"),
+                    *count,
+                    collapsed,
+                    selected,
+                    hovered,
                 );
                 mark(&mut line_bg, 0, theme.bg_base);
                 // Full-height hit rect (label and trailing gap): no hover/click dead zone between items
@@ -1941,7 +1948,15 @@ fn render_row(
                     Style::default().bg(bg).fg(theme.warning),
                 );
                 let prefix_w = UnicodeWidthStr::width(pending_label) as u16;
-                buf.set_string(content_start_x + prefix_w, sec_y, rest, secondary_style);
+                // LOCAL(i18n): 前缀后的剩余段整体 tr_str——row.rs 存的 "Pending: question" 固定尾
+                // （" question" 成键）在此命中翻译；"Pending: {title}" 的任意标题未命中则原样透传
+                let rest_disp = tr_str(rest);
+                buf.set_string(
+                    content_start_x + prefix_w,
+                    sec_y,
+                    &rest_disp,
+                    secondary_style,
+                );
             } else {
                 buf.set_string(content_start_x, sec_y, trunc, secondary_style);
             }
@@ -2045,7 +2060,14 @@ fn render_narrow_rows_with_grouping(
                 let selected = state.selected_section == Some(key);
                 let hovered = state.hovered_section == Some(key);
                 render_group_header_narrow(
-                    buf, line_rect, theme, tr("Pinned"), *count, collapsed, selected, hovered,
+                    buf,
+                    line_rect,
+                    theme,
+                    tr("Pinned"),
+                    *count,
+                    collapsed,
+                    selected,
+                    hovered,
                 );
                 state
                     .section_rects
@@ -2219,8 +2241,9 @@ fn render_no_match(buf: &mut Buffer, area: Rect, theme: &Theme, filter: &Filter)
     let hint = match filter {
         // LOCAL(i18n): 过滤空态整句成键；计数/状态插值保留，state 标签本身也走翻译
         Filter::None => tr("No matching rows.").to_string(),
-        Filter::Agent(n) => tr("No agents match `a:{n}`. Press Esc to clear the filter.")
-            .replace("{n}", n),
+        Filter::Agent(n) => {
+            tr("No agents match `a:{n}`. Press Esc to clear the filter.").replace("{n}", n)
+        }
         Filter::State(s) => tr("No agents in state `{state}`: press Esc to clear the filter.")
             .replace("{state}", tr(s.group_label())),
         Filter::Substring(n) => {
@@ -2472,7 +2495,8 @@ fn render_dispatch(
         let avail = content.width - painted_prefix_w;
         let cursor_column = if state.dispatch.text().is_empty() {
             if avail > 0 {
-                let placeholder = truncate_str(tr("Type to filter sessions\u{2026}"), avail as usize);
+                let placeholder =
+                    truncate_str(tr("Type to filter sessions\u{2026}"), avail as usize);
                 buf.set_string(
                     editor_x,
                     content.y,
@@ -2930,7 +2954,9 @@ fn render_footer(
         });
     let stop_label = if state.workspace_membership_mode {
         // LOCAL(i18n): state.rs 的 DashboardStopAction::label 返回英文键，展示侧翻译
-        state.selected_stop_action.map_or(tr("stop"), |action| tr(action.label()))
+        state
+            .selected_stop_action
+            .map_or(tr("stop"), |action| tr(action.label()))
     } else if matches!(
         selected_state,
         Some(RowState::Working | RowState::NeedsInput)
@@ -3058,7 +3084,11 @@ fn render_footer(
             .as_ref()
             .is_some_and(|p| p.selected_option.is_some());
         let reply_empty = state.peek_reply.text().trim().is_empty();
-        let esc_label = if reply_empty { tr("New Agent") } else { tr("back") };
+        let esc_label = if reply_empty {
+            tr("New Agent")
+        } else {
+            tr("back")
+        };
         // Pin Esc when it clears a draft (`back`) so compact doesn't drop it behind stop/help; that matches its importance in handle_peek_key
         let esc_hint = {
             let h = HintItem::new(esc, esc_label);
@@ -3068,7 +3098,14 @@ fn render_footer(
         // Two-focus model: Tab toggles between the reply and row nav. Vim opens the reply unfocused so j/k keep selecting.
         let peek_focused = state.peek.as_ref().map(|p| p.focused).unwrap_or(true);
         let question_focused = peek_focused && has_pending_question;
-        let tab_hint = HintItem::new(key!(Tab), if peek_focused { tr("list") } else { tr("input") });
+        let tab_hint = HintItem::new(
+            key!(Tab),
+            if peek_focused {
+                tr("list")
+            } else {
+                tr("input")
+            },
+        );
         // `1-9 select` hint for the question picker (no single bound key).
         let select_hint = HintItem {
             keys: vec![],

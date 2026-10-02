@@ -6,6 +6,7 @@
 use crate::app::agent::BgTaskStatus;
 use crate::app::agent_view::AgentView;
 use crate::app::subagent::format_subagent_label;
+use crate::slash::i18n::{tr, tr_str};
 use crate::util::{format_duration, group_thousands};
 
 /// `/queue` body: a read-only list of the queued prompts.
@@ -29,13 +30,11 @@ pub(crate) fn queue_block_text(agent: &AgentView) -> String {
     }
 
     if rows.is_empty() {
-        "Queue is empty.".to_string()
+        tr("Queue is empty.").to_string()
     } else {
-        let header = format!(
-            "Queued prompt{} ({}):",
-            if rows.len() == 1 { "" } else { "s" },
-            rows.len()
-        );
+        let header = tr_str("Queued prompt{plural} ({count}):")
+            .replace("{plural}", if rows.len() == 1 { "" } else { "s" })
+            .replace("{count}", &rows.len().to_string());
         join_header_rows(header, rows)
     }
 }
@@ -55,8 +54,8 @@ pub(crate) fn tasks_block_text(agent: &AgentView) -> String {
         let active = run.active_agent_count();
         let agents = match active {
             0 => String::new(),
-            1 => " · 1 agent".to_string(),
-            n => format!(" · {n} agents"),
+            1 => format!(" · {}", tr("{n} agent").replace("{n}", "1")),
+            n => format!(" · {}", tr("{n} agents").replace("{n}", &n.to_string())),
         };
         let phase = run
             .current_phase
@@ -66,12 +65,13 @@ pub(crate) fn tasks_block_text(agent: &AgentView) -> String {
             .map(|phase| format!(" · {phase}"))
             .unwrap_or_default();
         rows.push(format!(
-            "  {:<9}Workflow · {}{phase}{agents}  ({})",
+            "  {:<9}{} · {}{phase}{agents}  ({})",
             if run.is_active() {
-                "running".to_string()
+                tr("running").to_string()
             } else {
-                run.status.replace('_', " ")
+                tr_str(&run.status.replace('_', " "))
             },
+            tr("Workflow"),
             run.name,
             format_duration(std::time::Duration::from_millis(run.live_elapsed_ms()))
         ));
@@ -92,11 +92,15 @@ pub(crate) fn tasks_block_text(agent: &AgentView) -> String {
     for info in subs {
         let (type_label, desc) = format_subagent_label(info);
         let status = if info.attempt.pending_kill {
-            "stopping"
+            tr("stopping").to_string()
         } else if info.is_running() {
-            "running"
+            tr("running").to_string()
         } else {
-            info.attempt.status.as_deref().unwrap_or("done")
+            info.attempt
+                .status
+                .as_deref()
+                .map(tr_str)
+                .unwrap_or_else(|| tr("done").to_string())
         };
         let label = if desc.is_empty() {
             type_label
@@ -121,7 +125,11 @@ pub(crate) fn tasks_block_text(agent: &AgentView) -> String {
             .then(a.task_id.cmp(&b.task_id))
     });
     for task in tasks {
-        let kind = if task.is_monitor { "Monitor" } else { "Task" };
+        let kind = if task.is_monitor {
+            tr("Monitor")
+        } else {
+            tr("Task")
+        };
         let one_line = task
             .description
             .as_deref()
@@ -129,12 +137,12 @@ pub(crate) fn tasks_block_text(agent: &AgentView) -> String {
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| first_nonempty_line(&task.command));
         let status = if task.pending_kill {
-            "stopping"
+            tr("stopping").to_string()
         } else {
             match task.status {
-                BgTaskStatus::Running => "running",
-                BgTaskStatus::Done => "done",
-                BgTaskStatus::Failed => "failed",
+                BgTaskStatus::Running => tr("running").to_string(),
+                BgTaskStatus::Done => tr("done").to_string(),
+                BgTaskStatus::Failed => tr("failed").to_string(),
             }
         };
         rows.push(format!(
@@ -154,7 +162,7 @@ pub(crate) fn tasks_block_text(agent: &AgentView) -> String {
     for info in sched {
         rows.push(format!(
             "  {:<9}{} · {} · {}",
-            "scheduled",
+            tr("scheduled"),
             info.tag,
             info.human_schedule,
             first_nonempty_line(&info.prompt)
@@ -162,13 +170,11 @@ pub(crate) fn tasks_block_text(agent: &AgentView) -> String {
     }
 
     if rows.is_empty() {
-        "No background tasks, workflows, or subagents.".to_string()
+        tr("No background tasks, workflows, or subagents.").to_string()
     } else {
-        let header = format!(
-            "Task{} ({}):",
-            if rows.len() == 1 { "" } else { "s" },
-            rows.len()
-        );
+        let header = tr_str("Task{plural} ({count}):")
+            .replace("{plural}", if rows.len() == 1 { "" } else { "s" })
+            .replace("{count}", &rows.len().to_string());
         join_header_rows(header, rows)
     }
 }
@@ -180,53 +186,59 @@ pub(crate) fn session_usage_block_text(
     let t = &usage.totals;
     if t.model_calls == 0 && usage.model_usage.is_empty() {
         return if usage.usage_is_incomplete {
-            "Session usage: none recorded, but tracking is incomplete and may under-count."
+            tr("Session usage: none recorded, but tracking is incomplete and may under-count.")
                 .to_string()
         } else {
-            "Session usage: no model calls yet in this session.".to_string()
+            tr("Session usage: no model calls yet in this session.").to_string()
         };
     }
 
     let mut rows = Vec::new();
     rows.push(format!(
-        "  Input tokens:   {} ({} cached)",
+        "{} {} {}",
+        tr("  Input tokens:"),
         group_thousands(t.input_tokens),
-        group_thousands(t.cached_read_tokens),
+        tr_str("({} cached)").replace("{}", &group_thousands(t.cached_read_tokens)),
     ));
     rows.push(format!(
-        "  Output tokens:  {} ({} reasoning)",
+        "{} {} {}",
+        tr("  Output tokens:"),
         group_thousands(t.output_tokens),
-        group_thousands(t.reasoning_tokens),
+        tr_str("({} reasoning)").replace("{}", &group_thousands(t.reasoning_tokens)),
     ));
     rows.push(format!(
-        "  Total tokens:   {}",
+        "{} {}",
+        tr("  Total tokens:"),
         group_thousands(t.total_tokens)
     ));
     rows.push(format!(
-        "  Model calls:    {} · API time: {}",
+        "{} {} · {} {}",
+        tr("  Model calls:"),
         group_thousands(t.model_calls),
+        tr("API time:"),
         format_duration(std::time::Duration::from_millis(t.api_duration_ms)),
     ));
-    rows.push(format!("  Cost:           {}", format_cost(t)));
+    rows.push(format!("{} {}", tr("  Cost:"), format_cost(t)));
 
     if usage.model_usage.len() > 1 {
-        rows.push("  By model:".to_string());
+        rows.push(tr("  By model:").to_string());
         for (model, m) in &usage.model_usage {
-            rows.push(format!(
-                "    {model}: {} in / {} out · {}",
-                group_thousands(m.input_tokens),
-                group_thousands(m.output_tokens),
-                format_cost(m),
-            ));
+            rows.push(
+                tr_str("    {model}: {in} in / {out} out · {cost}")
+                    .replace("{model}", model)
+                    .replace("{in}", &group_thousands(m.input_tokens))
+                    .replace("{out}", &group_thousands(m.output_tokens))
+                    .replace("{cost}", &format_cost(m)),
+            );
         }
     }
 
     if usage.usage_is_incomplete {
-        rows.push("  Note: usage is incomplete and may under-count.".to_string());
+        rows.push(tr("  Note: usage is incomplete and may under-count.").to_string());
     }
 
     join_header_rows(
-        "Session usage (since start or last resume):".to_string(),
+        tr("Session usage (since start or last resume):").to_string(),
         rows,
     )
 }
@@ -236,8 +248,8 @@ fn format_cost(m: &xai_grok_shell::extensions::notification::PromptUsageModel) -
     use xai_grok_shell::extensions::notification::ticks_to_usd;
     match m.cost_usd_ticks {
         Some(ticks) => format!("${:.4}", ticks_to_usd(ticks)),
-        None if m.cost_is_partial => "not available (not reported for some calls)".to_string(),
-        None => "not available (not reported)".to_string(),
+        None if m.cost_is_partial => tr("not available (not reported for some calls)").to_string(),
+        None => tr("not available (not reported)").to_string(),
     }
 }
 
@@ -254,12 +266,15 @@ fn format_queue_row(pos: usize, text: &str) -> String {
     let first_line = first_nonempty_line(text);
     let extra = text.lines().count().saturating_sub(1);
     if extra > 0 {
-        format!(
-            "  #{pos}  {first_line}  (+{extra} more line{})",
-            if extra == 1 { "" } else { "s" }
-        )
+        tr_str("  #{pos}  {first}  (+{extra} more line{plural})")
+            .replace("{pos}", &pos.to_string())
+            .replace("{first}", first_line)
+            .replace("{extra}", &extra.to_string())
+            .replace("{plural}", if extra == 1 { "" } else { "s" })
     } else {
-        format!("  #{pos}  {first_line}")
+        tr_str("  #{pos}  {first}")
+            .replace("{pos}", &pos.to_string())
+            .replace("{first}", first_line)
     }
 }
 

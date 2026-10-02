@@ -352,7 +352,8 @@ pub(super) fn render_actions_row(
         // The session picker has no dashboard chord (`Ctrl+R` is rename here), so the hint names the slash command that opens it
         let open_previous = hint_line(
             Span::styled(
-                "Open Previous",
+                // LOCAL(i18n): 按钮标签直出点补接线；页脚 Enter 提示同族键 "open previous" 已在表内
+                tr("Open Previous"),
                 bg.fg(button_fg(
                     state.open_session_button_focused(),
                     state.open_session_button_hit.hovered,

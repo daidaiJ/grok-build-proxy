@@ -25,6 +25,7 @@ use crate::acp::tracker::{TurnActivity, WaitingReason};
 use crate::app::agent::{AgentCommand, AgentState};
 use crate::app::agent_view::McpInitProgress;
 use crate::render::line_utils::truncate_str;
+use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
 use crate::views::witty_phrases;
 
@@ -119,13 +120,20 @@ pub(crate) fn format_still_running<'a>(
         if !label.is_empty() {
             label.push_str(" \u{00b7} ");
         }
-        let plural = if count == 1 { "" } else { "s" };
-        let _ = write!(label, "{count} {noun}{plural}");
+        // LOCAL(i18n): 名词经 tr_str 查表（command/monitor/loop/subagent/workflow/task 等）；
+        // 中文无复数，译文命中（≠原文）时跳过 `s` 后缀，英文模式/未命中键保持原逻辑。
+        let translated = tr_str(noun);
+        let plural = if count == 1 || translated != noun {
+            ""
+        } else {
+            "s"
+        };
+        let _ = write!(label, "{count} {translated}{plural}");
     }
     if label.is_empty() {
         return None;
     }
-    label.push_str(" still running");
+    label.push_str(tr(" still running"));
     Some(label)
 }
 
@@ -243,7 +251,7 @@ pub fn render_turn_status(
                 Style::default().fg(diamond_color),
             ),
             Span::styled(
-                "agent idle ~ waiting on your edit",
+                tr("agent idle ~ waiting on your edit"),
                 Style::default().fg(theme.gray),
             ),
         ];
@@ -257,16 +265,19 @@ pub fn render_turn_status(
     if state.is_idle() || parked {
         // Parked with held queued rows: the queued hint says what Enter does (act on the queue now), so it replaces the generic interrupt copy
         let parked_suffix = if held_queue > 0 && held_queue_top_sendable {
-            format!(" \u{00b7} {held_queue} queued, Enter to send now")
+            tr(" \u{00b7} {held_queue} queued, Enter to send now")
+                .replace("{held_queue}", &held_queue.to_string())
         } else if held_queue > 0 {
-            format!(" \u{00b7} {held_queue} queued")
+            tr(" \u{00b7} {held_queue} queued").replace("{held_queue}", &held_queue.to_string())
         } else {
-            " \u{00b7} send a message to interrupt".to_string()
+            tr(" \u{00b7} send a message to interrupt").to_string()
         };
         let cue = match (still_running_label(watchers), parked) {
             (Some(label), true) => Some(format!("{label}{parked_suffix}")),
             (Some(label), false) => Some(label),
-            (None, true) => Some(format!("waiting{parked_suffix}")),
+            (None, true) => {
+                Some(tr("waiting{parked_suffix}").replace("{parked_suffix}", &parked_suffix))
+            }
             (None, false) => None,
         };
         if let Some(cue) = cue {
@@ -308,8 +319,14 @@ pub fn render_turn_status(
         );
 
     // ── Compute activity style and label ──
-    let (activity_style, label, is_tool) =
-        compute_activity(&theme, state, activity, is_bash_turn, goal_verifying, turn_elapsed);
+    let (activity_style, label, is_tool) = compute_activity(
+        &theme,
+        state,
+        activity,
+        is_bash_turn,
+        goal_verifying,
+        turn_elapsed,
+    );
 
     // Early return for idle (shouldn't happen if should_show is respected, but be safe).
     if matches!(state, AgentState::Idle) {
@@ -342,7 +359,7 @@ pub fn render_turn_status(
         );
     let bg_str = if show_bg {
         if bg_hovered {
-            " [send to bg]"
+            tr(" [send to bg]")
         } else {
             " [\u{2193}]"
         }
@@ -356,8 +373,8 @@ pub fn render_turn_status(
     // Hover state is conveyed by color (red on hover, see `cancel_style`), not by swapping the label
     let cancel_str: &str = match (show_cancel, show_bg) {
         (false, _) => "",
-        (true, true) => "[stop]",
-        (true, false) => " [stop]",
+        (true, true) => tr("[stop]"),
+        (true, false) => tr(" [stop]"),
     };
     let cancel_width = cancel_str.width();
 
@@ -440,7 +457,7 @@ pub fn render_turn_status(
                     .strip_prefix("Ask: ")
                     .or_else(|| title.strip_prefix("Ask "))
                     .unwrap_or(title.as_str());
-                let msg = format!("Waiting on answers for {detail}");
+                let msg = tr("Waiting on answers for {detail}").replace("{detail}", detail);
                 let display = truncate_str(&msg, available_for_label);
                 left_spans.push(Span::styled(display, activity_style));
             } else if let Some(desc) = description
@@ -455,7 +472,7 @@ pub fn render_turn_status(
                 left_spans.push(Span::styled(display, activity_style));
             } else if let Some(query) = title.strip_prefix("Web search: ") {
                 // Web search renders "Search " (muted) then the query (yellow)
-                let prefix = "Search ";
+                let prefix = tr("Search ");
                 let prefix_width = prefix.width();
                 let query = query.trim_matches('"');
                 let max_query = available_for_label.saturating_sub(prefix_width).max(5);
@@ -464,7 +481,7 @@ pub fn render_turn_status(
                 left_spans.push(Span::styled(display, Style::default().fg(theme.command)));
             } else if let Some(url) = title.strip_prefix("Fetch: ") {
                 // Fetch tools render "Fetch " (muted) then the URL (yellow)
-                let prefix = "Fetch ";
+                let prefix = tr("Fetch ");
                 let prefix_width = prefix.width();
                 let max_url = available_for_label.saturating_sub(prefix_width).max(5);
                 let display = truncate_str(url, max_url);
@@ -473,7 +490,7 @@ pub fn render_turn_status(
             } else {
                 // Normal tools render "Run " (muted) then the command (syntax-highlighted). Prettify it to
                 // `(Server) Action` so the spinner doesn't show the raw delimiter form.
-                let prefix = "Run ";
+                let prefix = tr("Run ");
                 let pretty = mcp_pretty_name_if_qualified(title.as_str());
                 let detail = pretty.as_str();
                 let prefix_width = prefix.width();
@@ -488,9 +505,10 @@ pub fn render_turn_status(
         // "Enter to send now" is advertised only when Enter would actually send the top row.
         let suffix = if held_queue > 0 && is_sendable_wait(activity) {
             if held_queue_top_sendable {
-                format!(" · {held_queue} queued, Enter to send now")
+                tr(" \u{00b7} {held_queue} queued, Enter to send now")
+                    .replace("{held_queue}", &held_queue.to_string())
             } else {
-                format!(" · {held_queue} queued")
+                tr(" \u{00b7} {held_queue} queued").replace("{held_queue}", &held_queue.to_string())
             }
         } else {
             String::new()
@@ -587,7 +605,7 @@ fn compute_activity(
     match (state, activity) {
         (AgentState::TurnCancelling | AgentState::CommandCancelling { .. }, _) => (
             Style::default().fg(theme.accent_error),
-            "Cancelling…".to_string(),
+            tr("Cancelling…").to_string(),
             false,
         ),
         // Goal-mode completion verification runs in-turn after the model stops streaming
@@ -595,7 +613,7 @@ fn compute_activity(
         // Label the whole window "Verifying…" so the multi-minute panel isn't mislabelled as the model responding (or a hung "Waiting…")
         (AgentState::TurnRunning, _) if goal_verifying => (
             Style::default().fg(theme.text_secondary),
-            "Verifying…".to_string(),
+            tr("Verifying…").to_string(),
             false,
         ),
         (AgentState::TurnRunning, Some(TurnActivity::Thinking)) => (
@@ -627,7 +645,7 @@ fn compute_activity(
         }
         (AgentState::TurnRunning, Some(TurnActivity::AutoCompacting)) => (
             Style::default().fg(theme.text_secondary),
-            "Compacting…".to_string(),
+            tr("Compacting…").to_string(),
             false,
         ),
         (
@@ -664,14 +682,14 @@ fn compute_activity(
         (AgentState::TurnRunning, None) if is_bash_turn => (
             // Bash turn: not inference, show generic "Running…".
             Style::default().fg(theme.text_secondary),
-            "Running…".to_string(),
+            tr("Running…").to_string(),
             false,
         ),
         (AgentState::TurnRunning, None) => (
             // Fallback: a running inference turn with no resolved activity
             // The view resolves this gap into Waiting(Model/Subagent) before render, so this is a rarely-hit safety net
             Style::default().fg(theme.text_secondary),
-            "Waiting…".to_string(),
+            tr("Waiting…").to_string(),
             false,
         ),
         (
@@ -720,7 +738,7 @@ fn render_starting_session(
     let style = Style::default().fg(theme.gray_dim);
     let spans = vec![
         Span::styled(format!("{} ", frames[frame_idx]), style),
-        Span::styled("Starting session…", style),
+        Span::styled(tr("Starting session…"), style),
         Span::styled(timer_str, style),
     ];
     buf.set_line(area.x, area.y, &Line::from(spans), area.width);

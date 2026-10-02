@@ -608,9 +608,7 @@ pub fn sanitize_config_name(name: &str) -> Result<String, String> {
         })
         .collect();
     if !sanitized.chars().any(|c| c.is_alphanumeric()) {
-        return Err(
-            tr("Name must contain at least one alphanumeric character").to_string(),
-        );
+        return Err(tr("Name must contain at least one alphanumeric character").to_string());
     }
     Ok(sanitized)
 }
@@ -638,7 +636,10 @@ pub fn create_persona_template(
     let sanitized = sanitize_config_name(name)?;
     let personas_dir = personas_dir_for_scope(scope, cwd);
     if let Err(e) = std::fs::create_dir_all(&personas_dir) {
-        return Err(format!("{}: {e}", tr("Failed to create personas directory")));
+        return Err(format!(
+            "{}: {e}",
+            tr("Failed to create personas directory")
+        ));
     }
     let path = personas_dir.join(format!("{sanitized}.toml"));
     if path.exists() {
@@ -828,7 +829,11 @@ pub fn format_agent_detail(entry: &AgentListEntry) -> Vec<String> {
     if let Some(ref path) = entry.source_path {
         lines.push(format!("  {}: {}", tr("Source"), path.display()));
     }
-    lines.push(format!("  {}: {}", tr("Scope"), tr_str(entry.scope.label())));
+    lines.push(format!(
+        "  {}: {}",
+        tr("Scope"),
+        tr_str(entry.scope.label())
+    ));
     if let Some(ref body) = def.prompt_body {
         let rendered = render_prompt_body(body, &def.tool_config);
         let char_count = rendered.chars().count();
@@ -1376,7 +1381,9 @@ fn render_agents_tab(
                     AgentGroup::Scope(AgentScope::Project) => {
                         tr("\u{2500}\u{2500} Project \u{2500}\u{2500}")
                     }
-                    AgentGroup::Scope(AgentScope::User) => tr("\u{2500}\u{2500} User \u{2500}\u{2500}"),
+                    AgentGroup::Scope(AgentScope::User) => {
+                        tr("\u{2500}\u{2500} User \u{2500}\u{2500}")
+                    }
                     AgentGroup::Scope(AgentScope::Bundled) => {
                         tr("\u{2500}\u{2500} Bundled \u{2500}\u{2500}")
                     }
@@ -1570,8 +1577,7 @@ fn render_personas_tab(
     let blurb_style = Style::default().fg(theme.gray_dim);
     buf.set_string(content_area.x, y, blurb, blurb_style);
     y += 1;
-    let blurb2 =
-        tr("Used by skills (e.g. /implement) and by the model when spawning subagents.");
+    let blurb2 = tr("Used by skills (e.g. /implement) and by the model when spawning subagents.");
     buf.set_string(content_area.x, y, blurb2, blurb_style);
     y += 2;
     if state.search_active || !state.search_query().is_empty() {
@@ -1709,7 +1715,8 @@ fn render_personas_tab(
                 buf.set_string(x, row_y, &name_display, name_style);
                 x += name_display.width() as u16;
                 if let Some(ref scope) = persona.scope_label {
-                    let badge = format!(" {scope} ");
+                    // LOCAL: scope 徽章存英文键（user/project/bundled，i18n 表已有），渲染出口查表
+                    let badge = format!(" {} ", tr_str(scope));
                     let mut scope_style = Style::default().fg(theme.accent_user);
                     if let Some(bg_color) = bg {
                         scope_style = scope_style.bg(bg_color);
@@ -2192,8 +2199,7 @@ fn handle_agents_tab_key(state: &mut AgentsModalState, key: &KeyEvent) -> Agents
         KeyCode::Enter | KeyCode::Char('o') => {
             if let Some(entry) = state.agents.get(state.selected) {
                 if let Some(ref path) = entry.source_path {
-                    let title =
-                        format!("{} \u{00b7} {}", entry.name, tr("prompt extension"));
+                    let title = format!("{} \u{00b7} {}", entry.name, tr("prompt extension"));
                     return AgentsModalOutcome::ViewAgent {
                         title,
                         source_path: Some(path.clone()),
@@ -2201,8 +2207,7 @@ fn handle_agents_tab_key(state: &mut AgentsModalState, key: &KeyEvent) -> Agents
                     };
                 }
                 if entry.definition.prompt_body.is_some() {
-                    let title =
-                        format!("{} \u{00b7} {}", entry.name, tr("prompt extension"));
+                    let title = format!("{} \u{00b7} {}", entry.name, tr("prompt extension"));
                     return AgentsModalOutcome::ViewAgent {
                         title,
                         source_path: None,
@@ -2350,8 +2355,9 @@ fn handle_personas_tab_key(state: &mut AgentsModalState, key: &KeyEvent) -> Agen
         KeyCode::Char('d') => {
             if let Some(persona) = state.personas.get(state.persona_selected) {
                 if !persona_is_deletable(persona) {
-                    state.message =
-                        Some(AgentsModalMessage::error(tr("Cannot delete bundled personas")));
+                    state.message = Some(AgentsModalMessage::error(tr(
+                        "Cannot delete bundled personas",
+                    )));
                     return AgentsModalOutcome::Changed;
                 }
                 if let Some(ref path_str) = persona.source_path {

@@ -466,11 +466,11 @@ fn model_card_lines(row: &ModelUsageAggregate, theme: &Theme, width: u16) -> Vec
 
     let perf_pairs: Vec<(&'static str, String)> = vec![
         (
-            "ttft p50/p90",
+            tr("ttft p50/p90"),
             fmt_ms_pair(row.ttft_p50_ms, row.ttft_p90_ms, tr("n/a")),
         ),
         (
-            "tps p50/p90",
+            tr("tps p50/p90"),
             fmt_tps_pair(row.tps_p50, row.tps_p90, tr("n/a")),
         ),
     ];
@@ -545,8 +545,10 @@ fn model_card_text(row: &ModelUsageAggregate) -> String {
     ));
     parts.push(tokens.join(" · "));
     parts.push(format!(
-        "ttft p50/p90 {} · tps p50/p90 {}",
+        "{} {} · {} {}",
+        tr("ttft p50/p90"),
         fmt_ms_pair(row.ttft_p50_ms, row.ttft_p90_ms, tr("n/a")),
+        tr("tps p50/p90"),
         fmt_tps_pair(row.tps_p50, row.tps_p90, tr("n/a")),
     ));
     parts.join("\n")

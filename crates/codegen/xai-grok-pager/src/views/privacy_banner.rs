@@ -78,7 +78,10 @@ impl PrivacyBannerRects {
 }
 
 fn button_block_width() -> u16 {
-    (OPT_OUT_LABEL.len() + 1 + OPT_IN_LABEL.len()) as u16
+    // LOCAL: 按钮标签在渲染出口 tr 查表（见 render）；宽度按译文的显示宽（CJK 感知）
+    // 计算，与 LEGAL 分段同一约束——译文选词保证渲染宽不超过英文原宽，因此用英文
+    // len 选槽位/判 fit 的既有断言与测试在旁路构建下不受影响。
+    (tr(OPT_OUT_LABEL).width() + 1 + tr(OPT_IN_LABEL).width()) as u16
 }
 
 fn legal_width(variant: &[LegalSegment]) -> u16 {
@@ -241,16 +244,20 @@ pub(crate) fn render(
             policy: policy_rect,
         };
     }
+    // LOCAL: 按钮标签渲染出口 tr 查表；热区宽度跟译文的显示宽（CJK 感知）走，
+    // 与标题/LEGAL 分段同一模式（存英文键、出口翻译）。
+    let opt_out_shown = tr(OPT_OUT_LABEL);
+    let opt_in_shown = tr(OPT_IN_LABEL);
     let opt_out_rect = Rect {
         x: area.x + area.width - button_block_width(),
         y: area.y,
-        width: OPT_OUT_LABEL.len() as u16,
+        width: opt_out_shown.width() as u16,
         height: 1,
     };
     let opt_in_rect = Rect {
         x: opt_out_rect.x + opt_out_rect.width + 1,
         y: area.y,
-        width: OPT_IN_LABEL.len() as u16,
+        width: opt_in_shown.width() as u16,
         height: 1,
     };
     let opt_out_style = if hovered(opt_out_rect) {
@@ -266,14 +273,14 @@ pub(crate) fn render(
     buf.set_stringn(
         opt_out_rect.x,
         opt_out_rect.y,
-        OPT_OUT_LABEL,
+        opt_out_shown,
         opt_out_rect.width as usize,
         opt_out_style,
     );
     buf.set_stringn(
         opt_in_rect.x,
         opt_in_rect.y,
-        OPT_IN_LABEL,
+        opt_in_shown,
         opt_in_rect.width as usize,
         opt_in_style,
     );

@@ -30,6 +30,8 @@ use crate::clipboard::{SystemClipboard, system_clipboard_get};
 use crate::input::key::key;
 use crate::prompt_images::PastedImage;
 use crate::render::{PreviewConfig, PreviewStyle, SafeBuf, render_preview_overlay};
+// LOCAL: i18n — 用户可见说明文案查表
+use crate::slash::i18n::tr;
 use crate::theme::Theme;
 use crate::views::file_search::{FileSearchState, context::normalize_display_path};
 use crate::views::history_search::HistorySearchState;
@@ -2341,7 +2343,8 @@ impl PromptWidget {
     /// Toast text shown when an image insertion is rejected because the prompt already holds [`Self::IMAGE_CAP`] images.
     #[allow(dead_code)]
     pub(crate) fn cap_reached_toast() -> String {
-        format!("Image limit reached (max {})", Self::IMAGE_CAP)
+        // LOCAL: i18n — 单一 {} 占位，replace 无歧义
+        tr("Image limit reached (max {})").replace("{}", &Self::IMAGE_CAP.to_string())
     }
 
     /// Insert a pasted image as an atomic `[Image #N]` chip. Returns `Err` with a user-facing message
@@ -2355,9 +2358,12 @@ impl PromptWidget {
         if let Some((w, h)) = image.preview_dimensions()
             && (w < MIN_SIDE || h < MIN_SIDE)
         {
-            return Err(format!(
-                "Image too small ({w}×{h}). Must be at least {MIN_SIDE}×{MIN_SIDE} pixels."
-            ));
+            return Err(tr(
+                "Image too small ({w}×{h}). Must be at least {MIN_SIDE}×{MIN_SIDE} pixels.",
+            )
+            .replace("{w}", &w.to_string())
+            .replace("{h}", &h.to_string())
+            .replace("{MIN_SIDE}", &MIN_SIDE.to_string()));
         }
 
         self.image_counter += 1;
@@ -2853,16 +2859,17 @@ impl PromptWidget {
         let chord = Style::default()
             .fg(theme.fuzzy_accent)
             .add_modifier(Modifier::BOLD);
+        // LOCAL: i18n — 首段是键帽词（"enter" 按 i18n.rs:1645/1652 先例保留原文），其余说明段查表
         let action = if self.paste_element_at_cursor().is_some() {
             "enter"
         } else {
-            "paste again"
+            tr("paste again")
         };
         Line::from(vec![
             Span::styled(action, chord),
-            Span::styled(" or ", dim),
-            Span::styled("double-click", chord),
-            Span::styled(" to expand", dim),
+            Span::styled(tr(" or "), dim),
+            Span::styled(tr("double-click"), chord),
+            Span::styled(tr(" to expand"), dim),
         ])
     }
 
@@ -3266,7 +3273,7 @@ impl PromptWidget {
             && (!style.focused || style.placeholder_when_focused)
             && !voice_interim_shown
         {
-            let placeholder = style.placeholder_override.unwrap_or("Build anything");
+            let placeholder = style.placeholder_override.unwrap_or(tr("Build anything"));
             // `set_string` clips at the buffer edge, not at the textarea, so a placeholder longer than the box would paint over its border.
             let truncated =
                 crate::render::line_utils::truncate_str(placeholder, ta_area.width as usize);
@@ -3517,7 +3524,7 @@ impl PromptWidget {
         // Build right-side spans: "multiline" indicator.
         let mut right_spans: Vec<Span<'static>> = Vec::new();
         if info.multiline {
-            right_spans.push(Span::styled("multiline", flag_style));
+            right_spans.push(Span::styled(tr("multiline"), flag_style));
         }
 
         if !right_spans.is_empty() {
@@ -3736,24 +3743,27 @@ fn normalize_line_breaks(text: &str) -> String {
 ///
 /// Renders as: `[Pasted: N lines]`
 fn paste_chip_display(line_count: usize) -> Line<'static> {
-    chip_line(format!(
-        "Pasted: {} line{}",
-        line_count,
-        if line_count != 1 { "s" } else { "" }
-    ))
+    // LOCAL: i18n — 复数后缀按 turn_status 先例改具名占位符（中文无复数，{s} 不出现在中文译文）
+    let plural = if line_count != 1 { "s" } else { "" };
+    chip_line(
+        tr("Pasted: {n} line{s}")
+            .replace("{n}", &line_count.to_string())
+            .replace("{s}", plural),
+    )
 }
 
 /// Display `Line` for a byte-triggered paste chip, e.g. `[Pasted: 12 KB]` or `[Pasted: 1.0 MB]` (size, not a line count).
 /// Decimal (1000-based) units.
 fn paste_chip_display_bytes(byte_len: usize) -> Line<'static> {
+    // LOCAL: i18n — MB/KB 为通用符号豁免；'bytes' 译作「字节」
     let size = if byte_len >= 1_000_000 {
         format!("{:.1} MB", byte_len as f64 / 1_000_000.0)
     } else if byte_len >= 1000 {
         format!("{} KB", byte_len / 1000)
     } else {
-        format!("{byte_len} bytes")
+        tr("{byte_len} bytes").replace("{byte_len}", &byte_len.to_string())
     };
-    chip_line(format!("Pasted: {size}"))
+    chip_line(tr("Pasted: {size}").replace("{size}", &size))
 }
 
 /// Highest `display_number` present in `images`, or `0` when the slice is empty.

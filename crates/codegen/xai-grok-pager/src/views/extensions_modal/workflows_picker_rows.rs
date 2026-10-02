@@ -38,13 +38,15 @@ pub(super) fn build_workflows_picker_rows(
     let workflows = match data {
         TabDataState::Loaded(workflows) => workflows,
         TabDataState::Error(msg) => {
-            return vec![WorkflowRow::notice(format!("{}: {msg}", tr("Error")))]
+            return vec![WorkflowRow::notice(format!("{}: {msg}", tr("Error")))];
         }
         // The render path never builds entries while the tab loads; it shows a spinner instead
         TabDataState::Loading => return Vec::new(),
     };
     if workflows.is_empty() {
-        return vec![WorkflowRow::notice(tr(WORKFLOWS_EMPTY_PLACEHOLDER).to_string())];
+        return vec![WorkflowRow::notice(
+            tr(WORKFLOWS_EMPTY_PLACEHOLDER).to_string(),
+        )];
     }
     let mut visible: Vec<&WorkflowInfo> = workflows
         .iter()

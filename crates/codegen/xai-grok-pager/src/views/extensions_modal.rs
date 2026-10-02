@@ -92,6 +92,16 @@ fn hook_row_label(hook: &xai_hooks_plugins_types::HookInfo) -> String {
     format!("on:{}{matcher}", hook.event)
 }
 
+/// LOCAL: hook 行标签的屏显翻译。`on:{event}{matcher}` 为运行时拼接串，且同串兼作
+/// 排序键（保持英文），故只在渲染出口按前缀拆分翻译（键 "on:" 进表）。
+fn tr_hook_row_label(label: &str) -> String {
+    if let Some(rest) = label.strip_prefix("on:") {
+        format!("{}{rest}", tr("on:"))
+    } else {
+        label.to_owned()
+    }
+}
+
 /// Logical source kind for hook group rank (independent of display copy).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum HookSourceKind {
@@ -342,6 +352,12 @@ fn plugin_count_label(n: usize) -> String {
 /// 查表（`Plugin: {name}` / `Custom: {path}` 为运行时拼接串，按前缀拆分翻译）。
 fn tr_group_label(label: &str) -> String {
     if let Some(rest) = label.strip_prefix("Plugin: ") {
+        // LOCAL: 缺省插件名 "unknown" 也是屏显词，复用既有键（表内 "unknown"→"未知"）
+        let rest = if rest == "unknown" {
+            tr("unknown")
+        } else {
+            rest
+        };
         format!("{}{rest}", tr("Plugin: "))
     } else if let Some(rest) = label.strip_prefix("Custom: ") {
         format!("{}{rest}", tr("Custom: "))
@@ -2694,12 +2710,20 @@ fn build_plugin_fields(plugin: &xai_hooks_plugins_types::PluginInfo) -> Vec<Stri
     use xai_hooks_plugins_types::McpStatus;
     let mut components = Vec::new();
     if !plugin.skill_names.is_empty() {
-        components.push(format!("{}: {}", tr("skills"), plugin.skill_names.join(", ")));
+        components.push(format!(
+            "{}: {}",
+            tr("skills"),
+            plugin.skill_names.join(", ")
+        ));
     } else if plugin.skill_count > 0 {
         components.push(tr("{n} skills").replace("{n}", &plugin.skill_count.to_string()));
     }
     if !plugin.agent_names.is_empty() {
-        components.push(format!("{}: {}", tr("agents"), plugin.agent_names.join(", ")));
+        components.push(format!(
+            "{}: {}",
+            tr("agents"),
+            plugin.agent_names.join(", ")
+        ));
     } else if plugin.agent_count > 0 {
         components.push(tr("{n} agents").replace("{n}", &plugin.agent_count.to_string()));
     }
@@ -2708,14 +2732,12 @@ fn build_plugin_fields(plugin: &xai_hooks_plugins_types::PluginInfo) -> Vec<Stri
     }
     match plugin.mcp_status {
         McpStatus::Active | McpStatus::ActiveInline => {
-            components.push(
-                tr("{n} MCP servers").replace("{n}", &plugin.mcp_server_count.to_string()),
-            );
+            components
+                .push(tr("{n} MCP servers").replace("{n}", &plugin.mcp_server_count.to_string()));
         }
         McpStatus::Blocked => {
-            components.push(
-                tr("{n} MCP: blocked").replace("{n}", &plugin.mcp_server_count.to_string()),
-            );
+            components
+                .push(tr("{n} MCP: blocked").replace("{n}", &plugin.mcp_server_count.to_string()));
         }
         McpStatus::None => {}
     }
@@ -2762,8 +2784,7 @@ pub(crate) fn render_components_fields(
         let mut value = names.join(", ");
         if items.len() > COMPONENT_ITEMS_CAP {
             value.push_str(
-                &tr(" +{n} more")
-                    .replace("{n}", &(items.len() - COMPONENT_ITEMS_CAP).to_string()),
+                &tr(" +{n} more").replace("{n}", &(items.len() - COMPONENT_ITEMS_CAP).to_string()),
             );
         }
         fields.push((label.to_string(), value));
@@ -3142,7 +3163,7 @@ pub fn render_extensions_modal(
                         }
                         for &hi in indices {
                             let hook = &data.hooks[hi];
-                            entry_labels.push(hook_row_label(hook));
+                            entry_labels.push(tr_hook_row_label(&hook_row_label(hook)));
                             let cmd = hook
                                 .command
                                 .as_deref()
@@ -3240,9 +3261,9 @@ pub fn render_extensions_modal(
                             entry_labels.push(plugin.name.clone());
                             let right = match (plugin.version.as_deref(), plugin.author.as_deref())
                             {
-                                (Some(v), Some(a)) => tr("v{v} by {a}")
-                                    .replace("{v}", v)
-                                    .replace("{a}", a),
+                                (Some(v), Some(a)) => {
+                                    tr("v{v} by {a}").replace("{v}", v).replace("{a}", a)
+                                }
                                 (Some(v), None) => format!("v{v}"),
                                 (None, Some(a)) => tr("by {a}").replace("{a}", a),
                                 (None, None) => String::new(),
@@ -3420,12 +3441,16 @@ pub fn render_extensions_modal(
                                 let enabled_count =
                                     server.tools.iter().filter(|t| t.enabled).count();
                                 if enabled_count == server.tools.len() {
-                                    entry_desc_lines.push(vec![tr("{n} tools")
-                                        .replace("{n}", &server.tools.len().to_string())]);
+                                    entry_desc_lines.push(vec![
+                                        tr("{n} tools")
+                                            .replace("{n}", &server.tools.len().to_string()),
+                                    ]);
                                 } else {
-                                    entry_desc_lines.push(vec![tr("{n} tools ({m} enabled)")
-                                        .replace("{n}", &server.tools.len().to_string())
-                                        .replace("{m}", &enabled_count.to_string())]);
+                                    entry_desc_lines.push(vec![
+                                        tr("{n} tools ({m} enabled)")
+                                            .replace("{n}", &server.tools.len().to_string())
+                                            .replace("{m}", &enabled_count.to_string()),
+                                    ]);
                                 }
                             }
                             entry_summary_lines.push(vec![]);

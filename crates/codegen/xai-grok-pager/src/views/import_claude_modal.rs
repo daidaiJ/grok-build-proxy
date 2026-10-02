@@ -991,10 +991,11 @@ fn with_bg(style: Style, focused: bool, theme: &Theme) -> Style {
 fn format_item_label(item: &ImportableItem) -> String {
     match item {
         ImportableItem::Permission(rule) => {
+            // LOCAL: 权限动作词仅作展示（不参与匹配/协议），就地查表
             let action = match rule.action {
-                RuleAction::Allow => "allow",
-                RuleAction::Deny => "deny",
-                RuleAction::Ask => "ask",
+                RuleAction::Allow => tr("allow"),
+                RuleAction::Deny => tr("deny"),
+                RuleAction::Ask => tr("ask"),
             };
             let pattern = rule.pattern.as_deref().unwrap_or("*");
             let tool = format!("{:?}", rule.tool);
@@ -1017,9 +1018,10 @@ fn format_item_label(item: &ImportableItem) -> String {
             format!("{event}  matcher={m} → {command}{t}")
         }
         ImportableItem::PathEntry { kind, path } => {
+            // LOCAL: 路径类别词仅作展示标签，就地查表
             let kind_str = match kind {
-                PathKind::Skill => "skill dir",
-                PathKind::Rule => "rule dir",
+                PathKind::Skill => tr("skill dir"),
+                PathKind::Rule => tr("rule dir"),
             };
             format!("{kind_str}: {path}")
         }
