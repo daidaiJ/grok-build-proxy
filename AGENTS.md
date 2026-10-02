@@ -55,10 +55,11 @@
 - [`docs-local/usage-quota-estimate-todo.md`](docs-local/usage-quota-estimate-todo.md) —
   `/usage` 周额度 token 估算：billing 采样落盘 → 本机 xAI 直连 tokens/Δpct 反推下界
   （pct 整点量化、多设备按"各机下界取 max"语义）→ Usage limit 面板展示。
-  **T1/T2/T3 施工完成**（分支 `feat/local-usage-quota-estimate`，实现记录见
-  PATCHES.md）；金额口径与 `/stats` 联动未做，等 09-30 07:50（北京）换周期
-  historyLen 实测后拍板。关键实测：`creditUsagePercent` 全整点、7%→76% 跳变非本机
-  （本周账本 xAI 直连 0 调用）、`isUnifiedBillingUser=true`、`historyLen=0`。
+  **已收口（2026-10-02）**：T1/T2/T3 施工完成（分支 `feat/local-usage-quota-estimate`，
+  实现记录见 PATCHES.md）；换周期（09-30 07:50）天然实验未采到——期间无客户端跑过
+  会话，金额口径与 `/stats week` 联动**维持待验证**，等下次换周期恰有会话在跑再采。
+  关键实测：`creditUsagePercent` 全整点、7%→76% 跳变非本机（本周账本 xAI 直连 0 调用）、
+  `isUnifiedBillingUser=true`、`historyLen=0`。
   现场 QA（pct 已变仍报采样不足 = Δpct < 2 整点门，非无 xAI 消耗）见该文档末节，
   补 user-guide / 文案时复用。
 - [`docs-local/status-line-perf-wiki.md`](docs-local/status-line-perf-wiki.md) — 状态行性能段
@@ -75,7 +76,9 @@
 - [`docs-local/stats-modal-todo.md`](docs-local/stats-modal-todo.md) — `/stats` 加时间窗
   option（5h/day/week/month）+ 输出改成 Grok 自制窗口样式（对齐 agents / usage limit 面板）
   + TUI 残留英文说明 i18n 扫尾。分支 `feat/local-stats-modal-i18n`，基线 `86a6e1d`。
-  三个子任务 T1/T2/T3 相互独立，可分批施工；文档内含现状锚点、改动点、验收标准与纪律要求。
+  **T1/T2 已施工完成并提交**（见该文档头部状态），剩 **T3 全仓英文残留 i18n 扫尾**
+  （先静态扫描出清单→分批 ≤3 文件→统一进 i18n.rs→一轮编译；2026-10-02 复核仍待做）。
+  文档内含现状锚点、改动点、验收标准与纪律要求。
 - [`docs-local/webdav-sync-todo.md`](docs-local/webdav-sync-todo.md) — WebDAV 同步（用量 +
   主机无关配置，服务端按机器分子目录）+ `/sync` 选择恢复/同步。**评估完成、未开工**；分期
   T1 传输层+假服务夹具 → T2 白名单/合并内核+`grok2 sync` CLI → T3 `/sync` TUI → T4 加密与凭据。
@@ -136,8 +139,10 @@
 
 - **当前状态：** 修复已合并 main（`bc33d257`）、tag `v1.0.37-preview.6` 已发布；CI（release + build）已核对；
   **活回合验证已补完**：正向用例（行内代码引用 / 围栏）正文完整不折叠、真标记路径未误伤、落盘扫描 0 命中、
-  回归 `ctest.sh -p xai-grok-sampler --lib` 272/272。⚠️ 用户当前在用的客户端 `D:\tool\cli\grok2.exe`
-  仍是 `1.0.37-preview.4`（**无此修复**），日常会话照旧折叠，需换到 preview.6 产物才生效
+  回归 `ctest.sh -p xai-grok-sampler --lib` 272/272。客户端状态（2026-10-02 复核）：
+  本机在用 `D:\tool-cli\grok2\grok2.exe` 已是 `1.0.38`（含此修复），旧记录
+  "`D:\tool\cli\grok2.exe` 仍是 preview.4 无此修复"已过时；路径与版本以
+  `grok2 --version` 实测为准
 - **关键证据：** 正文里被反引号引用的 `<think>` 曾被切分器当控制标记，把回答尾部改道 reasoning；
   判定签名＝正文 chunk 以反引号结尾 + 紧随 thought chunk 以反引号开头 + `<think>` 字面量两通道都缺
   （3 会话 6 处现场）；修复后 `ctest.sh -p xai-grok-sampler --lib` 272/272，mutation 下 5 例转红。

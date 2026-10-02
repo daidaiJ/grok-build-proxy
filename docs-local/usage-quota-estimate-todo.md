@@ -1,10 +1,10 @@
 # `/usage` 周额度 token 估算（TODO）
 
-> **状态（2026-09-27）：T1/T2/T3 施工完成**（分支 `feat/local-usage-quota-estimate`，
+> **状态（2026-10-02 收口）：T1/T2/T3 施工完成并收口**（分支 `feat/local-usage-quota-estimate`，
 > 实现记录见 `docs-local/PATCHES.md` 的「/usage 周额度估算」一节）。基线 `97252c5`，
 > 数据源与锚点均已实测验证（本机 unified.jsonl 93 条计费采样 + model-usage.jsonl
-> 1468 条调用）。金额口径（待定决策 1）与 `/stats week` 联动（待定决策 3）未做，
-> 等 2026-09-29 23:50 UTC 换周期 historyLen 实测后再拍板。
+> 1468 条调用）。金额口径（待定决策 1）与 `/stats week` 联动（待定决策 3）**维持待验证**——
+> 原"等 2026-09-29 23:50 UTC 换周期实测拍板"的条件已过（见下），不再挂起本专题。
 > 现场 QA（补用户文档素材）见文末 **§现场 QA**。
 >
 > **收口（2026-10-02）**：换周期实测**未采到**——unified.jsonl 最后一条 billing fetch
