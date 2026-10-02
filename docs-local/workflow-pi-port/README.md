@@ -2,14 +2,16 @@
 
 > **状态：预研选型完成，未开工。** 两个选型特性（canonical context edit / 延迟工具声明）
 > 已有设计原型，见同目录分文档；其余缺口已定性、给出做/不做的决策记录。
-> 调研快照：2026-09-30；fork 基线 `95aad87`（main）；pi 基线 `earendil-works/pi`
-> `0.99.1`（2026-09-29 发布，`0.99.0` 为 codemode+MCP 大版本）。
+> 调研快照：2026-09-30（pi `0.99.1`）；**2026-10-02 增补对照 pi `0.99.2`（09-30）与
+> `v1.0.0`（10-01）**，结论不变，P2 增补 pi 自身迭代出的三条设计约束（见矩阵与
+> `deferred-tool-exposure.md` §2/§6）。fork 基线 `95aad87`（main）。
 
 ## 用途与范围
 
 回答一个问题：**给本仓库的 `xai-workflow`（Rhai 编排引擎）移植 pi 近两个月的新特性，
-能不能提高上限、移植哪些**。只覆盖与 workflow/编排相关的主线特性（pi `0.84.0`–`0.99.x`，
-2026-07 至 2026-09）；主题/终端体验/登录体系类不调研。
+能不能提高上限、移植哪些**。只覆盖与 workflow/编排相关的主线特性（pi `0.84.0`–`1.0.0`，
+2026-07 至 2026-10）；主题/终端体验/登录体系类不调研（v1.0.0 头条的全屏 TUI、Radius
+登录等不在范围）。
 
 可信度分级：
 
@@ -36,16 +38,16 @@
 
 | pi 特性 | 版本 | fork 现状 | 判定 |
 |---|---|---|---|
-| MCP（stdio + streamable HTTP + OAuth） | 0.99.0 | `xai-grok-mcp` 基于 rmcp 全有：双传输、OAuth discovery+浏览器授权+刷新、401 重试、进程组收割（`servers.rs`）；会话内 `/mcp` | ✅ 已有 |
-| codemode（QuickJS 模型写 JS 调工具） | 0.99.0 | 无。唯一脚本是 Rhai，且只在 workflow 引擎（编排者写、非模型写、无工具调用） | ❌ 不移植（D1） |
-| tool_search / 延迟工具声明 | 0.99.0 | 有 `ToolSearch→search_tool` 兼容映射（`builder.rs:3016` 测试）但那是 allowlist 场景；缺整个"延迟声明"维度 | ⚠️ **选型 P2** |
-| 工具 exposure 分级（direct/model-only/codemode/deferred/hidden） | 0.99.0 | `tool_name.rs` 只有 admission 校验，无 exposure 维度，MCP 工具全量声明 | ⚠️ 并入 P2 |
+| MCP（stdio + streamable HTTP + OAuth） | 0.99.0 | `xai-grok-mcp` 基于 rmcp 全有：双传输、OAuth discovery+浏览器授权+刷新、401 重试、进程组收割（`servers.rs`）；会话内 `/mcp` | ✅ 已有（1.0.0 的 OAuth 加固项——`authServerMetadataUrl`、RFC 9207 `iss` 校验、按 server 存凭据、step-up 授权——可作 `xai-grok-mcp` 后续加固参考，不属本专题） |
+| codemode（QuickJS 模型写 JS 调工具） | 0.99.0 | 无。唯一脚本是 Rhai，且只在 workflow 引擎（编排者写、非模型写、无工具调用） | ❌ 不移植（D1）。1.0.0 把 codemode prompt 瘦身 ~40%（一行式工具声明 + 文档指针）并加 `models.generateImages()`，仍是 QuickJS 双运行时，判定不变 |
+| tool_search / 延迟工具声明 | 0.99.0 | 有 `ToolSearch→search_tool` 兼容映射（`builder.rs:3016` 测试）但那是 allowlist 场景；缺整个"延迟声明"维度 | ⚠️ **选型 P2**。0.99.2 pi 自己把默认 exposure 的 server 改为不进描述、不阻塞首 prompt、`searchTools()`/`describeNamespace()` 按需发现——方向与 P2 原型一致，且给出三条可吸收约束（静态描述/追加式指令段/resume 恢复坑，详见 P2 分文档 §2） |
+| 工具 exposure 分级（direct/model-only/codemode/deferred/hidden） | 0.99.0 | `tool_name.rs` 只有 admission 校验，无 exposure 维度，MCP 工具全量声明 | ⚠️ 并入 P2。0.99.2 pi 把 `codemode-deferred` 收敛为 `codemode` 别名——档位做减法的方向与 D2 收敛三档一致 |
 | virtual models（按请求路由物理模型） | 0.99.0 | `AgentOpts.model/effort` per-agent 已覆盖主场景 | 不需要 |
-| classifier models（Jev next-token 分类） | 0.99.0 | 无对应物 | P3，等 P1/P2 落地后有场景 |
+| classifier models（Jev next-token 分类） | 0.99.0 | 无对应物 | P3，等 P1/P2 落地后有场景（1.0.0 的 `models.generateImages()` 表明 `models` API 还在扩面，P3 观察线不变） |
 | extension 运行时 API（ctx.executeTool/nestedCalls 等） | 0.99.0 | hooks/plugins 是事件钩子，非运行时可编程 | 不移植 |
-| canonical session context（ContextEditEntry） | 0.87.0 | compaction 是"重写历史"路线，与 journal 重放确定性相斥 | ⚠️ **选型 P1** |
+| canonical session context（ContextEditEntry） | 0.87.0 | compaction 是"重写历史"路线，与 journal 重放确定性相斥 | ⚠️ **选型 P1**（0.99.2 的 `mcp_servers` 指令段"变更以追加方式进会话"是同思想的又一旁证：可见面变更走追加，不走改写） |
 | prompt cache warming | 0.86.0 | 无；已有 `docs-local/prompt-cache-notes.md` 实测地基 | P2，sampler 层独立做 |
-| cache-friendly 动态工具加载 / constrained sampling | 0.84.0 | 无 | 观察，随 P2 顺带评估 |
+| cache-friendly 动态工具加载 / constrained sampling | 0.84.0 | 无 | 观察，随 P2 顺带评估。**0.99.2 已给出可抄的落法**：工具/服务器描述静态化（不随 MCP 连接状态变），易变信息移到每轮开头更新的 `mcp_servers` system prompt 段、变更才追加——这正是 P2 三档声明要配套的缓存友好约束 |
 
 ## 决策记录
 
@@ -56,7 +58,9 @@
   比 `write_scratch_file` 语义更精细（按 seq 分支隔离）；② bash 结构化结果的
   1 MiB 原始输出 + `full_output_path` 旁路 —— 配合 `docs-local/tool-output-compression-plan.md`。
 - **D2 — exposure 分级不照抄 pi 五档**：fork 没有 codemode 档的需求（D1），收敛为
-  三档 `direct / deferred / hidden`，见 `deferred-tool-exposure.md`。
+  三档 `direct / deferred / hidden`，见 `deferred-tool-exposure.md`。（0.99.2 pi 自己
+  把 `codemode-deferred` 降为 `codemode` 别名、默认 exposure 的 server 退出描述清单，
+  方向互证。）
 - **D3 — canonical context edit 不走 compaction 通道**：两者语义相反（重写历史 vs
   历史不动），强行复用会把 compaction 的熵带进 journal 重放，见
   `canonical-context-edit.md` §3。
@@ -74,9 +78,12 @@
 
 - pi CHANGELOG：`packages/coding-agent/CHANGELOG.md`
   （github.com/earendil-works/pi，`0.99.0`/`0.87.0`/`0.86.0`/`0.84.0` 条目）
+- pi release notes：`v1.0.0`（2026-10-01）、`v0.99.2`（2026-09-30）——GitHub Releases
+  页正文（gh api 实取，2026-10-02）
 - pi docs：`docs/cli.md`（Enable codemode / How codemode works / Tool search）、
-  `docs/mcp.md`、`docs/session-format.md#contexteditentry`、`docs/extensions.md#tool-exposure`
-- pi.dev/changelog（0.99.0 摘要页）
+  `docs/mcp.md`（含 0.99.2 起的 Control tool exposure / Authenticate with OAuth）、
+  `docs/session-format.md#contexteditentry`、`docs/extensions.md#tool-exposure`、
+  `docs/codemode.md`（1.0.0 新增参考页）
 
 ## 分文档索引
 

@@ -2,7 +2,8 @@
 
 > 状态：预研原型，未开工、未验证。语义来源：pi `0.87.0` `ContextEditEntry`
 > （docs/session-format.md#contexteditentry）与 `context_with_system`
-> （per-request 系统消息变换）。fork 基线 `95aad87`。
+> （per-request 系统消息变换）。fork 基线 `95aad87`。2026-10-02 增补 pi
+> `0.99.2` 旁证（见 §2 末）。
 
 ## 1. 问题
 
@@ -27,6 +28,11 @@ fork 现有的两条路都不对：
 
 关键性质：编辑操作本身是一等公民事件，而不是对历史的原地 mutation。这正好和
 本仓库 journal 的 append-only 模型同构。
+
+**pi `0.99.2` 旁证（2026-10-02 增补）**：pi 把 MCP server 指令从 codemode 描述
+迁到 `mcp_servers` system prompt 段时，明确采用"每轮开头计算最新摘要，
+**与上一版不同才追加进会话**"的更新方式——可见面的变更走追加事件而非改写，
+与本设计的追加式可见面编辑同思想，属于不同子系统对同一原则的独立收敛。
 
 ## 3. fork 移植原型
 

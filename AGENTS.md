@@ -126,16 +126,19 @@
   Qwen Code。净开发约 6–11 人天。分支拟 `feat/local-vision-bridge`。基线：2026-09-27 `main`。
 - [`docs-local/workflow-pi-port/`](docs-local/workflow-pi-port/README.md) — **workflow ×
   pi 特性移植预研（选型完成，下一步预研特性，未开工）**：对照 pi（earendil-works/pi，
-  `0.84.0`–`0.99.1`）近两月特性与 `xai-workflow` 现状，结论 = 编排原语不缺、真缺口三个
+  `0.84.0`–`v1.0.0`）近两月特性与 `xai-workflow` 现状，结论 = 编排原语不缺、真缺口三个
   （编排上下文膨胀 / 子 agent 工具面全量声明 / 成本）。两个选型特性已出设计原型：
   P1 [canonical-context-edit.md](docs-local/workflow-pi-port/canonical-context-edit.md)
   （journal 化 `context_edit` host call + prompt 构建层可见面，历史不动与重放确定性
   兼容）、P2 [deferred-tool-exposure.md](docs-local/workflow-pi-port/deferred-tool-exposure.md)
   （exposure 收敛三档 + `AgentOpts.tools/defer_tools` + `search_tools` 延迟声明，
-  不碰重放语义）。codemode 判定不移植（QuickJS 双运行时破坏 journal hash 确定性，
-  决策 D1，只吸收按分支 KV / 大输出旁路两个思想）；cache warming 拟 P2' 独立专题。
+  不碰重放语义）。**2026-10-02 已增补对照 pi `0.99.2`/`v1.0.0`（结论不变）**：P2 吸收
+  pi 自身迭代的三条约束（描述静态化 #10212、`describeNamespace`/description 参与排名
+  定型、resume 丢声明时序坑→新增验收 5）；codemode 瘦身/`generateImages` 不改变 D1
+  判定。codemode 判定不移植（QuickJS 双运行时破坏 journal hash 确定性，决策 D1，
+  只吸收按分支 KV / 大输出旁路两个思想）；cache warming 拟 P2' 独立专题。
   分支拟 P1 `feat/local-workflow-context-edit` / P2 `feat/local-deferred-tool-exposure`。
-  基线：2026-09-30 `main` `95aad87`（pi 基线 `0.99.1`，2026-09-29）。
+  基线：2026-09-30 `main` `95aad87`（pi 基线 `v1.0.0`，2026-10-01 发布）。
 - [`docs-local/kimicode-port/`](docs-local/kimicode-port/README.md) — **kimicode
   （Kimi Code CLI）特性移植预研（选型完成，P1 待拍板开工）**：对照 MoonshotAI/kimi-code
   （main `21406fb`，2026-09-30）与 fork 现状。头号候选 = `/rewind` 从破坏性截断升级

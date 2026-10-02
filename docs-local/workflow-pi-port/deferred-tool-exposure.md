@@ -2,7 +2,8 @@
 
 > 状态：预研原型，未开工、未验证。语义来源：pi `0.99.0` tool_search 与
 > tool exposure（docs/cli.md#tool-search、docs/extensions.md#tool-exposure，
-> B 级转述）。fork 基线 `95aad87`。
+> B 级转述），**2026-10-02 增补 `0.99.2`/`v1.0.0` release notes 对本设计的
+> 三条修正（§2.1）**。fork 基线 `95aad87`。
 
 ## 1. 问题
 
@@ -26,6 +27,30 @@ fork 现有的 `ToolSearch→search_tool` 映射（`xai-grok-agent/src/builder.r
 - `describeNamespace(name)`：返回 namespace 描述 + 工具名清单，配合 server
   `description` 字段让模型知道往哪搜。
 - `codemode.inlineBudget`：声明清单有 token 预算，超了说明"清单不完整"。
+
+### 2.1 pi `0.99.2`/`v1.0.0` 的迭代修正（2026-10-02 增补，B 级）
+
+pi 自己在两版里对本机制做了三处实质迭代，均转化为本设计 §3/§6 的约束：
+
+1. **描述静态化（0.99.2，#10212）**：默认 exposure 的 MCP server 不再进
+   `codemode`/`tool_search` 的工具描述清单——描述不再随 MCP server 连接、
+   断开、换工具而变化（那是 prompt cache 的隐形杀手）；易变信息移到独立的
+   `mcp_servers` system prompt 段（一行式摘要，每轮 prompt 开始时更新，
+   **变更才追加进会话**）。配套：第一个 prompt 不再等待无 `direct` 工具的
+   server（后台连接，脚本点名/search/`tool_search` 运行时才等待）。
+2. **发现辅助定型（0.99.2）**：server `description` 字段参与 tool search
+   排名；`describeNamespace(name)` 随版发布（返回 namespace 指令 + 工具名
+   清单），namespace 名 `-`/`_` 等价、两种拼法都收（1.0.0 进一步把 MCP
+   工具名里的 `-` 归一为 `_`，仅差 `-`/`_` 的冲突工具加 hash 后缀）。
+3. **resume 恢复坑（1.0.0 修复项，反面教材）**：`tool_search` 已加载的
+   deferred 工具在 resume/`/reload` 时被整批丢弃——会话先恢复工具面、MCP
+   server 后重连，时序倒挂导致声明态丢失。**fork 侧对应物 = §3.4 的"声明
+   记录在子 agent 会话内"**：施工时必须保证恢复顺序是"子 agent 会话恢复 +
+   工具面重建"原子完成，不能出现"声明态在、工具面没挂上"的中间态。
+4. **声明面瘦身（1.0.0）**：codemode 描述整体瘦身 ~40%（一行式工具声明 +
+   指向 docs 的指针，模型要用时才读全文）——佐证 §5 待定决策 1 的降级路线
+   （先简单打分、声明面从简），声明面 token 本身就是 deferred 方案的收益项，
+   别让 `search_tools` 自己长成新的大面。
 
 ## 3. fork 移植原型
 
@@ -71,6 +96,11 @@ capability_mode 解析处同层）把 `tools`/`defer_tools` 解析为子 agent �
 - 声明记录在子 agent 自己的会话内（fork 子 agent 已有会话承载，声明变化随
   会话走，天然满足 pi 的"按分支持久"）；workflow journal 不感知——延迟声明
   是子 agent 会话内部状态，不产生 result-bearing host call，**不碰重放语义**。
+- **静态描述约束（吸收 0.99.2 #10212）**：`search_tools` 自身的工具描述与
+  deferred 工具的声明清单在 prompt 构建时一次性定型，不随 MCP 连接状态
+  动态变化；server 层的易变信息（连接态、指令）若需要进 prompt，走"变更才
+  追加"的独立段落，不回流到声明清单。resume 时声明态与工具面同批重建
+  （§2.1 第 3 条的坑位规避）。
 
 ### 3.5 明确不做
 
@@ -90,6 +120,8 @@ capability_mode 解析处同层）把 `tools`/`defer_tools` 解析为子 agent �
    `agent_current_hash_mismatch_still_diverges` 测试形态）。
 4. `capability_mode=read-only` × `defer_tools=true` 交集正确：deferred 命中也
    不会解锁写工具。
+5. resume 用例：子 agent 中断后恢复，此前经 `search_tools` 声明的工具**仍可
+   直接调用**（声明态随会话恢复，不重搜；对照 pi 1.0.0 修复的丢失 bug）。
 5. `ctest.sh -p xai-workflow --lib` + `ctest.sh -p xai-grok-agent --lib`（工具面
    裁剪在 agent 侧，注意该 crate 级联重编面，见 AGENTS.md 时间成本原则）。
 
@@ -105,7 +137,11 @@ capability_mode 解析处同层）把 `tools`/`defer_tools` 解析为子 agent �
 ## 6. 风险
 
 - **deferred 发现率**：模型搜不到该搜的工具会导致任务退化——缓解：server
-  `description` 必填进 `search_tools` 的 namespace 描述（pi Unreleased 的
-  `describeNamespace` 同款思路），验收 1 的 A/B 兜底。
+  `description` 必填进 `search_tools` 的 namespace 描述（pi `0.99.2` 已把
+  `describeNamespace` + description 参与排名定型，原"Unreleased"状态已落
+  地），验收 1 的 A/B 兜底。
+- **恢复时序**：子 agent 会话恢复与 MCP 工具面重建若不同步，会出现 pi 1.0.0
+  修过的同类丢声明 bug（§2.1 第 3 条）——验收标准需含"resume 后 deferred
+  已声明工具仍可调用"用例。
 - **xai-grok-agent 级联重编**：工具面裁剪动 agent builder/config，触及其
   依赖树；施工时先 `cargo check -p` 验证再进测试（AGENTS.md 调试时间成本原则）。
