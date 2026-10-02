@@ -1,7 +1,9 @@
 # kimicode（Kimi Code CLI）× 本仓库 特性移植预研
 
-> **状态：调研完成，未选型。** 本文只回答"kimicode 有什么值得移植、关键设计是什么"；
-> 选型与设计原型待拍板后另立分文档（同 workflow-pi-port 的推进方式）。
+> **状态：选型完成（2026-10-02）。** P1 已出设计原型分文档
+> [`rewind-branch-undo.md`](rewind-branch-undo.md)：fork 摸底推翻了本文的一个前提
+> （持久层已是 append-only + `RewindMarker` 分支标记，落点不是 sqlite-journal），
+> D1 推荐分支树路线，待拍板。P2/P3 维持本文判定，未开工。
 > 调研快照：2026-10-01；kimi-code 基线 `MoonshotAI/kimi-code` main `21406fb`
 > （2026-09-30，v2.1.1 之后）；本地 clone `D:\CODE\ai\kimi-code`。
 > fork 基线：main `2b8adae`（2026-10-01）。
@@ -54,7 +56,7 @@ monorepo，替代已归档的 Python 版 `kimi-cli`。包地图：
 | 子 agent 结果信封 + resume 同会话 | workflow 子 agent 有确定性 resume（领先）；无信封/next_step 映射 | ⚠️ 增益 P3 |
 | 委托图约束（能委托者不被委托） | `xai-grok-subagent-resolution` 现状未核实 | 待核实后判定 |
 | 输入队列 | `xai-prompt-queue`（排队 + 合并规则），回合结束发送 | ✅ 已有 |
-| Ctrl-S steer（注入运行中回合） | 无 | 观察（sampler/agent 层动刀，成本待估） |
+| Ctrl-S steer（注入运行中回合） | `xai-interjection-core` 机制层已有回合内注入通道（Ctrl-S 键位入口未对照） | ✅ 机制已有（键位入口待对照，2026-10-02 订正，原判"无"有误） |
 | 审批 "approve for session"（压入同一规则引擎的 session 作用域） | 审批/settings 面已有 allow 类选项，具体作用域模型未核实 | 待核实后判定 |
 | lifecycle hooks（20 事件点，0/2/fail-open 退出码） | `xai-grok-hooks`：7 事件、pre_tool_use 可 allow/ask/deny + 改写入参、fail-open 一致 | ✅ 已有（可补 Pre/PostCompact、PermissionRequest/Result 等事件位） |
 | `/mcp-config`（AI-native 对话式 MCP 配置 = 内置 SKILL.md） | `xai-grok-mcp` 传输/OAuth 全有；对话式配置无 | 思想可吸收（见决策 D4） |
@@ -85,9 +87,13 @@ kimi 实现：`agent-core-v2/src/agent/undo/undoService.ts` + `src/wire/`。
    上限 4MB/文件）——kimi 自己的 `/undo` 也不回滚代码改动，与 fork `/rewind`
    "文件不动"语义一致，无需移植。
 
-fork 落点：`xai-grok-session-events`/`xai-sqlite-journal`（journal 追加 SwitchEdge
-等价物）+ pager `/rewind` picker 改造。风险：`xai-chat-state` 现有快照 rewind 与
-分支树两条路线需拍板取舍（见决策 D1）。
+fork 落点（2026-10-02 摸底更正）：`updates.jsonl` 持久层的 `RewindMarker`（已等价于
+kimi 的 SwitchEdge，但语义是单向折叠）+ pager `/rewind` picker 改造；
+`xai-sqlite-journal`（SQLite 模式选择器）与 `xai-grok-session-events`（遥测）**不是**
+会话历史 journal，原判有误。且 prompt 放回编辑器（下第 3 点）fork **已有完整等价物**
+（`app/dispatch/rewind.rs:396`），实际差距只剩"分支可往返 + 旧分支点可见 + 边界预计算"。
+详见 [`rewind-branch-undo.md`](rewind-branch-undo.md) §1/§3。风险：`xai-chat-state`
+现有快照 rewind 与分支树两条路线需拍板取舍（见决策 D1）。
 
 ### P2：select_tools 延迟工具声明（并入 deferred-tool-exposure 选型）
 
@@ -138,9 +144,10 @@ kimi 实现：`agent/toolSelect/toolSelect.ts` + `toolSelectService.ts`。要点
 
 ## 决策记录（预研阶段）
 
-- **D1（待拍板）— undo 路线**：分支树（journal 追加）vs 现有 chat-state 快照 rewind。
-  分支树与 workflow journal 重放确定性同构，倾向分支树；但 `/rewind` 现有 UX 与
-  chat-state 依赖面需先摸清再定。
+- **D1（摸底完成，待拍板）— undo 路线**：分支树（journal 追加）vs 现有 chat-state 快照 rewind。
+  2026-10-02 摸底后倾向明确为**分支树**：fork 的 updates.jsonl 已是 append-only + RewindMarker
+  分支标记，升级 = SwitchEdge 化而非新建 journal；证据与分层清单见
+  [`rewind-branch-undo.md`](rewind-branch-undo.md) §3/§4。
 - **D2 — select_tools 并入 workflow-pi-port P2 施工**：同一道题两参照（pi 的
   search_tools/BM25 + kimi 的公告流/历史剥离），P2 开工前合并对照，不另立专题。
 - **D3 — hooks/插件市场/持久化/ACP 不移植**：fork 已有等价物；kimi 多出的事件位
@@ -155,8 +162,8 @@ kimi 实现：`agent/toolSelect/toolSelect.ts` + `toolSelectService.ts`。要点
 
 | 期 | 内容 | 关系 | 规模（C 级粗估） |
 |---|---|---|---|
-| P1 | `/rewind` 分支树升级（journal SwitchEdge + prompt 放回 + 边界计算） | 依赖 D1 拍板；与 workflow journal 联动 | 净开发 4–7 人天 |
-| P2' | deferred-tool-exposure 施工前对照 kimi 方案补强设计原型 | workflow-pi-port P2 的输入，不独立立项 | 0（并入 P2） |
+| P1 | `/rewind` 分支树升级（RewindMarker SwitchEdge 化 + prompt 放回 + 边界计算） | 依赖 D1 拍板；落点为 updates.jsonl，非新 journal；设计原型见 [`rewind-branch-undo.md`](rewind-branch-undo.md)（T1–T3 合计 5–7 人天） | 净开发 5–7 人天 |
+| P2' | deferred-tool-exposure 施工前对照 kimi 方案补强设计原型 | workflow-pi-port P2 的输入，不独立立项；另见 step-code-port survey P2/D2（branch summarization 属同题第三参照） | 0（并入 P2） |
 | P3 | 子 agent 结果信封 + next_step 映射 + 委托图约束 | `xai-workflow` 子 agent 面 | 净开发 2–4 人天 |
 | 随手 | steer、session-approval 作用域、NotifyPanel、intent-card 治理 | 各自挂靠相邻专题 | 各 ≤1 人天 |
 
