@@ -1,5 +1,12 @@
 # 项目工作规则（LOCAL fork）
 
+## 代码理解工具优先级（2026-10-03 定）
+
+**理解代码优先用 cbm**（`codebase-memory-mcp cli`，项目名 `D-CODE-ai-grok-build-proxy`），
+grep/Read 退居补充。进入本仓库没探索过的子系统（如 permission / workflow / sampler 内部）
+时，先跑 `cbm cli get_architecture`（hotspots/clusters）或 `query_graph`（Cypher 查调用链、
+复杂度），一次拿到结构地图再读代码，禁止上来就连环 grep。用法与陷阱见 `~/.zcode/skills/cbm/SKILL.md`。
+
 ## 待办事项（TODO）
 
 > **docs-local 维护约定（2026-09-30 定）**：根层与专题目录只放**活跃**文档（有未完成

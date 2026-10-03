@@ -126,3 +126,23 @@
   rewind 用例）；或先做 ③ 活回合抽查（`ctest.sh` 白名单外需 `GATE_FORCE=1`）。
   中断恢复按 §5-2。
 
+
+### 2026-10-03 · 任务② 完成交接（headless non-interactive-denial continue，feat/local-shell-command-analysis）
+
+- **当前状态**：分支 `feat/local-shell-command-analysis`（自 main `8d82c36`），代码提交
+  `6b1bc29`。**重大勘误收口**：step-code-port P1 的核心（tree-sitter typed AST + 危险
+  命令规则 + fail-closed 三态 + 分类器 findings）fork 在 2026-09-23 上游同步后**全都有**
+  （`xai-grok-workspace/src/permission/`），预研"grep 0 命中"判定作废，survey D1 与
+  inventory 已勘误。真实缺口仅剩无人值守收口一件：headless 非交互遇审批阻塞原样
+  Cancelled→终止回合；现新增 opt-in `--non-interactive-denial continue` 转成
+  PolicyDeny 失败工具结果，agent 换路续跑（对齐 Step-Code 同名语义）。
+- **关键证据**：`cargo check -p xai-grok-shell -p xai-grok-pager -p xai-grok-pager-bin`
+  0 error；shell 单测 3+3（resolve_unattended_denial 纯函数 + StartupHints 解析回退）、
+  pager headless init hint 测试 1 条，GATE_FORCE=1 窄过滤全绿。
+- **未验证事项 / 遗留**：① headless 活跑 A/B（stop vs continue 两档对比，需真实
+  触发一次权限提示）；② fork/worktree 子会话不经 initialize startupHints，continue
+  不覆盖（已知边界，PATCHES.md 十八期登记）；③ subagent 端到端继承未活测（链路已接）。
+- **详情指针**：PATCHES.md 十八期（改动面 + 上游重放清单）；survey D1 勘误节；
+  inventory §2 工具体系行已回填。
+- **接手者第一步**：随统一发版合 main；活跑验证可后置到发版后的新客户端。
+  中断恢复按 §5-2。
