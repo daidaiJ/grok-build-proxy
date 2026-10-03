@@ -192,3 +192,24 @@
 - **本轮动作**：补线按分支纪律收编进 `feat/local-deferred-tool-exposure`
   （`607fb6e`）再合 main（`67f0b21`）；`cargo check --workspace --all-targets`
   门禁通过后推送 + tag `v1.0.41` 发版，完成后另追加完成交接条目。
+
+### 2026-10-03 · Linux CI 首跑暴露 redo 回放缺口 + 修复（接续上条中断点）
+
+- **现场**：tag `v1.0.41` 首推后 build run `37111186613` linux job 挂 2 例
+  （`test_replay_redo_switches_back_to_abandoned_branch` /
+  `test_replay_two_phase_path_matches_streaming_path_for_forward_markers`）；
+  windows job 与 release run `37111199780` 全绿（release 曾以修前树发布 4 资产，
+  下载量 0）。本机 Windows 复跑同值复现 → 纯确定性语义缺口，非平台差异；根因
+  是两用例名不含 "rewind"，此前的 `--lib rewind` 过滤从未执行过它们，Linux CI
+  为其首跑。
+- **根因两处**：① 末端截断按全局 prompt 计数对齐 target，而 redo 的 target
+  是目标分支时间线坐标——复活分支自身 prompt（P4）被削掉；② fold 输出喂给
+  状态机时丢失全文件 promptIndex 幻影上下文（编号 chunk 在被裁分支上），
+  幻影尾巴被误计为真 prompt（reached 1≠0）。
+- **修复**（分支 `feat/local-rewind-branch-undo` 提交 `6e3c858`，合 main
+  `aae18d3`）：fold At 落点认活跃链上的现成分叉；pointer 路径预种全文件幻影
+  上下文 + redo 路径跳过末端截断、reached 固定 target。验证：shell replay::
+  27/0、rewind 过滤 58 过/25 挂（全为已知 AbsPathBuf Windows 环境族，与基线
+  一致）、pager rewind 63/0 无回归。
+- **发版动作**：沿 v1.0.39 覆盖先例删 tag `v1.0.41`（release 转 draft）→ 重指
+  修复后 main 重推，触发新 release/build run；资产同名覆盖、URL 不变。
