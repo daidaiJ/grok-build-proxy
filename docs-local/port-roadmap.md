@@ -92,4 +92,11 @@
 
 ## 6. 交接台账（只追加）
 
-（暂无——任务 ① 开工后在此追加第一条"开工"或"中断点"条目。）
+### 2026-10-03 · 任务① 开工（feat/local-rewind-branch-undo）
+
+- **当前状态**：按 [rewind-branch-undo.md](kimicode-port/rewind-branch-undo.md) 开工，
+  分支 `feat/local-rewind-branch-undo`（自 main `9908362`）；T1（L1 记录与回放语义）
+  先行，`cargo check` + 相关 lib 过滤测试过绿再进 T2。
+- **接手指引**：进度看该分支 `git log` + 本台账后续条目；中途中断按 §5-2 先补
+  "中断点"条目再续作。设计锚点全在 rewind-branch-undo.md §1/§4（当日 grep 复核过）。
+
