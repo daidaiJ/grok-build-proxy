@@ -142,3 +142,20 @@
   ④ `context_with_system` 对应物（落点三）按设计未纳入本项，挪 P2' 评估。
 - **详情指针**：PATCHES.md 十九期；设计锚点 workflow-pi-port/canonical-context-edit.md。
 - **接手者第一步**：随统一发版合 main；活回合验证可后置。中断恢复按 §5-2。
+
+### 2026-10-03 · 任务④ 阶段完成交接（工具面 allowlist T1 落地，search_tools T2 待做，feat/local-deferred-tool-exposure）
+
+- **当前状态**：分支 `feat/local-deferred-tool-exposure`（自 main `8d82c36`）。
+  `AgentOpts.tools` 白名单全链路（workflow payload/hash → host_service →
+  SubagentRuntimeOverrides → apply_child_tool_policy 裁剪，capability 只减不增）
+  已落地并验证。**T2 = defer_tools + search_tools 延迟发现未做**：涉及新工具实现 +
+  子 agent 会话内声明态 + 国模能力门（动态改声明面的模型支持未核实，路线图明确
+  要求先立能力门），按切片拆出。
+- **关键证据**：xai-grok-subagent-resolution 95/0（含 2 新用例）；xai-workflow
+  67/0（含 payload 传递 + divergence 用例）；shell workflow::host 过滤 4/0。
+- **未验证事项 / 遗留**：T2 三件套（search_tools 工具 / 会话声明态 + resume 原子性 /
+  国模能力门）；fan-out token 曲线 A/B（验收 1）等 T2 一起做对照实验。
+- **详情指针**：PATCHES.md 二十期（含 T2 施工约束全文）；设计锚点
+  workflow-pi-port/deferred-tool-exposure.md。
+- **接手者第一步**：T2 开工前先对照 fork-feature-inventory 与 `search_tool`
+  现有实现（builder.rs ToolSearch 映射）定 D 判定；国模能力门先行。中断恢复按 §5-2。

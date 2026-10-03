@@ -1885,3 +1885,45 @@ pi ContextEditEntry 同思想移植（workflow-pi-port P1）：journal 历史只
 - 结构化输出（非字符串）暂不可替换（needle 无法预测脚本嵌入形态），文档登记。
 - 占位符呈现格式为设计 §5-1 的首版定案（纯文本摘要行），等真实 workflow 场景校准。
 - 活回合验证：跑一个 3+ 轮评审 workflow 观察/token 曲线（验收 1 的曲线留档）。
+
+## 二十期：workflow 子代理工具面 allowlist（deferred exposure T1）（2026-10-03，分支 feat/local-deferred-tool-exposure）
+
+deferred-tool-exposure 设计（workflow-pi-port P2）第一切片：`AgentOpts.tools` 显式
+工具面白名单。fan-out 场景每个子代理默认全量工具面（内置 + MCP），工具面 token
+成本 = agent 数 × 工具面大小；白名单让 workflow 作者按子代理角色裁剪声明面。
+**T2（defer_tools + search_tools 延迟发现）未做**，见遗留。
+
+### 改动面（上游同步后必须重放）
+
+1. `xai-grok-tools/.../task/types.rs`：`SubagentRuntimeOverrides.allowed_tools:
+   Option<Vec<String>>`（canonical tool id，可裸名 `read_file` 或全限定
+   `GrokBuild:read_file`，大小写不敏感）。
+2. `xai-grok-subagent-resolution/src/types.rs` + `overrides.rs`：
+   `EffectiveRuntimeConfig.allowed_tools` 透传（v1 runtime-only，role/persona
+   不可设）。
+3. `xai-grok-subagent-resolution/src/definition.rs`：`apply_child_tool_policy`
+   新参 `allowed_tools: Option<&[String]>`——在 capability 过滤与 workflow 工具
+   剥离**之后** retain，故只能裁不能加（read-only 档下白名单也无法复活写工具）；
+   裁剪后重跑 `prune_orphaned_background_task_tools`。
+4. `xai-workflow/src/host.rs`：`AgentOpts.tools`（`skip_serializing_if =
+   "Option::is_none"`——旧 journal 重放 hash 零漂移；进 payload → 白名单变化
+   自然 divergence）。
+5. `xai-grok-shell/src/session/workflow/host_service.rs`：spawn 处
+   `allowed_tools: opts.tools.clone()` 下发到 SubagentRuntimeOverrides。
+
+### 测试
+
+- resolution 2 用例：白名单裁剪面（含裸名匹配断言）、白名单无法放大
+  capability 过滤（read-only + bash 白名单 → 仍无 bash）。全 suite 95/0。
+- 引擎 1 用例：tools 进 opts payload + 改动 → divergence。xai-workflow 67/0。
+
+### 遗留（T2：deferred 发现层，另切片）
+
+- `defer_tools: bool` + `search_tools(query)` 工具（对 deferred 工具名+description
+  简单打分，§5-1 允许首版降级 BM25）；命中者声明给下一轮；声明记录在子 agent
+  会话内（不碰 workflow 重放语义）。
+- **国模能力门（路线图要求）**：动态声明工具依赖模型支持轮间工具面变化
+  （Anthropic `dynamically_loaded_tools` 类能力位）；GLM/DeepSeek/Qwen 等国模
+  对中途改声明面的支持未核实，T2 施工前必须先加能力门（不支持者 defer_tools
+  拒绝或降级为纯 allowlist），未验证能力门不准默认启用。
+- resume 原子性（设计 §2.1-3）：声明态与工具面同批重建，T2 验收用例必须覆盖。
