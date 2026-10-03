@@ -815,3 +815,25 @@ fn handler_answers_ext_method_instead_of_dropping() {
         serde_json::from_str(resp.0.get()).expect("typed wire reply");
     assert!(matches!(parsed, AskUserQuestionExtResponse::Cancelled));
 }
+
+#[test]
+fn headless_init_request_carries_continue_denial_hint_only_when_enabled() {
+    let base = super::build_headless_init_request(None, None, false);
+    let hints = base
+        .meta
+        .as_ref()
+        .and_then(|m| m.get("startupHints"))
+        .cloned()
+        .expect("headless always sends startupHints");
+    assert_eq!(hints["nonInteractive"], serde_json::json!(true));
+    assert!(hints.get("nonInteractiveDenial").is_none());
+
+    let continuing = super::build_headless_init_request(None, None, true);
+    let hints = continuing
+        .meta
+        .as_ref()
+        .and_then(|m| m.get("startupHints"))
+        .cloned()
+        .expect("headless always sends startupHints");
+    assert_eq!(hints["nonInteractiveDenial"], serde_json::json!("continue"));
+}

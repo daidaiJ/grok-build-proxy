@@ -631,11 +631,25 @@ pub struct StartupHints {
     /// Unlike `yoloMode` / `autoMode`, a warm re-attach to an already-resident actor does NOT re-apply it.
     #[serde(default)]
     pub permission_mode: Option<String>,
+    /// How an unattended session treats a recoverable permission prompt that nobody can answer.
+    /// `None`/`"stop"` (default) keeps the resident behavior: the prompt resolves `Cancelled`
+    /// and the turn ends. `"continue"` resolves it as a policy deny — a failed tool result the
+    /// agent sees, so it can pick another route and keep going (headless `--non-interactive-denial continue`).
+    /// Execution-environment failures are not permission decisions and always terminate either way.
+    #[serde(default)]
+    pub non_interactive_denial: Option<String>,
     #[serde(skip)]
     pub startup_traceparent: std::cell::RefCell<Option<String>>,
 }
 
 impl StartupHints {
+    /// `startupHints.nonInteractiveDenial == "continue"`: unattended permission prompts
+    /// resolve as a policy deny (failed tool result, turn continues) instead of cancelling
+    /// the turn. Any other value or absence keeps the default stop behavior.
+    pub fn continue_on_unattended_denial(&self) -> bool {
+        self.non_interactive_denial.as_deref() == Some("continue")
+    }
+
     /// Shared by the spawn path and the resident re-attach path so both resolve identically.
     pub(crate) fn resolve_mcp_strategy(&self) -> xai_grok_telemetry::enums::McpInitStrategy {
         use xai_grok_telemetry::enums::McpInitStrategy;
@@ -968,5 +982,36 @@ mod tests {
         assert_eq!(agents.label, "AGENTS.md");
         assert_eq!(agents.detail.as_deref(), Some("1 file"));
         assert!(agents.tokens > 0);
+    }
+}
+
+#[cfg(test)]
+mod non_interactive_denial_tests {
+    use super::*;
+
+    #[test]
+    fn continue_denial_hint_parses_and_resolves() {
+        let hints: StartupHints =
+            serde_json::from_value(serde_json::json!({"nonInteractiveDenial": "continue"}))
+                .expect("parse");
+        assert!(hints.continue_on_unattended_denial());
+    }
+
+    #[test]
+    fn absent_or_stop_hint_keeps_default_stop() {
+        let absent: StartupHints = serde_json::from_value(serde_json::json!({})).expect("parse");
+        let stop: StartupHints =
+            serde_json::from_value(serde_json::json!({"nonInteractiveDenial": "stop"}))
+                .expect("parse");
+        assert!(!absent.continue_on_unattended_denial());
+        assert!(!stop.continue_on_unattended_denial());
+    }
+
+    #[test]
+    fn unknown_denial_value_falls_back_to_stop() {
+        let hints: StartupHints =
+            serde_json::from_value(serde_json::json!({"nonInteractiveDenial": "explode"}))
+                .expect("unknown value must not break hint parsing");
+        assert!(!hints.continue_on_unattended_denial());
     }
 }

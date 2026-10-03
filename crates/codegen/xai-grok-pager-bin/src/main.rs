@@ -2496,6 +2496,7 @@ async fn async_main(mut args: PagerArgs) -> Result<()> {
                 deny_rules: args.deny_rules.clone(),
                 max_turns: args.max_turns,
                 permission_mode_flag: args.permission_mode_flag.clone(),
+                non_interactive_denial: args.non_interactive_denial.clone(),
                 reasoning_effort: args.reasoning_effort.clone(),
                 wait_for_background: !args.no_wait_for_background,
                 background_wait_timeout: std::time::Duration::from_secs(
