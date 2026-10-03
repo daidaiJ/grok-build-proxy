@@ -2103,7 +2103,7 @@ impl RewindFace {
     /// (same "rewind to N keeps 0..N-1" convention as the picker). Uses the same
     /// leaf→root `k` recursion as [`fold_branch_timeline`]: each branch keeps
     /// `k - t_b` of its own prompts and the parent keeps `min(k, t_b)`.
-    pub fn timeline_prompts_at(&self, branch: usize, own_index: usize) -> Vec<String> {
+    pub(crate) fn timeline_prompts_at(&self, branch: usize, own_index: usize) -> Vec<String> {
         let Some(node) = self.branches.get(branch) else {
             return Vec::new();
         };
@@ -2129,7 +2129,7 @@ impl RewindFace {
     /// The active timeline decomposed per branch: `(branch id, own prompts kept,
     /// timeline base index)` root-first. Lets the picker map each flat timeline point
     /// back to the `(branch, own index)` coordinate the redo path needs.
-    pub fn active_chain_slices(&self) -> Vec<(usize, usize, usize)> {
+    pub(crate) fn active_chain_slices(&self) -> Vec<(usize, usize, usize)> {
         let active = self.active;
         let own = self.branches[active].prompts.len();
         let t_leaf = self.branches[active].fork.map_or(0, |(_, t)| t);
