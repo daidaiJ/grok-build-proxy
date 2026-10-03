@@ -225,6 +225,20 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) 的既定打法
   （52 冲突人工裁定、LOCAL 补丁按 PATCHES.md 重放、白名单 crate lib 测试门禁）。
 
+### 移植路线图四特性统一发版 — v1.0.41（2026-10-03）
+
+- **当前状态：** 任务①②③④ 已合 main 并随 `v1.0.41` 发版（tag 重指一次：Linux CI
+  首跑暴露 ① redo 回放两处语义缺口——两用例名不含 "rewind" 此前从未被本机过滤
+  覆盖，修复 `6e3c858`/`aae18d3` 后沿 v1.0.39 先例覆盖发版；release run
+  37115871788 / build run 37115862185 双双 job success，4 资产，release 页已恢复
+  发布）。客户端待更新到 1.0.41 做活回合抽查（/rewind 分支树 undo 等）。
+- **本地遗留：** ① T2b（replay 重建统一双路径）；④ T2（defer_tools +
+  search_tools + 国模能力门，开工前三参照合并定稿）；② headless 活跑 A/B；
+  ③ 活回合 token 曲线；两随手件（流恢复注入 / 子 agent 结果信封）。
+- **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
+  交接台账（四任务交接条目 + CI 缺口修复 + 完成交接条目）；PATCHES.md rewind 节
+  + 十八～二十期。
+
 ### 未验证事项
 
 - [ ] sampler 用例在 Linux CI 上的表现（CI 当前不跑；本机无 WSL/Linux 环境，跑不了；

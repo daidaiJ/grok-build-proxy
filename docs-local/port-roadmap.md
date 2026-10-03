@@ -213,3 +213,23 @@
   一致）、pager rewind 63/0 无回归。
 - **发版动作**：沿 v1.0.39 覆盖先例删 tag `v1.0.41`（release 转 draft）→ 重指
   修复后 main 重推，触发新 release/build run；资产同名覆盖、URL 不变。
+
+### 2026-10-03 · 四特性统一发版完成交接（v1.0.41，tag 重指后双绿）
+
+- **当前状态**：main `b811cfb`，tag `v1.0.41` 重指至修复后树（annotated，tag 消息
+  即 release body），release run `37115871788` linux/windows 双 job success 出
+  4 资产、build run `37115862185` 双 job success（此前挂的 2 用例转绿）；
+  release 页已恢复发布（draft → published，沿 v1.0.39 先例，同名覆盖）。
+- **关键证据**：`cargo check --workspace --all-targets` 0 error/0 warning（补线
+  后全树两轮）；shell replay:: 27/0、rewind 过滤 58 过/25 挂（全为已知
+  AbsPathBuf Windows 环境族，与基线一致）、pager rewind 63/0；Linux CI build
+  双 job success。
+- **未验证事项 / 遗留**：① T2b（replay 重建统一双路径）；② headless 活跑 A/B
+  （stop vs continue 两档对比）；③ 活回合 token 曲线验收；④ T2 三件套
+  （search_tools 工具 / 会话声明态 + resume 原子性 / 国模能力门）+ fan-out
+  token 曲线 A/B；两随手件（流恢复注入 / 子 agent 结果信封）未动；活回合 TUI
+  抽查（/rewind 切回弃分支 → 编辑重发 → regeneration 遥测）随新客户端。
+- **fork-feature-inventory 回填**：①②③④ 均已回填（见各任务交接条目）。
+- **详情指针**：PATCHES.md rewind 节 + 十八～二十期；release 页 tag v1.0.41。
+- **接手者第一步**：更新本机客户端到 1.0.41 做活回合抽查；下一特性按 §4 顺序，
+  随手件-流恢复注入可随时搭车；④ T2 开工前先做三参照合并定稿（§4-3）。
