@@ -29,6 +29,15 @@
   已恢复发布）。历史备注：`v1.0.38` release 实为草稿状态留在 release 页（昨天
   的正式发布是 v1.0.39），tag 已恢复原指向 `5667ea0`。
 
+- [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) — **移植路线图
+  （选型定稿 2026-10-03，未开工）**：三个移植预研专题（workflow-pi-port /
+  kimicode-port / step-code-port）候选特性按「coding+agent 价值 × 国模适配」定序：
+  ① rewind 分支树 undo（kimi P1 + step P2 并题，kimicode D1 随之拍板分支树路线）
+  ② bash AST 静态安全分析（三态判定）③ canonical context edit ④ 延迟工具声明
+  （capability 门 + kimi 公告流，不上首版 BM25），另两随手件（流恢复注入 /
+  子 agent 结果信封）。**交接协议在案（MANDATORY）：每个任务完成或中断都要在
+  roadmap §6 交接台账追加条目；重大里程碑另进本文 Handoff 摘要。**
+
 - [`docs-local/fork-feature-inventory.md`](docs-local/fork-feature-inventory.md) —
   **fork 已有特性基线清单（移植预研对照表，持续回填）**：102 crate 按 11 功能域的
   职责地图 + LOCAL 自产特性表（来源分支/期号）+ 既有预研「已有/不做」判定汇总 +

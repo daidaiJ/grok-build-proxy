@@ -1,7 +1,10 @@
 # Step-Code（阶跃星辰 Step Code CLI）× 本仓库 特性移植预研
 
-> **状态：调研完成，未选型。** 本文只回答"Step-Code 有什么值得移植、关键设计是什么"；
-> 选型与设计原型待拍板后另立分文档（同 kimicode-port / workflow-pi-port 的推进方式）。
+> **状态：选型定稿（2026-10-03，入 [`docs-local/port-roadmap.md`](../port-roadmap.md)）。**
+> P1（bash AST 静态安全分析）排序②；P2（branch summarization）并入 kimicode-port P1
+>（D2 落实，随路线图排序①施工）；P3（流恢复注入）列为路线图随手件；
+> P4 待 fork spawn 链路核实后判；P5/P6 不立项。
+> 本文保留调研全文，选型与施工顺序以路线图为准。
 > 调研快照：2026-10-02；Step-Code 基线 `stepfun-ai/Step-Code` main `519e4de4`
 > （2026-09-30，PR #204 merge）；本地 clone `D:\CODE\ai\Step-Code`（shallow）。
 > fork 基线：main `c3e6c3c`（2026-10-02）。
@@ -194,10 +197,9 @@ host 空闲才投递 + `agent_settled` 再排空、不追欠（missed 不爆发�
 
 ## 决策记录（预研阶段）
 
-- **D1（待拍板）— P1 shell 静态分析立项与否**：收益随 fork headless/无人值守使用
-  强度增长；若立项，Rust 解析器选型（tree-sitter-bash vs 手写）与
+- **D1（2026-10-03 立项：移植路线图排序②）— P1 shell 静态分析**：Rust 解析器选型（tree-sitter-bash vs 手写）与
   `analysisIncomplete` 语义放进 `xai-grok-tools` 还是独立 crate 需先定。
-- **D2 — 分支树需求并入 kimicode-port P1**：kimi（undo/prompt 放回/compaction 边界）
+- **D2（2026-10-03 落实，随路线图排序①施工）— 分支树需求并入 kimicode-port P1**：kimi（undo/prompt 放回/compaction 边界）
   与 Step（branch summarization/summary-overflow）两参照合并成一份设计原型后再动工，
   不另立 step-code 专题。
 - **D3 — P3 流恢复注入**：先在 `xai-grok-sampler` 确认不完整流的现有分类

@@ -3,7 +3,10 @@
 > **状态：选型完成（2026-10-02）。** P1 已出设计原型分文档
 > [`rewind-branch-undo.md`](rewind-branch-undo.md)：fork 摸底推翻了本文的一个前提
 > （持久层已是 append-only + `RewindMarker` 分支标记，落点不是 sqlite-journal），
-> D1 推荐分支树路线，待拍板。P2/P3 维持本文判定，未开工。
+> D1 推荐分支树路线，**2026-10-03 随移植路线图拍板为分支树路线**（排序①，并入
+> step-code branch summarization 同题需求，见
+> [`docs-local/port-roadmap.md`](../port-roadmap.md)）。P2 维持并入
+> deferred-tool-exposure 定稿（路线图排序④）、P3 列为路线图随手件，均未开工。
 > 调研快照：2026-10-01；kimi-code 基线 `MoonshotAI/kimi-code` main `21406fb`
 > （2026-09-30，v2.1.1 之后）；本地 clone `D:\CODE\ai\kimi-code`。
 > fork 基线：main `2b8adae`（2026-10-01）。
@@ -144,7 +147,7 @@ kimi 实现：`agent/toolSelect/toolSelect.ts` + `toolSelectService.ts`。要点
 
 ## 决策记录（预研阶段）
 
-- **D1（摸底完成，待拍板）— undo 路线**：分支树（journal 追加）vs 现有 chat-state 快照 rewind。
+- **D1（2026-10-03 拍板：分支树路线，随移植路线图排序①）— undo 路线**：分支树（journal 追加）vs 现有 chat-state 快照 rewind。
   2026-10-02 摸底后倾向明确为**分支树**：fork 的 updates.jsonl 已是 append-only + RewindMarker
   分支标记，升级 = SwitchEdge 化而非新建 journal；证据与分层清单见
   [`rewind-branch-undo.md`](rewind-branch-undo.md) §3/§4。
