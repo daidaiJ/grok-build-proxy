@@ -510,10 +510,13 @@ impl HostService {
             None => None,
             Some(schema) => Some(compile_contract_schema(schema).map_err(HostError::Failed)?),
         };
-        let prompt = match &opts.output_schema {
-            None => opts.prompt.clone(),
-            Some(schema) => contract_prompt(&opts.prompt, schema),
-        };
+        let prompt = xai_workflow::host::apply_visible_edits(
+            match &opts.output_schema {
+                None => opts.prompt.clone(),
+                Some(schema) => contract_prompt(&opts.prompt, schema),
+            },
+            &opts.context_edits,
+        );
 
         // Acquire before the roster row so a waiting agent is not shown as running
         let _agent_slot = self.acquire_agent_slot().await?;
