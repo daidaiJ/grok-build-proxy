@@ -34,7 +34,7 @@ struct RewindSessionRequest {
     #[serde(default)]
     mode: Option<RewindMode>,
     /// LOCAL (branch-tree undo) redo: switch back to this abandoned branch.
-    #[serde(default)]
+    #[serde(default, alias = "toBranch")]
     to_branch: Option<u64>,
 }
 impl RewindSessionRequest {

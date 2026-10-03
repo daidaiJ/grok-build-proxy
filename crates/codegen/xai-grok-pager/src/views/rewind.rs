@@ -21,12 +21,48 @@ pub struct RewindPointInfo {
     pub prompt_preview: Option<String>,
     #[serde(default, alias = "hasFileChanges")]
     pub has_file_changes: bool,
+    /// LOCAL (branch-tree undo): branch this point belongs to (0 = current timeline).
+    #[serde(default, alias = "branch")]
+    pub branch: u64,
+    /// Pre-computed replay boundary; `Some` = rewinding here would lose history.
+    #[serde(default)]
+    pub boundary: Option<String>,
+}
+
+/// One abandoned branch the redo path can switch back to (LOCAL branch-tree undo).
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct RewindBranchInfo {
+    #[serde(default, alias = "branch")]
+    pub branch: u64,
+    #[serde(default, alias = "fork")]
+    pub fork: Option<(u64, usize)>,
+    #[serde(default, alias = "points")]
+    pub points: Vec<RewindPointInfo>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct RewindPointsResponse {
     #[serde(alias = "rewindPoints")]
     pub rewind_points: Vec<RewindPointInfo>,
+    #[serde(default, alias = "abandonedBranches")]
+    pub abandoned_branches: Vec<RewindBranchInfo>,
+}
+
+/// A rewind target: a prompt index on the current timeline, or (with `to_branch`)
+/// an own index within an abandoned branch (LOCAL redo).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RewindTarget {
+    pub prompt_index: usize,
+    pub to_branch: Option<u64>,
+}
+
+impl RewindTarget {
+    pub fn from_point(point: &RewindPointInfo) -> Self {
+        Self {
+            prompt_index: point.prompt_index,
+            to_branch: (point.branch != 0).then_some(point.branch),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -68,6 +104,7 @@ pub enum RewindPhase {
     /// Confirm before executing a conversation-only rewind.
     Confirm {
         target_prompt_index: usize,
+        to_branch: Option<u64>,
         active_idx: usize,
         prompt_preview: Option<String>,
     },
@@ -106,10 +143,10 @@ pub enum RewindInput {
     Dismissed,
     CancelTurnThenProceed,
     DismissError,
-    Confirm(usize),
+    Confirm(RewindTarget),
     /// Execute this rewind and turn off confirm-before-rewind.
-    ConfirmNeverAsk(usize),
-    PickerSelect(usize),
+    ConfirmNeverAsk(RewindTarget),
+    PickerSelect(RewindTarget),
     MoveUp,
     MoveDown,
     ConfirmCursor,
@@ -130,7 +167,7 @@ pub fn handle_rewind_key(state: &RewindState, key: &KeyEvent) -> RewindInput {
             KeyCode::Char('k') | KeyCode::Up => RewindInput::MoveUp,
             KeyCode::Enter => {
                 if let Some(p) = points.get(*selected) {
-                    RewindInput::PickerSelect(p.prompt_index)
+                    RewindInput::PickerSelect(RewindTarget::from_point(p))
                 } else {
                     RewindInput::Consumed
                 }
@@ -149,17 +186,24 @@ pub fn handle_rewind_key(state: &RewindState, key: &KeyEvent) -> RewindInput {
         },
         RewindPhase::Confirm {
             target_prompt_index,
+            to_branch,
             ..
-        } => match key.code {
-            KeyCode::Char('y') => RewindInput::Confirm(*target_prompt_index),
-            KeyCode::Char('n') => RewindInput::Dismissed,
-            KeyCode::Char('a') => RewindInput::ConfirmNeverAsk(*target_prompt_index),
-            KeyCode::Char('j') | KeyCode::Down => RewindInput::MoveDown,
-            KeyCode::Char('k') | KeyCode::Up => RewindInput::MoveUp,
-            KeyCode::Enter => RewindInput::ConfirmCursor,
-            KeyCode::Esc => RewindInput::Dismissed,
-            _ => RewindInput::Consumed,
-        },
+        } => {
+            let target = RewindTarget {
+                prompt_index: *target_prompt_index,
+                to_branch: *to_branch,
+            };
+            match key.code {
+                KeyCode::Char('y') => RewindInput::Confirm(target),
+                KeyCode::Char('n') => RewindInput::Dismissed,
+                KeyCode::Char('a') => RewindInput::ConfirmNeverAsk(target),
+                KeyCode::Char('j') | KeyCode::Down => RewindInput::MoveDown,
+                KeyCode::Char('k') | KeyCode::Up => RewindInput::MoveUp,
+                KeyCode::Enter => RewindInput::ConfirmCursor,
+                KeyCode::Esc => RewindInput::Dismissed,
+                _ => RewindInput::Consumed,
+            }
+        }
         RewindPhase::Error { .. } => match key.code {
             KeyCode::Esc | KeyCode::Enter => RewindInput::DismissError,
             _ => RewindInput::Consumed,
@@ -202,13 +246,20 @@ pub fn confirm_cursor(phase: &RewindPhase) -> RewindInput {
         },
         RewindPhase::Confirm {
             target_prompt_index,
+            to_branch,
             active_idx,
             ..
-        } => match active_idx {
-            0 => RewindInput::Confirm(*target_prompt_index),
-            1 => RewindInput::ConfirmNeverAsk(*target_prompt_index),
-            _ => RewindInput::Dismissed,
-        },
+        } => {
+            let target = RewindTarget {
+                prompt_index: *target_prompt_index,
+                to_branch: *to_branch,
+            };
+            match active_idx {
+                0 => RewindInput::Confirm(target),
+                1 => RewindInput::ConfirmNeverAsk(target),
+                _ => RewindInput::Dismissed,
+            }
+        }
         _ => RewindInput::Consumed,
     }
 }
@@ -295,7 +346,8 @@ pub fn rewind_activate(phase: &RewindPhase) -> RewindInput {
     match phase {
         RewindPhase::Picker { points, selected } => points
             .get(*selected)
-            .map(|p| RewindInput::PickerSelect(p.prompt_index))
+            .map(RewindTarget::from_point)
+            .map(RewindInput::PickerSelect)
             .unwrap_or(RewindInput::Consumed),
         RewindPhase::Error { .. } => RewindInput::DismissError,
         other => confirm_cursor(other),
@@ -369,16 +421,35 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                 let Some(point) = points.get(i) else {
                     return Line::from("");
                 };
-                let dot_style = Style::default().fg(theme.gray).bg(ctx.row_bg);
+                // Abandoned branches get a distinct marker; boundary-blocked points a warning.
+                let dot_symbol = if point.branch != 0 {
+                    "\u{21A9} " // ↩ switch-back row
+                } else {
+                    "\u{00B7} "
+                };
+                let warn = point
+                    .boundary
+                    .as_deref()
+                    .map(|_| "\u{26A0} ") // ⚠
+                    .unwrap_or("");
+                let dot_style = if point.branch != 0 {
+                    Style::default().fg(theme.accent_user).bg(ctx.row_bg)
+                } else {
+                    Style::default().fg(theme.gray).bg(ctx.row_bg)
+                };
                 let preview: String = crate::render::line_utils::truncate_str(
                     point
                         .prompt_preview
                         .as_deref()
                         .unwrap_or(tr("(no preview)")),
-                    ctx.content_width.saturating_sub(8) as usize,
+                    ctx.content_width.saturating_sub(10) as usize,
                 );
                 let text_style = Style::default()
-                    .fg(theme.text_primary)
+                    .fg(if point.boundary.is_some() {
+                        theme.gray
+                    } else {
+                        theme.text_primary
+                    })
                     .bg(ctx.row_bg)
                     .add_modifier(if ctx.is_cursor {
                         Modifier::BOLD
@@ -387,7 +458,8 @@ pub fn render_rewind_overlay(buf: &mut Buffer, area: Rect, phase: &RewindPhase, 
                     });
 
                 Line::from(vec![
-                    Span::styled("\u{00B7} ", dot_style),
+                    Span::styled(dot_symbol, dot_style),
+                    Span::styled(warn.to_string(), dot_style),
                     Span::styled(preview, text_style),
                 ])
             });
@@ -647,6 +719,8 @@ mod tests {
             num_file_snapshots: 0,
             prompt_preview: Some(format!("turn {prompt_index}")),
             has_file_changes: false,
+            branch: 0,
+            boundary: None,
         }
     }
 
@@ -663,6 +737,7 @@ mod tests {
         RewindState {
             phase: RewindPhase::Confirm {
                 target_prompt_index: 3,
+                to_branch: None,
                 active_idx: 0,
                 prompt_preview: None,
             },
@@ -700,6 +775,7 @@ mod tests {
     fn confirm_rows() {
         let phase = RewindPhase::Confirm {
             target_prompt_index: 0,
+            to_branch: None,
             active_idx: 0,
             prompt_preview: None,
         };
@@ -750,6 +826,7 @@ mod tests {
 
         let mut confirm = RewindPhase::Confirm {
             target_prompt_index: 0,
+            to_branch: None,
             active_idx: 0,
             prompt_preview: None,
         };
@@ -775,7 +852,10 @@ mod tests {
         };
         assert!(matches!(
             rewind_activate(&picker),
-            RewindInput::PickerSelect(20)
+            RewindInput::PickerSelect(RewindTarget {
+                prompt_index: 20,
+                to_branch: None
+            })
         ));
 
         let error = RewindPhase::Error {
@@ -785,26 +865,35 @@ mod tests {
 
         let confirm_go = RewindPhase::Confirm {
             target_prompt_index: 4,
+            to_branch: None,
             active_idx: 0,
             prompt_preview: None,
         };
         assert!(matches!(
             rewind_activate(&confirm_go),
-            RewindInput::Confirm(4)
+            RewindInput::Confirm(RewindTarget {
+                prompt_index: 4,
+                to_branch: None
+            })
         ));
 
         let confirm_never = RewindPhase::Confirm {
             target_prompt_index: 4,
+            to_branch: None,
             active_idx: 1,
             prompt_preview: None,
         };
         assert!(matches!(
             rewind_activate(&confirm_never),
-            RewindInput::ConfirmNeverAsk(4)
+            RewindInput::ConfirmNeverAsk(RewindTarget {
+                prompt_index: 4,
+                to_branch: None
+            })
         ));
 
         let confirm_no = RewindPhase::Confirm {
             target_prompt_index: 4,
+            to_branch: None,
             active_idx: 2,
             prompt_preview: None,
         };
@@ -819,7 +908,10 @@ mod tests {
         let state = confirm_state();
         assert!(matches!(
             handle_rewind_key(&state, &key(KeyCode::Char('y'))),
-            RewindInput::Confirm(3)
+            RewindInput::Confirm(RewindTarget {
+                prompt_index: 3,
+                to_branch: None
+            })
         ));
         assert!(matches!(
             handle_rewind_key(&state, &key(KeyCode::Char('n'))),
@@ -827,7 +919,10 @@ mod tests {
         ));
         assert!(matches!(
             handle_rewind_key(&state, &key(KeyCode::Char('a'))),
-            RewindInput::ConfirmNeverAsk(3)
+            RewindInput::ConfirmNeverAsk(RewindTarget {
+                prompt_index: 3,
+                to_branch: None
+            })
         ));
     }
 

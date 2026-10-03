@@ -4709,6 +4709,7 @@ pub(crate) fn execute(
                                     TaskResult::RewindPointsLoaded {
                                         agent_id,
                                         points: r.rewind_points,
+                                        abandoned: r.abandoned_branches,
                                     }
                                 }
                                 Err(e) => {
@@ -4728,7 +4729,7 @@ pub(crate) fn execute(
                     }
                 });
         }
-        Effect::RewindExecute { agent_id, session_id, target_prompt_index } => {
+        Effect::RewindExecute { agent_id, session_id, target_prompt_index, to_branch } => {
             let tx = acp_tx.clone();
             tasks
                 .spawn(async move {
@@ -4738,6 +4739,7 @@ pub(crate) fn execute(
                                 &rewind_execute_params(
                                     session_id.0.as_ref(),
                                     target_prompt_index,
+                                to_branch,
                                 ),
                             )
                             .expect("serialize rewind/execute params")
@@ -5519,13 +5521,21 @@ pub(crate) const REWIND_MODE_WIRE: &str = "conversation_only";
 pub(crate) fn rewind_execute_params(
     session_id: &str,
     target_prompt_index: usize,
+    to_branch: Option<u64>,
 ) -> serde_json::Value {
-    serde_json::json!({
+    let mut value = serde_json::json!({
         "sessionId": session_id,
         "targetPromptIndex": target_prompt_index,
         "force": true,
         "mode": REWIND_MODE_WIRE,
-    })
+    });
+    // LOCAL (branch-tree undo) redo form; absent for plain rewinds.
+    if let Some(branch) = to_branch
+        && let Some(obj) = value.as_object_mut()
+    {
+        obj.insert("toBranch".into(), serde_json::json!(branch));
+    }
+    value
 }
 /// The shell prefers the `content` text block over `question`. The omit notice
 /// has to be on both, or a partial drop never reaches the model.

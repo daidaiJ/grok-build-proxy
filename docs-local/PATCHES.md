@@ -1845,3 +1845,63 @@ status_blocks 用量块的两个快照失配，根因是整串格式里的**对�
 - 遗留（= compat 文档「未验证项」顺延）：活体验证需把某个受影响模型切回
   `api_backend = "responses"` 实跑一轮带推理请求（本机当前已统一 chat_completions，
   未切回）；Command Code 是否还发其他非标事件名未穷举，命中 warn 日志可发现。
+
+## rewind 分支树 undo（2026-10-03，分支 `feat/local-rewind-branch-undo`，进行中）
+
+> 背景：[`kimicode-port/rewind-branch-undo.md`](kimicode-port/rewind-branch-undo.md)
+> 设计原型 + [`port-roadmap.md`](port-roadmap.md) 任务①。kimi `/rewind` 升级为
+> append-only 分支树 undo（SwitchEdge 化），T1/T2a/T3 本机完成，T2b/活回合验证待续。
+
+### 改动面（多属上游同步线，上游同步后必须重放本节）
+
+- **T1 持久语义**（storage 层核心）：
+  - `extensions/notification.rs`：`RewindMarker` 增 `to_branch: Option<u64>`
+    （serde default + skip_serializing_if，旧格式可读；None=向前 rewind，
+    Some(b)=切回弃分支 b 的 redo）。
+  - `session/storage/mod.rs`：`filter_rewind_by` 泛化为 `fold_branch_timeline`
+    （标记序列折叠成分支树，branch id = marker 序数；`BranchPointer`
+    Final/FinalCut/At 三态）。坐标系定案：fork target 记录在**写入时活跃时间线**
+    的连续编号上，链上切点从叶子向根递归传播（keep_own = k − t_b，
+    k ← min(k, t_b)）——首版按父分支自身编号切被 `filter_rewind_double_rewind`
+    与 `test_multiple_rewind_markers` 两用例抓出回归后修正。
+    `assign_branches` 构建阶段与 fold 分离共享。**所有消费面
+    （replay/raw-filter/typed-filter/fork copy/tail 分页/搜索索引/prompt 提取）
+    走同一 fold，旧格式输出逐条兼容（既有测试全过为门）。**
+  - `PromptExtractEvent::RewindTo` 改结构变体（target + to_branch）；
+    `collect_prompts_from_events` 缓冲后走同一 fold。
+  - `session/helpers/replay.rs`：`updates_have_backward_markers` 预扫 → 命中
+    backward 标记走两阶段路径（否则保持原流式，零内存增量）；`finish_replay`
+    抽取共享尾部；新增 `replay_to_prompt_pointer`（At 指针）。
+- **T2a redo 通道**：
+  - storage：`RewindFace`/`collect_rewind_face`（分支树 + 各分支 prompt）、
+    `timeline_prompts_at`（redo 落点时间线）、`active_chain_slices`（时间线点→
+    分支坐标）、`collect_branch_checkpoints`（边界预计算数据）。
+  - `acp_types.rs`：`RewindRequest.to_branch`（serde default）；
+    `RewindPointInfo.branch/boundary`；`RewindPointsResponse.abandoned_branches`
+    （+ `RewindBranchInfo`）。
+  - `acp_session_impl/rewind.rs`：`handle_rewind_to_branch`——face 校验 →
+    先追加 redo marker → 分支感知 replay 重建（preamble splice/清理与跨
+    compaction 路径一致）→ 快照 `prompt_texts` 从 journal 面重推导（§7-3）。
+    **redo 强制 conversation-only（文件半边不动，design §6-3）**。
+    `get_rewind_points` 加分支坐标映射 + 缺 checkpoint 文件的边界标注 +
+    弃分支列表（0..=tip）。
+  - `extensions/rewind.rs`：`x.ai/rewind/execute` 透传 `to_branch`
+    （wire 名 `toBranch`/`to_branch` 双收）。
+- **T3 pager**（views/rewind.rs、agent_view/rewind.rs、actions.rs、router.rs、
+  dispatch/rewind.rs、task_result.rs、effects/mod.rs）：
+  - `RewindTarget { prompt_index, to_branch }` 贯穿 PickerSelect/Confirm/
+    ConfirmNeverAsk/Effect::RewindExecute/`rewind_execute_params`。
+  - picker 渲染：弃分支行 `↩` 前缀、boundary 点 `⚠` 前缀 + 灰化；
+    弃分支点合入扁平列表（active 降序在后）。
+  - i18n 债：boundary 文案由 shell 下发英文（未进 tr() 体系），记欠账。
+
+### 验证与遗留
+
+- 本机：`cargo check -p xai-grok-shell/-p xai-grok-pager --all-targets` 全绿；
+  `ctest.sh -p xai-grok-pager --lib rewind` 63/0；shell 侧 rewind 过滤 58 过
+  （25 挂全为 `support.rs:287` AbsPathBuf("/tmp") Windows 环境族——该 crate 不在
+  白名单的既有原因，非本改引入）。
+- 遗留：① T2b（向前 rewind 统一走 replay 重建）未做，需 Linux CI/专用会话；
+  ② redo 端到端 + pty 回归（`rewind_after_compaction_with_missing_checkpoint`）
+  待活回合/CI；③ 活回合 TUI 抽查（redo → 编辑重发 → regeneration 遥测）；
+  ④ boundary 文案 i18n。

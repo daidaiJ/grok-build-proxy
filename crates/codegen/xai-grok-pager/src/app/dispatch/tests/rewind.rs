@@ -169,6 +169,8 @@ fn rewind_point(prompt_index: usize) -> crate::views::rewind::RewindPointInfo {
         num_file_snapshots: 0,
         prompt_preview: Some("fix the bug".into()),
         has_file_changes: false,
+        branch: 0,
+        boundary: None,
     }
 }
 
@@ -177,7 +179,8 @@ fn points_loaded(id: AgentId) -> Action {
     Action::TaskComplete(TaskResult::RewindPointsLoaded {
         agent_id: id,
         points: vec![rewind_point(0)],
-    })
+    
+    abandoned: vec![],})
 }
 
 /// Classic `/rewind` with a selected turn also lands on the confirm when confirm-before-rewind is on (default).
@@ -277,7 +280,8 @@ fn picker_select_nonzero_target_executes_immediately_when_confirm_off() {
         Action::TaskComplete(TaskResult::RewindPointsLoaded {
             agent_id: id,
             points: vec![rewind_point(1), rewind_point(0)],
-        }),
+        
+        abandoned: vec![],}),
         &mut app,
     );
     assert!(matches!(
@@ -285,7 +289,7 @@ fn picker_select_nonzero_target_executes_immediately_when_confirm_off() {
         crate::views::rewind::RewindPhase::Picker { .. }
     ));
 
-    let effects = dispatch(Action::RewindPickerSelect(1), &mut app);
+    let effects = dispatch(Action::RewindPickerSelect(crate::views::rewind::RewindTarget { prompt_index: 1, to_branch: None }), &mut app);
     assert!(
         matches!(
             effects.first(),
@@ -316,11 +320,12 @@ fn picker_select_nonzero_target_opens_confirm_when_setting_on() {
         Action::TaskComplete(TaskResult::RewindPointsLoaded {
             agent_id: id,
             points: vec![rewind_point(1), rewind_point(0)],
-        }),
+        
+        abandoned: vec![],}),
         &mut app,
     );
 
-    let effects = dispatch(Action::RewindPickerSelect(1), &mut app);
+    let effects = dispatch(Action::RewindPickerSelect(crate::views::rewind::RewindTarget { prompt_index: 1, to_branch: None }), &mut app);
     assert!(
         effects.is_empty(),
         "confirm setting on waits, got {effects:?}"
@@ -346,11 +351,12 @@ fn picker_select_target_zero_opens_confirm() {
         Action::TaskComplete(TaskResult::RewindPointsLoaded {
             agent_id: id,
             points: vec![rewind_point(1), rewind_point(0)],
-        }),
+        
+        abandoned: vec![],}),
         &mut app,
     );
 
-    let effects = dispatch(Action::RewindPickerSelect(0), &mut app);
+    let effects = dispatch(Action::RewindPickerSelect(crate::views::rewind::RewindTarget { prompt_index: 0, to_branch: None }), &mut app);
     assert!(
         effects.is_empty(),
         "confirm setting on waits for Yes/No, got {effects:?}"
@@ -376,10 +382,11 @@ fn confirm_yes_executes_rewind() {
         Action::TaskComplete(TaskResult::RewindPointsLoaded {
             agent_id: id,
             points: vec![rewind_point(1), rewind_point(0)],
-        }),
+        
+        abandoned: vec![],}),
         &mut app,
     );
-    dispatch(Action::RewindPickerSelect(1), &mut app);
+    dispatch(Action::RewindPickerSelect(crate::views::rewind::RewindTarget { prompt_index: 1, to_branch: None }), &mut app);
     assert!(matches!(
         agent_ref(&app, id).rewind_state.as_ref().unwrap().phase,
         crate::views::rewind::RewindPhase::Confirm {
@@ -388,7 +395,7 @@ fn confirm_yes_executes_rewind() {
         }
     ));
 
-    let effects = dispatch(Action::RewindConfirm(1), &mut app);
+    let effects = dispatch(Action::RewindConfirm(crate::views::rewind::RewindTarget { prompt_index: 1, to_branch: None }), &mut app);
     assert!(
         matches!(
             effects.first(),
@@ -419,12 +426,13 @@ fn confirm_never_ask_persists_setting_off_and_executes() {
         Action::TaskComplete(TaskResult::RewindPointsLoaded {
             agent_id: id,
             points: vec![rewind_point(1), rewind_point(0)],
-        }),
+        
+        abandoned: vec![],}),
         &mut app,
     );
-    dispatch(Action::RewindPickerSelect(1), &mut app);
+    dispatch(Action::RewindPickerSelect(crate::views::rewind::RewindTarget { prompt_index: 1, to_branch: None }), &mut app);
 
-    let effects = dispatch(Action::RewindConfirmNeverAsk(1), &mut app);
+    let effects = dispatch(Action::RewindConfirmNeverAsk(crate::views::rewind::RewindTarget { prompt_index: 1, to_branch: None }), &mut app);
     assert!(
         effects.iter().any(|e| matches!(
             e,
@@ -473,11 +481,12 @@ fn picker_select_target_zero_executes_immediately_when_confirm_off() {
         Action::TaskComplete(TaskResult::RewindPointsLoaded {
             agent_id: id,
             points: vec![rewind_point(1), rewind_point(0)],
-        }),
+        
+        abandoned: vec![],}),
         &mut app,
     );
 
-    let effects = dispatch(Action::RewindPickerSelect(0), &mut app);
+    let effects = dispatch(Action::RewindPickerSelect(crate::views::rewind::RewindTarget { prompt_index: 0, to_branch: None }), &mut app);
     assert!(
         matches!(
             effects.first(),

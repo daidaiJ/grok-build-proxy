@@ -2196,8 +2196,8 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             },
             results,
         ),
-        TaskResult::RewindPointsLoaded { agent_id, points } => {
-            handle_rewind_points_loaded(app, agent_id, points)
+        TaskResult::RewindPointsLoaded { agent_id, points, abandoned } => {
+            handle_rewind_points_loaded(app, agent_id, points, abandoned)
         }
         TaskResult::RewindPointsFailed { agent_id, error } => {
             let Some(agent) = app.agents.get_mut(&agent_id) else {
