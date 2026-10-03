@@ -41,6 +41,10 @@ pub struct EffectiveRuntimeConfig {
     pub persona_error: Option<String>,
     /// Isolation mode for the child execution environment.
     pub isolation: xai_tool_types::SubagentIsolationMode,
+    /// Explicit tool-face allowlist (canonical tool ids) from spawn-time overrides.
+    /// Trims the child's declared tool face after the capability filter; `None` keeps
+    /// the full face. v1: runtime-only — roles/personas cannot set it.
+    pub allowed_tools: Option<Vec<String>>,
 }
 
 /// Data about a completed source subagent, needed to validate a resume and to spawn the resumed child.

@@ -85,6 +85,12 @@ pub struct AgentOpts {
     /// journals written before this feature replay with unchanged request hashes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub context_edits: Vec<ContextEdit>,
+    /// Explicit tool-face allowlist for the child (canonical tool ids). `None` keeps
+    /// the full declared face; a list trims the declaration face only — it never
+    /// widens permissions (capability modes still intersect). Absent from the payload
+    /// when `None`, so journals written before this feature replay unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

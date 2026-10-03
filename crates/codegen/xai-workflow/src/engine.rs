@@ -2039,6 +2039,78 @@ mod tests {
     }
 
     #[test]
+    fn tools_allowlist_flows_through_opts_and_diverges_when_edited() {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let captured: std::sync::Arc<std::sync::Mutex<Vec<crate::host::AgentOpts>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured2 = captured.clone();
+        let host = spawn_mock_host(rx, move |req| match req {
+            WorkflowHostRequest::SpawnAgent { opts, reply } => {
+                captured2.lock().unwrap().push(opts.clone());
+                let _ = reply.send(Ok(agent_result("done")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+
+        let script = r#"
+            let meta = #{ name: "t", description: "d" };
+            let r = agent("work", #{ tools: ["read_file", "grep"] });
+            complete(r.output);
+        "#;
+        let outcome = run_workflow(params(script, Journal::new(None), tx));
+        drop(host);
+        assert!(matches!(outcome, WorkflowOutcome::Completed { .. }));
+        let opts = captured.lock().unwrap();
+        assert_eq!(opts.len(), 1);
+        assert_eq!(
+            opts[0].tools.as_deref(),
+            Some(&["read_file".to_string(), "grep".to_string()][..]),
+            "script-supplied allowlist reaches the host untouched"
+        );
+
+        // The allowlist is part of the payload hash: changing it diverges on replay.
+        let dir = tempfile::tempdir().unwrap();
+        let journal_path = dir.path().join("journal.jsonl");
+        let (tx, rx) = mpsc::unbounded_channel();
+        let host = spawn_mock_host(rx, |req| match req {
+            WorkflowHostRequest::SpawnAgent { reply, .. } => {
+                let _ = reply.send(Ok(agent_result("done")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+        let outcome = run_workflow(params(script, Journal::new(Some(journal_path.clone())), tx));
+        drop(host);
+        assert!(matches!(outcome, WorkflowOutcome::Completed { .. }));
+
+        let script_edited = script.replace("\"grep\"", "\"search_replace\"");
+        let (tx, rx) = mpsc::unbounded_channel();
+        let host = spawn_mock_host(rx, |req| match req {
+            WorkflowHostRequest::SpawnAgent { reply, .. } => {
+                let _ = reply.send(Ok(agent_result("done")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+        let outcome = run_workflow(params(
+            &script_edited,
+            Journal::load(journal_path.clone()).unwrap(),
+            tx,
+        ));
+        drop(host);
+        match outcome {
+            WorkflowOutcome::Failed { error } => {
+                assert!(
+                    error.to_lowercase().contains("diverg"),
+                    "expected divergence, got: {error}"
+                );
+            }
+            other => panic!("expected Failed with divergence, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn context_edit_replaces_earlier_output_in_later_spawn_payload() {
         let (tx, rx) = mpsc::unbounded_channel();
         let captured: std::sync::Arc<std::sync::Mutex<Vec<crate::host::AgentOpts>>> =

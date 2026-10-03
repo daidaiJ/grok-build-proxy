@@ -561,6 +561,7 @@ impl HostService {
                         capability_mode,
                         isolation,
                         output_schema: None,
+                        allowed_tools: opts.tools.clone(),
                         ..Default::default()
                     },
                     run_in_background: false,

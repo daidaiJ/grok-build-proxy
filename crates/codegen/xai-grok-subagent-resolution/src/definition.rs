@@ -217,11 +217,18 @@ pub fn apply_definition_runtime_defaults(
         runtime.isolation = SubagentIsolationMode::Worktree;
     }
 }
-/// Apply capability filtering and recursion depth to the exact production definition toolset.
+/// Apply capability filtering, recursion depth, and the explicit allowlist to the exact
+/// production definition toolset.
+///
+/// `allowed_tools` (canonical tool ids) trims the *declaration face*: it can only remove
+/// tools, never add ones a capability mode dropped — the capability filter runs first and
+/// the allowlist retains within what survives it. Background-task helpers pruned as
+/// orphans by the allowlist itself stay pruned.
 pub fn apply_child_tool_policy(
     definition: &mut AgentDefinition,
     capability_mode: Option<SubagentCapabilityMode>,
     allow_nested_subagents: bool,
+    allowed_tools: Option<&[String]>,
 ) {
     if let Some(mode) = capability_mode {
         mode.filter_tool_config(&mut definition.tool_config);
@@ -236,6 +243,21 @@ pub fn apply_child_tool_policy(
     definition.tool_config.tools.retain(|tool| {
         !xai_grok_tools::implementations::grok_build::is_workflow_tool(tool.kind, &tool.id)
     });
+    if let Some(allowed) = allowed_tools {
+        let face_before = definition.tool_config.tools.len();
+        // An allowlist entry may be a bare tool id (`read_file`) or the fully
+        // qualified config id (`GrokBuild:read_file`); case-insensitive either way.
+        definition.tool_config.tools.retain(|tool| {
+            let bare = tool.id.rsplit(':').next().unwrap_or(&tool.id);
+            allowed
+                .iter()
+                .any(|name| bare.eq_ignore_ascii_case(name) || tool.id.eq_ignore_ascii_case(name))
+        });
+        if definition.tool_config.tools.len() != face_before {
+            // The allowlist may have dropped the Task tool while keeping its helpers.
+            prune_orphaned_background_task_tools(&mut definition.tool_config);
+        }
+    }
 }
 /// Resolve runtime overrides and definition defaults in the production order.
 pub fn resolve_runtime_config(
@@ -329,7 +351,7 @@ mod tests {
         let toggles = HashMap::new();
         let mut definition =
             resolve_agent_definition("explore", &context(cwd.path(), &toggles)).unwrap();
-        apply_child_tool_policy(&mut definition, None, false);
+        apply_child_tool_policy(&mut definition, None, false, None);
         let kinds: Vec<Option<ToolKind>> = definition
             .tool_config
             .tools
@@ -363,6 +385,59 @@ mod tests {
             "general-purpose must keep the rest of the grok-build child tools"
         );
     }
+
+    #[test]
+    fn allowed_tools_trims_the_declaration_face() {
+        let cwd = tempfile::tempdir().unwrap();
+        let toggles = HashMap::new();
+        let mut definition =
+            resolve_agent_definition("general-purpose", &context(cwd.path(), &toggles)).unwrap();
+        let allowed = vec!["read_file".to_string(), "grep".to_string()];
+        apply_child_tool_policy(&mut definition, None, true, Some(&allowed));
+        let kept: Vec<String> = definition
+            .tool_config
+            .tools
+            .iter()
+            .map(|tool| tool.id.rsplit(':').next().unwrap_or(&tool.id).to_string())
+            .collect();
+        assert!(kept.iter().all(|id| allowed.iter().any(|a| a.eq_ignore_ascii_case(id))));
+        assert!(
+            kept.iter().any(|id| id.eq_ignore_ascii_case("read_file")),
+            "allowlisted tools survive"
+        );
+    }
+
+    #[test]
+    fn allowed_tools_cannot_widen_capability_mode() {
+        let cwd = tempfile::tempdir().unwrap();
+        let toggles = HashMap::new();
+        let mut definition =
+            resolve_agent_definition("general-purpose", &context(cwd.path(), &toggles)).unwrap();
+        // `execute` is not in a read-only child's face; allowlisting it must not bring it back.
+        let allowed = vec!["read_file".to_string(), "bash".to_string()];
+        apply_child_tool_policy(
+            &mut definition,
+            Some(SubagentCapabilityMode::ReadOnly),
+            true,
+            Some(&allowed),
+        );
+        let bare_kept = |id: &String| id.rsplit(':').next().unwrap_or(id).to_string();
+        let kept: Vec<String> = definition
+            .tool_config
+            .tools
+            .iter()
+            .map(|tool| bare_kept(&tool.id))
+            .collect();
+        assert!(
+            kept.iter().any(|id| id.eq_ignore_ascii_case("read_file")),
+            "read survives both filters"
+        );
+        assert!(
+            !kept.iter().any(|id| id.eq_ignore_ascii_case("bash")),
+            "allowlist must not widen the capability-filtered face"
+        );
+    }
+
     #[test]
     fn child_tool_policy_strips_workflow_and_keeps_other_tools() {
         let cwd = tempfile::tempdir().unwrap();
@@ -379,7 +454,7 @@ mod tests {
             .iter()
             .map(|tool| tool.id.clone())
             .collect();
-        apply_child_tool_policy(&mut definition, None, true);
+        apply_child_tool_policy(&mut definition, None, true, None);
         let after: Vec<String> = definition
             .tool_config
             .tools
@@ -404,7 +479,7 @@ mod tests {
             .tool_config
             .tools
             .push((&xai_grok_tools::implementations::grok_build::WorkflowTool).into());
-        apply_child_tool_policy(&mut definition, None, true);
+        apply_child_tool_policy(&mut definition, None, true, None);
         assert!(
             definition
                 .tool_config
@@ -428,7 +503,7 @@ mod tests {
             .tool_config
             .tools
             .push(ToolConfig::from_id("GrokBuild:workflow"));
-        apply_child_tool_policy(&mut definition, None, true);
+        apply_child_tool_policy(&mut definition, None, true, None);
         assert!(definition.tool_config.tools.iter().all(|tool| {
             tool.kind != Some(ToolKind::Workflow)
                 && tool.id.rsplit(':').next()
