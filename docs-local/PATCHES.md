@@ -1845,3 +1845,43 @@ status_blocks 用量块的两个快照失配，根因是整串格式里的**对�
 - 遗留（= compat 文档「未验证项」顺延）：活体验证需把某个受影响模型切回
   `api_backend = "responses"` 实跑一轮带推理请求（本机当前已统一 chat_completions，
   未切回）；Command Code 是否还发其他非标事件名未穷举，命中 warn 日志可发现。
+
+## 十九期：workflow canonical context edit（2026-10-03，分支 feat/local-workflow-context-edit，提交 904dc9a）
+
+pi ContextEditEntry 同思想移植（workflow-pi-port P1）：journal 历史只增不改，可见面
+= 原始结果 + 按 seq 应用编辑序列。解决迭代式 workflow 的 prompt 线性膨胀：脚本可把
+上一轮子代理结果替换为摘要占位符，token 不再随轮数线性涨。
+
+### 改动面（上游同步后必须重放）
+
+1. `xai-workflow/src/host.rs`：`ContextEdit`（target/action/digest/needle）+
+   `placeholder()` + `apply_visible_edits()`；`AgentOpts.context_edits`
+   （`skip_serializing_if = "Vec::is_empty"`——**兼容关键**：空时不序列化，旧 journal
+   spawn hash 不漂移）。
+2. `xai-workflow/src/journal.rs`：`spawn_output_text(seq)`（目标输出文本访问器）+
+   `resolve_context_edits(upto)`（按 seq 顺序解析，first-edit-wins，结构化输出
+   不可替换 → 丢弃该编辑；纯 journal 派生 → 重放逐字节一致）。
+3. `xai-workflow/src/engine.rs`：
+   - 新 Rhai 函数 `replace_visible(seq, digest)` / `hide_visible(seq)`，
+     `context_edit_call` journal 直记（deviation：设计原型说走 host_call 通道，
+     施工改为 journal 直记——seq 分配/hash/重放/divergence 语义等价，无需 host 回路；
+     seq 无条件消耗，重放命中也不能省，否则后续 spawn 会踩进编辑的 seq 位）；
+   - `spawn_agent_call`：payload 哈希前强制 `opts.context_edits = journal.resolve(upto)`
+     （覆盖脚本手填）；返回值注入 `r.seq`（引擎侧注入，journal 记录不含）；
+   - `parallel()`：batch 前统一 resolve 注入；`PendingAgent::Replayed` 携带 seq，
+     resolved 三元组，结果统一注入 seq。
+4. `xai-grok-shell/src/session/workflow/host_service.rs`：spawn prompt（含 contract
+   包装后）经 `apply_visible_edits` 替换 needle → 占位符；needle 不出现为 no-op。
+
+### 测试
+
+- 引擎 4 用例：替换进 later spawn payload（含 needle/digest 断言）、hide 占位符、
+  编辑序列变化 → divergence、同脚本重放不重跑且结果一致。
+- journal resolve 单测（first-wins + 结构化丢弃 + 边界）+ apply_visible_edits 单测。
+- `ctest -p xai-workflow --lib` 66/0；shell `workflow::host` 过滤 4/0。
+
+### 遗留
+
+- 结构化输出（非字符串）暂不可替换（needle 无法预测脚本嵌入形态），文档登记。
+- 占位符呈现格式为设计 §5-1 的首版定案（纯文本摘要行），等真实 workflow 场景校准。
+- 活回合验证：跑一个 3+ 轮评审 workflow 观察/token 曲线（验收 1 的曲线留档）。
