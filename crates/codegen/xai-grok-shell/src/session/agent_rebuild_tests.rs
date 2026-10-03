@@ -203,6 +203,7 @@ async fn child_rebuild_message_authority_respects_grant_workflow_and_capability_
                 &mut definition,
                 Some(SubagentCapabilityMode::ReadOnly),
                 true,
+                None,
             );
             assert_no_child_messaging(&child_agent(definition, Some(sender), true).await).await;
         })
