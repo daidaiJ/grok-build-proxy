@@ -1905,3 +1905,48 @@ status_blocks 用量块的两个快照失配，根因是整串格式里的**对�
   ② redo 端到端 + pty 回归（`rewind_after_compaction_with_missing_checkpoint`）
   待活回合/CI；③ 活回合 TUI 抽查（redo → 编辑重发 → regeneration 遥测）；
   ④ boundary 文案 i18n。
+## 十八期：headless non-interactive-denial continue（2026-10-03，分支 feat/local-shell-command-analysis，提交 6b1bc29）
+
+Step-Code P1 勘误后的唯一真实缺口（fork 已有 tree-sitter-bash 命令内容静态分析全套，
+见 step-code-port survey 勘误节）：无人值守（headless 非交互）会话遇权限提示时，
+客户端无审批通道 → 提示一律 Cancelled → 回合终止。新增 opt-in continue 模式：
+把可恢复的审批阻塞转成 PolicyDeny（失败工具结果），agent 看到失败原因后换路续跑。
+对齐 Step-Code `--non-interactive-denial continue` 语义；执行环境故障不经权限决策，
+两种模式都照常终止。
+
+### 改动面（上游同步后必须重放）
+
+1. `xai-grok-shell/src/session/acp_types.rs`：`StartupHints.non_interactive_denial`
+   （serde `nonInteractiveDenial`，default None；未知值不破坏解析、回落 stop）+
+   `continue_on_unattended_denial()`。
+2. `xai-grok-shell/src/session/acp_session_impl/tool_calls.rs`：新纯函数
+   `resolve_unattended_denial(decision, continue_mode)`（Cancelled+continue →
+   `Decision::PolicyDeny("no approval channel available (unattended \`continue\` denial mode)")`），
+   在 permission resolution 返回后调用；PolicyDeny 既有管线（telemetry / PermissionDenied
+   hook / handle_tool_not_executed / ToolLoop::Continue）全复用，无新增分支。
+3. `xai-grok-shell/src/session/handle.rs`：`SessionHandle.continue_on_unattended_denial`
+   （spawn.rs 从 hints 读取；`spawn.rs:1404`）。
+4. subagent 继承链：`SubagentSpawnContext.parent_continue_on_denial`（mod.rs）←
+   `subagent_spawn.rs` 读 parent handle → `handle_request.rs` 写子会话
+   `StartupHints.non_interactive_denial = Some("continue")`。
+5. `xai-grok-pager/src/headless.rs`：`HeadlessOptions.non_interactive_denial` +
+   `build_headless_init_request(…, continue_on_denial)` 注入 initialize
+   `startupHints.nonInteractiveDenial`。
+6. `xai-grok-pager/src/app/cli.rs`：`--non-interactive-denial <continue|stop>`
+   （hide，PossibleValuesParser）；`xai-grok-pager-bin/main.rs` 透传。
+
+### 测试与接线
+
+- 新测试：tool_calls `unattended_denial_tests` 3 条、acp_types
+  `non_interactive_denial_tests` 3 条（continue 解析 / 缺省+stop / 未知值回落）、
+  headless `headless_init_request_carries_continue_denial_hint_only_when_enabled`。
+- 夹具补字段：`isolated_spawn_e2e.rs`、`lsp_runtime.rs` ctx_with_toggle、
+  `subagent/tests/mod.rs` SessionHandle 字面量、`mvp_agent/tests.rs` 同。
+- 验证：`cargo check -p xai-grok-shell -p xai-grok-pager -p xai-grok-pager-bin` 0 error；
+  shell 3+3、pager 1 全绿（GATE_FORCE=1 窄过滤）。
+
+### 遗留
+
+- fork 路径（`--fork-session` / worktree 复用）的子会话经 ext `x.ai/session/fork`
+  创建，不走 initialize startupHints，continue 语义不覆盖（登记为已知边界）。
+- 活回合验证：headless 非交互跑一个会触发审批的命令，对比 stop/continue 两档行为。

@@ -274,6 +274,20 @@ fn revise_plan_message(feedback: &str) -> String {
         format!("The user wants to revise the plan. The user said:\n{feedback}")
     }
 }
+/// Unattended-deny continue mode (`startupHints.nonInteractiveDenial = "continue"`, headless):
+/// a permission prompt nobody can answer becomes a policy denial — a failed tool result the
+/// agent sees, so the turn keeps going — instead of resolving `Cancelled` and ending the run.
+/// Genuine user cancellations can't occur on this path (there is no user behind a headless
+/// permission request), and execution-environment failures never reach a permission decision.
+/// Extracted as a pure function for unit testing.
+fn resolve_unattended_denial(decision: Decision, continue_mode: bool) -> Decision {
+    match decision {
+        Decision::Cancelled if continue_mode => Decision::PolicyDeny(
+            "no approval channel available (unattended `continue` denial mode)".to_string(),
+        ),
+        other => other,
+    }
+}
 /// What the resume re-park does with the user's decision.
 /// Extracted from `resume_plan_approval` so the branch logic is unit-testable without driving a real turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1860,7 +1874,10 @@ impl SessionActor {
                 .record("wait_ms", perm_wait_start.elapsed().as_millis() as i64);
             perm_wait_span.close();
             let manager_event = resolution.event;
-            let decision = resolution.decision;
+            let decision = resolve_unattended_denial(
+                resolution.decision,
+                self.startup_hints.continue_on_unattended_denial(),
+            );
             self.events.permission_resolved(
                 &call.function.name,
                 match &decision {
@@ -3858,5 +3875,42 @@ mod wait_interrupt_tests {
         );
         drop(new);
         assert_eq!(depth.depth(), 0);
+    }
+}
+#[cfg(test)]
+mod unattended_denial_tests {
+    use super::resolve_unattended_denial;
+    use xai_grok_workspace::permission::types::Decision;
+
+    #[test]
+    fn continue_mode_converts_cancelled_to_policy_deny() {
+        let decision = resolve_unattended_denial(Decision::Cancelled, true);
+        match decision {
+            Decision::PolicyDeny(reason) => {
+                assert!(reason.contains("no approval channel"));
+            }
+            other => panic!("expected PolicyDeny, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn default_mode_keeps_cancelled() {
+        assert_eq!(
+            resolve_unattended_denial(Decision::Cancelled, false),
+            Decision::Cancelled
+        );
+    }
+
+    #[test]
+    fn continue_mode_leaves_everything_else_untouched() {
+        assert_eq!(resolve_unattended_denial(Decision::Allow, true), Decision::Allow);
+        assert_eq!(
+            resolve_unattended_denial(Decision::Reject("no".into()), true),
+            Decision::Reject("no".into())
+        );
+        assert_eq!(
+            resolve_unattended_denial(Decision::Ask, false),
+            Decision::Ask
+        );
     }
 }

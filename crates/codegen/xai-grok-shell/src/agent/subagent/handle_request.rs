@@ -1503,6 +1503,9 @@ pub(crate) async fn run_shell_child(
             inherited_prefix_len: Some(inherited_prefix_len),
             is_subagent: true,
             non_interactive: ctx.parent_non_interactive,
+            non_interactive_denial: ctx
+                .parent_continue_on_denial
+                .then(|| "continue".to_string()),
             parent_session_id: Some(ctx.parent_session_id.clone()),
             subagent_type: Some(request.subagent_type.clone()),
             preserve_inherited_system: verbatim_mirror_fork,

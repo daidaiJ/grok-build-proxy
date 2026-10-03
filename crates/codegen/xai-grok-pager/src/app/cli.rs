@@ -679,6 +679,17 @@ pub struct PagerArgs {
         )
     )]
     pub permission_mode_flag: Option<String>,
+    /// How an unattended (headless) run treats a permission prompt that nobody can answer.
+    /// `stop` (default) cancels the run; `continue` turns it into a failed tool result so
+    /// the agent can pick another route and keep going. Execution-environment failures
+    /// still terminate. Headless only.
+    #[arg(
+        long = "non-interactive-denial",
+        value_name = "MODE",
+        hide = true,
+        value_parser = clap::builder::PossibleValuesParser::new(["continue", "stop"])
+    )]
+    pub non_interactive_denial: Option<String>,
     /// Disable web search and web fetch tools.
     #[arg(long = "disable-web-search")]
     pub disable_web_search: bool,

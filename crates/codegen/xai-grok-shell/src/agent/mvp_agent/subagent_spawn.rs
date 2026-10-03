@@ -207,6 +207,10 @@ impl MvpAgent {
             .as_ref()
             .map(|h| h.non_interactive)
             .unwrap_or(false);
+        let parent_continue_on_denial = parent_handle
+            .as_ref()
+            .map(|h| h.continue_on_unattended_denial)
+            .unwrap_or(false);
         let (gcs_upload_method, gcs_bucket_url) = match self.trace_upload_config_snapshot() {
             Some(method) => {
                 let bucket = match &method {
@@ -320,6 +324,7 @@ impl MvpAgent {
             background_workflows_enabled: self.cfg.borrow().resolve_workflows().value,
             ask_user_question_enabled: false,
             parent_non_interactive,
+            parent_continue_on_denial,
             parent_cmd_tx: parent_cmd_tx.clone(),
             spawner_address_target: None,
             parent_session_info: parent_handle.as_ref().map(|h| crate::session::info::Info {

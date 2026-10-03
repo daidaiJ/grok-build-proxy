@@ -82,6 +82,10 @@ pub struct HeadlessOptions {
     pub deny_rules: Vec<String>,
     pub max_turns: Option<u32>,
     pub permission_mode_flag: Option<String>,
+    /// `--non-interactive-denial continue` (headless only): a permission prompt with no
+    /// approval channel resolves as a policy deny (failed tool result, the turn continues)
+    /// instead of cancelling the run. Absent/`stop` keeps the terminating default.
+    pub non_interactive_denial: Option<String>,
     /// Effort token (`--reasoning-effort` / `--effort`); a menu id or canonical level after models load.
     pub reasoning_effort: Option<String>,
     /// Wait for background tasks to report `task_completed` before exiting (default true).
@@ -466,6 +470,7 @@ async fn authenticate(
 fn build_headless_init_request(
     rules: Option<&str>,
     system_prompt_override: Option<&str>,
+    continue_on_denial: bool,
 ) -> acp::InitializeRequest {
     let mut meta = serde_json::json!({
         "clientType": HEADLESS_CLIENT_TYPE,
@@ -481,12 +486,13 @@ fn build_headless_init_request(
                 serde_json::json!(system_prompt_override),
             );
         }
-        obj.insert(
-            "startupHints".into(),
-            serde_json::json!({
-                "nonInteractive": true,
-            }),
-        );
+        let mut hints = serde_json::json!({
+            "nonInteractive": true,
+        });
+        if continue_on_denial {
+            hints["nonInteractiveDenial"] = serde_json::json!("continue");
+        }
+        obj.insert("startupHints".into(), hints);
     }
     acp::InitializeRequest::new(acp::ProtocolVersion::V1)
         .client_capabilities(
@@ -910,6 +916,7 @@ pub async fn run_single_turn(
     let init_req = build_headless_init_request(
         options.rules.as_deref(),
         options.system_prompt_override.as_deref(),
+        options.non_interactive_denial.as_deref() == Some("continue"),
     );
     xai_grok_telemetry::startup::enter(crate::acp::StartupPhase::AcpInitialize);
     let init_resp: acp::InitializeResponse = match acp_send(init_req, &acp_tx).await {

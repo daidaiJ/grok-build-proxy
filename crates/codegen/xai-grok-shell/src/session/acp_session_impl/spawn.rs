@@ -1401,6 +1401,7 @@ pub(crate) async fn spawn_session_actor(
     save_prompt_context(&session_info, &prompt_context);
     let is_subagent_spawn = startup_hints.is_subagent;
     let session_non_interactive = startup_hints.non_interactive;
+    let session_continue_on_denial = startup_hints.continue_on_unattended_denial();
     install_system_prompt(
         &mut conversation,
         &mut startup_hints.inherited_prefix_len,
@@ -2450,6 +2451,7 @@ pub(crate) async fn spawn_session_actor(
         code_nav_enabled,
         ask_user_question_enabled,
         non_interactive: session_non_interactive,
+        continue_on_unattended_denial: session_continue_on_denial,
         plan_mode: plan_mode.clone(),
         force_compact,
         permission_handle: permissions_for_handle,

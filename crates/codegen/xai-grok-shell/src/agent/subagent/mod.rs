@@ -264,6 +264,10 @@ pub(crate) struct SubagentSpawnContext {
     /// Whether the parent session is non-interactive (headless `-p` / SDK).
     /// Copied onto the child's `StartupHints` so its prompt omits interactive guidance.
     pub parent_non_interactive: bool,
+    /// Parent's unattended-deny continue mode (`nonInteractiveDenial: "continue"`).
+    /// Copied onto the child's `StartupHints` so an unattended child also converts
+    /// unanswerable permission prompts into failed tool results instead of ending its turn.
+    pub parent_continue_on_denial: bool,
     /// Parent session command channel.
     /// Carries lifecycle notifications the parent persists (`SubagentSpawned` / `SubagentFinished`).
     /// When goal mode is on, it also carries transient `SubagentProgress` ticks the parent consumes for token accounting without persisting.
