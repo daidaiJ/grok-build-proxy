@@ -145,7 +145,8 @@
 
 ### 2026-10-03 · 任务④ 阶段完成交接（工具面 allowlist T1 落地，search_tools T2 待做，feat/local-deferred-tool-exposure）
 
-- **当前状态**：分支 `feat/local-deferred-tool-exposure`（自 main `8d82c36`）。
+- **当前状态**：分支 `feat/local-deferred-tool-exposure`（叠层于 ③ 分支之上——
+  AgentOpts 同文件演进，合 main 时按 ③→④ 顺序）。
   `AgentOpts.tools` 白名单全链路（workflow payload/hash → host_service →
   SubagentRuntimeOverrides → apply_child_tool_policy 裁剪，capability 只减不增）
   已落地并验证。**T2 = defer_tools + search_tools 延迟发现未做**：涉及新工具实现 +
