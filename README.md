@@ -156,6 +156,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 
 ### 交互与界面
 
+- **`/rewind` 分支树 undo**：rewind 从破坏性截断升级为分支树——被弃回合保留在会话文件里（append-only + 分支标记），`/rewind` 列表对旧分支点标 ↩、不可回退点标 ⚠，对旧分支点再次 rewind 即 redo 切回原路继续；跨 compaction 检查点回放语义一致。
 - **中文界面**：斜杠命令、快捷键栏、设置/用量/MCP/扩展/会话选择/权限与计划审批等弹窗默认中文（1400+ 词条）。`/lang` 中英即时切换；`GROK_LANG=en` 固定英文。
 - **欢迎屏定制**：熊猫头 logo、副标题与退出告别语；`28-welcome-branding.md` 是给 AI 看的复刻配方（换成你自己的 logo/文案）。
 - **趣味等待文案**：思考/回复阶段按轮换词表随机取词（中英各一套），不再固定 "Thinking…"。
@@ -167,6 +168,9 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 
 - **`BeforeModelCall`**：每次请求组装完成后、发送前改写消息列表（出去脱敏 / 回来还原），会话记录永不改动；fail-open，坏 hook 降级为 no-op。
 - **`PostCompact`**：压缩后可通过 `additionalContext` 重注入状态（任务列表 / 记忆类扩展的恢复通道）。
+- **workflow 可见面编辑**：spawn prompt 可经 `replace_visible(seq, digest)` / `hide_visible(seq)` 对早前子代理的可见输出做原位替换 / 隐藏（journal 直记、重放确定），迭代式 workflow 不再把历史全文反复塞进 prompt。
+- **workflow 子代理工具面白名单**：`AgentOpts.tools` 按子代理角色显式裁剪声明面（canonical tool id，支持裸名），与 capability 过滤叠加只减不增；fan-out 场景省掉"每 agent × 全量工具面"的重复 token。deferred 延迟发现（`defer_tools` / `search_tools`）为后续切片。
+- **headless 审批降级续跑**：无人值守回合遇权限审批阻塞默认终止；`--non-interactive-denial continue` 把阻塞审批转成 PolicyDeny 失败工具结果，agent 带着拒绝原因换路续跑。
 - **本地命令**：`/stats`（用量与压缩收益）、`/lang`（中英切换）、`/style`（极简风格）、以及 `grok2 stats` 独立子命令。
 
 ## 配置速查
