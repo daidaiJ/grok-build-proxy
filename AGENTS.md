@@ -94,6 +94,13 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   火山 Ark 晚头）、0ms 过滤×晚响应头的相互作用、unified.jsonl 取证 playbook、双 tps 口径。
   只收深挖节点，不复述可从代码/文档推出的内容。随修复 `feat/local-perf-ttft-request-anchor`
   （TTFT 参考点前移到请求发起）落地。
+- [`docs-local/startup-perf/`](docs-local/startup-perf/README.md) — **grok2 启动耗时专题
+  wiki（排查完成 2026-10-03，缓解待拍板）**：主因 = 模型目录阻塞拉取
+  `startup.fetch_models_blocking`（缓存 TTL 仅 300s，冷启动 2.7–6.8s，热缓存
+  ≈60–100ms；MCP init 异步不挡首帧）。含 `GROK_SPAN_PROFILE_OUT` + ptyctl 驱动
+  真实 TUI 的可复现流程与已知坑（stable-ms 永不稳定、杀 keeper 连带 TUI 树丢画像）、
+  机制锚点（fetch.rs / cache.rs / features.remote_fetch 开关，managed 层优先）。
+  缓解两案：config 关 `features.remote_fetch`（BYOK 安全）或立分支改 TTL/异步化。
 - [`docs-local/limit-inference.md`](docs-local/limit-inference.md) — **供应商 cache
   TTL / RPM / TPM 反推记录，T1/T2 已实现**（分支 `feat/local-limit-probe`）：sampler
   HTTP 层被动落盘每次请求的限流头/429 现场/前缀哈希/终端 cached_tokens 到
