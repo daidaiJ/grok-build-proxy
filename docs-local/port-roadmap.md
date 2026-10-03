@@ -1,8 +1,9 @@
 # 移植路线图（选型定稿 2026-10-03）
 
-> **状态：选型定稿。** 任务① rewind 分支树 undo 已在本机完成 T1/T2a/T3 三期施工
-> （分支 `feat/local-rewind-branch-undo`，HEAD `1bba307`，待 CI/活回合验证后合 main
-> 发版，见 §6 交接台账）；②③④ 未开工。三个移植预研专题
+> **状态：四特性施工合 main（2026-10-03 统一发版 v1.0.41）。** ① rewind 分支树 undo
+> （T1/T2a/T3 落地，T2b 未做）② headless `--non-interactive-denial continue`（P1
+> 勘误：静态分析上游已有，实做面收窄）③ canonical context edit ④ 工具面 allowlist
+> （T1 落地，T2 未做），均已合 main；两随手件未动，见 §6 交接台账。三个移植预研专题
 > （[workflow-pi-port](workflow-pi-port/README.md) / [kimicode-port](kimicode-port/README.md)
 > / [step-code-port](step-code-port/survey.md)）的候选特性按
 > 「coding + agent work 价值 × 国模适配性」定序，本文是**施工顺序与交接台账的唯一
@@ -179,3 +180,15 @@
   workflow-pi-port/deferred-tool-exposure.md。
 - **接手者第一步**：T2 开工前先对照 fork-feature-inventory 与 `search_tool`
   现有实现（builder.rs ToolSearch 映射）定 D 判定；国模能力门先行。中断恢复按 §5-2。
+
+### 2026-10-03 · 合 main/推送发版中断点（接手会话登记）
+
+- **现场核对（git log/status/diff）**：前会话已完成三笔 merge（① `aae86a9` /
+  ② `a56cab0` / ④ `f66364a`，③ 线性落在 main），main 领先 origin 16 提交，
+  未推送、未打 tag。工作区遗留 2 行未提交补线：`handle_request.rs` /
+  `agent_rebuild_tests.rs` 给 `apply_child_tool_policy` 调用点补 `allowed_tools`
+  第 4 参——④ 合并后签名 4 参已入库而 shell 调用点仍 3 参，main HEAD 编译不过；
+  系前会话验证全链路时未及提交（用户确认另一会话已验证）。
+- **本轮动作**：补线按分支纪律收编进 `feat/local-deferred-tool-exposure`
+  （`607fb6e`）再合 main（`67f0b21`）；`cargo check --workspace --all-targets`
+  门禁通过后推送 + tag `v1.0.41` 发版，完成后另追加完成交接条目。

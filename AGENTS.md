@@ -37,13 +37,16 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   的正式发布是 v1.0.39），tag 已恢复原指向 `5667ea0`。
 
 - [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) — **移植路线图
-  （选型定稿 2026-10-03，未开工）**：三个移植预研专题（workflow-pi-port /
-  kimicode-port / step-code-port）候选特性按「coding+agent 价值 × 国模适配」定序：
-  ① rewind 分支树 undo（kimi P1 + step P2 并题，kimicode D1 随之拍板分支树路线）
-  ② bash AST 静态安全分析（三态判定）③ canonical context edit ④ 延迟工具声明
-  （capability 门 + kimi 公告流，不上首版 BM25），另两随手件（流恢复注入 /
-  子 agent 结果信封）。**交接协议在案（MANDATORY）：每个任务完成或中断都要在
-  roadmap §6 交接台账追加条目；重大里程碑另进本文 Handoff 摘要。**
+  （四特性施工合 main，2026-10-03 随 v1.0.41 统一发版）**：三个移植预研专题
+  （workflow-pi-port / kimicode-port / step-code-port）候选特性按「coding+agent
+  价值 × 国模适配」定序。施工结果：① rewind 分支树 undo（T1/T2a/T3 落地：
+  SwitchEdge 化 + 分支面 picker + redo 通道；T2b replay 统一双路径未做）
+  ② headless `--non-interactive-denial continue`（勘误后实做面：step P1 静态
+  分析上游已有）③ canonical context edit（journal 直记 replace_visible/
+  hide_visible）④ 工具面 allowlist（deferred exposure T1；T2 延迟发现未做），
+  另两随手件（流恢复注入 / 子 agent 结果信封）未动。**交接协议在案（MANDATORY）：
+  每个任务完成或中断都要在 roadmap §6 交接台账追加条目；重大里程碑另进本文
+  Handoff 摘要。**
 
 - [`docs-local/fork-feature-inventory.md`](docs-local/fork-feature-inventory.md) —
   **fork 已有特性基线清单（移植预研对照表，持续回填）**：102 crate 按 11 功能域的
@@ -141,7 +144,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   剥图或转写 → T3 披露与 BYOK 禁止静默打 xAI。整回合切视觉 agent 明确不做。对照兄弟目录
   Qwen Code。净开发约 6–11 人天。分支拟 `feat/local-vision-bridge`。基线：2026-09-27 `main`。
 - [`docs-local/workflow-pi-port/`](docs-local/workflow-pi-port/README.md) — **workflow ×
-  pi 特性移植预研（选型完成，下一步预研特性，未开工）**：对照 pi（earendil-works/pi，
+  pi 特性移植预研（选型完成；P1 已落地，P2 T1 已落地、T2 未开工）**：对照 pi（earendil-works/pi，
   `0.84.0`–`v1.0.0`）近两月特性与 `xai-workflow` 现状，结论 = 编排原语不缺、真缺口三个
   （编排上下文膨胀 / 子 agent 工具面全量声明 / 成本）。两个选型特性已出设计原型：
   P1 [canonical-context-edit.md](docs-local/workflow-pi-port/canonical-context-edit.md)
@@ -155,8 +158,12 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   只吸收按分支 KV / 大输出旁路两个思想）；cache warming 拟 P2' 独立专题。
   分支拟 P1 `feat/local-workflow-context-edit` / P2 `feat/local-deferred-tool-exposure`。
   基线：2026-09-30 `main` `95aad87`（pi 基线 `v1.0.0`，2026-10-01 发布）。
+  **施工状态（2026-10-03）**：P1 已落地（`feat/local-workflow-context-edit`，
+  replace_visible/hide_visible journal 直记，PATCHES 十九期）；P2 T1 工具面
+  allowlist 已落地（`feat/local-deferred-tool-exposure`，PATCHES 二十期），
+  T2 defer_tools + search_tools + 国模能力门未开工。
 - [`docs-local/kimicode-port/`](docs-local/kimicode-port/README.md) — **kimicode
-  （Kimi Code CLI）特性移植预研（选型完成，P1 待拍板开工）**：对照 MoonshotAI/kimi-code
+  （Kimi Code CLI）特性移植预研（选型完成；P1 rewind 分支树 undo 已落地）**：对照 MoonshotAI/kimi-code
   （main `21406fb`，2026-09-30）与 fork 现状。头号候选 = `/rewind` 从破坏性截断升级
   wire 分支树 undo；**2026-10-02 摸底已出设计原型
   [rewind-branch-undo.md](docs-local/kimicode-port/rewind-branch-undo.md)**：推翻"缺
@@ -168,8 +175,13 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   历史 schema 持续剥离两点待吸收）；再次 = 子 agent 结果信封（stop_reason→next_step
   映射 + resume 同会话）与委托图约束。hooks/插件市场/持久化/ACP 判定已有不移植
   （决策 D2–D5）。本地 clone `D:\CODE\ai\kimi-code`。基线：2026-10-01 `main` `2b8adae`。
+  **施工状态（2026-10-03）**：P1 已按 rewind-branch-undo.md 落地 T1/T2a/T3
+  （`feat/local-rewind-branch-undo`：SwitchEdge 化 + 分支面 picker + redo 通道；
+  T2b replay 统一双路径未做，见 roadmap §6）；次选 select_tools 随
+  workflow-pi-port P2 T2 另切片。
 - [`docs-local/step-code-port/`](docs-local/step-code-port/survey.md) — **Step-Code
-  （阶跃星辰 stepfun-ai/Step-Code）特性移植预研（调研完成，未选型）**：TS monorepo
+  （阶跃星辰 stepfun-ai/Step-Code）特性移植预研（调研完成；P1 勘误后实做
+  headless continue 已落地）**：TS monorepo
   （MIT，573 星，本地 clone `D:\CODE\ai\Step-Code`，基线 `519e4de4` 2026-09-30）。
   头部候选：P1 bash 命令 AST 静态安全分析（三态判定 + `analysisIncomplete` 不冒充
   安全，fork 无命令内容静态分析，headless 安全基座）；P2 会话分支树 + 离开分支自动
@@ -178,6 +190,11 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   ≤1 人天小件）；P4 子 agent env 防递归 + 输出驱动 idle watchdog（待核实 fork spawn
   链路，决策 D4）。fork 已有面（goal/plan/todo/MCP 导入/secret 脱敏/steer 机制）已
   在对照矩阵澄清防重复建设。分支拟 P1 `feat/local-shell-command-analysis`。
+  **施工状态（2026-10-03）**：P1 经勘误收口——tree-sitter 静态分析上游
+  2026-09-23 同步后已有（`xai-grok-workspace/src/permission/`），实做缺口只剩
+  headless `--non-interactive-denial continue`（`feat/local-shell-command-analysis`，
+  PATCHES 十八期）；P2 分支树随 kimicode P1 落地（branch summarization 未做）；
+  P3/P4 未动。
 
 ## 🔄 Handoff 摘要
 

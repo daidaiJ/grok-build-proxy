@@ -2014,6 +2014,11 @@ deferred-tool-exposure 设计（workflow-pi-port P2）第一切片：`AgentOpts.
    自然 divergence）。
 5. `xai-grok-shell/src/session/workflow/host_service.rs`：spawn 处
    `allowed_tools: opts.tools.clone()` 下发到 SubagentRuntimeOverrides。
+6. `xai-grok-shell/src/agent/subagent/handle_request.rs`：`run_shell_child` 调
+   `apply_child_tool_policy` 补传第 4 参 `effective_runtime.allowed_tools.as_deref()`
+   （shell 子代理 spawn 链路接线；T1 验证时留在工作区未提交，合 main 发版前补线
+   `607fb6e`）。
+7. `xai-grok-shell/src/session/agent_rebuild_tests.rs`：同函数测试调用点补 `None`。
 
 ### 测试
 
