@@ -10,7 +10,9 @@ use crate::extensions::notification::{
     CompactionCheckpointFile, CompactionCheckpointInfo, SessionUpdate as XaiSessionUpdate,
 };
 use crate::sampling::ConversationItem;
-use crate::session::storage::{SessionUpdate, UpdatesIterator};
+use crate::session::storage::{
+    BranchPointer, SessionUpdate, UpdatesIterator, fold_branch_timeline, rewind_step_for_update,
+};
 
 #[derive(Debug)]
 pub struct ReplayResult {
@@ -87,6 +89,13 @@ pub fn replay_to_prompt(
     session_dir: &Path,
     target_prompt_index: usize,
 ) -> io::Result<ReplayResult> {
+    // LOCAL (branch-tree undo): a redo marker (`to_branch`) can revive an abandoned
+    // branch, so the streaming fold below — which truncates state in place — would lose
+    // it forever. Route those files through the branch-aware two-phase replay.
+    if updates_have_backward_markers(updates_path)? {
+        return replay_to_prompt_pointer(updates_path, session_dir, None, target_prompt_index);
+    }
+
     let Some(iter) = UpdatesIterator::open(updates_path)? else {
         return Ok(ReplayResult {
             conversation: vec![],
@@ -110,6 +119,87 @@ pub fn replay_to_prompt(
         state.process_update(&update, session_dir);
     }
 
+    finish_replay(state, target_prompt_index)
+}
+
+/// Raw pre-scan: true if any `rewind_marker` line carries the redo form (`to_branch`).
+/// Cheap substring bail for marker-free files; only marker-bearing lines get peek-parsed.
+fn updates_have_backward_markers(updates_path: &Path) -> io::Result<bool> {
+    use crate::session::storage::RewindStep;
+
+    let contents = match std::fs::read_to_string(updates_path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e),
+    };
+    if !contents.contains("rewind_marker") {
+        return Ok(false);
+    }
+    Ok(contents.lines().any(|line| {
+        !line.trim().is_empty()
+            && matches!(
+                crate::session::storage::rewind_step_for_line(line),
+                RewindStep::Rewind {
+                    to_branch: Some(_),
+                    ..
+                }
+            )
+    }))
+}
+
+/// Branch-aware two-phase replay (LOCAL branch-tree undo): buffers the typed updates,
+/// resolves the timeline tree for the requested pointer, then runs the same
+/// checkpoint-aware state machine over the surviving items.
+/// `to_branch: None` = the final active branch cut at `target` (forward rewind);
+/// `Some(b)` = abandoned branch `b` cut at `target` (the redo path).
+pub(crate) fn replay_to_prompt_pointer(
+    updates_path: &Path,
+    session_dir: &Path,
+    to_branch: Option<u64>,
+    target_prompt_index: usize,
+) -> io::Result<ReplayResult> {
+    let Some(iter) = UpdatesIterator::open(updates_path)? else {
+        return Ok(ReplayResult {
+            conversation: vec![],
+            prompt_index_reached: 0,
+            original_user_info: None,
+            last_compaction_prompt_index: None,
+        });
+    };
+
+    let mut updates = Vec::new();
+    for update_result in iter {
+        match update_result {
+            Ok(u) => updates.push(u),
+            Err(e) => {
+                tracing::warn!(?e, "Skipping malformed update during replay");
+                continue;
+            }
+        }
+    }
+
+    let pointer = match to_branch {
+        None => BranchPointer::FinalCut {
+            target: target_prompt_index,
+        },
+        Some(branch) => BranchPointer::At {
+            branch,
+            target: target_prompt_index,
+        },
+    };
+    let live = fold_branch_timeline(updates, rewind_step_for_update, pointer);
+
+    let mut state = ReplayState::new(target_prompt_index);
+    for update in &live {
+        state.process_update(update, session_dir);
+    }
+
+    finish_replay(state, target_prompt_index)
+}
+
+/// Shared tail of both replay paths: flush partials, fail on an unreadable innermost
+/// base, and truncate the conversation if it extends beyond the target.
+fn finish_replay(mut state: ReplayState, target_prompt_index: usize) -> io::Result<ReplayResult> {
     // Flush any trailing partial messages.
     state.flush_pending_user();
     state.flush_pending_agent();
@@ -697,6 +787,20 @@ mod tests {
             update: XaiSessionUpdate::RewindMarker {
                 target_prompt_index: target,
                 created_at: "2024-01-01T00:00:00Z".to_string(),
+                to_branch: None,
+            },
+            meta: None,
+        }))
+    }
+
+    /// LOCAL (branch-tree undo): the redo form — switch back to an abandoned branch.
+    fn make_rewind_marker_to_branch(target: usize, to_branch: u64) -> SessionUpdate {
+        SessionUpdate::Xai(Box::new(XaiNotification {
+            session_id: acp::SessionId::new("test"),
+            update: XaiSessionUpdate::RewindMarker {
+                target_prompt_index: target,
+                created_at: "2024-01-01T00:00:00Z".to_string(),
+                to_branch: Some(to_branch),
             },
             meta: None,
         }))
@@ -1157,6 +1261,106 @@ mod tests {
             .map(|c| c.text_content())
             .collect();
         assert_eq!(user_msgs, vec!["P0", "P1_prime"]);
+    }
+
+    /// LOCAL (branch-tree undo): a redo marker (`to_branch: Some(0)`) revives the
+    /// abandoned branch's prompts, which a truncate-on-marker fold would have lost.
+    #[test]
+    fn test_replay_redo_switches_back_to_abandoned_branch() {
+        let tmp = TempDir::new().unwrap();
+
+        // P0 R0 | P1 R1 | P2 R2 | rewind(1) | P3 R3 | redo(to_branch=0, target=2) | P4 R4
+        let updates = vec![
+            make_user_update("s1", "P0"),
+            make_agent_update("s1", "R0"),
+            make_user_update("s1", "P1"),
+            make_agent_update("s1", "R1"),
+            make_user_update("s1", "P2"),
+            make_agent_update("s1", "R2"),
+            make_rewind_marker(1),
+            make_user_update("s1", "P3"),
+            make_agent_update("s1", "R3"),
+            make_rewind_marker_to_branch(2, 0),
+            make_user_update("s1", "P4"),
+            make_agent_update("s1", "R4"),
+        ];
+
+        let updates_path = tmp.path().join("updates.jsonl");
+        let mut content = Vec::new();
+        for u in &updates {
+            let envelope = crate::session::storage::SessionUpdateEnvelope::from_update(u).unwrap();
+            serde_json::to_writer(&mut content, &envelope).unwrap();
+            content.push(b'\n');
+        }
+        std::fs::write(&updates_path, content).unwrap();
+
+        // Redo to branch 0 at prompt 2: keep prompts 0..1 of the original timeline (P0, P1)
+        // plus the new P4. P3 (branch 1) and P2 (abandoned tail of branch 0) stay dropped.
+        let result = super::replay_to_prompt_pointer(&updates_path, tmp.path(), Some(0), 2)
+            .expect("redo replay must succeed");
+        let user_msgs: Vec<String> = result
+            .conversation
+            .iter()
+            .filter(|c| matches!(c, ConversationItem::User(_)))
+            .map(|c| c.text_content())
+            .collect();
+        assert_eq!(user_msgs, vec!["P0", "P1", "P4"],);
+        assert_eq!(result.prompt_index_reached, 2);
+
+        // The plain replay path (resume) resolves the file's final pointer, which is the
+        // same branch-2 timeline; truncating to prompt 2 keeps [P0, P1].
+        let resumed = replay_to_prompt(&updates_path, tmp.path(), 2).expect("resume must succeed");
+        let user_msgs: Vec<String> = resumed
+            .conversation
+            .iter()
+            .filter(|c| matches!(c, ConversationItem::User(_)))
+            .map(|c| c.text_content())
+            .collect();
+        assert_eq!(user_msgs, vec!["P0", "P1"]);
+    }
+
+    /// The default `replay_to_prompt` on a redo-free file must produce identical output
+    /// through the branch-aware two-phase path and the historical streaming path.
+    #[test]
+    fn test_replay_two_phase_path_matches_streaming_path_for_forward_markers() {
+        let tmp = TempDir::new().unwrap();
+
+        let updates = vec![
+            make_user_update("s1", "P0"),
+            make_agent_update("s1", "R0"),
+            make_user_update("s1", "P1"),
+            make_agent_update("s1", "R1"),
+            make_rewind_marker(1),
+            make_user_update_pi("s1", "P1_prime", 1),
+            make_agent_update("s1", "R1_prime"),
+            make_rewind_marker(0),
+            make_user_update("s1", "P_fresh"),
+        ];
+
+        let updates_path = tmp.path().join("updates.jsonl");
+        let mut content = Vec::new();
+        for u in &updates {
+            let envelope = crate::session::storage::SessionUpdateEnvelope::from_update(u).unwrap();
+            serde_json::to_writer(&mut content, &envelope).unwrap();
+            content.push(b'\n');
+        }
+        std::fs::write(&updates_path, content).unwrap();
+
+        let streaming = replay_to_prompt(&updates_path, tmp.path(), 1).unwrap();
+        let two_phase =
+            super::replay_to_prompt_pointer(&updates_path, tmp.path(), None, 1).unwrap();
+        pretty_assertions::assert_eq!(
+            two_phase.conversation.len(),
+            streaming.conversation.len()
+        );
+        let texts_of = |r: &super::ReplayResult| -> Vec<String> {
+            r.conversation
+                .iter()
+                .map(ConversationItem::text_content)
+                .collect()
+        };
+        pretty_assertions::assert_eq!(texts_of(&two_phase), texts_of(&streaming));
+        assert_eq!(two_phase.prompt_index_reached, streaming.prompt_index_reached);
     }
 
     #[test]

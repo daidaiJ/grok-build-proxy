@@ -412,9 +412,11 @@ impl SessionActor {
             self.rearm_failed_server_announcements().await;
 
             // Append a RewindMarker to updates.jsonl so replay can handle a branched timeline (updates.jsonl is append-only)
+            // LOCAL (branch-tree undo): `to_branch: None` = forward rewind; T2's redo path appends `Some(b)` instead.
             self.persist_xai_update_only(XaiSessionUpdate::RewindMarker {
                 target_prompt_index: target_index,
                 created_at: chrono::Utc::now().to_rfc3339(),
+                to_branch: None,
             });
 
             // The turn summary and recap describe turns the rewind just removed
