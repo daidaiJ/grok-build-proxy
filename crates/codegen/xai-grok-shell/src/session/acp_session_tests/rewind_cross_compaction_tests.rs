@@ -145,7 +145,8 @@ async fn run_rewind_scenario() {
             target_prompt_index: 3,
             force: true,
             mode: RewindMode::ConversationOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("handle_rewind ok");
     assert!(resp.success, "rewind should succeed: {resp:?}");
@@ -202,7 +203,8 @@ async fn run_files_only_bound_scenario() {
             target_prompt_index: 5,
             force: true,
             mode: RewindMode::FilesOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("files-only rewind ok");
     assert!(
@@ -217,7 +219,8 @@ async fn run_files_only_bound_scenario() {
             target_prompt_index: 1,
             force: true,
             mode: RewindMode::FilesOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("files-only rewind ok");
     assert!(
@@ -231,7 +234,8 @@ async fn run_files_only_bound_scenario() {
             target_prompt_index: 5,
             force: true,
             mode: RewindMode::ConversationOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("handle_rewind returns Ok(success=false)");
     assert!(
@@ -295,7 +299,8 @@ async fn run_clears_marker_scenario() {
             target_prompt_index: 3,
             force: true,
             mode: RewindMode::ConversationOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("handle_rewind ok");
     assert!(resp.success, "rewind should succeed: {resp:?}");
@@ -347,7 +352,8 @@ async fn run_before_missing_checkpoint_scenario() {
             target_prompt_index: 3,
             force: true,
             mode: RewindMode::ConversationOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("handle_rewind ok");
 
@@ -384,7 +390,8 @@ async fn run_after_missing_checkpoint_scenario() {
             target_prompt_index: 6,
             force: true,
             mode: RewindMode::ConversationOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("handle_rewind returns Ok(success=false)");
 
@@ -485,7 +492,8 @@ async fn run_forked_rewind_scenario() {
             target_prompt_index: 6,
             force: true,
             mode: RewindMode::ConversationOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("handle_rewind ok");
 

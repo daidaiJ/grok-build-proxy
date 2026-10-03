@@ -65,7 +65,8 @@ async fn run_rewind_over_synthetic_turn(mark_turn_starts: bool) {
             target_prompt_index: 2,
             force: true,
             mode: RewindMode::ConversationOnly,
-        })
+        
+        to_branch: None,})
         .await
         .expect("handle_rewind ok");
     assert!(resp.success, "rewind should succeed: {resp:?}");
@@ -130,7 +131,8 @@ async fn rewind_with_no_prompts_lists_no_points_and_rejects_execute() {
                     target_prompt_index: 0,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("handle_rewind ok");
             assert!(!resp.success, "rewind with no prompts must be rejected");
@@ -178,7 +180,8 @@ async fn rewind_to_start_keeps_only_preamble() {
                     target_prompt_index: 0,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("handle_rewind ok");
             assert!(resp.success, "rewind to start should succeed: {resp:?}");
@@ -200,7 +203,8 @@ async fn rewind_to_start_keeps_only_preamble() {
                     target_prompt_index: 0,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("handle_rewind ok");
             assert!(!again.success, "no prompts left to rewind: {again:?}");
@@ -265,7 +269,8 @@ async fn rewind_twice_narrows_history_each_time() {
                     target_prompt_index: 3,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("handle_rewind ok");
             assert!(first.success, "{first:?}");
@@ -294,7 +299,8 @@ async fn rewind_twice_narrows_history_each_time() {
                     target_prompt_index: 1,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("handle_rewind ok");
             assert!(second.success, "{second:?}");
@@ -379,7 +385,8 @@ async fn rewind_to_midpoint_with_synthetic_turns_on_both_sides() {
                         target_prompt_index: 2,
                         force: true,
                         mode: RewindMode::ConversationOnly,
-                    })
+                    
+                    to_branch: None,})
                     .await
                     .expect("handle_rewind ok");
                 assert!(resp.success, "mark={mark_turn_starts}: {resp:?}");
@@ -434,7 +441,8 @@ async fn rewind_to_synthetic_auto_wake_turn_cuts_at_the_wake() {
                     target_prompt_index: 1,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("handle_rewind ok");
             assert!(resp.success, "rewind should succeed: {resp:?}");

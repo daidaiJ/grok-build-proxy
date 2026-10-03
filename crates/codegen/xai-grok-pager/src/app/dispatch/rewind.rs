@@ -158,7 +158,10 @@ pub(super) fn dispatch_rewind_show_picker(app: &mut AppView) -> Vec<Effect> {
     }]
 }
 
-pub(super) fn dispatch_rewind_picker_select(app: &mut AppView, prompt_index: usize) -> Vec<Effect> {
+pub(super) fn dispatch_rewind_picker_select(
+    app: &mut AppView,
+    target: crate::views::rewind::RewindTarget,
+) -> Vec<Effect> {
     let ActiveView::Agent(id) = app.active_view else {
         return vec![];
     };
@@ -169,21 +172,25 @@ pub(super) fn dispatch_rewind_picker_select(app: &mut AppView, prompt_index: usi
 
     let point = agent.rewind_points.as_ref().and_then(
         |pts: &Vec<crate::views::rewind::RewindPointInfo>| {
-            pts.iter().find(|p| p.prompt_index == prompt_index)
+            pts.iter()
+                .find(|p| p.prompt_index == target.prompt_index && p.branch == target.to_branch.unwrap_or(0))
         },
     );
     let preview = point.and_then(|p| p.prompt_preview.clone());
 
-    let anchor = find_user_prompt_entry_for_shell_index(&agent.scrollback, prompt_index);
+    // A redo target lives on an abandoned branch — there is no scrollback anchor for it.
+    let anchor = match target.to_branch {
+        None => find_user_prompt_entry_for_shell_index(&agent.scrollback, target.prompt_index),
+        Some(_) => None,
+    };
     if let Some(entry_idx) = anchor {
         agent.scrollback.set_selected(Some(entry_idx));
     }
-
     let draft = agent.rewind_state.take().and_then(|s| s.stashed_draft);
     begin_rewind(
         agent,
         id,
-        prompt_index,
+        target,
         anchor.unwrap_or(0),
         draft,
         preview,
@@ -232,7 +239,10 @@ pub(super) fn dispatch_rewind_cancel_offer(app: &mut AppView) -> Vec<Effect> {
     effects
 }
 
-pub(super) fn dispatch_rewind_confirm(app: &mut AppView, target: usize) -> Vec<Effect> {
+pub(super) fn dispatch_rewind_confirm(
+    app: &mut AppView,
+    target: crate::views::rewind::RewindTarget,
+) -> Vec<Effect> {
     let ActiveView::Agent(id) = app.active_view else {
         return vec![];
     };
@@ -250,7 +260,10 @@ pub(super) fn dispatch_rewind_confirm(app: &mut AppView, target: usize) -> Vec<E
 
 /// "Yes, and don't ask again": quiet-persist confirm-before-rewind off, then execute.
 /// No settings checkmark toast; success/toast comes from the rewind itself.
-pub(super) fn dispatch_rewind_confirm_never_ask(app: &mut AppView, target: usize) -> Vec<Effect> {
+pub(super) fn dispatch_rewind_confirm_never_ask(
+    app: &mut AppView,
+    target: crate::views::rewind::RewindTarget,
+) -> Vec<Effect> {
     let mut effects = Vec::new();
     let prev = app.current_ui.confirm_before_rewind_enabled();
     if prev {
@@ -289,7 +302,7 @@ pub(super) fn dispatch_rewind_dismiss_error(app: &mut AppView) -> Vec<Effect> {
 fn enter_executing(
     agent: &mut crate::app::agent_view::AgentView,
     agent_id: AgentId,
-    target: usize,
+    target: crate::views::rewind::RewindTarget,
     anchor: usize,
     draft: Option<StashedPrompt>,
 ) -> Vec<Effect> {
@@ -303,7 +316,7 @@ fn enter_executing(
     };
     agent.rewind_state = Some(RewindState {
         phase: RewindPhase::Executing {
-            target_prompt_index: target,
+            target_prompt_index: target.prompt_index,
         },
         anchor_entry_idx: anchor,
         stashed_draft: draft,
@@ -312,7 +325,8 @@ fn enter_executing(
     vec![Effect::RewindExecute {
         agent_id,
         session_id,
-        target_prompt_index: target,
+        target_prompt_index: target.prompt_index,
+        to_branch: target.to_branch,
     }]
 }
 
@@ -320,7 +334,7 @@ fn enter_executing(
 fn begin_rewind(
     agent: &mut crate::app::agent_view::AgentView,
     agent_id: AgentId,
-    target: usize,
+    target: crate::views::rewind::RewindTarget,
     anchor: usize,
     draft: Option<StashedPrompt>,
     prompt_preview: Option<String>,
@@ -329,13 +343,14 @@ fn begin_rewind(
     if confirm {
         agent.rewind_state = Some(RewindState {
             phase: RewindPhase::Confirm {
-                target_prompt_index: target,
+                target_prompt_index: target.prompt_index,
+                to_branch: target.to_branch,
                 active_idx: 0,
                 prompt_preview,
             },
             anchor_entry_idx: anchor,
             stashed_draft: draft,
-            selected_prompt_index: Some(target),
+            selected_prompt_index: Some(target.prompt_index),
         });
         return vec![];
     }
@@ -413,6 +428,7 @@ pub(super) fn handle_rewind_points_loaded(
     app: &mut AppView,
     agent_id: AgentId,
     points: Vec<crate::views::rewind::RewindPointInfo>,
+    abandoned: Vec<crate::views::rewind::RewindBranchInfo>,
 ) -> Vec<Effect> {
     let confirm = app.current_ui.confirm_before_rewind_enabled();
     let Some(agent) = app.agents.get_mut(&agent_id) else {
@@ -442,9 +458,10 @@ pub(super) fn handle_rewind_points_loaded(
             .cloned();
 
         if let Some(point) = resolved {
-            let target = point.prompt_index;
+            let target = crate::views::rewind::RewindTarget::from_point(&point);
             let preview = point.prompt_preview.clone();
-            let anchor = find_user_prompt_entry_for_shell_index(&agent.scrollback, target);
+            let anchor =
+                find_user_prompt_entry_for_shell_index(&agent.scrollback, target.prompt_index);
             let draft = stashed.or_else(|| stash_prompt(&mut agent.prompt));
             if let Some(entry_idx) = anchor {
                 agent.scrollback.set_selected(Some(entry_idx));
@@ -461,8 +478,12 @@ pub(super) fn handle_rewind_points_loaded(
         }
     }
 
+    // Merge abandoned-branch points (LOCAL redo) after the active timeline's points.
     let mut sorted = points;
     sorted.sort_by(|a, b| b.prompt_index.cmp(&a.prompt_index));
+    for branch in &abandoned {
+        sorted.extend(branch.points.iter().cloned());
+    }
     let draft = stashed.or_else(|| stash_prompt(&mut agent.prompt));
     let initial_anchor = sorted
         .first()

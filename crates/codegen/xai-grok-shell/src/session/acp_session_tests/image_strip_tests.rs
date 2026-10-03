@@ -383,7 +383,8 @@ async fn rewind_waits_for_in_flight_strip_write_before_restoring() {
                         target_prompt_index: 1,
                         force: true,
                         mode: RewindMode::ConversationOnly,
-                    })
+                    
+                    to_branch: None,})
                     .await;
                 rewind_done.store(true, std::sync::atomic::Ordering::SeqCst);
                 response
@@ -445,7 +446,8 @@ async fn rejected_rewind_preserves_queued_image_strip() {
                     target_prompt_index: usize::MAX,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("rewind returns a response");
             assert!(
@@ -548,7 +550,8 @@ async fn failed_compaction_replay_preserves_queued_image_strip() {
                     target_prompt_index: 1,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("rewind returns a response");
             assert!(

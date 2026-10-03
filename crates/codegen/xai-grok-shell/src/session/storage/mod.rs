@@ -1541,6 +1541,9 @@ pub(crate) struct RawUpdatePeek<'a> {
     pub status: Option<&'a str>,
     #[serde(default)]
     pub target_prompt_index: Option<usize>,
+    /// `rewind_marker` redo form: switch back to this abandoned branch (LOCAL branch-tree undo).
+    #[serde(default)]
+    pub to_branch: Option<u64>,
     /// Chunk `_meta.promptIndex` when present (owned; not borrowed).
     #[serde(default, rename = "_meta")]
     pub meta: Option<RawChunkMetaPeek>,
@@ -1556,47 +1559,179 @@ pub(crate) struct RawChunkMetaPeek {
 
 /// Role of one item in the rewind timeline, as seen by [`filter_rewind_by`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RewindStep {
-    /// Rewind marker: truncate survivors back to `target`'s prompt boundary.
-    Rewind { target: usize },
+pub(crate) enum RewindStep {
+    /// Rewind marker: switch the active branch of the timeline tree.
+    /// `to_branch: None` is the original forward form — fork a fresh branch off the current
+    /// active one at `target`'s prompt boundary; `Some(b)` forks off the abandoned branch `b`
+    /// instead (LOCAL branch-tree undo, the redo path).
+    Rewind { target: usize, to_branch: Option<u64> },
     /// User-message chunk opening (or continuing) a prompt run.
     UserChunk { prompt_index: Option<usize> },
     /// Anything else: kept, but ends the current user run.
     Other,
 }
 
+/// Which point of the timeline tree [`filter_rewind_by`]-style resolvers emit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BranchPointer {
+    /// The file's final active branch with all of its prompts: what every consumer of the
+    /// persisted transcript wants.
+    Final,
+    /// The final active branch cut at `target`'s prompt boundary (keeps prompts 0..target-1).
+    FinalCut { target: usize },
+    /// Abandoned branch `branch`, cut at `target`'s prompt boundary (the redo replay).
+    /// Unknown branch ids fall back to [`BranchPointer::FinalCut`].
+    At { branch: u64, target: usize },
+}
+
 /// Shared rewind dead-branch filter. `classify` maps each item to its [`RewindStep`].
-/// The driver tracks prompt boundaries and, on a marker, truncates survivors back to the target prompt.
-/// [`filter_rewind_lines`] and [`filter_rewind_updates`] wrap this over raw JSONL and typed updates so the two paths share one algorithm.
+/// The driver folds the append-only marker sequence into a branch tree (branch ids are
+/// marker ordinals: branch 0 is the original timeline, the k-th marker creates branch k)
+/// and emits the items on the final active branch's path, in file order. Items on
+/// abandoned branches are dropped; marker items themselves never reach the output.
+/// For files containing only the original forward markers, the output is identical to
+/// the historical truncate-on-marker fold.
 fn filter_rewind_by<T>(items: Vec<T>, classify: impl Fn(&T) -> RewindStep) -> Vec<T> {
-    let mut result: Vec<T> = Vec::with_capacity(items.len());
-    let mut prompt_starts: Vec<usize> = Vec::new();
+    fold_branch_timeline(items, classify, BranchPointer::Final)
+}
+
+/// Build phase shared by [`fold_branch_timeline`] and [`collect_rewind_face`]: assigns
+/// each item to its branch and records the marker-sequence branch tree.
+struct BranchAssignment {
+    /// Per-item branch id; `None` for markers (never emitted).
+    item_branch: Vec<Option<usize>>,
+    /// `forks[b] = (parent, fork target in the parent's timeline coordinates)`.
+    forks: Vec<Option<(usize, usize)>>,
+    /// Final active branch id.
+    active: usize,
+    /// Per branch: index (within its item sequence) where each counted prompt run starts.
+    prompt_starts: Vec<Vec<usize>>,
+    /// Per branch: total item count.
+    branch_len: Vec<usize>,
+}
+
+fn assign_branches<T>(items: &[T], classify: impl Fn(&T) -> RewindStep) -> BranchAssignment {
+    let mut assignment = BranchAssignment {
+        item_branch: Vec::with_capacity(items.len()),
+        forks: vec![None],
+        active: 0,
+        prompt_starts: vec![Vec::new()],
+        branch_len: vec![0],
+    };
     let mut tracker = UserRunTurnTracker::new();
 
     for item in items {
-        match classify(&item) {
-            RewindStep::Rewind { target } => {
-                // Out-of-range target keeps every survivor: fold to `result.len()`.
-                let trunc = prompt_starts.get(target).copied().unwrap_or(result.len());
-                result.truncate(trunc);
-                prompt_starts.truncate(target);
+        match classify(item) {
+            RewindStep::Rewind { target, to_branch } => {
+                // A `to_branch` naming a branch that doesn't exist yet (corrupt or foreign
+                // file) falls back to a forward fork off the current active branch.
+                let parent = match to_branch {
+                    Some(b) if (b as usize) < assignment.forks.len() => b as usize,
+                    _ => assignment.active,
+                };
                 tracker.on_non_user();
-                continue;
+                assignment.forks.push(Some((parent, target)));
+                assignment.prompt_starts.push(Vec::new());
+                assignment.branch_len.push(0);
+                assignment.active = assignment.forks.len() - 1;
+                assignment.item_branch.push(None);
             }
             RewindStep::UserChunk { prompt_index } => {
+                let active = assignment.active;
                 if tracker.on_user_chunk(prompt_index) {
-                    prompt_starts.push(result.len());
+                    assignment.prompt_starts[active].push(assignment.branch_len[active]);
                 }
+                assignment.branch_len[active] += 1;
+                assignment.item_branch.push(Some(active));
             }
-            RewindStep::Other => tracker.on_non_user(),
+            RewindStep::Other => {
+                tracker.on_non_user();
+                let active = assignment.active;
+                assignment.branch_len[active] += 1;
+                assignment.item_branch.push(Some(active));
+            }
         }
-        result.push(item);
+    }
+    assignment
+}
+
+/// Folds an append-only rewind timeline into a branch tree and emits the items on the
+/// resolved [`BranchPointer`]'s path. Each branch keeps a *prefix* of its item sequence
+/// (cut at a prompt boundary), so a single file-order walk with per-branch counters
+/// emits exactly the active path without re-scanning.
+pub(crate) fn fold_branch_timeline<T>(
+    items: Vec<T>,
+    classify: impl Fn(&T) -> RewindStep,
+    pointer: BranchPointer,
+) -> Vec<T> {
+    let len = items.len();
+    let assignment = assign_branches(&items, classify);
+    let BranchAssignment {
+        item_branch,
+        forks,
+        active,
+        prompt_starts,
+        branch_len,
+    } = assignment;
+
+    // Resolve the pointer to (leaf branch, how many prompts of the LEAF's timeline are
+    // kept). Timeline coordinates are branch-relative: branch `b`'s timeline is its
+    // parent's first `t_b` prompts (the marker's raw `target_prompt_index`) plus `b`'s
+    // own prompts. A forward marker's target is therefore relative to the timeline that
+    // was active when the marker was appended — matching the historical continuous fold.
+    let (leaf, mut k) = match pointer {
+        BranchPointer::Final => {
+            let own = prompt_starts[active].len();
+            (active, forks[active].map_or(own, |(_, t)| t + own))
+        }
+        BranchPointer::FinalCut { target } => (active, target),
+        BranchPointer::At { branch, target } => {
+            if (branch as usize) < forks.len() {
+                (branch as usize, target)
+            } else {
+                (active, target)
+            }
+        }
+    };
+
+    // Walk leaf→root: branch `b` keeps its own prompts [0, k - t_b); the parent then
+    // keeps min(k, t_b) of its timeline. Only chain branches keep anything.
+    let mut keep_own = vec![0usize; forks.len()];
+    let mut cursor = leaf;
+    loop {
+        let t = forks[cursor].map_or(0, |(_, t)| t);
+        keep_own[cursor] = k.saturating_sub(t);
+        k = k.min(t);
+        match forks[cursor] {
+            Some((parent, _)) => cursor = parent,
+            None => break,
+        }
+    }
+
+    // Out-of-range keep keeps the whole branch (historical out-of-range fold).
+    let mut kept = vec![0usize; forks.len()];
+    for b in 0..forks.len() {
+        kept[b] = prompt_starts[b]
+            .get(keep_own[b])
+            .copied()
+            .unwrap_or(branch_len[b]);
+    }
+
+    let mut emitted = vec![0usize; forks.len()];
+    let mut result: Vec<T> = Vec::with_capacity(len);
+    for (item, branch) in items.into_iter().zip(item_branch) {
+        let Some(b) = branch else { continue };
+        let keep = emitted[b] < kept[b];
+        emitted[b] += 1;
+        if keep {
+            result.push(item);
+        }
     }
     result
 }
 
 /// Classify a raw JSONL line by peeking at its tag and `_meta` without fully deserializing the payload.
-fn rewind_step_for_line(line: &str) -> RewindStep {
+pub(crate) fn rewind_step_for_line(line: &str) -> RewindStep {
     let (raw_params, is_xai) = if let Ok(env) = serde_json::from_str::<RawLinePeek<'_>>(line) {
         let raw = env.params.map(|p| p.get()).unwrap_or(line);
         (raw, env.method == Some(XAI_SESSION_UPDATE_METHOD))
@@ -1615,7 +1750,10 @@ fn rewind_step_for_line(line: &str) -> RewindStep {
         && u.session_update == *REWIND_MARKER
         && let Some(target) = u.target_prompt_index
     {
-        return RewindStep::Rewind { target };
+        return RewindStep::Rewind {
+            target,
+            to_branch: u.to_branch,
+        };
     }
 
     let is_host_turn = u.meta.as_ref().and_then(|m| m.host_turn).unwrap_or(false);
@@ -1630,15 +1768,17 @@ fn rewind_step_for_line(line: &str) -> RewindStep {
     RewindStep::Other
 }
 
-fn rewind_step_for_update(update: &SessionUpdate) -> RewindStep {
+pub(crate) fn rewind_step_for_update(update: &SessionUpdate) -> RewindStep {
     if let SessionUpdate::Xai(n) = update
         && let crate::extensions::notification::SessionUpdate::RewindMarker {
             target_prompt_index,
+            to_branch,
             ..
         } = &n.update
     {
         return RewindStep::Rewind {
             target: *target_prompt_index,
+            to_branch: *to_branch,
         };
     }
     if is_acp_user_message_chunk(update) && !is_host_turn_update(update) {
@@ -1729,9 +1869,14 @@ pub enum PromptExtractEvent {
     },
 
     /// A `RewindMarker` xAI update: truncate accumulated prompts to this index.
+    /// `to_branch` mirrors the marker's redo form (switch back to abandoned branch `b`,
+    /// LOCAL branch-tree undo); `None` is the original forward rewind.
     ///
     /// Any in-progress user message should be flushed before truncating.
-    RewindTo(usize),
+    RewindTo {
+        target: usize,
+        to_branch: Option<u64>,
+    },
 
     /// Any other update type: the current user message (if any) has ended.
     NotUserMessage,
@@ -1800,7 +1945,40 @@ impl Iterator for PromptExtractIterator {
 /// Consecutive `UserTextChunk` events are concatenated into one prompt until a non-user event or a `promptIndex` change opens a new run.
 /// Progressive counting (same as [`UserRunTurnTracker`]): every user run counts until the first `_meta.promptIndex`.
 /// After that only marked runs count (mid-turn phantoms are dropped from the list).
+///
+/// LOCAL (branch-tree undo): events are buffered and folded through [`fold_branch_timeline`]
+/// so a redo marker (`RewindTo` with `to_branch`) revives prompts an earlier marker
+/// truncated. Without redo markers the fold is the historical truncate-on-marker pass, so
+/// the output for existing sessions is unchanged. Buffering holds the events (prompt text
+/// plus unit variants) for one file — the same materialization `search_content` already does.
 pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent>) -> Vec<String> {
+    let events: Vec<PromptExtractEvent> = iter.collect();
+    let live = fold_branch_timeline(
+        events,
+        |event| match event {
+            PromptExtractEvent::UserTextChunk { prompt_index, .. } => RewindStep::UserChunk {
+                prompt_index: *prompt_index,
+            },
+            PromptExtractEvent::RewindTo { target, to_branch } => RewindStep::Rewind {
+                target: *target,
+                to_branch: *to_branch,
+            },
+            PromptExtractEvent::NotUserMessage => RewindStep::Other,
+        },
+        BranchPointer::Final,
+    );
+    accumulate_prompts(&live)
+}
+
+/// Groups user-chunk events into prompt texts. Consecutive `UserTextChunk` events are
+/// concatenated into one prompt until a non-user event or a `promptIndex` change opens a
+/// new run. Progressive counting (same as [`UserRunTurnTracker`]): every user run counts
+/// until the first `_meta.promptIndex`; after that only marked runs count (mid-turn
+/// phantoms are dropped from the list).
+fn accumulate_prompts<'a>(
+    events: impl IntoIterator<Item = &'a PromptExtractEvent>,
+) -> Vec<String> {
+
     let mut prompts: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut in_user = false;
@@ -1829,7 +2007,7 @@ pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent
         }
     }
 
-    for event in iter {
+    for event in events {
         match event {
             PromptExtractEvent::UserTextChunk { text, prompt_index } => {
                 if prompt_index.is_some() {
@@ -1843,7 +2021,7 @@ pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent
                 let new_run = if !in_user {
                     true
                 } else if seen_marker || prompt_index.is_some() {
-                    prompt_index != current_run_pi
+                    *prompt_index != current_run_pi
                 } else {
                     false
                 };
@@ -1856,20 +2034,20 @@ pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent
                         &mut current_counts,
                     );
                     in_user = true;
-                    current_run_pi = prompt_index;
+                    current_run_pi = *prompt_index;
                     current_counts = counts;
-                    current.push_str(&text);
+                    current.push_str(text);
                 } else {
-                    current.push_str(&text);
+                    current.push_str(text);
                     if current_run_pi.is_none() && prompt_index.is_some() {
-                        current_run_pi = prompt_index;
+                        current_run_pi = *prompt_index;
                         current_counts = true;
                     }
                 }
             }
-            PromptExtractEvent::RewindTo(target_index) => {
-                // Flush any in-progress user message before truncating.
-                // Rewinding TO prompt N keeps prompts[0..N].
+            PromptExtractEvent::RewindTo { .. } => {
+                // Redo markers were consumed by the fold above; markers never survive it.
+                // Kept as a conservative flush arm.
                 flush(
                     &mut prompts,
                     &mut current,
@@ -1877,7 +2055,6 @@ pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent
                     &mut current_run_pi,
                     &mut current_counts,
                 );
-                prompts.truncate(target_index);
             }
             PromptExtractEvent::NotUserMessage => {
                 flush(
@@ -1900,6 +2077,181 @@ pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent
     );
 
     prompts
+}
+
+/// One branch of the rewind timeline face (LOCAL branch-tree undo).
+pub(crate) struct RewindFaceBranch {
+    /// `(parent branch, fork target in the parent's timeline coordinates)`; root = `None`.
+    pub fork: Option<(usize, usize)>,
+    /// This branch's own prompts (timeline prompts after the fork point), grouped with
+    /// the same counting rules as [`collect_prompts_from_events`].
+    pub prompts: Vec<String>,
+}
+
+/// Branch face of a persisted rewind timeline: the whole tree the picker and the redo
+/// path need, derived from `updates.jsonl` alone.
+pub(crate) struct RewindFace {
+    /// Branch tree in marker-ordinal order (index = branch id; 0 = the original timeline).
+    pub branches: Vec<RewindFaceBranch>,
+    /// Final active branch id.
+    pub active: usize,
+}
+
+impl RewindFace {
+    /// Prompts of the timeline the user lands on by switching to `own_index` of
+    /// `branch` — i.e. the state *before* that branch's own prompt `own_index` ran
+    /// (same "rewind to N keeps 0..N-1" convention as the picker). Uses the same
+    /// leaf→root `k` recursion as [`fold_branch_timeline`]: each branch keeps
+    /// `k - t_b` of its own prompts and the parent keeps `min(k, t_b)`.
+    pub fn timeline_prompts_at(&self, branch: usize, own_index: usize) -> Vec<String> {
+        let Some(node) = self.branches.get(branch) else {
+            return Vec::new();
+        };
+        let t_leaf = node.fork.map_or(0, |(_, t)| t);
+        let mut k = t_leaf + own_index;
+        let mut slices: Vec<(usize, usize)> = Vec::new();
+        let mut cursor = Some(branch);
+        while let Some(b) = cursor {
+            let Some(node) = self.branches.get(b) else { break };
+            let t = node.fork.map_or(0, |(_, t)| t);
+            slices.push((b, k.saturating_sub(t)));
+            k = k.min(t);
+            cursor = node.fork.map(|(p, _)| p);
+        }
+        slices.reverse();
+        let mut out: Vec<String> = Vec::new();
+        for (b, take) in slices {
+            out.extend(self.branches[b].prompts.iter().take(take).cloned());
+        }
+        out
+    }
+
+    /// The active timeline decomposed per branch: `(branch id, own prompts kept,
+    /// timeline base index)` root-first. Lets the picker map each flat timeline point
+    /// back to the `(branch, own index)` coordinate the redo path needs.
+    pub fn active_chain_slices(&self) -> Vec<(usize, usize, usize)> {
+        let active = self.active;
+        let own = self.branches[active].prompts.len();
+        let t_leaf = self.branches[active].fork.map_or(0, |(_, t)| t);
+        let mut k = t_leaf + own;
+        let mut slices: Vec<(usize, usize)> = Vec::new();
+        let mut cursor = Some(active);
+        while let Some(b) = cursor {
+            let Some(node) = self.branches.get(b) else { break };
+            let t = node.fork.map_or(0, |(_, t)| t);
+            slices.push((b, k.saturating_sub(t)));
+            k = k.min(t);
+            cursor = node.fork.map(|(p, _)| p);
+        }
+        slices.reverse();
+        let mut out: Vec<(usize, usize, usize)> = Vec::with_capacity(slices.len());
+        let mut base = 0usize;
+        for (b, take) in slices {
+            out.push((b, take, base));
+            base += take;
+        }
+        out
+    }
+}
+
+/// Derives the branch face from `updates.jsonl` events.
+pub(crate) fn collect_rewind_face(
+    iter: impl Iterator<Item = PromptExtractEvent>,
+) -> RewindFace {
+    let events: Vec<PromptExtractEvent> = iter.collect();
+    let assignment = assign_branches(&events, |event| match event {
+        PromptExtractEvent::UserTextChunk { prompt_index, .. } => RewindStep::UserChunk {
+            prompt_index: *prompt_index,
+        },
+        PromptExtractEvent::RewindTo { target, to_branch } => RewindStep::Rewind {
+            target: *target,
+            to_branch: *to_branch,
+        },
+        PromptExtractEvent::NotUserMessage => RewindStep::Other,
+    });
+    let mut branch_events: Vec<Vec<&PromptExtractEvent>> =
+        vec![Vec::new(); assignment.forks.len()];
+    for (event, branch) in events.iter().zip(&assignment.item_branch) {
+        if let Some(b) = branch {
+            branch_events[*b].push(event);
+        }
+    }
+    let branches = assignment
+        .forks
+        .iter()
+        .zip(branch_events)
+        .map(|(fork, events)| RewindFaceBranch {
+            fork: *fork,
+            prompts: accumulate_prompts(events.iter().copied()),
+        })
+        .collect();
+    RewindFace {
+        branches,
+        active: assignment.active,
+    }
+}
+
+/// A compaction checkpoint with the branch it lives on (LOCAL branch-tree undo).
+pub(crate) struct BranchCheckpoint {
+    /// Branch the checkpoint was written on (marker-ordinal id).
+    pub branch: usize,
+    /// `prompt_index_at_compaction`, in that branch's timeline coordinates.
+    pub at: usize,
+    /// Checkpoint blob file name (relative to the session dir).
+    pub file: String,
+}
+
+/// Cheap raw scan for per-branch checkpoint positions. Lines are peek-classified; only
+/// lines containing the checkpoint tag are fully parsed, and the branch walk only runs
+/// when the file contains any rewind marker.
+pub(crate) fn collect_branch_checkpoints(
+    updates_path: &std::path::Path,
+) -> std::io::Result<Vec<BranchCheckpoint>> {
+    let contents = match std::fs::read_to_string(updates_path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+        Err(e) => return Err(e),
+    };
+    if !contents.contains("compaction_checkpoint") {
+        return Ok(vec![]);
+    }
+    let has_markers = contents.contains("rewind_marker");
+    let mut out: Vec<BranchCheckpoint> = Vec::new();
+    let mut marker_count = 0usize;
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if has_markers
+            && let RewindStep::Rewind { .. } = rewind_step_for_line(line)
+        {
+            // Every marker (forward or redo) activates a fresh branch with the next ordinal.
+            marker_count += 1;
+        }
+        if line.contains("compaction_checkpoint") {
+            let notification = serde_json::from_str::<RawLinePeek<'_>>(line)
+                .ok()
+                .and_then(|env| {
+                    let raw = env.params.map(|p| p.get()).unwrap_or(line);
+                    serde_json::from_str::<
+                        crate::extensions::notification::SessionNotification,
+                    >(raw)
+                    .ok()
+                });
+            if let Some(notification) = notification
+                && let crate::extensions::notification::SessionUpdate::CompactionCheckpoint(info) =
+                    notification.update
+            {
+                out.push(BranchCheckpoint {
+                    branch: marker_count,
+                    at: info.prompt_index_at_compaction,
+                    file: info.checkpoint_file,
+                });
+            }
+        }
+    }
+    Ok(out)
 }
 /// Extracts `ContentChunk.text` from `AgentMessageChunk` updates.
 /// Rewound-away branches may still contribute to FTS index.
@@ -2077,6 +2429,9 @@ struct UpdatePeek<'a> {
     meta: Option<RawChunkMetaPeek>,
     /// Present only for `rewind_marker`.
     target_prompt_index: Option<usize>,
+    /// `rewind_marker` redo form: switch back to this abandoned branch (LOCAL branch-tree undo).
+    #[serde(default)]
+    to_branch: Option<u64>,
 }
 
 /// Selective peek at a `user_message_chunk` content object.
@@ -2161,7 +2516,10 @@ pub(crate) fn parse_prompt_extract_event(line: &str) -> PromptExtractEvent {
 
     if is_xai && tag == *REWIND_MARKER {
         if let Some(idx) = peek.update.target_prompt_index {
-            return PromptExtractEvent::RewindTo(idx);
+            return PromptExtractEvent::RewindTo {
+                target: idx,
+                to_branch: peek.update.to_branch,
+            };
         }
         // Malformed rewind_marker: treat conservatively (flush, no truncate).
         return PromptExtractEvent::NotUserMessage;
@@ -2741,7 +3099,10 @@ mod tests {
         );
         assert_eq!(
             parse_prompt_extract_event(&line),
-            PromptExtractEvent::RewindTo(3)
+            PromptExtractEvent::RewindTo {
+                target: 3,
+                to_branch: None,
+            }
         );
     }
 
@@ -2752,7 +3113,10 @@ mod tests {
         );
         assert_eq!(
             parse_prompt_extract_event(&line),
-            PromptExtractEvent::RewindTo(0)
+            PromptExtractEvent::RewindTo {
+                target: 0,
+                to_branch: None,
+            }
         );
     }
 
@@ -2893,7 +3257,13 @@ mod tests {
         let events = collect_events(f.path());
         assert_eq!(events.first(), Some(&PromptExtractEvent::user_text("p1")));
         assert_eq!(events.get(1), Some(&PromptExtractEvent::NotUserMessage));
-        assert_eq!(events.get(2), Some(&PromptExtractEvent::RewindTo(0)));
+        assert_eq!(
+            events.get(2),
+            Some(&PromptExtractEvent::RewindTo {
+                target: 0,
+                to_branch: None
+            })
+        );
     }
 
     #[test]
@@ -3056,6 +3426,7 @@ mod tests {
                 update: crate::extensions::notification::SessionUpdate::RewindMarker {
                     target_prompt_index: 2,
                     created_at: "2026-01-01T00:00:00Z".to_string(),
+                    to_branch: None,
                 },
                 meta: None,
             },
@@ -3330,6 +3701,189 @@ mod tests {
         assert!(result.get(1).is_some_and(|s| s.contains("resp1")));
         assert!(result.get(2).is_some_and(|s| s.contains("replacement")));
         assert!(result.get(3).is_some_and(|s| s.contains("resp3")));
+    }
+
+    /// LOCAL (branch-tree undo): a redo marker (`to_branch: Some(0)`) revives the
+    /// abandoned branch's prompts — the historical truncate-on-marker fold lost them.
+    #[test]
+    fn filter_rewind_backward_switch_restores_abandoned_branch() {
+        let uline = |t: &str| {
+            acp_envelope(&format!(
+                r#"{{"sessionUpdate":"user_message_chunk","content":{{"type":"text","text":"{t}"}}}}"#
+            ))
+        };
+        let aline = |t: &str| {
+            acp_envelope(&format!(
+                r#"{{"sessionUpdate":"agent_message_chunk","content":{{"type":"text","text":"{t}"}}}}"#
+            ))
+        };
+        let marker = |target: usize, to_branch: Option<u64>| {
+            let to = match to_branch {
+                Some(b) => format!(r#","to_branch":{b}"#),
+                None => String::new(),
+            };
+            xai_envelope(&format!(
+                r#"{{"sessionUpdate":"rewind_marker","target_prompt_index":{target},"created_at":"2024-01-01"{to}}}"#
+            ))
+        };
+
+        let (p1, p2, p3, p4, p5) = (uline("p1"), uline("p2"), uline("p3"), uline("p4"), uline("p5"));
+        let (a1, a2, a3, a4, a5) = (aline("r1"), aline("r2"), aline("r3"), aline("r4"), aline("r5"));
+        let rw1 = marker(1, None); // forward: fork off the active branch at prompt 1
+        let rw2 = marker(2, Some(0)); // redo: switch back to branch 0 at prompt 2
+
+        // Timeline: p1 r1 p2 r2 p3 r3 | rw(1) | p4 r4 | redo(branch 0 @ 2) | p5 r5
+        // Final active chain: branch 0 truncated at prompt 2 (p1, p2) + p5.
+        // p3/r3 (abandoned tail of branch 0) and p4/r4 (branch 1) stay dropped.
+        let result = filter_rewind_lines(vec![
+            p1.as_str(),
+            a1.as_str(),
+            p2.as_str(),
+            a2.as_str(),
+            p3.as_str(),
+            a3.as_str(),
+            rw1.as_str(),
+            p4.as_str(),
+            a4.as_str(),
+            rw2.as_str(),
+            p5.as_str(),
+            a5.as_str(),
+        ]);
+
+        assert_eq!(
+            result,
+            vec![
+                p1.as_str(),
+                a1.as_str(),
+                p2.as_str(),
+                a2.as_str(),
+                p5.as_str(),
+                a5.as_str(),
+            ]
+        );
+    }
+
+    /// A redo marker naming a branch that doesn't exist (corrupt or foreign file) folds
+    /// as a forward rewind off the active branch instead of corrupting the timeline.
+    #[test]
+    fn filter_rewind_backward_switch_unknown_branch_falls_back_forward() {
+        let uline = |t: &str| {
+            acp_envelope(&format!(
+                r#"{{"sessionUpdate":"user_message_chunk","content":{{"type":"text","text":"{t}"}}}}"#
+            ))
+        };
+        let aline = |t: &str| {
+            acp_envelope(&format!(
+                r#"{{"sessionUpdate":"agent_message_chunk","content":{{"type":"text","text":"{t}"}}}}"#
+            ))
+        };
+        let marker = |target: usize, to_branch: Option<u64>| {
+            let to = match to_branch {
+                Some(b) => format!(r#","to_branch":{b}"#),
+                None => String::new(),
+            };
+            xai_envelope(&format!(
+                r#"{{"sessionUpdate":"rewind_marker","target_prompt_index":{target},"created_at":"2024-01-01"{to}}}"#
+            ))
+        };
+
+        let (p1, p2, p4) = (uline("p1"), uline("p2"), uline("p4"));
+        let (a1, a2, a4) = (aline("r1"), aline("r2"), aline("r4"));
+        let rw = marker(1, Some(9)); // branch 9 does not exist
+
+        let result = filter_rewind_lines(vec![
+            p1.as_str(),
+            a1.as_str(),
+            p2.as_str(),
+            a2.as_str(),
+            rw.as_str(),
+            p4.as_str(),
+            a4.as_str(),
+        ]);
+
+        // Forward fallback: prompts 0..0 kept (p1/r1), then p4/r4.
+        assert_eq!(
+            result,
+            vec![p1.as_str(), a1.as_str(), p4.as_str(), a4.as_str()]
+        );
+    }
+
+    /// Pre-branch markers carry no `to_branch`: they must deserialize unchanged, and a
+    /// `to_branch: None` marker must not grow a new wire field.
+    #[test]
+    fn rewind_marker_branch_field_is_wire_backward_compatible() {
+        use crate::extensions::notification::SessionUpdate as XaiSessionUpdate;
+
+        let old_json = serde_json::json!({
+            "sessionUpdate": "rewind_marker",
+            "target_prompt_index": 3,
+            "created_at": "2024-01-01",
+        });
+        let parsed: XaiSessionUpdate =
+            serde_json::from_value(old_json).expect("old-format marker must deserialize");
+        match parsed {
+            XaiSessionUpdate::RewindMarker { to_branch, .. } => {
+                assert_eq!(to_branch, None);
+            }
+            other => panic!("expected RewindMarker, got {other:?}"),
+        }
+
+        let forward = XaiSessionUpdate::RewindMarker {
+            target_prompt_index: 1,
+            created_at: "2024-01-01".to_string(),
+            to_branch: None,
+        };
+        let value = serde_json::to_value(&forward).unwrap();
+        assert!(
+            value.get("to_branch").is_none(),
+            "forward markers must not emit a to_branch key: {value}"
+        );
+
+        let redo_json = serde_json::json!({
+            "sessionUpdate": "rewind_marker",
+            "target_prompt_index": 2,
+            "created_at": "2024-01-01",
+            "to_branch": 0,
+        });
+        let parsed: XaiSessionUpdate =
+            serde_json::from_value(redo_json).expect("redo marker must deserialize");
+        match parsed {
+            XaiSessionUpdate::RewindMarker { to_branch, .. } => {
+                assert_eq!(to_branch, Some(0));
+            }
+            other => panic!("expected RewindMarker, got {other:?}"),
+        }
+    }
+
+    /// Redo markers must also revive prompts in the selective prompt-extraction path
+    /// (resume prompt list, search indexing).
+    #[test]
+    fn collect_prompts_redo_restores_truncated_prompts() {
+        let events = vec![
+            PromptExtractEvent::user_text_pi("p1", 0),
+            PromptExtractEvent::NotUserMessage,
+            PromptExtractEvent::user_text_pi("p2", 1),
+            PromptExtractEvent::NotUserMessage,
+            PromptExtractEvent::user_text_pi("p3", 2),
+            PromptExtractEvent::NotUserMessage,
+            PromptExtractEvent::RewindTo {
+                target: 1,
+                to_branch: None,
+            },
+            PromptExtractEvent::user_text_pi("p4", 1),
+            PromptExtractEvent::NotUserMessage,
+            PromptExtractEvent::RewindTo {
+                target: 2,
+                to_branch: Some(0),
+            },
+            PromptExtractEvent::user_text_pi("p5", 2),
+            PromptExtractEvent::NotUserMessage,
+        ];
+
+        let prompts = collect_prompts_from_events(events.into_iter());
+
+        // Redo to branch 0 at prompt 2: p1, p2 revived; p4 (branch 1) stays dropped; p5 appended.
+        assert_eq!(prompts, vec!["p1", "p2", "p5"]);
     }
 
     #[test]

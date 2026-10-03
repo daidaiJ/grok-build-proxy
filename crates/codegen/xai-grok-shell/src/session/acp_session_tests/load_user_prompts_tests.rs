@@ -42,6 +42,7 @@ fn rewind_marker(target: usize) -> SessionUpdate {
         update: XaiSessionUpdate::RewindMarker {
             target_prompt_index: target,
             created_at: "2024-01-01T00:00:00Z".to_string(),
+            to_branch: None,
         },
         meta: None,
     }))

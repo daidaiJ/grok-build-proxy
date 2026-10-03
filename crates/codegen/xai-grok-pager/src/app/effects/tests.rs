@@ -2989,7 +2989,7 @@ fn worktree_resume_failure_sanitizes_detail_before_hint() {
 }
 #[test]
 fn rewind_execute_params_sends_conversation_only_with_force() {
-    let params = rewind_execute_params("sess-1", 3);
+    let params = rewind_execute_params("sess-1", 3, None);
     assert_eq!(j(&params, "sessionId"), "sess-1");
     assert_eq!(j(&params, "targetPromptIndex"), 3);
     assert_eq!(j(&params, "force"), true);

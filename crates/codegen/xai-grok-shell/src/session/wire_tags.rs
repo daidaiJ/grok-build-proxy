@@ -54,6 +54,7 @@ pub(crate) static REWIND_MARKER: LazyLock<String> = LazyLock::new(|| {
     tagged_discriminant(&XaiSessionUpdate::RewindMarker {
         target_prompt_index: 0,
         created_at: String::new(),
+        to_branch: None,
     })
 });
 

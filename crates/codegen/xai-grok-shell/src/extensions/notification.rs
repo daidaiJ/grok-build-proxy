@@ -732,11 +732,20 @@ pub enum SessionUpdate {
     CompactionCheckpoint(Box<CompactionCheckpointInfo>),
     /// A rewind marker written to `updates.jsonl` when a rewind occurs. This is **persist-only**: it is never sent to the gateway/UI. Because `updates.jsonl` is append-only, rewinding creates a timeline branch.
     /// The marker tells the replay algorithm to discard accumulated state beyond `target_prompt_index` and continue from that point.
+    /// LOCAL (branch-tree undo): the marker doubles as a SwitchEdge. Branch ids are marker
+    /// ordinals (branch 0 = the original timeline; the k-th marker in file order creates
+    /// branch k). `to_branch: None` is the original forward form — fork a fresh branch off
+    /// the current active one at `target_prompt_index`; `Some(b)` switches back to the
+    /// abandoned branch `b` and forks at `target_prompt_index` (the redo path). Missing
+    /// field reads as `None`, so pre-branch markers replay identically.
     RewindMarker {
         /// The prompt index being rewound to (0-based).
         target_prompt_index: usize,
         /// When the rewind occurred.
         created_at: String,
+        /// Abandoned branch to switch back to, when this marker is a redo rather than a forward rewind.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to_branch: Option<u64>,
     },
     /// Task completed notification
     TaskCompleted {

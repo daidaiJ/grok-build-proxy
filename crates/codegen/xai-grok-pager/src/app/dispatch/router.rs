@@ -1591,8 +1591,8 @@ fn dispatch_inner(action: Action, app: &mut AppView) -> Vec<Effect> {
         }
         Action::Rewind => dispatch_rewind(app),
         Action::RewindShowPicker => dispatch_rewind_show_picker(app),
-        Action::RewindPickerSelect(prompt_index) => {
-            dispatch_rewind_picker_select(app, prompt_index)
+        Action::RewindPickerSelect(target) => {
+            dispatch_rewind_picker_select(app, target)
         }
         Action::RewindConfirm(target) => dispatch_rewind_confirm(app, target),
         Action::RewindConfirmNeverAsk(target) => dispatch_rewind_confirm_never_ask(app, target),

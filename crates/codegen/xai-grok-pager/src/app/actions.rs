@@ -941,10 +941,10 @@ pub enum Action {
     ToggleWorkflows,
     Rewind,
     RewindShowPicker,
-    RewindPickerSelect(usize),
-    RewindConfirm(usize),
+    RewindPickerSelect(crate::views::rewind::RewindTarget),
+    RewindConfirm(crate::views::rewind::RewindTarget),
     /// Confirm rewind and turn off `confirm_before_rewind` for future rewinds.
-    RewindConfirmNeverAsk(usize),
+    RewindConfirmNeverAsk(crate::views::rewind::RewindTarget),
     RewindCancelOffer,
     RewindDismiss,
     RewindDismissError,
@@ -2175,6 +2175,8 @@ pub enum Effect {
         agent_id: AgentId,
         session_id: acp::SessionId,
         target_prompt_index: usize,
+        /// LOCAL (branch-tree undo) redo: switch back to this abandoned branch.
+        to_branch: Option<u64>,
     },
     /// Fetch billing/credit usage from the agent's `x.ai/billing` extension.
     /// When `silent` is true the result updates `credit_balance` without pushing a system message into scrollback.
@@ -3119,6 +3121,7 @@ pub enum TaskResult {
     RewindPointsLoaded {
         agent_id: AgentId,
         points: Vec<crate::views::rewind::RewindPointInfo>,
+        abandoned: Vec<crate::views::rewind::RewindBranchInfo>,
     },
     RewindPointsFailed {
         agent_id: AgentId,

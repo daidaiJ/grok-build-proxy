@@ -261,7 +261,10 @@ pub(super) fn collect_all_indexable_content_single_pass(
                     if let Some(ref u) = update_peek
                         && let Some(idx) = u.target_prompt_index
                     {
-                        prompt_events.push(PromptExtractEvent::RewindTo(idx));
+                        prompt_events.push(PromptExtractEvent::RewindTo {
+                            target: idx,
+                            to_branch: u.to_branch,
+                        });
                     } else {
                         prompt_events.push(PromptExtractEvent::NotUserMessage);
                     }

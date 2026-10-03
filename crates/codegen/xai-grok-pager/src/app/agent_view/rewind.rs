@@ -110,8 +110,8 @@ impl AgentView {
             RewindInput::ConfirmNeverAsk(target) => {
                 InputOutcome::Action(Action::RewindConfirmNeverAsk(target))
             }
-            RewindInput::PickerSelect(prompt_index) => {
-                InputOutcome::Action(Action::RewindPickerSelect(prompt_index))
+            RewindInput::PickerSelect(target) => {
+                InputOutcome::Action(Action::RewindPickerSelect(target))
             }
             RewindInput::MoveUp
             | RewindInput::MoveDown
@@ -261,6 +261,8 @@ mod sync_rewind_anchor_to_picker_tests {
             num_file_snapshots: 0,
             has_file_changes: false,
             prompt_preview: Some(preview.into()),
+            branch: 0,
+            boundary: None,
         };
         let points = vec![pt(2, "charlie"), pt(1, "bravo"), pt(0, "alpha")];
         agent.rewind_state = Some(RewindState {

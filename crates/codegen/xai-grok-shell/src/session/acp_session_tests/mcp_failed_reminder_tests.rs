@@ -379,7 +379,8 @@ async fn rewind_rearms_failed_server_announcements() {
                     target_prompt_index: 1,
                     force: true,
                     mode: RewindMode::ConversationOnly,
-                })
+                
+                to_branch: None,})
                 .await
                 .expect("handle_rewind ok");
             assert!(resp.success, "{resp:?}");
