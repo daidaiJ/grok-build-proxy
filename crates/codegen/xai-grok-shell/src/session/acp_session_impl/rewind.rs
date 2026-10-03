@@ -2,6 +2,24 @@
 
 use super::*;
 
+/// First non-empty line of the prompt, truncated to 60 chars — the picker preview.
+fn preview_of(text: &str) -> Option<String> {
+    let clean_text = extract_user_query(text);
+    let first_line = clean_text
+        .lines()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty())
+        .unwrap_or("");
+
+    if first_line.is_empty() {
+        None
+    } else if first_line.chars().count() > 60 {
+        Some(format!("{}...", crate::util::truncate(first_line, 57)))
+    } else {
+        Some(first_line.to_string())
+    }
+}
+
 impl SessionActor {
     pub(super) async fn close_rewind_window(&self) {
         let mut state = self.state.lock().await;
@@ -22,6 +40,8 @@ impl SessionActor {
     /// Get available rewind points for this session.
     /// Every prompt is a checkpoint: the list always contains `[0, 1, ..., N-1]` where N is the current prompt_index.
     /// File snapshots may or may not exist for each checkpoint (indicated by `has_file_changes`).
+    /// LOCAL (branch-tree undo): points additionally carry their branch coordinate and a
+    /// pre-computed replay boundary; the response lists abandoned branches for redo.
     pub(super) async fn get_rewind_points(&self) -> RewindPointsResponse {
         // Metadata only: don't load the (huge) file-content snapshots just to render the picker
         let file_metas = self.file_state_tracker.get_rewind_point_metas().await;
@@ -40,24 +60,9 @@ impl SessionActor {
         > = file_metas.iter().map(|m| (m.prompt_index, m)).collect();
 
         // Generate a rewind point for every prompt 0..current_prompt_index.
-        let rewind_points = (0..current_prompt_index)
+        let mut rewind_points = (0..current_prompt_index)
             .map(|idx| {
-                let prompt_preview = prompts.get(idx).and_then(|text| {
-                    let clean_text = extract_user_query(text);
-                    let first_line = clean_text
-                        .lines()
-                        .map(|l| l.trim())
-                        .find(|l| !l.is_empty())
-                        .unwrap_or("");
-
-                    if first_line.is_empty() {
-                        None
-                    } else if first_line.chars().count() > 60 {
-                        Some(format!("{}...", crate::util::truncate(first_line, 57)))
-                    } else {
-                        Some(first_line.to_string())
-                    }
-                });
+                let prompt_preview = prompts.get(idx).and_then(|text| preview_of(text));
 
                 let file_meta = file_meta_map.get(&idx);
                 let num_file_snapshots = file_meta.map_or(0, |m| m.num_file_snapshots);
@@ -71,11 +76,96 @@ impl SessionActor {
                     num_file_snapshots,
                     has_file_changes: num_file_snapshots > 0,
                     prompt_preview,
+                    branch: 0,
+                    boundary: None,
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
 
-        RewindPointsResponse { rewind_points }
+        let mut abandoned_branches: Vec<RewindBranchInfo> = Vec::new();
+
+        // LOCAL (branch-tree undo): derive the journal branch face — branch coordinates
+        // for each timeline point, per-point replay boundary, and the abandoned branches
+        // the redo path can switch back to.
+        let session_dir = crate::session::persistence::session_dir(&self.session_info);
+        let updates_path = session_dir.join("updates.jsonl");
+        if let Ok(Some(iter)) = crate::session::storage::PromptExtractIterator::open(&updates_path)
+        {
+            let face = crate::session::storage::collect_rewind_face(iter);
+            let checkpoints = crate::session::storage::collect_branch_checkpoints(&updates_path)
+                .unwrap_or_default();
+            let slices = face.active_chain_slices();
+            let chain_branches: std::collections::HashSet<usize> =
+                slices.iter().map(|(b, _, _)| *b).collect();
+
+            // Map each timeline point to its (branch, own index) coordinate.
+            let mut coords: Vec<(u64, usize)> =
+                vec![(0, 0); rewind_points.len().max(1)];
+            for (branch, kept, base) in &slices {
+                for i in 0..*kept {
+                    if let Some(c) = coords.get_mut(base + i) {
+                        *c = (*branch as u64, i);
+                    }
+                }
+            }
+
+            // Chain checkpoints, normalized to active-timeline coordinates.
+            let mut chain_ckpts: Vec<(usize, &str)> = checkpoints
+                .iter()
+                .filter(|c| chain_branches.contains(&c.branch))
+                .filter_map(|c| {
+                    let (branch, _kept, base) =
+                        slices.iter().copied().find(|(b, _, _)| *b == c.branch)?;
+                    let t = face.branches[branch].fork.map_or(0, |(_, t)| t);
+                    (c.at >= t).then(|| (base + (c.at - t), c.file.as_str()))
+                })
+                .collect();
+            chain_ckpts.sort_by_key(|(at, _)| *at);
+
+            for (i, point) in rewind_points.iter_mut().enumerate() {
+                if let Some(c) = coords.get(i) {
+                    point.branch = c.0;
+                }
+                // Boundary precompute (kimi ForkLineError): the point fails iff the
+                // innermost surviving checkpoint base at its target is unreadable.
+                if let Some((_, file)) =
+                    chain_ckpts.iter().filter(|(at, _)| *at <= i).last()
+                    && !session_dir.join(file).exists()
+                {
+                    point.boundary = Some(format!(
+                        "compaction checkpoint {file} is gone — rewinding here would lose history; pick a later point"
+                    ));
+                }
+            }
+
+            // Abandoned branches: everything off the active chain, points 0..=tip.
+            for (b, node) in face.branches.iter().enumerate() {
+                if chain_branches.contains(&b) {
+                    continue;
+                }
+                let points = (0..=node.prompts.len())
+                    .map(|own| RewindPointInfo {
+                        prompt_index: own,
+                        created_at: String::new(),
+                        num_file_snapshots: 0,
+                        has_file_changes: false,
+                        prompt_preview: node.prompts.get(own).and_then(|t| preview_of(t)),
+                        branch: b as u64,
+                        boundary: None,
+                    })
+                    .collect();
+                abandoned_branches.push(RewindBranchInfo {
+                    branch: b as u64,
+                    fork: node.fork.map(|(p, t)| (p as u64, t)),
+                    points,
+                });
+            }
+        }
+
+        RewindPointsResponse {
+            rewind_points,
+            abandoned_branches,
+        }
     }
 
     /// Load user prompts from `updates.jsonl` in chronological order.
@@ -133,6 +223,13 @@ impl SessionActor {
         &self,
         request: RewindRequest,
     ) -> anyhow::Result<RewindResponse> {
+        // LOCAL (branch-tree undo): the redo form switches back to an abandoned branch
+        // instead of truncating the current one — completely different validation and
+        // rebuild path, so it gets its own handler.
+        if let Some(to_branch) = request.to_branch {
+            return self.handle_rewind_to_branch(request, to_branch).await;
+        }
+
         self.signals_handle().mark_reverted();
 
         let target_index = request.target_prompt_index;
@@ -475,6 +572,215 @@ impl SessionActor {
             reverted_files,
             clean_files: vec![],
             conflicts,
+            prompt_text,
+            error: None,
+        })
+    }
+
+    /// LOCAL (branch-tree undo) redo: switch the active timeline back to abandoned
+    /// branch `to_branch` at `request.target_prompt_index` (its own index). Appends a
+    /// redo-form `RewindMarker` and rebuilds the conversation through the branch-aware
+    /// replay, mirroring the cross-compaction path's splice and housekeeping. The file
+    /// half is intentionally untouched (same semantics as kimi's undo; design §4).
+    pub(super) async fn handle_rewind_to_branch(
+        &self,
+        request: RewindRequest,
+        to_branch: u64,
+    ) -> anyhow::Result<RewindResponse> {
+        if request.mode != RewindMode::ConversationOnly {
+            tracing::info!(
+                to_branch,
+                mode = ?request.mode,
+                "redo rewind forces conversation-only semantics (file half not re-applied)"
+            );
+        }
+
+        let target_index = request.target_prompt_index;
+        let mode = request.mode;
+
+        let session_dir = crate::session::persistence::session_dir(&self.session_info);
+        let updates_path = session_dir.join("updates.jsonl");
+
+        let error_response = |target: usize, error: String| RewindResponse {
+            success: false,
+            target_prompt_index: target,
+            mode,
+            reverted_files: vec![],
+            clean_files: vec![],
+            conflicts: vec![],
+            prompt_text: None,
+            error: Some(error),
+        };
+
+        // Validate the (branch, own index) point against the journal branch face.
+        let face = match crate::session::storage::PromptExtractIterator::open(&updates_path) {
+            Ok(Some(iter)) => crate::session::storage::collect_rewind_face(iter),
+            _ => {
+                return Ok(error_response(
+                    target_index,
+                    "No replayable session journal — cannot switch branches".to_string(),
+                ));
+            }
+        };
+        let Some(branch) = face.branches.get(to_branch as usize) else {
+            return Ok(error_response(
+                target_index,
+                format!("Branch #{to_branch} does not exist in this session's journal"),
+            ));
+        };
+        if target_index > branch.prompts.len() {
+            return Ok(error_response(
+                target_index,
+                format!(
+                    "Branch #{to_branch} has {} prompts — cannot rewind to #{}",
+                    branch.prompts.len(),
+                    target_index
+                ),
+            ));
+        }
+        let timeline_target = branch.fork.map_or(0, |(_, t)| t) + target_index;
+        let prompt_text = branch.prompts.get(target_index).cloned();
+
+        // Preview mode: hand back the prompt text so the pager confirm modal can offer
+        // the kimi-style "edit and resend" flow.
+        if !request.force {
+            return Ok(RewindResponse {
+                success: false,
+                target_prompt_index: timeline_target,
+                mode,
+                reverted_files: vec![],
+                clean_files: vec![],
+                conflicts: vec![],
+                prompt_text,
+                error: None,
+            });
+        }
+
+        self.signals_handle().mark_reverted();
+        let _strip_guard = if request.force {
+            Some(self.prepare_image_strips_for_rewind().await)
+        } else {
+            None
+        };
+
+        // Store for edit-and-retry detection in the next prompt() call.
+        if let Ok(mut pending) = self.rewind_pending_prompt.lock() {
+            *pending = prompt_text.clone();
+        }
+
+        // Append the redo marker FIRST so the replay below resolves it as the final
+        // pointer (updates.jsonl is append-only).
+        self.persist_xai_update_only(XaiSessionUpdate::RewindMarker {
+            target_prompt_index: timeline_target,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            to_branch: Some(to_branch),
+        });
+
+        // Rebuild the conversation from the journal (replay resolves the branch chain
+        // and any compaction checkpoints on it).
+        let replay_updates = updates_path.clone();
+        let replay_session_dir = session_dir.clone();
+        let replay_target = timeline_target;
+        let replay_result = tokio::task::spawn_blocking(move || {
+            crate::session::helpers::replay::replay_to_prompt(
+                &replay_updates,
+                &replay_session_dir,
+                replay_target,
+            )
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("spawn_blocking panicked: {e}"))?;
+        let replay_result = match replay_result {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!(?e, to_branch, "Redo replay failed — rewind aborted");
+                return Ok(error_response(
+                    timeline_target,
+                    format!("Cannot switch to branch #{to_branch}: {e}"),
+                ));
+            }
+        };
+
+        // Splice the rebuilt conversation, keeping the session preamble (same as the
+        // cross-compaction path).
+        let mut conversation = self.chat_state_handle.get_conversation().await;
+        if matches!(replay_result.conversation.first(), Some(ConversationItem::System(_))) {
+            conversation = replay_result.conversation;
+        } else {
+            if let Some(ui0) = replay_result.original_user_info {
+                conversation.truncate(1); // keep System only
+                conversation.push(ConversationItem::user(ui0));
+            } else {
+                conversation.truncate(2); // keep System + current user_info
+            }
+            conversation.extend(replay_result.conversation);
+        }
+
+        self.cancel_active_sampling_requests();
+        self.cancel_pending_image_strips_for_rewind();
+        self.chat_state_handle.replace_conversation(conversation);
+        if let Some(mut snap) = self.chat_state_handle.snapshot().await {
+            snap.prompt_index = timeline_target;
+            // The switched-to branch's prompt texts are not in memory — re-derive them
+            // from the journal (design §7-3: prompt_texts degrade to a derived cache).
+            snap.prompt_texts = Self::load_user_prompts_from_updates(&updates_path)
+                .unwrap_or_else(|_| snap.prompt_texts.clone());
+            snap.last_compaction_prompt_index = replay_result.last_compaction_prompt_index;
+            self.chat_state_handle.restore_snapshot(snap);
+        }
+
+        // Post-rewind housekeeping, identical to the forward path.
+        if self
+            .compaction
+            .auto_compact_suppressed
+            .load(std::sync::atomic::Ordering::Relaxed)
+            != crate::session::compaction_config::SUPPRESS_UNTIL_SUCCESS
+        {
+            self.compaction.auto_compact_suppressed.store(
+                crate::session::compaction_config::SUPPRESS_NONE,
+                std::sync::atomic::Ordering::Relaxed,
+            );
+        }
+        self.rearm_failed_server_announcements().await;
+        self.recap_epoch.set(self.recap_epoch.get().wrapping_add(1));
+        self.abort_turn_summary();
+        self.abort_title_refresh();
+        let _ = self
+            .notifications
+            .persistence_tx
+            .send(PersistenceMsg::LastTurnSummary(None));
+        let _ = self
+            .notifications
+            .persistence_tx
+            .send(PersistenceMsg::LastRecap(None));
+        if !crate::session::persistence::title_is_manual_in_dir(&session_dir) {
+            let post_rewind_turns = crate::session::helpers::session_recap::main_turn_count(
+                &self.chat_state_handle.get_conversation().await,
+            );
+            let idx = crate::session::helpers::session_summary::checkpoints_reached(
+                post_rewind_turns,
+            );
+            self.next_title_refresh_idx.set(idx);
+            crate::session::helpers::session_summary::save_title_refresh_watermark(
+                &session_dir,
+                idx,
+            );
+        }
+
+        tracing::info!(
+            to_branch,
+            own_target = target_index,
+            timeline_target,
+            "redo rewind: switched back to abandoned branch"
+        );
+
+        Ok(RewindResponse {
+            success: true,
+            target_prompt_index: timeline_target,
+            mode,
+            reverted_files: vec![],
+            clean_files: vec![],
+            conflicts: vec![],
             prompt_text,
             error: None,
         })

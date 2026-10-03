@@ -338,6 +338,7 @@ pub enum RewindMode {
 pub struct RewindRequest {
     /// Target prompt index to rewind to (0-based).
     /// Rewinding to N restores the state from before prompt N ran; prompts 0..N-1 are kept.
+    /// With `to_branch`, this is the target's own index within that branch.
     pub target_prompt_index: usize,
     /// Whether to force rewind even with conflicts
     pub force: bool,
@@ -345,6 +346,11 @@ pub struct RewindRequest {
     /// Defaults to `All` for backwards compatibility with older clients.
     #[serde(default = "default_rewind_mode")]
     pub mode: RewindMode,
+    /// LOCAL (branch-tree undo) redo form: switch back to this abandoned branch instead
+    /// of truncating the current one. Missing reads as `None` (forward rewind). The redo
+    /// is conversation-only regardless of `mode` (the file half is not re-applied).
+    #[serde(default)]
+    pub to_branch: Option<u64>,
 }
 
 pub(crate) fn default_rewind_mode() -> RewindMode {
@@ -382,6 +388,20 @@ pub struct RewindPointsRequest {}
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RewindPointsResponse {
     pub rewind_points: Vec<RewindPointInfo>,
+    /// LOCAL (branch-tree undo): abandoned branches that can be switched back to.
+    /// Empty for sessions without redo markers.
+    #[serde(default)]
+    pub abandoned_branches: Vec<RewindBranchInfo>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RewindBranchInfo {
+    /// Branch id (marker ordinal); the redo request echoes it as `to_branch`.
+    pub branch: u64,
+    /// `(parent branch, fork target)` in the parent's timeline coordinates; root = `None`.
+    #[serde(default)]
+    pub fork: Option<(u64, usize)>,
+    pub points: Vec<RewindPointInfo>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -396,6 +416,14 @@ pub struct RewindPointInfo {
     /// Preview of the user prompt text (truncated)
     #[serde(default)]
     pub prompt_preview: Option<String>,
+    /// LOCAL (branch-tree undo): branch this point belongs to (marker-ordinal id;
+    /// 0 = the original timeline). The redo request pairs it with `to_branch`.
+    #[serde(default)]
+    pub branch: u64,
+    /// Pre-computed replay boundary (design: kimi `ForkLineError`); `None` = rewinding
+    /// here replays losslessly. Set when the needed compaction checkpoint file is gone.
+    #[serde(default)]
+    pub boundary: Option<String>,
 }
 
 // ── Session info ────────────────────────────────────────────────────────
@@ -814,6 +842,7 @@ mod tests {
             target_prompt_index: 3,
             force: false,
             mode: RewindMode::ConversationOnly,
+            to_branch: None,
         };
         let json = serde_json::to_value(&original).unwrap();
         let decoded: RewindRequest = serde_json::from_value(json).unwrap();
@@ -890,6 +919,8 @@ mod tests {
             num_file_snapshots: 3,
             has_file_changes: true,
             prompt_preview: Some("refactor auth".into()),
+            branch: 0,
+            boundary: None,
         };
         let v = serde_json::to_value(&point).unwrap();
         assert_eq!(v.get("has_file_changes"), Some(&json!(true)));
@@ -904,6 +935,8 @@ mod tests {
             num_file_snapshots: 0,
             has_file_changes: false,
             prompt_preview: None,
+            branch: 0,
+            boundary: None,
         };
         let v = serde_json::to_value(&point).unwrap();
         assert_eq!(v.get("has_file_changes"), Some(&json!(false)));

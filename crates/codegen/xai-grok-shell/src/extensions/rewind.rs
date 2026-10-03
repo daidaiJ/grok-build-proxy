@@ -33,6 +33,9 @@ struct RewindSessionRequest {
     force: bool,
     #[serde(default)]
     mode: Option<RewindMode>,
+    /// LOCAL (branch-tree undo) redo: switch back to this abandoned branch.
+    #[serde(default)]
+    to_branch: Option<u64>,
 }
 impl RewindSessionRequest {
     fn prompt_index_for_local(&self) -> Result<usize, acp::Error> {
@@ -73,6 +76,7 @@ async fn handle_execute(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
                 target_prompt_index,
                 force: request.force,
                 mode: request.mode.unwrap_or(RewindMode::All),
+                to_branch: request.to_branch,
             },
             respond_to: tx,
         })

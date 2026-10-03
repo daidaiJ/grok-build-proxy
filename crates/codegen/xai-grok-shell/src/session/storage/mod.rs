@@ -1595,6 +1595,66 @@ fn filter_rewind_by<T>(items: Vec<T>, classify: impl Fn(&T) -> RewindStep) -> Ve
     fold_branch_timeline(items, classify, BranchPointer::Final)
 }
 
+/// Build phase shared by [`fold_branch_timeline`] and [`collect_rewind_face`]: assigns
+/// each item to its branch and records the marker-sequence branch tree.
+struct BranchAssignment {
+    /// Per-item branch id; `None` for markers (never emitted).
+    item_branch: Vec<Option<usize>>,
+    /// `forks[b] = (parent, fork target in the parent's timeline coordinates)`.
+    forks: Vec<Option<(usize, usize)>>,
+    /// Final active branch id.
+    active: usize,
+    /// Per branch: index (within its item sequence) where each counted prompt run starts.
+    prompt_starts: Vec<Vec<usize>>,
+    /// Per branch: total item count.
+    branch_len: Vec<usize>,
+}
+
+fn assign_branches<T>(items: &[T], classify: impl Fn(&T) -> RewindStep) -> BranchAssignment {
+    let mut assignment = BranchAssignment {
+        item_branch: Vec::with_capacity(items.len()),
+        forks: vec![None],
+        active: 0,
+        prompt_starts: vec![Vec::new()],
+        branch_len: vec![0],
+    };
+    let mut tracker = UserRunTurnTracker::new();
+
+    for item in items {
+        match classify(item) {
+            RewindStep::Rewind { target, to_branch } => {
+                // A `to_branch` naming a branch that doesn't exist yet (corrupt or foreign
+                // file) falls back to a forward fork off the current active branch.
+                let parent = match to_branch {
+                    Some(b) if (b as usize) < assignment.forks.len() => b as usize,
+                    _ => assignment.active,
+                };
+                tracker.on_non_user();
+                assignment.forks.push(Some((parent, target)));
+                assignment.prompt_starts.push(Vec::new());
+                assignment.branch_len.push(0);
+                assignment.active = assignment.forks.len() - 1;
+                assignment.item_branch.push(None);
+            }
+            RewindStep::UserChunk { prompt_index } => {
+                let active = assignment.active;
+                if tracker.on_user_chunk(prompt_index) {
+                    assignment.prompt_starts[active].push(assignment.branch_len[active]);
+                }
+                assignment.branch_len[active] += 1;
+                assignment.item_branch.push(Some(active));
+            }
+            RewindStep::Other => {
+                tracker.on_non_user();
+                let active = assignment.active;
+                assignment.branch_len[active] += 1;
+                assignment.item_branch.push(Some(active));
+            }
+        }
+    }
+    assignment
+}
+
 /// Folds an append-only rewind timeline into a branch tree and emits the items on the
 /// resolved [`BranchPointer`]'s path. Each branch keeps a *prefix* of its item sequence
 /// (cut at a prompt boundary), so a single file-order walk with per-branch counters
@@ -1605,45 +1665,14 @@ pub(crate) fn fold_branch_timeline<T>(
     pointer: BranchPointer,
 ) -> Vec<T> {
     let len = items.len();
-    let mut forks: Vec<Option<(usize, usize)>> = vec![None];
-    // Per branch: item sequence length, and the index where each counted prompt run starts.
-    let mut branch_len: Vec<usize> = vec![0];
-    let mut prompt_starts: Vec<Vec<usize>> = vec![Vec::new()];
-    let mut tracker = UserRunTurnTracker::new();
-    let mut active = 0usize;
-    // Per-item branch assignment; `None` for markers (never emitted).
-    let mut item_branch: Vec<Option<usize>> = Vec::with_capacity(len);
-
-    for item in &items {
-        match classify(item) {
-            RewindStep::Rewind { target, to_branch } => {
-                // A `to_branch` naming a branch that doesn't exist yet (corrupt or foreign
-                // file) falls back to a forward fork off the current active branch.
-                let parent = match to_branch {
-                    Some(b) if (b as usize) < forks.len() => b as usize,
-                    _ => active,
-                };
-                tracker.on_non_user();
-                forks.push(Some((parent, target)));
-                branch_len.push(0);
-                prompt_starts.push(Vec::new());
-                active = forks.len() - 1;
-                item_branch.push(None);
-            }
-            RewindStep::UserChunk { prompt_index } => {
-                if tracker.on_user_chunk(prompt_index) {
-                    prompt_starts[active].push(branch_len[active]);
-                }
-                branch_len[active] += 1;
-                item_branch.push(Some(active));
-            }
-            RewindStep::Other => {
-                tracker.on_non_user();
-                branch_len[active] += 1;
-                item_branch.push(Some(active));
-            }
-        }
-    }
+    let assignment = assign_branches(&items, classify);
+    let BranchAssignment {
+        item_branch,
+        forks,
+        active,
+        prompt_starts,
+        branch_len,
+    } = assignment;
 
     // Resolve the pointer to (leaf branch, how many prompts of the LEAF's timeline are
     // kept). Timeline coordinates are branch-relative: branch `b`'s timeline is its
@@ -1938,6 +1967,17 @@ pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent
         },
         BranchPointer::Final,
     );
+    accumulate_prompts(&live)
+}
+
+/// Groups user-chunk events into prompt texts. Consecutive `UserTextChunk` events are
+/// concatenated into one prompt until a non-user event or a `promptIndex` change opens a
+/// new run. Progressive counting (same as [`UserRunTurnTracker`]): every user run counts
+/// until the first `_meta.promptIndex`; after that only marked runs count (mid-turn
+/// phantoms are dropped from the list).
+fn accumulate_prompts<'a>(
+    events: impl IntoIterator<Item = &'a PromptExtractEvent>,
+) -> Vec<String> {
 
     let mut prompts: Vec<String> = Vec::new();
     let mut current = String::new();
@@ -1967,7 +2007,7 @@ pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent
         }
     }
 
-    for event in &live {
+    for event in events {
         match event {
             PromptExtractEvent::UserTextChunk { text, prompt_index } => {
                 if prompt_index.is_some() {
@@ -2037,6 +2077,181 @@ pub fn collect_prompts_from_events(iter: impl Iterator<Item = PromptExtractEvent
     );
 
     prompts
+}
+
+/// One branch of the rewind timeline face (LOCAL branch-tree undo).
+pub(crate) struct RewindFaceBranch {
+    /// `(parent branch, fork target in the parent's timeline coordinates)`; root = `None`.
+    pub fork: Option<(usize, usize)>,
+    /// This branch's own prompts (timeline prompts after the fork point), grouped with
+    /// the same counting rules as [`collect_prompts_from_events`].
+    pub prompts: Vec<String>,
+}
+
+/// Branch face of a persisted rewind timeline: the whole tree the picker and the redo
+/// path need, derived from `updates.jsonl` alone.
+pub(crate) struct RewindFace {
+    /// Branch tree in marker-ordinal order (index = branch id; 0 = the original timeline).
+    pub branches: Vec<RewindFaceBranch>,
+    /// Final active branch id.
+    pub active: usize,
+}
+
+impl RewindFace {
+    /// Prompts of the timeline the user lands on by switching to `own_index` of
+    /// `branch` — i.e. the state *before* that branch's own prompt `own_index` ran
+    /// (same "rewind to N keeps 0..N-1" convention as the picker). Uses the same
+    /// leaf→root `k` recursion as [`fold_branch_timeline`]: each branch keeps
+    /// `k - t_b` of its own prompts and the parent keeps `min(k, t_b)`.
+    pub fn timeline_prompts_at(&self, branch: usize, own_index: usize) -> Vec<String> {
+        let Some(node) = self.branches.get(branch) else {
+            return Vec::new();
+        };
+        let t_leaf = node.fork.map_or(0, |(_, t)| t);
+        let mut k = t_leaf + own_index;
+        let mut slices: Vec<(usize, usize)> = Vec::new();
+        let mut cursor = Some(branch);
+        while let Some(b) = cursor {
+            let Some(node) = self.branches.get(b) else { break };
+            let t = node.fork.map_or(0, |(_, t)| t);
+            slices.push((b, k.saturating_sub(t)));
+            k = k.min(t);
+            cursor = node.fork.map(|(p, _)| p);
+        }
+        slices.reverse();
+        let mut out: Vec<String> = Vec::new();
+        for (b, take) in slices {
+            out.extend(self.branches[b].prompts.iter().take(take).cloned());
+        }
+        out
+    }
+
+    /// The active timeline decomposed per branch: `(branch id, own prompts kept,
+    /// timeline base index)` root-first. Lets the picker map each flat timeline point
+    /// back to the `(branch, own index)` coordinate the redo path needs.
+    pub fn active_chain_slices(&self) -> Vec<(usize, usize, usize)> {
+        let active = self.active;
+        let own = self.branches[active].prompts.len();
+        let t_leaf = self.branches[active].fork.map_or(0, |(_, t)| t);
+        let mut k = t_leaf + own;
+        let mut slices: Vec<(usize, usize)> = Vec::new();
+        let mut cursor = Some(active);
+        while let Some(b) = cursor {
+            let Some(node) = self.branches.get(b) else { break };
+            let t = node.fork.map_or(0, |(_, t)| t);
+            slices.push((b, k.saturating_sub(t)));
+            k = k.min(t);
+            cursor = node.fork.map(|(p, _)| p);
+        }
+        slices.reverse();
+        let mut out: Vec<(usize, usize, usize)> = Vec::with_capacity(slices.len());
+        let mut base = 0usize;
+        for (b, take) in slices {
+            out.push((b, take, base));
+            base += take;
+        }
+        out
+    }
+}
+
+/// Derives the branch face from `updates.jsonl` events.
+pub(crate) fn collect_rewind_face(
+    iter: impl Iterator<Item = PromptExtractEvent>,
+) -> RewindFace {
+    let events: Vec<PromptExtractEvent> = iter.collect();
+    let assignment = assign_branches(&events, |event| match event {
+        PromptExtractEvent::UserTextChunk { prompt_index, .. } => RewindStep::UserChunk {
+            prompt_index: *prompt_index,
+        },
+        PromptExtractEvent::RewindTo { target, to_branch } => RewindStep::Rewind {
+            target: *target,
+            to_branch: *to_branch,
+        },
+        PromptExtractEvent::NotUserMessage => RewindStep::Other,
+    });
+    let mut branch_events: Vec<Vec<&PromptExtractEvent>> =
+        vec![Vec::new(); assignment.forks.len()];
+    for (event, branch) in events.iter().zip(&assignment.item_branch) {
+        if let Some(b) = branch {
+            branch_events[*b].push(event);
+        }
+    }
+    let branches = assignment
+        .forks
+        .iter()
+        .zip(branch_events)
+        .map(|(fork, events)| RewindFaceBranch {
+            fork: *fork,
+            prompts: accumulate_prompts(events.iter().copied()),
+        })
+        .collect();
+    RewindFace {
+        branches,
+        active: assignment.active,
+    }
+}
+
+/// A compaction checkpoint with the branch it lives on (LOCAL branch-tree undo).
+pub(crate) struct BranchCheckpoint {
+    /// Branch the checkpoint was written on (marker-ordinal id).
+    pub branch: usize,
+    /// `prompt_index_at_compaction`, in that branch's timeline coordinates.
+    pub at: usize,
+    /// Checkpoint blob file name (relative to the session dir).
+    pub file: String,
+}
+
+/// Cheap raw scan for per-branch checkpoint positions. Lines are peek-classified; only
+/// lines containing the checkpoint tag are fully parsed, and the branch walk only runs
+/// when the file contains any rewind marker.
+pub(crate) fn collect_branch_checkpoints(
+    updates_path: &std::path::Path,
+) -> std::io::Result<Vec<BranchCheckpoint>> {
+    let contents = match std::fs::read_to_string(updates_path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+        Err(e) => return Err(e),
+    };
+    if !contents.contains("compaction_checkpoint") {
+        return Ok(vec![]);
+    }
+    let has_markers = contents.contains("rewind_marker");
+    let mut out: Vec<BranchCheckpoint> = Vec::new();
+    let mut marker_count = 0usize;
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if has_markers
+            && let RewindStep::Rewind { .. } = rewind_step_for_line(line)
+        {
+            // Every marker (forward or redo) activates a fresh branch with the next ordinal.
+            marker_count += 1;
+        }
+        if line.contains("compaction_checkpoint") {
+            let notification = serde_json::from_str::<RawLinePeek<'_>>(line)
+                .ok()
+                .and_then(|env| {
+                    let raw = env.params.map(|p| p.get()).unwrap_or(line);
+                    serde_json::from_str::<
+                        crate::extensions::notification::SessionNotification,
+                    >(raw)
+                    .ok()
+                });
+            if let Some(notification) = notification
+                && let crate::extensions::notification::SessionUpdate::CompactionCheckpoint(info) =
+                    notification.update
+            {
+                out.push(BranchCheckpoint {
+                    branch: marker_count,
+                    at: info.prompt_index_at_compaction,
+                    file: info.checkpoint_file,
+                });
+            }
+        }
+    }
+    Ok(out)
 }
 /// Extracts `ContentChunk.text` from `AgentMessageChunk` updates.
 /// Rewound-away branches may still contribute to FTS index.
