@@ -11,7 +11,8 @@ use crate::extensions::notification::{
 };
 use crate::sampling::ConversationItem;
 use crate::session::storage::{
-    BranchPointer, SessionUpdate, UpdatesIterator, fold_branch_timeline, rewind_step_for_update,
+    BranchPointer, RewindStep, SessionUpdate, UpdatesIterator, fold_branch_timeline,
+    rewind_step_for_update,
 };
 
 #[derive(Debug)]
@@ -119,7 +120,7 @@ pub fn replay_to_prompt(
         state.process_update(&update, session_dir);
     }
 
-    finish_replay(state, target_prompt_index)
+    finish_replay(state, target_prompt_index, true)
 }
 
 /// Raw pre-scan: true if any `rewind_marker` line carries the redo form (`to_branch`).
@@ -187,19 +188,39 @@ pub(crate) fn replay_to_prompt_pointer(
             target: target_prompt_index,
         },
     };
+    // Seed the phantom rule with the WHOLE file's promptIndex context: numbered
+    // chunks on cut-away branches still mark every later unmarked chunk as a
+    // mid-turn phantom, exactly as the streaming path would have seen them.
+    let seen_prompt_index = updates.iter().any(|u| {
+        matches!(
+            rewind_step_for_update(u),
+            RewindStep::UserChunk {
+                prompt_index: Some(_)
+            }
+        )
+    });
+    let is_redo = matches!(pointer, BranchPointer::At { .. });
     let live = fold_branch_timeline(updates, rewind_step_for_update, pointer);
 
     let mut state = ReplayState::new(target_prompt_index);
+    state.seen_prompt_index_marker = seen_prompt_index;
     for update in &live {
         state.process_update(update, session_dir);
     }
 
-    finish_replay(state, target_prompt_index)
+    // The redo fold already cut every branch precisely in branch-relative
+    // coordinates; the end-of-replay truncation would count the revived branch's
+    // own prompts against the target branch's timeline and shave them off.
+    finish_replay(state, target_prompt_index, !is_redo)
 }
 
 /// Shared tail of both replay paths: flush partials, fail on an unreadable innermost
 /// base, and truncate the conversation if it extends beyond the target.
-fn finish_replay(mut state: ReplayState, target_prompt_index: usize) -> io::Result<ReplayResult> {
+fn finish_replay(
+    mut state: ReplayState,
+    target_prompt_index: usize,
+    end_truncate: bool,
+) -> io::Result<ReplayResult> {
     // Flush any trailing partial messages.
     state.flush_pending_user();
     state.flush_pending_agent();
@@ -210,7 +231,7 @@ fn finish_replay(mut state: ReplayState, target_prompt_index: usize) -> io::Resu
 
     // After processing the entire file, the conversation may extend beyond the target
     // `target_prompt_index` means "rewind to before prompt N", so keep prompts 0..N-1 (N prompts total)
-    if state.prompt_counter > target_prompt_index {
+    if end_truncate && state.prompt_counter > target_prompt_index {
         if let Some(top) = state.bases.last()
             && target_prompt_index >= top.prompt_index
         {
@@ -229,7 +250,11 @@ fn finish_replay(mut state: ReplayState, target_prompt_index: usize) -> io::Resu
 
     Ok(ReplayResult {
         conversation: state.conversation,
-        prompt_index_reached: state.prompt_counter,
+        prompt_index_reached: if end_truncate {
+            state.prompt_counter
+        } else {
+            target_prompt_index
+        },
         original_user_info: state.original_user_info,
         last_compaction_prompt_index: state.bases.last().map(|base| base.prompt_index),
     })

@@ -1686,8 +1686,27 @@ pub(crate) fn fold_branch_timeline<T>(
         }
         BranchPointer::FinalCut { target } => (active, target),
         BranchPointer::At { branch, target } => {
-            if (branch as usize) < forks.len() {
-                (branch as usize, target)
+            let b = branch as usize;
+            if b < forks.len() {
+                // Redo replay: when the active chain already continues the
+                // (branch, target) point through an existing fork, the redo lands
+                // on that fork — keep its own prompts and let the walk cut the fork
+                // parent at `target`; otherwise replay the bare branch cut at target.
+                let mut cursor = active;
+                let mut landed = false;
+                while let Some((parent, t)) = forks[cursor] {
+                    if parent == b && t == target {
+                        landed = true;
+                        break;
+                    }
+                    cursor = parent;
+                }
+                if landed {
+                    let own = prompt_starts[cursor].len();
+                    (cursor, forks[cursor].map_or(own, |(_, t)| t + own))
+                } else {
+                    (b, target)
+                }
             } else {
                 (active, target)
             }
