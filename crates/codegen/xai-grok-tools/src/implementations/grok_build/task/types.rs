@@ -233,6 +233,12 @@ pub struct SubagentRuntimeOverrides {
     pub output_token_budget: Option<u64>,
     pub output_schema: Option<serde_json::Value>,
     pub loop_task_id: Option<String>,
+    /// Explicit tool-face allowlist (canonical tool ids, e.g. `run_terminal_cmd`).
+    /// When set, the child's declared tool config is retained down to these tools
+    /// after the capability-mode filter — exposure trims the *declaration face* only,
+    /// it never widens permissions (a read-only capability mode still drops write
+    /// tools the allowlist names). `None` keeps the full face.
+    pub allowed_tools: Option<Vec<String>>,
 }
 
 /// Re-export of [`xai_tool_types::is_not_sentinel`] for existing call sites.

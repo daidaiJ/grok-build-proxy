@@ -84,7 +84,10 @@ impl Ctx {
 type ScriptResult<T> = Result<T, Box<EvalAltResult>>;
 
 enum PendingAgent {
-    Replayed(serde_json::Value),
+    Replayed {
+        seq: u64,
+        value: serde_json::Value,
+    },
     Live {
         seq: u64,
         hash: String,
@@ -441,7 +444,15 @@ fn is_resumable_unjournaled_terminal(err: &EvalAltResult) -> bool {
     )
 }
 
-fn spawn_agent_call(ctx: &Rc<RefCell<Ctx>>, opts: AgentOpts) -> ScriptResult<Dynamic> {
+fn spawn_agent_call(ctx: &Rc<RefCell<Ctx>>, mut opts: AgentOpts) -> ScriptResult<Dynamic> {
+    let (opts, own_seq) = {
+        let ctx = ctx.borrow();
+        // Canonical context edits are engine-owned: resolved from the journal (deterministic
+        // on replay), overriding anything a hand-built opts map carried, and hashed into the
+        // payload so an edited edit sequence diverges like any other host-call change.
+        opts.context_edits = ctx.journal.resolve_context_edits(ctx.seq);
+        (opts, ctx.seq)
+    };
     let payload = serde_json::to_value(&opts)
         .map_err(|e| runtime_error(format!("invalid agent options: {e}")))?;
     let hash = request_hash("spawn_agent", &payload);
@@ -471,7 +482,57 @@ fn spawn_agent_call(ctx: &Rc<RefCell<Ctx>>, opts: AgentOpts) -> ScriptResult<Dyn
             return Err(err);
         }
     };
-    value_to_dynamic(&value)
+    value_to_dynamic(&inject_agent_seq(value, own_seq))
+}
+
+/// Surface the spawn's journal seq on the script-visible result (`r.seq`) so scripts can
+/// target it with `replace_visible` / `hide_visible`. Engine-side injection happens after
+/// the journal record is written, so records stay untouched and replay reproduces the
+/// same injection deterministically.
+fn inject_agent_seq(mut value: serde_json::Value, seq: u64) -> serde_json::Value {
+    if let Some(object) = value.as_object_mut() {
+        object.insert("seq".into(), serde_json::json!(seq));
+    }
+    value
+}
+
+/// Journal-direct canonical context edit (`replace_visible` / `hide_visible`): the edit
+/// is an ordinary journaled call — seq assigned, request hashed, replayed on resume, and
+/// divergent when the script's edit sequence changes — but it needs no host round-trip,
+/// so it records straight into the journal instead of riding the host channel.
+fn context_edit_call(
+    ctx: &Rc<RefCell<Ctx>>,
+    target: i64,
+    action: &'static str,
+    digest: Option<String>,
+) -> ScriptResult<Dynamic> {
+    let Ok(target) = u64::try_from(target) else {
+        return Err(runtime_error(format!(
+            "{action}: agent seq must be a non-negative number (got {target})"
+        )));
+    };
+    let payload = serde_json::json!({ "target": target, "action": action, "digest": digest });
+    let hash = request_hash("context_edit", &payload);
+    // Seq is consumed unconditionally (like `host_call`) so a replayed edit occupies the
+    // same journal slot it did in the live run — returning early on a replay hit without
+    // consuming would shift every later spawn onto the edit's seq and diverge.
+    let seq = ctx.borrow_mut().next_seq()?;
+    {
+        let ctx = ctx.borrow();
+        if ctx.journal.spawn_output_text(target).is_none() {
+            return Err(runtime_error(format!(
+                "{action}: agent seq {target} has no substitutable output — it must \
+                 reference a prior `agent()`/`parallel()` result from this run"
+            )));
+        }
+        match ctx.journal.replay(seq, "context_edit", &hash) {
+            Ok(Some(_)) => return Ok(Dynamic::UNIT),
+            Ok(None) => {}
+            Err(error) => return Err(journal_fatal(error)),
+        }
+    }
+    ctx.borrow_mut().record(seq, "context_edit", hash, payload)?;
+    Ok(Dynamic::UNIT)
 }
 
 fn agent_opts_from_map(prompt: Option<&str>, map: rhai::Map) -> ScriptResult<AgentOpts> {
@@ -488,6 +549,24 @@ fn agent_opts_from_map(prompt: Option<&str>, map: rhai::Map) -> ScriptResult<Age
 }
 
 fn register_host_fns(engine: &mut rhai::Engine, ctx: &Rc<RefCell<Ctx>>) {
+    let c = ctx.clone();
+    engine.register_fn(
+        "replace_visible",
+        move |target: i64, digest: &str| -> ScriptResult<Dynamic> {
+            let digest = digest.trim().to_string();
+            if digest.is_empty() {
+                return Err(runtime_error(
+                    "replace_visible: digest must not be empty (use hide_visible to remove)",
+                ));
+            }
+            context_edit_call(&c, target, "replace", Some(digest))
+        },
+    );
+    let c = ctx.clone();
+    engine.register_fn(
+        "hide_visible",
+        move |target: i64| -> ScriptResult<Dynamic> { context_edit_call(&c, target, "hide", None) },
+    );
     let c = ctx.clone();
     engine.register_fn("agent", move |prompt: &str| -> ScriptResult<Dynamic> {
         spawn_agent_call(
@@ -522,7 +601,14 @@ fn register_host_fns(engine: &mut rhai::Engine, ctx: &Rc<RefCell<Ctx>>) {
                 let map = item
                     .try_cast::<rhai::Map>()
                     .ok_or_else(|| runtime_error("parallel() items must be option maps"))?;
-                opts_list.push(agent_opts_from_map(None, map)?);
+                let mut opts = agent_opts_from_map(None, map)?;
+                // Engine-owned edits in force before this batch; every batch item sees the
+                // same list, and no item of the batch can have edits recorded after it.
+                opts.context_edits = {
+                    let ctx = c.borrow();
+                    ctx.journal.resolve_context_edits(ctx.seq)
+                };
+                opts_list.push(opts);
             }
 
             let requests = opts_list
@@ -559,7 +645,7 @@ fn register_host_fns(engine: &mut rhai::Engine, ctx: &Rc<RefCell<Ctx>>) {
                     drain_parallel_replies(std::mem::take(&mut pending));
                 })?;
                 match replay_spawn_agent(&c.borrow().journal, seq, &payload, &hash) {
-                    Ok(Some(value)) => pending.push(PendingAgent::Replayed(value)),
+                    Ok(Some(value)) => pending.push(PendingAgent::Replayed { seq, value }),
                     Ok(None) => {
                         let (reply_tx, reply_rx) = oneshot::channel();
                         if c.borrow()
@@ -588,14 +674,14 @@ fn register_host_fns(engine: &mut rhai::Engine, ctx: &Rc<RefCell<Ctx>>) {
                 }
             }
 
-            let mut resolved: Vec<(Option<(u64, String)>, serde_json::Value)> =
+            let mut resolved: Vec<(Option<(u64, String)>, u64, serde_json::Value)> =
                 Vec::with_capacity(pending.len());
             let mut terminal_kind: Option<String> = None;
             let mut terminal_error = None;
             let mut resumable_terminal = false;
             for entry in pending {
                 match entry {
-                    PendingAgent::Replayed(value) => {
+                    PendingAgent::Replayed { seq, value } => {
                         if is_host_terminal_sentinel(&value) {
                             let kind = value
                                 .get(HOST_TERMINAL_KEY)
@@ -614,7 +700,7 @@ fn register_host_fns(engine: &mut rhai::Engine, ctx: &Rc<RefCell<Ctx>>) {
                             terminal_error.get_or_insert(error);
                             continue;
                         }
-                        resolved.push((None, value));
+                        resolved.push((None, seq, value));
                     }
                     PendingAgent::Live {
                         seq,
@@ -646,7 +732,7 @@ fn register_host_fns(engine: &mut rhai::Engine, ctx: &Rc<RefCell<Ctx>>) {
                                 | HostError::Failed(_),
                             )) => serde_json::Value::Null,
                         };
-                        resolved.push((Some((seq, hash)), value));
+                        resolved.push((Some((seq, hash)), seq, value));
                     }
                 }
             }
@@ -654,7 +740,7 @@ fn register_host_fns(engine: &mut rhai::Engine, ctx: &Rc<RefCell<Ctx>>) {
             if resumable_terminal {
                 release_agent_calls(&c, live_count);
             } else {
-                for (live, value) in &resolved {
+                for (live, _, value) in &resolved {
                     let Some((seq, hash)) = live else {
                         continue;
                     };
@@ -676,7 +762,8 @@ fn register_host_fns(engine: &mut rhai::Engine, ctx: &Rc<RefCell<Ctx>>) {
             }
 
             let mut results = rhai::Array::with_capacity(resolved.len());
-            for (_, value) in resolved {
+            for (_, seq, value) in resolved {
+                let value = inject_agent_seq(value, seq);
                 match value_to_dynamic(&value) {
                     Ok(value) => results.push(value),
                     Err(error) => return Err(error),
@@ -1946,6 +2033,266 @@ mod tests {
         match outcome {
             WorkflowOutcome::Completed { result } => {
                 assert_eq!(result, serde_json::json!("\"</tag>\\nquoted\""));
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tools_allowlist_flows_through_opts_and_diverges_when_edited() {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let captured: std::sync::Arc<std::sync::Mutex<Vec<crate::host::AgentOpts>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured2 = captured.clone();
+        let host = spawn_mock_host(rx, move |req| match req {
+            WorkflowHostRequest::SpawnAgent { opts, reply } => {
+                captured2.lock().unwrap().push(opts.clone());
+                let _ = reply.send(Ok(agent_result("done")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+
+        let script = r#"
+            let meta = #{ name: "t", description: "d" };
+            let r = agent("work", #{ tools: ["read_file", "grep"] });
+            complete(r.output);
+        "#;
+        let outcome = run_workflow(params(script, Journal::new(None), tx));
+        drop(host);
+        assert!(matches!(outcome, WorkflowOutcome::Completed { .. }));
+        let opts = captured.lock().unwrap();
+        assert_eq!(opts.len(), 1);
+        assert_eq!(
+            opts[0].tools.as_deref(),
+            Some(&["read_file".to_string(), "grep".to_string()][..]),
+            "script-supplied allowlist reaches the host untouched"
+        );
+
+        // The allowlist is part of the payload hash: changing it diverges on replay.
+        let dir = tempfile::tempdir().unwrap();
+        let journal_path = dir.path().join("journal.jsonl");
+        let (tx, rx) = mpsc::unbounded_channel();
+        let host = spawn_mock_host(rx, |req| match req {
+            WorkflowHostRequest::SpawnAgent { reply, .. } => {
+                let _ = reply.send(Ok(agent_result("done")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+        let outcome = run_workflow(params(script, Journal::new(Some(journal_path.clone())), tx));
+        drop(host);
+        assert!(matches!(outcome, WorkflowOutcome::Completed { .. }));
+
+        let script_edited = script.replace("\"grep\"", "\"search_replace\"");
+        let (tx, rx) = mpsc::unbounded_channel();
+        let host = spawn_mock_host(rx, |req| match req {
+            WorkflowHostRequest::SpawnAgent { reply, .. } => {
+                let _ = reply.send(Ok(agent_result("done")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+        let outcome = run_workflow(params(
+            &script_edited,
+            Journal::load(journal_path.clone()).unwrap(),
+            tx,
+        ));
+        drop(host);
+        match outcome {
+            WorkflowOutcome::Failed { error } => {
+                assert!(
+                    error.to_lowercase().contains("diverg"),
+                    "expected divergence, got: {error}"
+                );
+            }
+            other => panic!("expected Failed with divergence, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn context_edit_replaces_earlier_output_in_later_spawn_payload() {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let captured: std::sync::Arc<std::sync::Mutex<Vec<crate::host::AgentOpts>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured2 = captured.clone();
+        let host = spawn_mock_host(rx, move |req| match req {
+            WorkflowHostRequest::SpawnAgent { opts, reply } => {
+                captured2.lock().unwrap().push(opts.clone());
+                let output = if captured2.lock().unwrap().len() == 1 {
+                    "REVIEW FINDINGS: lots of text"
+                } else {
+                    "review done"
+                };
+                let _ = reply.send(Ok(agent_result(output)));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+
+        let outcome = run_workflow(params(
+            r#"
+            let meta = #{ name: "t", description: "d" };
+            let a = agent("produce");
+            replace_visible(a.seq, "summarized: 3 findings");
+            let b = agent("review: " + a.output);
+            complete(b.seq);
+            "#,
+            Journal::new(None),
+            tx,
+        ));
+        drop(host);
+
+        match outcome {
+            WorkflowOutcome::Completed { result } => {
+                assert_eq!(result, serde_json::json!(2), "script-visible seq is 1-based journal order");
+            }
+            other => panic!("expected Completed, got {other:?}"),
+        }
+        let opts = captured.lock().unwrap();
+        assert_eq!(opts.len(), 2);
+        assert!(
+            opts[0].context_edits.is_empty(),
+            "first spawn has no edits in force"
+        );
+        assert_eq!(opts[1].context_edits.len(), 1);
+        let edit = &opts[1].context_edits[0];
+        assert_eq!(edit.target, 0);
+        assert_eq!(edit.action, "replace");
+        assert_eq!(edit.digest.as_deref(), Some("summarized: 3 findings"));
+        assert_eq!(edit.needle.as_deref(), Some("REVIEW FINDINGS: lots of text"));
+    }
+
+    #[test]
+    fn hide_visible_omits_the_target_output() {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let captured: std::sync::Arc<std::sync::Mutex<Vec<crate::host::AgentOpts>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured2 = captured.clone();
+        let host = spawn_mock_host(rx, move |req| match req {
+            WorkflowHostRequest::SpawnAgent { opts, reply } => {
+                captured2.lock().unwrap().push(opts.clone());
+                let _ = reply.send(Ok(agent_result("NOISY intermediate dump")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+
+        let outcome = run_workflow(params(
+            r#"
+            let meta = #{ name: "t", description: "d" };
+            let a = agent("produce");
+            hide_visible(a.seq);
+            let b = agent("next: " + a.output);
+            complete(b.output);
+            "#,
+            Journal::new(None),
+            tx,
+        ));
+        drop(host);
+
+        assert!(matches!(outcome, WorkflowOutcome::Completed { .. }));
+        let opts = captured.lock().unwrap();
+        assert_eq!(opts[1].context_edits.len(), 1);
+        let edit = &opts[1].context_edits[0];
+        assert_eq!(edit.action, "hide");
+        assert_eq!(edit.placeholder(), "[agent #0 result omitted]");
+    }
+
+    #[test]
+    fn context_edit_sequence_change_diverges_on_replay() {
+        let dir = tempfile::tempdir().unwrap();
+        let journal_path = dir.path().join("journal.jsonl");
+        let script_original = r#"
+            let meta = #{ name: "t", description: "d" };
+            let a = agent("produce");
+            replace_visible(a.seq, "digest-v1");
+            let b = agent("next: " + a.output);
+            complete(b.output);
+        "#;
+        // Editing the digest changes the edit call's payload hash — the edit sequence is
+        // part of the journaled call chain, so a changed edit diverges exactly like an
+        // edited prompt would.
+        let script_edited = script_original.replace("digest-v1", "digest-v2");
+
+        let (tx, rx) = mpsc::unbounded_channel();
+        let host = spawn_mock_host(rx, |req| match req {
+            WorkflowHostRequest::SpawnAgent { reply, .. } => {
+                let _ = reply.send(Ok(agent_result("some findings")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+        let outcome = run_workflow(params(script_original, Journal::new(Some(journal_path.clone())), tx));
+        drop(host);
+        assert!(matches!(outcome, WorkflowOutcome::Completed { .. }));
+
+        let (tx, rx) = mpsc::unbounded_channel();
+        let host = spawn_mock_host(rx, |req| match req {
+            WorkflowHostRequest::SpawnAgent { reply, .. } => {
+                let _ = reply.send(Ok(agent_result("some findings")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+        let outcome = run_workflow(params(
+            &script_edited,
+            Journal::load(journal_path.clone()).unwrap(),
+            tx,
+        ));
+        drop(host);
+        match outcome {
+            WorkflowOutcome::Failed { error } => {
+                assert!(
+                    error.to_lowercase().contains("diverg"),
+                    "expected divergence, got: {error}"
+                );
+            }
+            other => panic!("expected Failed with divergence, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn context_edit_journal_replays_without_respawning() {
+        let dir = tempfile::tempdir().unwrap();
+        let journal_path = dir.path().join("journal.jsonl");
+        let script = r#"
+            let meta = #{ name: "t", description: "d" };
+            let a = agent("produce");
+            replace_visible(a.seq, "digest-v1");
+            let b = agent("next: " + a.output);
+            complete(b.output);
+        "#;
+        let (tx, rx) = mpsc::unbounded_channel();
+        let host = spawn_mock_host(rx, |req| match req {
+            WorkflowHostRequest::SpawnAgent { reply, .. } => {
+                let _ = reply.send(Ok(agent_result("some findings")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+        let outcome = run_workflow(params(script, Journal::new(Some(journal_path.clone())), tx));
+        drop(host);
+        assert!(matches!(outcome, WorkflowOutcome::Completed { .. }));
+
+        // Resume with the same script: edits replay, no new spawns, result identical.
+        let (tx, rx) = mpsc::unbounded_channel();
+        let host = spawn_mock_host(rx, |req| match req {
+            WorkflowHostRequest::SpawnAgent { reply, .. } => {
+                let _ = reply.send(Ok(agent_result("REPLAYED - must not appear")));
+            }
+            WorkflowHostRequest::Phase { .. } | WorkflowHostRequest::Log { .. } => {}
+            other => panic!("unexpected request: {other:?}"),
+        });
+        let outcome = run_workflow(params(
+            script,
+            Journal::load(journal_path.clone()).unwrap(),
+            tx,
+        ));
+        drop(host);
+        match outcome {
+            WorkflowOutcome::Completed { result } => {
+                assert_eq!(result, serde_json::json!("some findings"));
             }
             other => panic!("expected Completed, got {other:?}"),
         }

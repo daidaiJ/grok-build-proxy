@@ -157,6 +157,80 @@ impl Journal {
         self.entries.is_empty()
     }
 
+    /// Resolve the canonical context edits in force for a spawn that would be assigned
+    /// journal seq `upto` (exclusive). Entries are visited in seq order, so a spawn's
+    /// output is available to any edit recorded after it, and first-edit-wins decides
+    /// the effect for a doubly edited target (design §5-2: first wins, replay stays
+    /// simplest). Edits whose target output is not a plain string are dropped —
+    /// structured outputs are not substitutable in v1.
+    ///
+    /// Deterministic by construction (journal contents only), so the resolved list is
+    /// byte-identical between the live run and a replay — a requirement because it is
+    /// embedded in the spawn payload before hashing.
+    pub fn resolve_context_edits(&self, upto: u64) -> Vec<crate::host::ContextEdit> {
+        use std::collections::HashMap;
+        let mut outputs: HashMap<u64, Option<String>> = HashMap::new();
+        let mut edits: Vec<crate::host::ContextEdit> = Vec::new();
+        let mut decided: HashMap<u64, usize> = HashMap::new();
+        for entry in self
+            .entries
+            .iter()
+            .take(usize::try_from(upto).unwrap_or(self.entries.len()))
+        {
+            match entry.kind.as_str() {
+                "spawn_agent" => {
+                    let output = entry
+                        .result
+                        .get("output")
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::to_owned);
+                    outputs.insert(entry.seq, output);
+                }
+                "context_edit" => {
+                    let Some(target) = entry.result.get("target").and_then(|v| v.as_u64()) else {
+                        continue;
+                    };
+                    let Some(action) = entry.result.get("action").and_then(|v| v.as_str()) else {
+                        continue;
+                    };
+                    let edit = crate::host::ContextEdit {
+                        target,
+                        action: action.to_string(),
+                        digest: entry
+                            .result
+                            .get("digest")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_owned),
+                        needle: outputs.get(&target).cloned().flatten(),
+                    };
+                    match decided.get(&target) {
+                        // First edit wins (design §5-2); later re-edits of the same target are inert.
+                        Some(_) => {}
+                        None => {
+                            decided.insert(target, edits.len());
+                            edits.push(edit);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        edits.into_iter().filter(|edit| edit.needle.is_some()).collect()
+    }
+
+    /// The raw output text of the spawn recorded at `seq`, when it is a plain string.
+    /// `None` for unknown seqs, other kinds, and structured (non-string) outputs —
+    /// the last are not substitutable in v1 because the engine cannot predict the
+    /// exact text a script embedded in a later prompt.
+    pub fn spawn_output_text(&self, seq: u64) -> Option<String> {
+        self.entries
+            .get(usize::try_from(seq).ok()?)
+            .filter(|entry| entry.kind == "spawn_agent" && entry.seq == seq)
+            .and_then(|entry| entry.result.get("output"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    }
+
     pub fn agent_reservation_count(&self) -> u64 {
         u64::try_from(
             self.entries
@@ -368,6 +442,35 @@ pub fn request_hash(kind: &str, payload: &serde_json::Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolve_context_edits_first_edit_wins_and_drops_non_string() {
+        let mut journal = Journal::new(None);
+        let spawn = |output: serde_json::Value| {
+            serde_json::json!({
+                "agent_id": "child", "success": true, "output": output,
+                "cancelled": false, "tokens_used": 1, "duration_ms": 1
+            })
+        };
+        let edit = |target: u64, action: &str, digest: Option<&str>| {
+            serde_json::json!({ "target": target, "action": action, "digest": digest })
+        };
+        journal.record(0, "spawn_agent", "h0".into(), spawn(serde_json::json!("RAW OUTPUT"))).unwrap();
+        journal.record(1, "spawn_agent", "h1".into(), spawn(serde_json::json!({"structured": true}))).unwrap();
+        journal.record(2, "context_edit", "h2".into(), edit(1, "replace", Some("structured digest"))).unwrap();
+        journal.record(3, "context_edit", "h3".into(), edit(0, "hide", None)).unwrap();
+        journal.record(4, "context_edit", "h4".into(), edit(0, "replace", Some("late digest"))).unwrap();
+
+        let edits = journal.resolve_context_edits(5);
+        // The structured-output target (seq 1) is dropped (no substitutable needle);
+        // seq 0 keeps its FIRST edit (hide), the later replace is inert.
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].target, 0);
+        assert_eq!(edits[0].action, "hide");
+        assert_eq!(edits[0].needle.as_deref(), Some("RAW OUTPUT"));
+        // Edits recorded after the boundary are invisible to an earlier spawn.
+        assert!(journal.resolve_context_edits(1).is_empty());
+    }
 
     #[test]
     fn record_and_replay_roundtrip() {

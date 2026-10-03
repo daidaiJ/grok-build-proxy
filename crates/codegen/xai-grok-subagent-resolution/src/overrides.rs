@@ -130,6 +130,9 @@ pub fn resolve_effective_overrides(
         role_name,
         persona_error,
         isolation,
+        // v1: runtime-only. Roles/personas cannot set an allowlist — the spawn site
+        // (workflow `AgentOpts.tools` / Task tool args) owns this override.
+        allowed_tools: overrides.allowed_tools.clone(),
     }
 }
 
@@ -221,6 +224,7 @@ mod tests {
             output_token_budget: None,
             output_schema: None,
             loop_task_id: None,
+            allowed_tools: None,
         }
     }
 

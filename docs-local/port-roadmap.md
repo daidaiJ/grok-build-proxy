@@ -146,3 +146,36 @@
   inventory §2 工具体系行已回填。
 - **接手者第一步**：随统一发版合 main；活跑验证可后置到发版后的新客户端。
   中断恢复按 §5-2。
+### 2026-10-03 · 任务③ 完成交接（canonical context edit，feat/local-workflow-context-edit）
+
+- **当前状态**：分支 `feat/local-workflow-context-edit`（自 main `8d82c36`），代码提交
+  `904dc9a`。pi ContextEditEntry 语义落地：`replace_visible(seq, digest)` /
+  `hide_visible(seq)` journal 直记 + spawn payload 哈希耦合 + host_service 可见面替换；
+  脚本可见 `r.seq`。与原型的偏差（journal 直记 vs host_call 通道）已记录于 PATCHES
+  十九期——seq 分配/重放/divergence 语义等价。**兼容关键**：context_edits 空时不
+  序列化，旧 journal 重放 hash 零漂移（有测试断言 indirectly 兜底）。
+- **关键证据**：xai-workflow lib 66/0（含 4 个新引擎用例：payload 注入/重放不重跑/
+  编辑 divergence/hide 占位符）；shell workflow::host 过滤 4/0；两 crate cargo check 全绿。
+- **未验证事项 / 遗留**：① 结构化输出不可替换（v1 边界，PATCHES 登记）；② 占位符
+  格式等真实场景校准（设计 §5-1）；③ 活回合 token 曲线验收（设计验收 1）未做；
+  ④ `context_with_system` 对应物（落点三）按设计未纳入本项，挪 P2' 评估。
+- **详情指针**：PATCHES.md 十九期；设计锚点 workflow-pi-port/canonical-context-edit.md。
+- **接手者第一步**：随统一发版合 main；活回合验证可后置。中断恢复按 §5-2。
+
+### 2026-10-03 · 任务④ 阶段完成交接（工具面 allowlist T1 落地，search_tools T2 待做，feat/local-deferred-tool-exposure）
+
+- **当前状态**：分支 `feat/local-deferred-tool-exposure`（叠层于 ③ 分支之上——
+  AgentOpts 同文件演进，合 main 时按 ③→④ 顺序）。
+  `AgentOpts.tools` 白名单全链路（workflow payload/hash → host_service →
+  SubagentRuntimeOverrides → apply_child_tool_policy 裁剪，capability 只减不增）
+  已落地并验证。**T2 = defer_tools + search_tools 延迟发现未做**：涉及新工具实现 +
+  子 agent 会话内声明态 + 国模能力门（动态改声明面的模型支持未核实，路线图明确
+  要求先立能力门），按切片拆出。
+- **关键证据**：xai-grok-subagent-resolution 95/0（含 2 新用例）；xai-workflow
+  67/0（含 payload 传递 + divergence 用例）；shell workflow::host 过滤 4/0。
+- **未验证事项 / 遗留**：T2 三件套（search_tools 工具 / 会话声明态 + resume 原子性 /
+  国模能力门）；fan-out token 曲线 A/B（验收 1）等 T2 一起做对照实验。
+- **详情指针**：PATCHES.md 二十期（含 T2 施工约束全文）；设计锚点
+  workflow-pi-port/deferred-tool-exposure.md。
+- **接手者第一步**：T2 开工前先对照 fork-feature-inventory 与 `search_tool`
+  现有实现（builder.rs ToolSearch 映射）定 D 判定；国模能力门先行。中断恢复按 §5-2。
