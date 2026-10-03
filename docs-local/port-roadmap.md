@@ -1,9 +1,12 @@
 # 移植路线图（选型定稿 2026-10-03）
 
-> **状态：选型定稿，未开工。** 三个移植预研专题（[workflow-pi-port](workflow-pi-port/README.md)
-> / [kimicode-port](kimicode-port/README.md) / [step-code-port](step-code-port/survey.md)）
-> 的候选特性按「coding + agent work 价值 × 国模适配性」定序，本文是**施工顺序与
-> 交接台账的唯一权威**；各特性的设计细节仍以各自分文档为准，本文不复述。
+> **状态：选型定稿。** 任务① rewind 分支树 undo 已在本机完成 T1/T2a/T3 三期施工
+> （分支 `feat/local-rewind-branch-undo`，HEAD `1bba307`，待 CI/活回合验证后合 main
+> 发版，见 §6 交接台账）；②③④ 未开工。三个移植预研专题
+> （[workflow-pi-port](workflow-pi-port/README.md) / [kimicode-port](kimicode-port/README.md)
+> / [step-code-port](step-code-port/survey.md)）的候选特性按
+> 「coding + agent work 价值 × 国模适配性」定序，本文是**施工顺序与交接台账的唯一
+> 权威**；各特性的设计细节仍以各自分文档为准，本文不复述。
 > 基线：main `6e83214`（2026-10-03）。
 
 ## 1. 选型结论
@@ -99,4 +102,27 @@
   先行，`cargo check` + 相关 lib 过滤测试过绿再进 T2。
 - **接手指引**：进度看该分支 `git log` + 本台账后续条目；中途中断按 §5-2 先补
   "中断点"条目再续作。设计锚点全在 rewind-branch-undo.md §1/§4（当日 grep 复核过）。
+
+### 2026-10-03 · 任务① 阶段完成交接（T1/T2a/T3 本机完成，待 CI/活回合收口）
+
+- **当前状态**：分支 `feat/local-rewind-branch-undo`（自 main `9908362`），四个提交：
+  开工台账 `78f37f5` → T1 `2057bfe`（RewindMarker SwitchEdge 化 + 分支树 fold +
+  两阶段 replay）→ T2a `357a529`（redo 通道端到端 + 分支面/边界预计算 +
+  abandoned_branches 响应）→ T3 `1bba307`（picker ↩/⚠ 标注 + RewindTarget 贯穿 +
+  to_branch execute）。**未合 main、未打 tag。**
+- **关键证据**：`cargo check -p xai-grok-shell/-p xai-grok-pager --all-targets` 全绿；
+  pager `ctest.sh --lib rewind` 63/0、全量 lib **10032/0**；shell rewind 过滤 58 过
+  /25 挂（25 全为 `acp_session_tests/support.rs:287` AbsPathBuf("/tmp") Windows
+  环境族，该 crate 不在白名单的既有原因，非本改引入）；兼容门 = 既有
+  filter/collect 测试全过（旧格式输出逐条一致）+ 新增 5 用例（redo 恢复/未知分支
+  回退/serde 兼容/两阶段等价/redo 端到端 replay）。
+- **未验证事项 / 遗留**：① T2b（向前 rewind 统一走 replay 重建，消除双路径）未做；
+  ② redo 端到端 + pty 回归（rewind_after_compaction_with_missing_checkpoint）待
+  Linux CI / 专用会话；③ 活回合 TUI 抽查（/rewind → 切回弃分支 → 编辑重发 →
+  regeneration 遥测）；④ boundary 文案 i18n；⑤ fork-feature-inventory 已回填。
+- **详情指针**：PATCHES.md「rewind 分支树 undo」节（改动面全景，多属上游同步线
+  **同步后必须重放**）；设计锚点 kimicode-port/rewind-branch-undo.md。
+- **接手者第一步**：合 main 前先推分支跑 Linux CI（build.yml + 补跑 shell 侧
+  rewind 用例）；或先做 ③ 活回合抽查（`ctest.sh` 白名单外需 `GATE_FORCE=1`）。
+  中断恢复按 §5-2。
 
