@@ -197,8 +197,18 @@ host 空闲才投递 + `agent_settled` 再排空、不追欠（missed 不爆发�
 
 ## 决策记录（预研阶段）
 
-- **D1（2026-10-03 立项：移植路线图排序②）— P1 shell 静态分析**：Rust 解析器选型（tree-sitter-bash vs 手写）与
-  `analysisIncomplete` 语义放进 `xai-grok-tools` 还是独立 crate 需先定。
+- **D1（2026-10-03 立项：移植路线图排序②）— P1 shell 静态分析**：
+  **勘误收口（2026-10-03 施工时核实，以下为准，上节"fork 无命令内容静态分析"判定作废）**：
+  fork 经 2026-09-23 上游同步后，`xai-grok-workspace/src/permission/` 已有远超预期的
+  命令内容静态分析全套——`bash_command_splitting.rs`（tree-sitter-bash typed 解析 +
+  wrapper/transparent-prefix 保守剥离）、`grants.rs` `is_dangerous_command_words`
+  （rm/chmod/chown/chgrp/chattr/pkill/kill/killall/git push 词边界前缀，白名单也不能
+  覆盖）、`exec_risk.rs`（spawn 类 argv 旗标 + git 只读单一事实源 + 环境配置扫描）、
+  `security_findings.rs`（10 个固定 finding token 喂 auto-mode 分类器）、
+  GateDecision `Reject/AskRuleMatch/AskFailClosed` 三态且 fail-closed 永不冒充安全。
+  与 Step-Code 对照后真实缺口只剩无人值守收口：**`--non-interactive-denial continue`**
+  （headless 审批阻塞转失败工具结果续跑）——已实施（分支 `feat/local-shell-command-analysis`
+  提交 6b1bc29，PATCHES.md 十八期）。解析器选型、"分析不完备"语义落位两问随之消解。
 - **D2（2026-10-03 落实，随路线图排序①施工）— 分支树需求并入 kimicode-port P1**：kimi（undo/prompt 放回/compaction 边界）
   与 Step（branch summarization/summary-overflow）两参照合并成一份设计原型后再动工，
   不另立 step-code 专题。

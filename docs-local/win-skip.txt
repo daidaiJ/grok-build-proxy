@@ -78,3 +78,17 @@ settings_api_key_keeps_voice_despite_remote_false
 settings_non_api_key_tier_clears_stale_api_key_flag
 voice_remote_true_re_enables_after_kill_switch
 plan_kept_replaces_the_keep_and_refreshes_mounted_review
+
+# 族R acp_session rewind 期家族 —— 同族N根因（create_test_actor 夹具写死
+# /tmp，support.rs:287 AbsPathBuf NotAbsolute panic），2026-10-03 v1.0.41
+# Linux CI 首跑 + 本机 GATE_FORCE 复跑确认的 8 个家族，按族路径整族跳过
+# （这些族后续新增用例同样自动跳过，行为验证走 Linux CI）；其余 acp_session
+# 家族同根因，碰到时按本格式补登记。
+session::acp_session::image_strip_tests::
+session::acp_session::mcp_failed_reminder_tests::
+session::acp_session::parent_message::
+session::acp_session::prompt_queue_actor_tests::
+session::acp_session::rewind_cross_compaction_tests::
+session::acp_session::rewind_synthetic_turn_tests::
+session::acp_session::turn_completion_emit_tests::
+session::acp_session::turn_end_reporting_tests::

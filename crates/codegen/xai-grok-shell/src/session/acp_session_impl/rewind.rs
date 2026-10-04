@@ -198,24 +198,6 @@ impl SessionActor {
     /// Check whether a rewind must replay `updates.jsonl` to reconstruct the conversation: replay whenever a compaction has occurred.
     /// Compaction collapses N+1 user messages into ~3, so the conversation in memory no longer has the User count `prompt_index` implies.
     /// `truncate_to_prompt_index` counts User items to find the cut point, so it is wrong for ALL post-compaction targets, not just at the boundary.
-    async fn needs_compaction_replay(&self) -> bool {
-        let last = self
-            .chat_state_handle
-            .snapshot()
-            .await
-            .and_then(|s| s.last_compaction_prompt_index);
-        match last {
-            Some(compaction_at) => {
-                tracing::info!(
-                    compaction_at,
-                    "Compaction detected — using replay for rewind"
-                );
-                true
-            }
-            None => false,
-        }
-    }
-
     /// "Rewind to N" restores the state from before prompt N ran; prompts 0..N-1 are kept.
     /// `All`: roll back both conversation and files.
     /// `ConversationOnly`: roll back conversation, leave files untouched.
@@ -394,83 +376,80 @@ impl SessionActor {
                 *pending = prompt_text.clone();
             }
 
-            let needs_replay = self.needs_compaction_replay().await;
-
+            // LOCAL (T2b): every rewind rebuilds through the journal replay — one path for
+            // below- and above-compaction targets alike, so the rebuilt conversation always
+            // matches what a resume would load (tool calls/results and image parts included)
+            // instead of the old dual path (in-memory truncate above the compaction point,
+            // text-only replay below it).
             let mut conversation = self.chat_state_handle.get_conversation().await;
 
-            // Cross-compaction replay recomputes whether a compaction summary survives; `None` keeps the existing marker (standard truncation)
-            let mut replay_compaction_marker: Option<Option<usize>> = None;
+            // Replay recomputes whether a compaction summary survives; `None` keeps the existing marker
+            let replay_compaction_marker: Option<Option<usize>>;
 
-            if needs_replay {
-                // Cross-compaction rewind: reconstruct the conversation from updates.jsonl
-                // Run on the blocking pool since replay does synchronous file I/O (reading checkpoint files and scanning updates.jsonl)
-                let replay_updates = updates_path.clone();
-                let replay_session_dir = session_dir.clone();
-                let replay_target = target_index;
-                let replay_result = tokio::task::spawn_blocking(move || {
-                    crate::session::helpers::replay::replay_to_prompt(
-                        &replay_updates,
-                        &replay_session_dir,
-                        replay_target,
-                    )
-                })
-                .await
-                .map_err(|e| anyhow::anyhow!("spawn_blocking panicked: {e}"))?;
-                match replay_result {
-                    Ok(replay_result) => {
-                        tracing::info!(
-                            target_index,
-                            prompt_index_reached = replay_result.prompt_index_reached,
-                            conversation_len = replay_result.conversation.len(),
-                            "Cross-compaction rewind: conversation reconstructed via replay"
-                        );
-                        // The rebuilt conversation drops the summary unless a checkpoint survived
-                        // Carry the recomputed marker to the snapshot restore so the stale value isn't reused
-                        replay_compaction_marker = Some(replay_result.last_compaction_prompt_index);
-                        // The replay result may or may not include the session preamble (System and User(user_info)).
-                        // Raw updates (target < compaction_at): replay only accumulates user/agent turns from updates.jsonl.
-                        // Prepend System and the original User(user_info) so the model sees the same preamble it originally saw.
-                        if matches!(
-                            replay_result.conversation.first(),
-                            Some(ConversationItem::System(_))
-                        ) {
-                            conversation = replay_result.conversation;
+            // Run on the blocking pool since replay does synchronous file I/O (reading checkpoint files and scanning updates.jsonl)
+            let replay_updates = updates_path.clone();
+            let replay_session_dir = session_dir.clone();
+            let replay_target = target_index;
+            let replay_result = tokio::task::spawn_blocking(move || {
+                crate::session::helpers::replay::replay_to_prompt(
+                    &replay_updates,
+                    &replay_session_dir,
+                    replay_target,
+                )
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("spawn_blocking panicked: {e}"))?;
+            match replay_result {
+                Ok(replay_result) => {
+                    tracing::info!(
+                        target_index,
+                        prompt_index_reached = replay_result.prompt_index_reached,
+                        conversation_len = replay_result.conversation.len(),
+                        "Rewind: conversation reconstructed via replay"
+                    );
+                    // The rebuilt conversation drops the summary unless a checkpoint survived
+                    // Carry the recomputed marker to the snapshot restore so the stale value isn't reused
+                    replay_compaction_marker = Some(replay_result.last_compaction_prompt_index);
+                    // The replay result may or may not include the session preamble (System and User(user_info)).
+                    // Raw updates (target < compaction_at): replay only accumulates user/agent turns from updates.jsonl.
+                    // Prepend System and the original User(user_info) so the model sees the same preamble it originally saw.
+                    if matches!(
+                        replay_result.conversation.first(),
+                        Some(ConversationItem::System(_))
+                    ) {
+                        conversation = replay_result.conversation;
+                    } else {
+                        // Keep System (index 0)
+                        // Replace User(user_info) at index 1 with the original from the checkpoint if available, otherwise keep the current one
+                        if let Some(ui0) = replay_result.original_user_info {
+                            conversation.truncate(1); // keep System only
+                            conversation.push(ConversationItem::user(ui0));
                         } else {
-                            // Keep System (index 0)
-                            // Replace User(user_info) at index 1 with the original from the checkpoint if available, otherwise keep the current one
-                            if let Some(ui0) = replay_result.original_user_info {
-                                conversation.truncate(1); // keep System only
-                                conversation.push(ConversationItem::user(ui0));
-                            } else {
-                                conversation.truncate(2); // keep System + current user_info
-                            }
-                            conversation.extend(replay_result.conversation);
+                            conversation.truncate(2); // keep System + current user_info
                         }
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            ?e,
-                            target_index,
-                            "Cross-compaction replay failed — rewind aborted"
-                        );
-                        // No fallback to truncation: post-compaction conversations have wrong user-message counts
-                        return Ok(RewindResponse {
-                            success: false,
-                            target_prompt_index: target_index,
-                            mode,
-                            reverted_files: vec![],
-                            clean_files: vec![],
-                            conflicts: vec![],
-                            prompt_text: None,
-                            error: Some(format!("Cannot rewind to prompt #{target_index}: {e}")),
-                        });
+                        conversation.extend(replay_result.conversation);
                     }
                 }
-            } else {
-                // Standard rewind: truncate the in-memory conversation
-                // "Rewind to N" means restoring the state from before prompt N ran, keeping prompts 0..N-1; target 0 keeps only the session preamble
-                let keep_count = conversation_truncate_for_prompt(&conversation, target_index);
-                conversation.truncate(keep_count);
+                Err(e) => {
+                    tracing::error!(
+                        ?e,
+                        target_index,
+                        "Rewind replay failed — rewind aborted"
+                    );
+                    // No fallback to truncation: a rebuild failure means the journal could
+                    // not answer for this target; falling back would silently pick a
+                    // different reconstruction semantics.
+                    return Ok(RewindResponse {
+                        success: false,
+                        target_prompt_index: target_index,
+                        mode,
+                        reverted_files: vec![],
+                        clean_files: vec![],
+                        conflicts: vec![],
+                        prompt_text: None,
+                        error: Some(format!("Cannot rewind to prompt #{target_index}: {e}")),
+                    });
+                }
             }
 
             self.cancel_active_sampling_requests();

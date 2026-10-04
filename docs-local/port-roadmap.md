@@ -100,3 +100,22 @@
 - **接手指引**：进度看该分支 `git log` + 本台账后续条目；中途中断按 §5-2 先补
   "中断点"条目再续作。设计锚点全在 rewind-branch-undo.md §1/§4（当日 grep 复核过）。
 
+
+### 2026-10-04 · 遗留①T2b 完成交接（replay 重建统一双路径，feat/local-rewind-branch-undo）
+
+- **当前状态**：分支 `feat/local-rewind-branch-undo`（tip = 本条目提交），未合 main
+  （随本会话滚动收口统一发版）。`handle_rewind` 双路径已消除：一律 journal replay
+  重建；replay 状态机补全保真（工具调用/结果 item + 用户消息图片 parts），重建
+  结果对齐 resume 侧 ChatReducer 输出。
+- **关键证据**：`ctest.sh -p xai-grok-shell --lib session::helpers::replay`
+  （GATE_FORCE）26/26（含新增
+  `replay_keeps_tool_calls_and_results_full_fidelity` /
+  `replay_rewind_marker_discards_partial_tool_step`）；整测试二进制编译 0 警告。
+- **未验证事项 / 遗留**：acp_session rewind_cross_compaction / rewind_synthetic_turn
+  族本机 win-skip（族R），统一路径的行为回归依赖 Linux CI（发版时盯 build run）；
+  活回合 /rewind 抽查随新客户端。
+- **语义变化（有意）**：目标在 compaction 点之上时重建基准从"内存截断"变为
+  "checkpoint + raw 重放"；replay 失败不再回退截断。详见 PATCHES.md 二十二期。
+- **详情指针**：PATCHES.md 二十二期；rewind-branch-undo.md §4-L2。
+- **fork-feature-inventory 回填**：无新澄清行（T2b 属设计内施工）。
+- **接手者第一步**：发版收口时合 main → Linux CI 盯 rewind 族 → 活回合抽查。
