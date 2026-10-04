@@ -234,20 +234,21 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ### 遗留滚动推进第一批 + ④T2 开工 — v1.0.42（2026-10-04）
 
-- **当前状态：** 交接遗留三件已收口合 main：随手件-流恢复注入（`feat/local-stream-recovery-injection`，
+- **当前状态：** 随手件-流恢复注入（`feat/local-stream-recovery-injection`，
   PATCHES 二十一期：不完整流失败 → 下一轮用户 prompt 前置一次性恢复提示，
-  sampling::error 29/29 + session-events 16/16）；① T2b replay 重建统一双路径
-  （`feat/local-rewind-branch-undo`，PATCHES 二十二期：`handle_rewind` 删双路径 +
-  ReplayState 全保真补齐——工具调用/结果 item、用户消息图片 parts，重建对齐
-  resume 语义，replay 26/26）；④T2 设计定稿（三参照合并 + **用户拍板：声明模式
-  可配置 direct/deferred，默认传统**）与开工台账（`feat/local-deferred-tool-exposure`，
-  切片计划在台账）。`v1.0.42` 发版收口中（workspace check → tag → CI）。
-- **本地遗留：** ④ T2 施工四切片（管道 / 能力门 / search_tools 运行时+声明态
-  +resume 原子性 / 面板 i18n，切片计划与入口点见 roadmap §6 开工条目）；
+  sampling::error 29/29 + session-events 16/16）与 ④T2 设计定稿（三参照合并 +
+  **用户拍板：声明模式可配置 direct/deferred，默认传统**）已合 main；**① T2b
+  在 v1.0.42 Linux CI 红灯后暂退**（build run 37174064017：rewind_synthetic_turn
+  族 6 用例挂——T2b"journal 即真相"锚点 vs 夹具空 journal 的语义冲突，代码三
+  文件已还原，重做清单在 roadmap §6 台账，分支 feat/local-rewind-branch-undo
+  保留全部 T2b 提交）。`v1.0.42` tag 重指至回退后 main（df7ef40）。
+- **本地遗留：** ① T2b 夹具重做（6 夹具 journal+内存一致 + 两处计数语义推导 +
+  WSL 验证）后重复合 main；④ T2 施工四切片（管道 / 能力门 / search_tools
+  运行时+声明态+resume 原子性 / 面板 i18n，切片计划见 roadmap §6 开工条目）；
   ② headless 活跑 A/B；③ 活回合 token 曲线；随手件-子 agent 结果信封；
-  活回合 TUI 抽查（/rewind、流恢复提示、context edit token 曲线）随新客户端。
+  活回合 TUI 抽查随新客户端。
 - **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
-  交接台账（2026-10-04 接手登记 + ①T2b 完成交接 + ④T2 开工条目）；
+  交接台账（2026-10-04 接手登记 + ①T2b 完成/回退两条目 + ④T2 开工条目）；
   PATCHES.md 二十一～二十二期。
 
 ### 移植路线图四特性统一发版 — v1.0.41（2026-10-03）
