@@ -216,9 +216,15 @@ pub(crate) fn terminal_error_data(
     http_status: Option<u16>,
     kind: SamplingErrorKind,
 ) -> serde_json::Value {
+    // LOCAL: stamps `Http` and `EmptyResponse` too, so the turn-failure choke point can
+    // recognize incomplete-stream failures for the stream-recovery note (readers that
+    // predate these kinds degrade to untyped via the parse fallback).
     if !matches!(
         kind,
-        SamplingErrorKind::MaxTokensTruncation | SamplingErrorKind::IdleTimeout
+        SamplingErrorKind::MaxTokensTruncation
+            | SamplingErrorKind::IdleTimeout
+            | SamplingErrorKind::Http
+            | SamplingErrorKind::EmptyResponse
     ) {
         return error_data_with_status(message, http_status);
     }
@@ -253,6 +259,21 @@ pub fn error_kind_from_error(err: &acp::Error) -> Option<SamplingErrorKind> {
 /// Whether a mapped turn error carries the max-tokens truncation marker.
 pub(crate) fn is_max_tokens_turn_error(err: &acp::Error) -> bool {
     error_kind_from_error(err) == Some(SamplingErrorKind::MaxTokensTruncation)
+}
+
+/// LOCAL: Whether a turn error means the model's response never completed and was discarded:
+/// mid-stream connection break (`Http` covers `EventStreamError`), model stall, or an empty
+/// response. `StreamError` (server aborted the stream) folds into `Api` at the wire layer, so it
+/// is out of reach here; the recovery note degrades to absent rather than mislabeling Api errors.
+pub(crate) fn is_incomplete_stream_error(err: &acp::Error) -> bool {
+    matches!(
+        error_kind_from_error(err),
+        Some(
+            SamplingErrorKind::Http
+                | SamplingErrorKind::IdleTimeout
+                | SamplingErrorKind::EmptyResponse
+        )
+    )
 }
 
 /// `turn_result.json` stop_reason for a failed turn: "MaxTokens" when the marker is present, else "Error".
@@ -960,6 +981,36 @@ mod tests {
             stop_reason_for_turn_error(&acp::Error::internal_error()),
             "Error"
         );
+    }
+
+    /// LOCAL: the incomplete-stream family covers mid-stream breaks (`Http`, which the
+    /// sampler's `EventStreamError` folds into), stalls, and empty responses; explicit
+    /// Api/Auth/RateLimited failures and non-sampling errors stay out. Mirrors the
+    /// funnel's stamping: `acp::Error.data` built via `terminal_error_data`.
+    #[test]
+    fn incomplete_stream_error_classifies_by_kind() {
+        let stream_break =
+            acp::Error::internal_error().data(terminal_error_data(
+                "stream ended before completion".into(),
+                None,
+                SamplingErrorKind::Http,
+            ));
+        assert!(is_incomplete_stream_error(&stream_break));
+        let idle = map_sampling_err_to_acp(SamplingError::IdleTimeout { elapsed_secs: 60 });
+        assert!(is_incomplete_stream_error(&idle));
+        let empty = acp::Error::internal_error().data(terminal_error_data(
+            "empty response from model".into(),
+            None,
+            SamplingErrorKind::EmptyResponse,
+        ));
+        assert!(is_incomplete_stream_error(&empty));
+        // Untyped errors (no kind marker) are not incomplete-stream.
+        assert!(!is_incomplete_stream_error(&acp::Error::internal_error()));
+        assert!(!is_incomplete_stream_error(
+            &map_sampling_err_to_acp(SamplingError::EventStreamError(
+                "untyped legacy path".into()
+            ))
+        ));
     }
 
     #[test]

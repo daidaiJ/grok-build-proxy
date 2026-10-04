@@ -1212,9 +1212,13 @@ impl SessionActor {
                 }
                 super::super::PromptOrigin::PlanResume => ConversationItem::user(user_message),
                 super::super::PromptOrigin::User => {
-                    let mut item = ConversationItem::user(
+                    // LOCAL: stream-recovery note prepends outside the interrupt frame so a
+                    // turn that both was cancelled and later stream-failed keeps both truths.
+                    let framed = self.maybe_apply_stream_recovery_note(
                         self.maybe_apply_interrupt_envelope(user_message, verbatim),
+                        verbatim,
                     );
+                    let mut item = ConversationItem::user(framed);
                     if let Some(interrupt) = self
                         .events
                         .take_prior_interrupt_category()
@@ -3126,6 +3130,11 @@ impl SessionActor {
                     salvage.response_arrived();
                     salvage.step_boundary();
                     self.tool_context.fail_task_output_usage_closed();
+                    // LOCAL: the failed response is discarded, so arm the one-shot recovery
+                    // note — the next real user prompt must explain why the model's work vanished.
+                    if crate::sampling::error::is_incomplete_stream_error(&error) {
+                        self.events.set_pending_stream_recovery();
+                    }
                     return Err(error);
                 }
                 Ok(SamplerTurnOutcome::RetryTransient { kind, status_code }) => {

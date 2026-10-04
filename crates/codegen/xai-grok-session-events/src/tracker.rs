@@ -33,6 +33,10 @@ pub struct EventTracker {
     /// model it was interrupted: no dangling tool call gets repaired and no permission tool result is written. The next real
     /// user prompt consumes it and frames that query with the interrupt envelope.
     pending_interrupt_reminder: Cell<bool>,
+    /// LOCAL: one-shot stream-recovery note for the next real user prompt. Set when a turn ends
+    /// with an incomplete-stream sampling failure (mid-stream break, idle timeout, empty response);
+    /// the failed response never reaches history, so nothing else tells the model why its work vanished.
+    pending_stream_recovery: Cell<bool>,
 }
 
 impl std::fmt::Debug for EventTracker {
@@ -52,6 +56,10 @@ impl std::fmt::Debug for EventTracker {
                 "pending_interrupt_reminder",
                 &self.pending_interrupt_reminder.get(),
             )
+            .field(
+                "pending_stream_recovery",
+                &self.pending_stream_recovery.get(),
+            )
             .finish()
     }
 }
@@ -66,6 +74,7 @@ impl EventTracker {
             prior_interrupt_category: Cell::new(None),
             prior_redirect_kind: Cell::new(None),
             pending_interrupt_reminder: Cell::new(false),
+            pending_stream_recovery: Cell::new(false),
         }
     }
 
@@ -176,6 +185,18 @@ impl EventTracker {
         self.pending_interrupt_reminder.replace(false)
     }
 
+    /// LOCAL: Turns on the one-shot stream-recovery note for the next real user prompt.
+    /// Set when a turn fails with an incomplete-stream sampling error; the failed response is
+    /// discarded, so the note is the only signal that keeps the model from resending huge output.
+    pub fn set_pending_stream_recovery(&self) {
+        self.pending_stream_recovery.set(true);
+    }
+
+    /// LOCAL: Take (and clear) the pending stream-recovery flag.
+    pub fn take_pending_stream_recovery(&self) -> bool {
+        self.pending_stream_recovery.replace(false)
+    }
+
     /// Emits `PhaseChanged(PermissionPrompt)` and then `PermissionRequested`.
     /// Returns the `Instant` that `permission_resolved()` uses to compute `wait_ms`.
     pub fn permission_requested(&self, tool_name: &str) -> Instant {
@@ -231,6 +252,11 @@ mod tests {
         t.set_pending_interrupt_reminder();
         assert!(t.take_pending_interrupt_reminder());
         assert!(!t.take_pending_interrupt_reminder());
+
+        // LOCAL: stream-recovery flag is consumed exactly once.
+        t.set_pending_stream_recovery();
+        assert!(t.take_pending_stream_recovery());
+        assert!(!t.take_pending_stream_recovery());
 
         // Redirect kind is consumed exactly once.
         t.set_prior_redirect_kind(RedirectKind::QueuedAfterCancel);

@@ -529,6 +529,27 @@ impl SessionActor {
             "Injected date rollover reminder"
         );
     }
+    /// LOCAL: recovery note prepended to the next real user turn after an incomplete-stream failure.
+    /// Steers the retry toward smaller, incremental output so a repeat failure is less likely.
+    pub(super) const STREAM_RECOVERY_NOTE: &str = "Note: the previous model response failed or was interrupted before completion, and any tool calls it attempted were not executed. Work confirmed by earlier tool results still stands. Continue the task with smaller responses: one focused tool call at a time, and build large files or reports incrementally with write/edit instead of resending a whole file.";
+
+    /// LOCAL: prepend the one-shot stream-recovery note to the next real user turn.
+    /// Verbatim prompts still consume the flag (this is the next real user turn) but keep the caller-owned bytes, matching the interrupt envelope.
+    /// Callers must gate to `PromptOrigin::User` so synthetic turns leave the flag.
+    pub(super) fn maybe_apply_stream_recovery_note(
+        &self,
+        user_message: String,
+        verbatim: bool,
+    ) -> String {
+        if !self.events.take_pending_stream_recovery() {
+            return user_message;
+        }
+        if verbatim {
+            return user_message;
+        }
+        tracing::debug!("Prepended stream-recovery note to the next user turn");
+        format!("{}\n{user_message}", Self::STREAM_RECOVERY_NOTE)
+    }
     /// Frame the already-assembled user turn when a mid-stream abort left the model no other signal.
     /// Verbatim prompts still consume the flag (this is the next real user turn) but keep the caller-owned bytes, matching truncation and send-now.
     /// Callers must gate to `PromptOrigin::User` so synthetic turns leave the flag.
