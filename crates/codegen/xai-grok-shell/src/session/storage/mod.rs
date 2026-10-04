@@ -595,8 +595,7 @@ pub(crate) mod chat_rebuild {
     }
 
     /// Extract displayable text from a completed ToolCallUpdate.
-    /// `pub(crate)`: the rewind replay state machine (T2b full fidelity) shares this extractor so both rebuild paths produce identical tool-result items.
-    pub(crate) fn extract_tool_result_text(fields: &acp::ToolCallUpdateFields) -> String {
+    fn extract_tool_result_text(fields: &acp::ToolCallUpdateFields) -> String {
         if let Some(content) = &fields.content {
             let text: String = content
                 .iter()

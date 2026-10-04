@@ -292,3 +292,29 @@
   `agent/subagent/handle_request.rs` spawn 流与 `agent.rs tool_definitions()`
   每轮声明面构建，确认声明态过滤的落点（每轮 vs 构建时）。
 
+
+### 2026-10-04 · ①T2b CI 红灯回退登记（接本日完成交接条目，接手会话中断点）
+
+- **现场**：v1.0.42 build run `37174064017` linux job 红——`rewind_synthetic_turn_tests`
+  族 6 用例全挂（windows 绿；release run `37174082853` 仅产资产不受影响）。
+  根因：T2b 统一路径锚点 = "journal 即真相"，而该族 6 夹具只播种内存对话
+  （updates.jsonl 为空），replay 重建自然清空——语义锚点冲突，非实现 bug。
+- **处置**：main 上外科手术回退 T2b 三个代码文件（replay.rs / rewind.rs /
+  storage/mod.rs 还原至 47447f0 版），PATCHES 二十二期与本条目保留为记录；
+  tag `v1.0.42` 重指至回退后 main（沿 v1.0.39/41 先例）。
+- **重做清单（下会话，分支 feat/local-rewind-branch-undo 保留全部 T2b 提交）**：
+  1. 重写 6 夹具为 journal+内存一致（镜像 rewind_cross_compaction_tests.rs 的
+     `write_compacted_session_fixture` 写法：SessionUpdateEnvelope 逐行写
+     updates.jsonl + 唯一 session id），marked 变体 chunk 带 promptIndex meta、
+     unmarked 变体不带。
+  2. 两个非平凡点必须先推导再动手：① `rewind_to_start_keeps_only_preamble`
+     的 preamble system_reminder（journal 以 UserMessageChunk 持久化，replay 的
+     hostTurn/phantom 折叠语义决定它是否可重建——若不可重建，期望值需改为
+     不含 reminder 并在台账登记语义变化）；② unmarked 回退计数
+     （`truncate_target` 的 target-1 前提是 preamble 计入 live 计数，与
+     marked 夹具的 index-0 起点矛盾——先读 live 侧 prompt_index 分配再定）。
+  3. 本机验证走 WSL（该族在 win 因族R夹具根因 skip）：`wsl -e bash -c "cd
+     /mnt/d/CODE/ai/grok-build-proxy && cargo test -p xai-grok-shell --lib
+     rewind_synthetic"`，首跑含全量编译预算。
+  4. 绿后重复合 main + 重指 tag。
+- **工作区状态**：干净（本条目提交后）。
