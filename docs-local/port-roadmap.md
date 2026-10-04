@@ -318,3 +318,18 @@
      rewind_synthetic"`，首跑含全量编译预算。
   4. 绿后重复合 main + 重指 tag。
 - **工作区状态**：干净（本条目提交后）。
+
+### 2026-10-04 · v1.0.42 发版完成交接（tag 重指后双绿）
+
+- **当前状态**：main `cdd2bfc`，tag `v1.0.42` 重指一次（首指 build 红于 rewind
+  族 → T2b 回退后重指，沿 v1.0.39/41 先例）；release run `37175711015` /
+  build run `37175702302` 双 job success，release 页 published + 4 资产。
+- **本版内容**：随手件-流恢复注入（PATCHES 二十一期）；④T2 设计定稿文档
+  （含用户可配置拍板）；①T2b 未随版（回退，重做清单在案）。
+- **关键证据**：build run Linux 85 套件全绿 0 FAILED，rewind_synthetic_turn
+  族回退后全部 ok；本机 workspace check 0 error/0 warning。
+- **未验证事项 / 遗留**：①T2b 夹具重做（清单见回退条目）；④T2 四切片施工；
+  ②headless 活跑 A/B；③活回合 token 曲线；随手件-子 agent 结果信封；
+  流恢复提示活回合抽查（等客户端更新 1.0.42）。
+- **接手者第一步**：按 roadmap §6 ④T2 开工条目切片 1 动工；或先做 ①T2b
+  夹具重做（WSL 验证）。
