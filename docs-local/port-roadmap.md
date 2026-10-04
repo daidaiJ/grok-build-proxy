@@ -235,6 +235,7 @@
 - **接手者第一步**：更新本机客户端到 1.0.41 做活回合抽查；下一特性按 §4 顺序，
   随手件-流恢复注入可随时搭车；④ T2 开工前先做三参照合并定稿（§4-3）。
 
+
 ### 2026-10-04 · 接手会话开工登记（遗留任务滚动推进）
 
 - **接手内容**：v1.0.41 交接遗留五件——①T2b（replay 重建统一双路径）、②headless
@@ -262,4 +263,32 @@
 - **详情指针**：PATCHES.md 二十二期；rewind-branch-undo.md §4-L2。
 - **fork-feature-inventory 回填**：无新澄清行（T2b 属设计内施工）。
 - **接手者第一步**：发版收口时合 main → Linux CI 盯 rewind 族 → 活回合抽查。
+### 2026-10-04 · ④T2 开工登记（defer_tools + search_tools 延迟发现，feat/local-deferred-tool-exposure）
+
+- **状态**：设计定稿已完成（§2.2 三参照合并，用户同日加拍板：**声明模式必须
+  可配置**——`tools.declaration_mode = "direct" | "deferred"` 全局项，默认
+  direct=传统全量声明，deferred 开启仍受能力门约束；三层可配 global → server
+  exposure → 子代理 AgentOpts）。分支已快进到 main `20470cd`，设计文档定稿版
+  已带入工作区（原提交在 feat/local-stream-recovery-injection 47447f0）。
+- **施工切片计划**（每片绿一块提交一块）：
+  1. 管道片：`AgentOpts.defer_tools`（serde default false，old-journal hash
+     稳定）→ `SubagentRuntimeOverrides` / `EffectiveRuntimeConfig` →
+     `apply_child_tool_policy` 新参（defer 时保留面 = allowlist，其余记入
+     deferred 集）→ host_service:564 同层接线（镜像 T1 allowed_tools 模式）。
+  2. 能力门片：SamplerConfig per-model `supports_dynamic_tools`（默认 false
+     = 回落 direct；先例 `supports_backend_search` config.rs:111）+ host_service
+     降级 info 日志。
+  3. 运行时片（核心）：search_tools 内建工具 + 子代理会话声明态
+     （ToolBridge shared_resources `State<DynamicToolExposure>`，先例
+     ReportedTaskCompletions）+ 每轮声明面过滤（agent.rs `tool_definitions`
+     按声明态过滤，注册不裁剪）+ 公告流（声明变更追加 system-reminder，
+     tools_added 名单）+ resume 原子性（声明态与工具面同批重建）。
+  4. 面板片：/mcp 展示模式与生效层级 + i18n。
+- **关键入口点（已探明）**：`apply_child_tool_policy`
+  （subagent-resolution/definition.rs:231，调用点 handle_request.rs:789）；
+  `AgentOpts`（xai-workflow/src/host.rs:93 tools 字段旁）；host_service
+  allowed_tools 透传在 host_service.rs:564。
+- **接手者第一步**：按切片 1 开工；切片 3 前先读
+  `agent/subagent/handle_request.rs` spawn 流与 `agent.rs tool_definitions()`
+  每轮声明面构建，确认声明态过滤的落点（每轮 vs 构建时）。
 
