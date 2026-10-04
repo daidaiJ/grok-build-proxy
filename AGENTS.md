@@ -232,6 +232,24 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) 的既定打法
   （52 冲突人工裁定、LOCAL 补丁按 PATCHES.md 重放、白名单 crate lib 测试门禁）。
 
+### 遗留滚动推进第一批 + ④T2 开工 — v1.0.42（2026-10-04）
+
+- **当前状态：** 交接遗留三件已收口合 main：随手件-流恢复注入（`feat/local-stream-recovery-injection`，
+  PATCHES 二十一期：不完整流失败 → 下一轮用户 prompt 前置一次性恢复提示，
+  sampling::error 29/29 + session-events 16/16）；① T2b replay 重建统一双路径
+  （`feat/local-rewind-branch-undo`，PATCHES 二十二期：`handle_rewind` 删双路径 +
+  ReplayState 全保真补齐——工具调用/结果 item、用户消息图片 parts，重建对齐
+  resume 语义，replay 26/26）；④T2 设计定稿（三参照合并 + **用户拍板：声明模式
+  可配置 direct/deferred，默认传统**）与开工台账（`feat/local-deferred-tool-exposure`，
+  切片计划在台账）。`v1.0.42` 发版收口中（workspace check → tag → CI）。
+- **本地遗留：** ④ T2 施工四切片（管道 / 能力门 / search_tools 运行时+声明态
+  +resume 原子性 / 面板 i18n，切片计划与入口点见 roadmap §6 开工条目）；
+  ② headless 活跑 A/B；③ 活回合 token 曲线；随手件-子 agent 结果信封；
+  活回合 TUI 抽查（/rewind、流恢复提示、context edit token 曲线）随新客户端。
+- **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
+  交接台账（2026-10-04 接手登记 + ①T2b 完成交接 + ④T2 开工条目）；
+  PATCHES.md 二十一～二十二期。
+
 ### 移植路线图四特性统一发版 — v1.0.41（2026-10-03）
 
 - **当前状态：** 任务①②③④ 已合 main 并随 `v1.0.41` 发版（tag 重指一次：Linux CI
