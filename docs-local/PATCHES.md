@@ -2036,3 +2036,47 @@ deferred-tool-exposure 设计（workflow-pi-port P2）第一切片：`AgentOpts.
   对中途改声明面的支持未核实，T2 施工前必须先加能力门（不支持者 defer_tools
   拒绝或降级为纯 allowlist），未验证能力门不准默认启用。
 - resume 原子性（设计 §2.1-3）：声明态与工具面同批重建，T2 验收用例必须覆盖。
+
+## 二十一期：不完整流恢复注入（stream recovery note）（2026-10-04，分支 feat/local-stream-recovery-injection）
+
+随手件-P3（step-code-port 调研，Step-Code `step-stream-recovery.ts` 的 fork 移植）：
+回合以不完整流错误收尾时，失败响应被丢弃，模型下一轮不知道自己的工作"消失"了，
+容易整文件重发。本补丁复用 fork 既有的一次性 interrupt envelope 管道，在下一轮
+真实用户 prompt 前置一条恢复提示（轻量、按次消费）。
+
+### 改动面（上游同步后必须重放）
+
+1. `xai-grok-session-events/src/tracker.rs`：`EventTracker` 新增一次性标志
+   `pending_stream_recovery: Cell<bool>` + `set_pending_stream_recovery` /
+   `take_pending_stream_recovery`（语义同 `pending_interrupt_reminder`：
+   `begin_turn` 不清除，活到下一次真实用户 prompt）。
+2. `xai-grok-shell/src/sampling/error.rs`：
+   - 新增 `is_incomplete_stream_error(&acp::Error)`——kind 命中
+     `Http | IdleTimeout | EmptyResponse`（`EventStreamError` 在采样器侧折入
+     `Http`；`StreamError` 折入 `Api`，wire 层不可达，恢复提示降级为缺席）。
+   - `terminal_error_data` 盖章集合扩为 `MaxTokensTruncation | IdleTimeout |
+     Http | EmptyResponse`（原先只盖前两者；新 kind 对旧读者经 parse fallback
+     优雅降级为无类型）。
+3. `xai-grok-shell/src/session/acp_session_impl/sampler_turn.rs`（经由
+   `handle_sampling_failure` 终点漏斗生效，无需改动）。
+4. `xai-grok-shell/src/session/acp_session_impl/turn.rs`：采样失败出口
+   （`Err(error)` 前一步）按 `is_incomplete_stream_error` 置位；
+   `PromptOrigin::User` 分支在 interrupt envelope 之外前置
+   `maybe_apply_stream_recovery_note`（verbatim prompt 消费标志但保持原文）。
+5. `xai-grok-shell/src/session/acp_session_impl/reminders.rs`：
+   `STREAM_RECOVERY_NOTE` 常量 + `maybe_apply_stream_recovery_note`。
+
+### 验证
+
+- `ctest.sh -p xai-grok-session-events --lib`（GATE_FORCE，本地自有 crate）
+  16/16；`ctest.sh -p xai-grok-shell --lib sampling::error`（GATE_FORCE 过滤子集）
+  29/29（新增 `incomplete_stream_error_classifies_by_kind`）。
+- 活体行为（真流中断 → 下一轮提示出现）随客户端 1.0.41+ 活回合抽查，未验证。
+
+### 设计取舍
+
+- 与 Step 的差异：Step 从会话历史读失败 entry（持久化失败态）；fork 失败响应
+  完全不落盘，故用内存一次性标志（进程重启即失，可接受——重连后的首轮本就无
+  陈旧恢复态可继承）。
+- 投影纯度：提示文本只折叠进下一轮用户消息，不注入合成历史条目，重放/rewind
+  不继承。

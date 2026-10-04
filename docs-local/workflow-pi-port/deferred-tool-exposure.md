@@ -1,9 +1,11 @@
 # P2 设计原型：延迟工具声明 + exposure 三档
 
-> 状态：预研原型，未开工、未验证。语义来源：pi `0.99.0` tool_search 与
-> tool exposure（docs/cli.md#tool-search、docs/extensions.md#tool-exposure，
-> B 级转述），**2026-10-02 增补 `0.99.2`/`v1.0.0` release notes 对本设计的
-> 三条修正（§2.1）**。fork 基线 `95aad87`。
+> 状态：预研原型 + **三参照合并定稿（2026-10-04，§2.2）**。语义来源：pi
+> `0.99.0` tool_search 与 tool exposure（docs/cli.md#tool-search、
+> docs/extensions.md#tool-exposure，B 级转述），**2026-10-02 增补
+> `0.99.2`/`v1.0.0` release notes 对本设计的三条修正（§2.1）**，
+> **2026-10-04 并入 kimi `select_tools` 三件套与 step 侧无参照判定（§2.2，
+> kimicode-port 决策 D2 落实）**。fork 基线 `95aad87`。
 
 ## 1. 问题
 
@@ -52,7 +54,38 @@ pi 自己在两版里对本机制做了三处实质迭代，均转化为本设�
    （先简单打分、声明面从简），声明面 token 本身就是 deferred 方案的收益项，
    别让 `search_tools` 自己长成新的大面。
 
+### 2.2 三参照合并定稿（2026-10-04，kimicode-port 决策 D2 落实）
+
+同一道题的三个参照：pi（§2/§2.1，搜索式发现）+ kimi（`toolSelect.ts`，
+公告式发现）+ step（**无工具面裁剪参照**，其 branch summarization 已属
+kimicode-port ①；不带来新约束）。合并裁定：
+
+1. **首版发现机制 = kimi 公告流 + 按名展开，不上 BM25**（roadmap §3 国模
+   约束拍板）：deferred 工具只以名字清单出现在公告里；模型调
+   `select_tools(names)`（fork 侧命名沿用 `search_tools`，§3.4）后完整
+   schema 下一轮进声明面。按名认领比自主搜索对国模可靠。pi 的
+   `describeNamespace`/description 参与排名三条约束**不丢弃**，降格为
+   公告内容质量约束：公告必须携带 server `description` 一行式摘要，让
+   模型"知道往哪认领"（§6 风险缓解的替代形态）。BM25 留 trait 位，
+   实测按名认领不够再升（原待定决策 1 就此关闭）。
+2. **kimi capability 门吸收（国模适配硬约束）**：只有模型能力位
+   `dynamically_loaded_tools === true` 的模型走 deferred 档；其余模型
+   **回落 direct 全量声明**——"按能力裁剪请求，而不是发出去等上游报错"
+   （kimi `toolSelectService.ts:87-88` 的语义）。落点：defer 档生效前查
+   模型能力位，不满足则静默降级 direct 并打一条 info 日志。
+3. **kimi 历史剥离（`stripDynamicToolContext`）的 fork 等价物**：kimi 的
+   动态 schema 在历史消息里流转，需要持续剥离省 token；fork 的 schema
+   走**请求级 `tools` 参数**，历史里只可能有轻量公告消息（纯名字清单），
+   天然无 schema 膨胀——不需要移植剥离函数，等价保障 = **公告消息保持
+   轻量且变更才追加**（与 §3.4 静态描述约束同一形态）。声明态本身持久
+   在子 agent 会话（§3.4），历史剥离问题在 fork 侧消解。
+4. **公告流的具体形态（合并 kimi 增量流 + pi 静态化）**：声明态变化时
+   追加一条 `<system-reminder>`（fork 既有注入形态），内容 = 本轮新增
+   工具名清单（`tools_added` 语义）；首版不做 `tools_removed`（无移除
+   入口，defer 声明态只增不减，降复杂度；pi 同样无按会话移除）。
+
 ## 3. fork 移植原型
+
 
 ### 3.1 exposure 收敛为三档（决策 D2）
 
@@ -88,11 +121,13 @@ capability_mode 解析处同层）把 `tools`/`defer_tools` 解析为子 agent �
 工具面裁剪参数。`capability_mode`（read-only 等权限档）先做交集——exposure
 只裁"声明面"，不放大权限，两通道正交。
 
-### 3.4 `search_tools` 延迟声明
+### 3.4 `search_tools` 延迟声明（定稿 2026-10-04：按名认领 + 公告流）
 
 - `defer_tools=true` 的子 agent 工具面 = 白名单（direct）+ 一个 `search_tools`
-  工具；`search_tools(query)` 对 deferred 工具的**名称 + description** 做
-  BM25（pi 同款排序，B 级），命中者声明给下一轮。
+  工具；deferred 工具以**名字清单公告**进会话（§2.2 第 1/4 条），server
+  `description` 摘要随公告携带（pi discover 辅助约束的降格形态）。
+- `search_tools(query)` 按**名称精确/前缀 + description 包含**匹配打分
+  （不上 BM25，§2.2 第 1 条），命中者声明给下一轮。
 - 声明记录在子 agent 自己的会话内（fork 子 agent 已有会话承载，声明变化随
   会话走，天然满足 pi 的"按分支持久"）；workflow journal 不感知——延迟声明
   是子 agent 会话内部状态，不产生 result-bearing host call，**不碰重放语义**。
@@ -122,17 +157,26 @@ capability_mode 解析处同层）把 `tools`/`defer_tools` 解析为子 agent �
    不会解锁写工具。
 5. resume 用例：子 agent 中断后恢复，此前经 `search_tools` 声明的工具**仍可
    直接调用**（声明态随会话恢复，不重搜；对照 pi 1.0.0 修复的丢失 bug）。
-5. `ctest.sh -p xai-workflow --lib` + `ctest.sh -p xai-grok-agent --lib`（工具面
+6. **能力门（§2.2 第 2 条）**：无 `dynamically_loaded_tools` 能力位的模型在
+   `defer_tools=true` 下回落 direct 全量声明，日志可见降级；deferred 工具不进
+   请求面。
+7. `ctest.sh -p xai-workflow --lib` + `ctest.sh -p xai-grok-agent --lib`（工具面
    裁剪在 agent 侧，注意该 crate 级联重编面，见 AGENTS.md 时间成本原则）。
 
-## 5. 待定决策
+## 5. 待定决策（定稿后剩余）
 
-1. BM25 是否首版就上——工具名精确匹配 + description 包含匹配可能已够用
-   （fork 工具面远小于 pi 生态），首版可以降级为简单打分，留 trait 位。
+1. ~~BM25 是否首版就上~~ **已关闭（2026-10-04，§2.2 第 1 条）**：首版按名
+   匹配 + description 包含，BM25 留 trait 位。
 2. MCP `toolExposure` 工具级覆盖与 server 级默认的优先级实现位置
    （config-types 合并时归一 vs mcp 侧读取时归一）——倾向后者，配置面保持哑。
 3. `search_tools` 结果的缓存（同 query 重复调用）——pi 未提及，先不做。
 4. 主会话是否跟进三档 exposure——见 §3.5，登记待实测。
+5. ~~模型能力位的读取通道~~ **载体已核实（2026-10-04）**：fork 的模型能力位
+   走 `SamplerConfig` per-model 布尔（先例 `supports_backend_search`，
+   `config.rs:111`）。deferred 门新增同模式标志（拟
+   `supports_dynamic_tools`，默认 false = 回落 direct），BYOK/国模在模型
+   配置里显式打开；kimi 的 `dynamically_loaded_tools` 是服务端模型元数据，
+   fork 无对应源，不改成运行时拉取。
 
 ## 6. 风险
 
