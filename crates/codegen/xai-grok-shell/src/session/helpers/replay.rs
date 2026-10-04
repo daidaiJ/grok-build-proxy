@@ -9,7 +9,8 @@ use std::path::Path;
 use crate::extensions::notification::{
     CompactionCheckpointFile, CompactionCheckpointInfo, SessionUpdate as XaiSessionUpdate,
 };
-use crate::sampling::ConversationItem;
+use crate::sampling::{AssistantItem, ContentPart, ConversationItem, ToolCall};
+use crate::session::storage::chat_rebuild::extract_tool_result_text;
 use crate::session::storage::{
     BranchPointer, RewindStep, SessionUpdate, UpdatesIterator, fold_branch_timeline,
     rewind_step_for_update,
@@ -280,8 +281,9 @@ struct ReplayState {
     /// Whether we're inside a contiguous sequence of UserMessageChunk updates (used to count user turns correctly: multiple chunks are one turn).
     in_user_message: bool,
 
-    /// Partial text accumulator for the current user message.
-    current_user_text: String,
+    /// Partial content accumulator for the current user message (LOCAL T2b: parts, so
+    /// image prompts survive a replay rebuild like the in-memory truncate path kept them).
+    current_user_parts: Vec<ContentPart>,
 
     current_user_prompt_index: Option<usize>,
 
@@ -296,6 +298,18 @@ struct ReplayState {
     current_agent_text: String,
 
     has_pending_agent: bool,
+
+    /// LOCAL (T2b full fidelity): tool calls of the step in flight, in arrival order.
+    /// Merged into the pending assistant item when it flushes, matching `ChatReducer`
+    /// (the resume-side rebuild) so a replayed conversation carries the model's tool
+    /// history instead of text-only turns.
+    pending_tool_calls: Vec<ToolCall>,
+
+    /// LOCAL: raw input per tool call id, for argument backfill from later updates.
+    tool_args: std::collections::HashMap<String, String>,
+
+    /// LOCAL: tool call ids whose completed result item has been emitted.
+    emitted_tool_results: std::collections::HashSet<String>,
 
     /// Installed checkpoint bases, innermost last: a loaded one clears the stack, an unreadable one stacks on top,
     /// and a rewind marker pops every base above its target. While non-empty, only real `UserMessageChunk` turns count.
@@ -312,12 +326,15 @@ impl ReplayState {
             conversation: Vec::new(),
             prompt_counter: 0,
             in_user_message: false,
-            current_user_text: String::new(),
+            current_user_parts: Vec::new(),
             current_user_prompt_index: None,
             current_user_is_interjection: false,
             seen_prompt_index_marker: false,
             current_agent_text: String::new(),
             has_pending_agent: false,
+            pending_tool_calls: Vec::new(),
+            tool_args: std::collections::HashMap::new(),
+            emitted_tool_results: std::collections::HashSet::new(),
             bases: Vec::new(),
             original_user_info: None,
         }
@@ -348,8 +365,14 @@ impl ReplayState {
                     agent_client_protocol::SessionUpdate::AgentMessageChunk(chunk) => {
                         self.handle_agent_chunk(chunk);
                     }
+                    agent_client_protocol::SessionUpdate::ToolCall(tc) => {
+                        self.handle_tool_call(tc);
+                    }
+                    agent_client_protocol::SessionUpdate::ToolCallUpdate(tc) => {
+                        self.handle_tool_call_update(tc);
+                    }
                     _ => {
-                        // Other ACP updates (ToolCall, StatusUpdate, etc.) don't affect prompt counting, so replay skips them
+                        // Other ACP updates (StatusUpdate, Plan, ...) don't affect prompt counting or the conversation, so replay skips them
                     }
                 }
             }
@@ -382,11 +405,12 @@ impl ReplayState {
         }
 
         self.in_user_message = false;
-        self.current_user_text.clear();
+        self.current_user_parts.clear();
         self.current_user_prompt_index = None;
         self.current_user_is_interjection = false;
         self.current_agent_text.clear();
         self.has_pending_agent = false;
+        self.clear_partial_tools();
 
         // Counting proceeds as if the blob loaded, so later markers and checkpoints resolve identically either way
         self.prompt_counter = compaction_at;
@@ -460,12 +484,13 @@ impl ReplayState {
 
     fn handle_rewind_marker(&mut self, marker_target: usize) {
         // Discard any in-progress partial messages: they belong to the timeline being discarded, so we drop them rather than flushing
-        self.current_user_text.clear();
+        self.current_user_parts.clear();
         self.current_user_prompt_index = None;
         self.current_user_is_interjection = false;
         self.current_agent_text.clear();
         self.has_pending_agent = false;
         self.in_user_message = false;
+        self.clear_partial_tools();
 
         if self.prompt_counter <= marker_target {
             return;
@@ -536,7 +561,7 @@ impl ReplayState {
         if !self.in_user_message {
             self.flush_pending_agent();
             self.in_user_message = true;
-            self.current_user_text.clear();
+            self.current_user_parts.clear();
             self.current_user_prompt_index = chunk_prompt_index;
             self.current_user_is_interjection = interjection;
         } else if (chunk_prompt_index != self.current_user_prompt_index
@@ -547,7 +572,7 @@ impl ReplayState {
             // New run: promptIndex changed, transition between marked/unmarked, or an interjection boundary.
             self.flush_pending_user();
             self.in_user_message = true;
-            self.current_user_text.clear();
+            self.current_user_parts.clear();
             self.current_user_prompt_index = chunk_prompt_index;
             self.current_user_is_interjection = interjection;
         } else if self.current_user_prompt_index.is_none() {
@@ -555,8 +580,27 @@ impl ReplayState {
         }
 
         // No early stop when prompt_counter > target: a later RewindMarker can reset the counter back below the target
-        if let agent_client_protocol::ContentBlock::Text(t) = &chunk.content {
-            self.current_user_text.push_str(&t.text);
+        match &chunk.content {
+            agent_client_protocol::ContentBlock::Text(t) => {
+                // Merge adjacent text chunks into one part so the item shape matches the live drain
+                match self.current_user_parts.last_mut() {
+                    Some(ContentPart::Text { text }) => {
+                        // `Arc<str>` is immutable: rebuild the part with the chunk appended
+                        *text = format!("{text}{}", t.text).into();
+                    }
+                    _ => self
+                        .current_user_parts
+                        .push(ContentPart::Text { text: t.text.clone().into() }),
+                }
+            }
+            agent_client_protocol::ContentBlock::Image(img) => {
+                if let Some(uri) = &img.uri {
+                    self.current_user_parts.push(ContentPart::Image {
+                        url: uri.clone().into(),
+                    });
+                }
+            }
+            _ => {}
         }
     }
 
@@ -605,39 +649,107 @@ impl ReplayState {
 
     fn flush_pending_user(&mut self) {
         let interjection = std::mem::take(&mut self.current_user_is_interjection);
-        if self.current_user_text.is_empty() {
+        if self.current_user_parts.is_empty() {
             self.current_user_prompt_index = None;
             return;
         }
-        let text = std::mem::take(&mut self.current_user_text);
+        let parts = std::mem::take(&mut self.current_user_parts);
         let pi = self.current_user_prompt_index.take();
         if interjection {
-            // Tagged like the live drain's item; never a counted turn
+            // Text-only, tagged like the live drain's item; never a counted turn
+            let text = parts
+                .iter()
+                .filter_map(|p| match p {
+                    ContentPart::Text { text } => Some(text.to_string()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("");
             self.conversation.push(ConversationItem::interjection(text));
             return;
         }
+        let mut item = ConversationItem::user_with_parts(parts);
         if let Some(pi) = pi {
-            let mut item = ConversationItem::user(text);
             item.set_prompt_index(pi);
             self.conversation.push(item);
             self.prompt_counter += 1;
         } else if !self.seen_prompt_index_marker {
-            self.conversation.push(ConversationItem::user(text));
+            self.conversation.push(item);
             self.prompt_counter += 1;
         } else {
-            // Mid-turn phantom after markers: keep text, do not count.
-            self.conversation.push(ConversationItem::user(text));
+            // Mid-turn phantom after markers: keep the item, do not count.
+            self.conversation.push(item);
         }
     }
 
     fn flush_pending_agent(&mut self) {
-        if self.has_pending_agent {
+        if self.has_pending_agent || !self.pending_tool_calls.is_empty() {
             self.conversation
-                .push(ConversationItem::assistant(std::mem::take(
-                    &mut self.current_agent_text,
-                )));
+                .push(ConversationItem::Assistant(AssistantItem {
+                    content: std::mem::take(&mut self.current_agent_text).into(),
+                    tool_calls: std::mem::take(&mut self.pending_tool_calls),
+                    model_id: None,
+                    model_fingerprint: None,
+                    reasoning_effort: None,
+                }));
             self.has_pending_agent = false;
         }
+    }
+
+    /// LOCAL (T2b full fidelity): buffer a tool call for the assistant item in flight.
+    /// Mirrors `ChatReducer::on_tool_call`; a call never flushes on its own.
+    fn handle_tool_call(&mut self, tc: &agent_client_protocol::ToolCall) {
+        let id = tc.tool_call_id.0.to_string();
+        let args = tc
+            .raw_input
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        self.tool_args.insert(id.clone(), args.clone());
+        self.pending_tool_calls.push(ToolCall {
+            id: id.into(),
+            name: tc.title.clone(),
+            arguments: args.into(),
+        });
+    }
+
+    /// LOCAL (T2b full fidelity): a completed tool update emits its result item, flushing
+    /// the assistant text + calls in flight first — the same shape the live drain and
+    /// `ChatReducer` produce (`[assistant(text, calls), tool_result]` per step).
+    fn handle_tool_call_update(&mut self, tc: &agent_client_protocol::ToolCallUpdate) {
+        let id = tc.tool_call_id.0.to_string();
+        if let Some(raw) = &tc.fields.raw_input
+            && self.tool_args.get(&id).is_none_or(String::is_empty)
+        {
+            let args = raw.to_string();
+            if let Some(call) = self
+                .pending_tool_calls
+                .iter_mut()
+                .find(|c| c.id.as_ref() == id)
+            {
+                call.arguments = args.clone().into();
+            }
+            self.tool_args.insert(id.clone(), args);
+        }
+        let completed = matches!(
+            tc.fields.status,
+            Some(
+                agent_client_protocol::ToolCallStatus::Completed
+                    | agent_client_protocol::ToolCallStatus::Failed
+            )
+        );
+        if completed && self.emitted_tool_results.insert(id.clone()) {
+            self.flush_pending_agent();
+            let content = extract_tool_result_text(&tc.fields);
+            self.conversation.push(ConversationItem::tool_result(id, content));
+        }
+    }
+
+    /// LOCAL: discard in-flight tool buffers (rewind marker / checkpoint superseded them).
+    fn clear_partial_tools(&mut self) {
+        self.pending_tool_calls.clear();
+        self.tool_args.clear();
+        self.emitted_tool_results.clear();
     }
 }
 
@@ -1735,5 +1847,98 @@ mod tests {
             .map(|i| i.text_content())
             .collect();
         assert_eq!(texts, ["sys", "summary2"]);
+    }
+
+    // ── LOCAL (T2b full fidelity): tool calls / results survive replay ──
+
+    fn make_tool_call(session_id: &str, id: &str, title: &str) -> SessionUpdate {
+        SessionUpdate::Acp(Box::new(acp::SessionNotification::new(
+            acp::SessionId::new(session_id),
+            acp::SessionUpdate::ToolCall(acp::ToolCall::new(
+                acp::ToolCallId::new(id),
+                title.to_string(),
+            )),
+        )))
+    }
+
+    fn make_tool_done(session_id: &str, id: &str) -> SessionUpdate {
+        SessionUpdate::Acp(Box::new(acp::SessionNotification::new(
+            acp::SessionId::new(session_id),
+            acp::SessionUpdate::ToolCallUpdate(acp::ToolCallUpdate::new(
+                acp::ToolCallId::new(id),
+                acp::ToolCallUpdateFields::new().status(Some(acp::ToolCallStatus::Completed)),
+            )),
+        )))
+    }
+
+    /// A replayed step must keep the model's tool call attached to the assistant item and
+    /// the tool result as its own item — the same shape a resume loads from
+    /// chat_history.jsonl (ChatReducer). The old text-only fold dropped both.
+    #[test]
+    fn replay_keeps_tool_calls_and_results_full_fidelity() {
+        let tmp = TempDir::new().unwrap();
+        let updates = vec![
+            make_user_update_pi("s1", "P0", 0),
+            make_agent_update("s1", "working"),
+            make_tool_call("s1", "t1", "read_file"),
+            make_tool_done("s1", "t1"),
+            make_agent_update("s1", "done"),
+        ];
+
+        let result = replay_updates(&updates, tmp.path(), 1);
+        assert_eq!(result.prompt_index_reached, 1);
+        let mut saw_assistant_with_call = false;
+        let mut saw_tool_result = false;
+        for item in &result.conversation {
+            match item {
+                ConversationItem::Assistant(a) => {
+                    if a.tool_calls.len() == 1 && a.tool_calls[0].id.as_ref() == "t1" {
+                        saw_assistant_with_call = true;
+                    }
+                }
+                ConversationItem::ToolResult(_) => saw_tool_result = true,
+                _ => {}
+            }
+        }
+        assert!(
+            saw_assistant_with_call,
+            "assistant item must carry the buffered tool call: {:?}",
+            result.conversation
+        );
+        assert!(
+            saw_tool_result,
+            "completed tool update must emit a tool-result item: {:?}",
+            result.conversation
+        );
+    }
+
+    /// A rewind marker discards the in-flight step (assistant text + buffered call) instead
+    /// of flushing it into the surviving branch.
+    #[test]
+    fn replay_rewind_marker_discards_partial_tool_step() {
+        let tmp = TempDir::new().unwrap();
+        let updates = vec![
+            make_user_update_pi("s1", "P0", 0),
+            make_agent_update("s1", "abandoned"),
+            make_tool_call("s1", "t1", "read_file"),
+            make_rewind_marker(0),
+            make_user_update_pi("s1", "P1", 1),
+        ];
+
+        let result = replay_updates(&updates, tmp.path(), 1);
+        let texts: Vec<_> = result
+            .conversation
+            .iter()
+            .map(|i| i.text_content())
+            .collect();
+        assert_eq!(texts, ["P1"], "the partial abandoned step must be dropped");
+        assert!(
+            result
+                .conversation
+                .iter()
+                .all(|i| !matches!(i, ConversationItem::Assistant(a) if !a.tool_calls.is_empty())),
+            "no stranded tool calls may survive the marker: {:?}",
+            result.conversation
+        );
     }
 }

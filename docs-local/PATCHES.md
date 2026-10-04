@@ -1905,6 +1905,7 @@ status_blocks 用量块的两个快照失配，根因是整串格式里的**对�
   ② redo 端到端 + pty 回归（`rewind_after_compaction_with_missing_checkpoint`）
   待活回合/CI；③ 活回合 TUI 抽查（redo → 编辑重发 → regeneration 遥测）；
   ④ boundary 文案 i18n。
+
 ## 十八期：headless non-interactive-denial continue（2026-10-03，分支 feat/local-shell-command-analysis，提交 6b1bc29）
 
 Step-Code P1 勘误后的唯一真实缺口（fork 已有 tree-sitter-bash 命令内容静态分析全套，
@@ -2080,3 +2081,46 @@ deferred-tool-exposure 设计（workflow-pi-port P2）第一切片：`AgentOpts.
   陈旧恢复态可继承）。
 - 投影纯度：提示文本只折叠进下一轮用户消息，不注入合成历史条目，重放/rewind
   不继承。
+## 二十二期：rewind T2b——replay 重建统一双路径（2026-10-04，分支 feat/local-rewind-branch-undo）
+
+rewind-branch-undo 设计 §4-L2 遗留件：`handle_rewind` 原为双路径（无 compaction 时
+内存截断全保真 / 跨 compaction 时 replay 文本重建），本补丁统一为**journal replay
+单路径**，并把 replay 状态机补到全保真，使重建结果与 resume 重建
+（`chat_history.jsonl` = ChatReducer 输出）对齐。
+
+### 改动面（上游同步后必须重放）
+
+1. `xai-grok-shell/src/session/helpers/replay.rs`（ReplayState 全保真化）：
+   - 新增 `pending_tool_calls` / `tool_args` / `emitted_tool_results`，处理
+     `ToolCall` / `ToolCallUpdate`：助手 item 携带本步工具调用（合并 text +
+     calls），完成更新产出 `ToolResult` item（先 flush 助手）——与
+     ChatReducer 同构；原文本-only 折叠两者皆丢。
+   - `current_user_text: String` → `current_user_parts: Vec<ContentPart>`，
+     Image 块进 parts（相邻 text 块合并，保持与 live drain 同形）；interjection
+     仍取纯文本。
+   - rewind marker / checkpoint 前置路径同步清理工具缓冲（`clear_partial_tools`）。
+   - 新增测试 `replay_keeps_tool_calls_and_results_full_fidelity` /
+     `replay_rewind_marker_discards_partial_tool_step`。
+2. `xai-grok-shell/src/session/storage/mod.rs`：`chat_rebuild::extract_tool_result_text`
+   提为 `pub(crate)`（replay 共享同一提取器，两条重建线产出同形 tool-result）。
+3. `xai-grok-shell/src/session/acp_session_impl/rewind.rs`：
+   `handle_rewind` 删除 `needs_compaction_replay` 分支与内存截断路径，一律
+   spawn_blocking replay 重建（splicing/marker 重算逻辑保留）；
+   `needs_compaction_replay` 函数删除。
+
+### 语义变化（登记为有意行为变化）
+
+- rewind 目标在 compaction 点之上时，重建基准从"当前内存对话截断"变为
+  "checkpoint blob + raw updates 重放"——与 resume 加载同源；失败不再回退
+  截断（构造性保证重建语义唯一）。
+- 全量 updates.jsonl 扫描成本随总行数（非活跃分支长度）增长，checkpoint base
+  天然压制（设计 §7-2 已记）。
+- Reasoning siblings 仍不进重建（与 resume 侧 ChatReducer 一致——上游同步
+  线本来就不持久化 thought chunk 进 chat_history）。
+
+### 验证
+
+- 本机：`ctest.sh -p xai-grok-shell --lib session::helpers::replay`（GATE_FORCE
+  过滤子集）+ `cargo check --all-targets`；acp_session rewind 族本机 win-skip
+  （族R），行为回归依赖 Linux CI（rewind_cross_compaction / rewind_synthetic_turn）。
+
