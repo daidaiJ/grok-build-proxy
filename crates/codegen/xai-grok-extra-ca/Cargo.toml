@@ -16,6 +16,10 @@ rustls-native-certs = { workspace = true }
 tracing = { workspace = true }
 webpki-roots = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+# LOCAL(model-proxy): WinINET registry read for system-proxy auto-detection.
+windows = { workspace = true }
+
 [dev-dependencies]
 rcgen = { workspace = true }
 # Carries the workspace rustls feature set into the test build.

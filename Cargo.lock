@@ -13767,6 +13767,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "webpki-roots 0.26.11",
+ "windows 0.61.3",
 ]
 
 [[package]]

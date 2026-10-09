@@ -79,19 +79,33 @@ pub fn set_process_proxy(url: Option<String>, host_suffixes: Option<Vec<String>>
     }));
 }
 
-/// The resolved rule, if any. `GROK_PROXY` (plus optional comma-separated
-/// `GROK_PROXY_HOSTS`) is the no-config fallback.
+/// The resolved rule, if any. Resolution order:
+/// 1. the config-loaded rule ([`set_process_proxy`] from `[network] proxy_url`),
+/// 2. `GROK_PROXY` (plus optional comma-separated `GROK_PROXY_HOSTS`),
+/// 3. LOCAL auto-detection: `HTTPS_PROXY` / `https_proxy` / `HTTP_PROXY` /
+///    `http_proxy` env, then the Windows system proxy (WinINET registry
+///    `ProxyEnable` + `ProxyServer`), on the default first-party host list —
+///    and since the model-level `use_proxy` gate decides who rides the tunnel,
+///    an auto-detected proxy only affects models that opted in.
 pub fn process_proxy_rule() -> Option<ProcessProxyRule> {
     if let Some(rule) = PROCESS_PROXY.get() {
         return rule.clone();
     }
-    let url = std::env::var(ENV_GROK_PROXY).ok().filter(|v| !v.trim().is_empty())?;
+    let mut url: Option<String> =
+        std::env::var(ENV_GROK_PROXY).ok().filter(|v| !v.trim().is_empty());
+    if url.is_none() {
+        url = detect_system_proxy();
+    }
+    let Some(url) = url else {
+        return None;
+    };
     // LOCAL: same parse guard as `set_process_proxy` — a bad `GROK_PROXY`
-    // env value falls back to direct rather than breaking every request.
+    // value or an unusable system proxy falls back to direct rather than
+    // breaking every request.
     let url = match reqwest::Url::parse(url.trim()) {
         Ok(parsed) => parsed.to_string(),
         Err(error) => {
-            tracing::warn!("invalid {ENV_GROK_PROXY} value ignored; traffic goes direct ({error})");
+            tracing::warn!("invalid egress proxy URL {url:?} ignored; traffic goes direct ({error})");
             return None;
         }
     };
@@ -209,6 +223,129 @@ pub fn build_reqwest_client_no_proxy(
     build_reqwest_client_inner(configure, false)
 }
 
+// LOCAL(model-proxy): auto-detection for the no-config fallback.
+//
+// Mirrors websearch-mcpserver's `pkg/proxy` detector: `HTTPS_PROXY` /
+// `https_proxy` / `HTTP_PROXY` / `http_proxy` / `ALL_PROXY` / `all_proxy` env
+// first, then the Windows system proxy (WinINET `ProxyEnable` + `ProxyServer`
+// in HKCU Internet Settings; `https=` / `http=` scheme entries preferred over
+// the bare `host:port` form; `<local>` markers ignored — loopback never
+// matches the allowlist matcher anyway). Returns an `http://` URL reqwest can
+// tunnel with, or `None` when nothing is enabled — the caller then goes direct.
+
+fn detect_system_proxy() -> Option<String> {
+    for var in [
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ] {
+        if let Ok(v) = std::env::var(var)
+            && !v.trim().is_empty()
+        {
+            return Some(v);
+        }
+    }
+    #[cfg(windows)]
+    {
+        wininet_system_proxy().or_else(|| {
+            tracing::debug!("no egress proxy configured or auto-detected; traffic goes direct");
+            None
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        tracing::debug!("no egress proxy configured or auto-detected; traffic goes direct");
+        None
+    }
+}
+
+#[cfg(windows)]
+fn wininet_system_proxy() -> Option<String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::System::Registry::{
+        RegGetValueW, HKEY_CURRENT_USER, REG_ROUTINE_FLAGS, REG_VALUE_TYPE, RRF_RT_REG_DWORD,
+        RRF_RT_REG_SZ,
+    };
+
+    const SETTINGS_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
+
+    fn read_reg(key: &str, value: &str, flags: REG_ROUTINE_FLAGS) -> Option<Vec<u8>> {
+        let key_w: Vec<u16> = key.encode_utf16().chain(std::iter::once(0)).collect();
+        let value_w: Vec<u16> = value.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut buf = [0u8; 2048];
+        let mut size = buf.len() as u32;
+        let mut ty = REG_VALUE_TYPE::default();
+        let result = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                PCWSTR(key_w.as_ptr()),
+                PCWSTR(value_w.as_ptr()),
+                flags,
+                Some(&mut ty),
+                Some(buf.as_mut_ptr().cast()),
+                Some(&mut size),
+            )
+        };
+        if result.is_err() {
+            return None;
+        }
+        Some(buf[..size as usize].to_vec())
+    }
+
+    fn read_reg_sz(key: &str, value: &str) -> Option<String> {
+        let bytes = read_reg(key, value, RRF_RT_REG_SZ)?;
+        let units: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .take_while(|&u| u != 0)
+            .collect();
+        let text = String::from_utf16_lossy(&units);
+        let trimmed = text.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    }
+
+    // ProxyEnable: REG_DWORD, non-zero = on.
+    let enabled = read_reg(SETTINGS_KEY, "ProxyEnable", RRF_RT_REG_DWORD)
+        .and_then(|b| b.first_chunk::<4>().map(|c| u32::from_le_bytes(*c)))
+        .is_some_and(|v| v != 0);
+    if !enabled {
+        return None;
+    }
+    let server = read_reg_sz(SETTINGS_KEY, "ProxyServer")?;
+    // Forms: "host:port" or "http=h:port;https=h:port;ftp=h:port". "<local>" markers ignored.
+    let mut https = None;
+    let mut http = None;
+    let mut bare = None;
+    for entry in server.split(';') {
+        let entry = entry.trim();
+        if entry.is_empty() || entry.eq_ignore_ascii_case("<local>") {
+            continue;
+        }
+        match entry.split_once('=') {
+            Some((scheme, addr)) if scheme.eq_ignore_ascii_case("https") && https.is_none() => {
+                https = Some(addr.to_string());
+            }
+            Some((scheme, addr)) if scheme.eq_ignore_ascii_case("http") && http.is_none() => {
+                http = Some(addr.to_string());
+            }
+            Some(_) => {}
+            None if bare.is_none() => bare = Some(entry.to_string()),
+            None => {}
+        }
+    }
+    let addr = https.or(http).or(bare)?;
+    let url = if addr.contains("://") {
+        addr
+    } else {
+        format!("http://{addr}")
+    };
+    tracing::debug!("egress proxy auto-detected from Windows system settings: {url}");
+    Some(url)
+}
+
 fn build_reqwest_client_inner(
     configure: impl Fn(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
     apply_proxy: bool,
@@ -219,7 +356,9 @@ fn build_reqwest_client_inner(
         if apply_proxy {
             apply_process_proxy(configured)
         } else {
-            configured
+            // LOCAL: the model-level `use_proxy = false` path must be genuinely
+            // direct — clear reqwest's env/system proxy detection too.
+            configured.no_proxy()
         }
     }
     .use_rustls_tls()
