@@ -29,7 +29,12 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   `ConfigModelOverride` / `ModelInfo` 字段 + 装配点 config.rs / sampler_turn /
   subagent / spawn / model_switch / tools）。验证：`cargo check -p xai-grok-shell
   --all-targets` 0 error；sampler 291 / extra-ca 15 / sampling-types 303 lib 全绿；
-  新增 shell `config::tests` 2 例绿（GATE_FORCE 过滤跑）。
+  新增 shell `config::tests` 2 例绿（GATE_FORCE 过滤跑）。**活回合已验（2026-10-09，
+  v1.0.44 客户端 headless）**：debug 日志 `egress proxy auto-detected from Windows
+  system settings: http://127.0.0.1:7890`，muse-spark 请求经隧道到达 cline（对端
+  业务响应），glm-5.3-flash 直连一轮「成功」对照组正常。muse-spark 本身 403
+  region 受限是 cline 侧策略（代理出口/直连出口都被拒），需 clash 对 cline.bot
+  走代理规则或换出口节点，与本项目无关。
 - **欢迎页 XL 熊猫 logo 档（v1.0.39 比例修复）** — v1.0.38 发的 44×13 盲文格
   资产存在**采样宽高比 bug**：`panda_dither.py` 直接把源图 resize 到 `cols*2 ×
   rows*4` 点阵，未补偿终端字符格 1:2（格高≈2×格宽、盲文点物理近正方），方形源图
