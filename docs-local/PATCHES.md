@@ -2163,3 +2163,20 @@ rewind-branch-undo 设计 §4-L2 遗留件：`handle_rewind` 原为双路径（�
 - 新增 shell `agent::config::tests` 2 例（`sampling_config_carries_per_model_use_proxy`
   / `model_override_applies_use_proxy`，GATE_FORCE 过滤跑）通过。
 - 活回合（真实代理环境）验证未做，待发版后实测。
+
+## 二十四期：出口代理自动探测（2026-10-09，分支 feat/local-model-proxy-auto-detect）
+
+对齐 `D:\pro\websearch-mcpserver` 的 `pkg/proxy` 自动代理识别。`process_proxy_rule()`
+解析链扩为三级：① `[network] proxy_url`（config 加载）→ ② `GROK_PROXY` /
+`GROK_PROXY_HOSTS` env → ③ 自动探测：`HTTPS_PROXY`/`https_proxy`/`HTTP_PROXY`/
+`http_proxy`/`ALL_PROXY`/`all_proxy` env，再 Windows 系统代理（HKCU Internet
+Settings 的 `ProxyEnable` + `ProxyServer`，`https=`/`http=` 分项优先于裸
+`host:port`，`<local>` 忽略，无 scheme 补 `http://`）；全空直连。自动探测到的代理
+只影响 `use_proxy = true` 的模型。同时 `build_reqwest_client_no_proxy` 落
+`.no_proxy()`：默认路径即使系统/env 有代理也真直连。未移植 websearch 的后台轮询
+热切换（grok2 共享 client 进程内 latched，代理切换需重启）。
+
+改动：`xai-grok-extra-ca/src/lib.rs`（`detect_system_proxy` + `wininet_system_proxy`
+经 `windows` crate 读注册表；workspace windows dep 增 `Win32_System_Registry`
+feature）、`Cargo.toml`。验证：`cargo check -p xai-grok-extra-ca` 0 error、
+extra-ca 15/15 + sampler 291/291；活回合验证随 v1.0.44。
