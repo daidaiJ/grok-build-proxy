@@ -767,6 +767,7 @@ mod tests {
             show_model_fingerprint: Some(true),
             stream_tool_calls: Some(false),
             reasoning_summary: Some(ReasoningSummary::None),
+            use_proxy: Some(true),
         }
     }
 

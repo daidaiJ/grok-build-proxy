@@ -17,6 +17,9 @@ pub(crate) use mtls::client as mtls_client;
 
 static SHARED_H2: OnceLock<reqwest::Client> = OnceLock::new();
 static SHARED_HTTP1: OnceLock<reqwest::Client> = OnceLock::new();
+// LOCAL: proxy-free twins for the model-level `use_proxy = false` path.
+static SHARED_H2_NO_PROXY: OnceLock<reqwest::Client> = OnceLock::new();
+static SHARED_HTTP1_NO_PROXY: OnceLock<reqwest::Client> = OnceLock::new();
 
 /// Kill switch: `GROK_SAMPLER_SHARED_CLIENT=0` (or `false`, any case) builds a fresh `reqwest::Client` per `SamplingClient` instead.
 /// Resolved once per process: the environment cannot change externally after spawn.
@@ -92,10 +95,26 @@ pub(crate) fn client_http1() -> Result<reqwest::Client, reqwest::Error> {
     shared(&SHARED_HTTP1, build_http_client_http1, sharing_disabled())
 }
 
+/// LOCAL: shared HTTP/2 client that always bypasses the process-wide egress
+/// proxy, for models with `use_proxy = false` (the default).
+pub(crate) fn client_no_proxy() -> Result<reqwest::Client, reqwest::Error> {
+    shared(&SHARED_H2_NO_PROXY, build_http_client_no_proxy, sharing_disabled())
+}
+
+/// LOCAL: HTTP/1.1 twin of [`client_no_proxy`].
+pub(crate) fn client_http1_no_proxy() -> Result<reqwest::Client, reqwest::Error> {
+    shared(&SHARED_HTTP1_NO_PROXY, build_http_client_http1_no_proxy, sharing_disabled())
+}
+
 /// Build a `reqwest::Client` for sampling with HTTP/2 and connection pooling.
 /// Env knobs are read once, when the shared client is first built.
 fn build_http_client() -> Result<reqwest::Client, reqwest::Error> {
     xai_grok_extra_ca::build_reqwest_client(configure_http2)
+}
+
+/// LOCAL: proxy-free build of [`build_http_client`].
+fn build_http_client_no_proxy() -> Result<reqwest::Client, reqwest::Error> {
+    xai_grok_extra_ca::build_reqwest_client_no_proxy(configure_http2)
 }
 
 fn configure_http2(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
@@ -122,6 +141,11 @@ fn configure_http2(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
 /// Used as a fallback after HTTP/2 transport failures.
 fn build_http_client_http1() -> Result<reqwest::Client, reqwest::Error> {
     xai_grok_extra_ca::build_reqwest_client(configure_http1)
+}
+
+/// LOCAL: proxy-free build of [`build_http_client_http1`].
+fn build_http_client_http1_no_proxy() -> Result<reqwest::Client, reqwest::Error> {
+    xai_grok_extra_ca::build_reqwest_client_no_proxy(configure_http1)
 }
 
 fn configure_http1(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {

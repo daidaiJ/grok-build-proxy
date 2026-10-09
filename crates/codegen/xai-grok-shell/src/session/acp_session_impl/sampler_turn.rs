@@ -718,8 +718,9 @@ impl SessionActor {
                 context_window: std::num::NonZeroU64::new(256_000).unwrap(),
                 max_request_bytes: None,
                 reasoning_effort: None,
-                reasoning_summary: None,
+                                reasoning_summary: None,
                 stream_tool_calls: None,
+                use_proxy: false,
             });
         let creds = self.chat_state_handle.get_credentials().await;
         let model_facts = self.model_auth_facts(cfg.model.as_str());
@@ -810,6 +811,7 @@ impl SessionActor {
             reasoning_effort: cfg.reasoning_effort,
             reasoning_summary: cfg.reasoning_summary,
             force_http1: false,
+            use_proxy: cfg.use_proxy,
             max_retries: cfg.max_retries.or(Some(self.max_retries)),
             rate_limit_retry_threshold: cfg.rate_limit_retry_threshold,
             stream_tool_calls: cfg.stream_tool_calls.unwrap_or(false),

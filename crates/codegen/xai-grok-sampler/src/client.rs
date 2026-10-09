@@ -666,12 +666,30 @@ impl SamplingClient {
         if config.force_http1 {
             tracing::info!("Using HTTP/1.1 for sampling client (force_http1=true)");
         }
+        // LOCAL: `use_proxy = true` only takes effect when a process-wide egress
+        // proxy is actually configured (`[network] proxy_url` / `GROK_PROXY`);
+        // without one the model goes direct, warned once per process.
+        static PROXY_UNCONFIGURED_WARNED: std::sync::Once = std::sync::Once::new();
+        let use_proxy = config.use_proxy
+            && xai_grok_extra_ca::process_proxy_rule().is_some();
+        if config.use_proxy && !use_proxy {
+            PROXY_UNCONFIGURED_WARNED.call_once(|| {
+                tracing::warn!(
+                    "model {} requested use_proxy but no egress proxy is configured; going direct",
+                    config.model
+                );
+            });
+        }
         let http = if let Some(cert_dir) = config.mtls_cert_dir.as_deref() {
             crate::shared_http::mtls_client(cert_dir, config.force_http1)?
-        } else if config.force_http1 {
+        } else if config.force_http1 && use_proxy {
             crate::shared_http::client_http1().map_err(SamplingError::Http)?
-        } else {
+        } else if config.force_http1 {
+            crate::shared_http::client_http1_no_proxy().map_err(SamplingError::Http)?
+        } else if use_proxy {
             crate::shared_http::client().map_err(SamplingError::Http)?
+        } else {
+            crate::shared_http::client_no_proxy().map_err(SamplingError::Http)?
         };
 
         tracing::info!(

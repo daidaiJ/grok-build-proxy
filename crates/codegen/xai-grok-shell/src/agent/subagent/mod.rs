@@ -816,6 +816,7 @@ async fn read_parent_sampling_config(
                 reasoning_effort: cfg.reasoning_effort,
                 reasoning_summary: cfg.reasoning_summary,
                 force_http1: false,
+                use_proxy: cfg.use_proxy,
                 max_retries: cfg.max_retries.or(ctx.sampling_config.max_retries),
                 rate_limit_retry_threshold: cfg.rate_limit_retry_threshold,
                 stream_tool_calls: cfg.stream_tool_calls.unwrap_or(false),

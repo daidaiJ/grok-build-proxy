@@ -216,6 +216,7 @@ impl ShellToolsetConfig {
             reasoning_effort: None,
             reasoning_summary: None,
             force_http1: false,
+            use_proxy: false,
             max_retries: None,
             rate_limit_retry_threshold: None,
             stream_tool_calls: false,

@@ -3815,6 +3815,7 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 show_model_fingerprint: m.show_model_fingerprint,
                 stream_tool_calls: None,
                 reasoning_summary: None,
+                use_proxy: false,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
                 experimental: None,
     };
@@ -3950,6 +3951,11 @@ pub struct ModelEntryConfig {
     /// `none` omits the field for BYOK gateways that reject it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_summary: Option<ReasoningSummary>,
+    /// LOCAL: when true, this model's requests ride the process-wide egress proxy
+    /// (`[network] proxy_url` / `GROK_PROXY`); the default (false) always goes
+    /// direct, even when a process proxy is configured.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub use_proxy: bool,
     /// Per-model Layer-3 LazinessDetector configuration.
     /// Defaults to the all-disabled state via `#[serde(default)]`.
     #[serde(default, skip_serializing_if = "is_default_laziness_detector")]
@@ -3999,6 +4005,7 @@ impl Default for ModelEntryConfig {
             show_model_fingerprint: false,
             stream_tool_calls: None,
             reasoning_summary: None,
+            use_proxy: false,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
             // LOCAL(experimental): 本地实验特性集合默认未设
             experimental: None,
@@ -4073,6 +4080,9 @@ pub struct ConfigModelOverride {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub experimental: Option<ExperimentalSamplingOptions>,
     pub reasoning_summary: Option<ReasoningSummary>,
+    /// LOCAL: per-model egress-proxy opt-in (`use_proxy = true` in `[model.<id>]`);
+    /// `None` keeps the default direct connection.
+    pub use_proxy: Option<bool>,
 }
 impl ConfigModelOverride {
     pub(crate) fn apply(
@@ -4189,6 +4199,9 @@ impl ConfigModelOverride {
         if self.reasoning_summary.is_some() {
             entry.info.reasoning_summary = self.reasoning_summary;
         }
+        if let Some(v) = self.use_proxy {
+            entry.info.use_proxy = v;
+        }
         if self.api_key.is_some() {
             entry.api_key.clone_from(&self.api_key);
         }
@@ -4291,6 +4304,10 @@ pub struct ModelInfo {
     /// Responses API `reasoning.summary` override; `None` keeps the request builder's default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_summary: Option<ReasoningSummary>,
+    /// LOCAL: when true, this model's requests ride the process-wide egress proxy;
+    /// default (false) always goes direct. See [`ModelEntryConfig::use_proxy`].
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub use_proxy: bool,
     /// Per-model Layer-3 LazinessDetector configuration. Defaults to the all-disabled state.
     /// The feature is per-model opt-in, with a second-step `max_nudges_per_session > 0` opt-in for actually injecting nudges.
     /// See [`LazinessDetectorPerModelConfig`].
@@ -4347,6 +4364,7 @@ impl ModelInfo {
             show_model_fingerprint: false,
             stream_tool_calls: None,
             reasoning_summary: None,
+            use_proxy: false,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
         }
     }
@@ -4390,6 +4408,7 @@ impl ModelInfo {
             show_model_fingerprint: entry.show_model_fingerprint,
             stream_tool_calls: entry.stream_tool_calls,
             reasoning_summary: entry.reasoning_summary,
+            use_proxy: entry.use_proxy,
             laziness_detector: entry.laziness_detector.clone(),
         }
     }
@@ -5103,6 +5122,7 @@ pub(crate) fn resolve_aux_model_sampling_config(
                 show_model_fingerprint: false,
                 stream_tool_calls: None,
                 reasoning_summary: None,
+                use_proxy: false,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
             },
             mtls_cert_dir: None,
@@ -5250,6 +5270,7 @@ pub(crate) fn sampling_config_for_model(
         reasoning_effort: info.reasoning_effort,
         reasoning_summary: info.reasoning_summary,
         force_http1: false,
+        use_proxy: info.use_proxy,
         max_retries: info.max_retries,
         rate_limit_retry_threshold: info.rate_limit_retry_threshold,
         stream_tool_calls: info.stream_tool_calls.unwrap_or(false),
@@ -5338,6 +5359,7 @@ fn resolve_hidden_default_web_search_sampling_config(
             show_model_fingerprint: false,
             stream_tool_calls: None,
             reasoning_summary: None,
+            use_proxy: false,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
         },
         mtls_cert_dir: None,

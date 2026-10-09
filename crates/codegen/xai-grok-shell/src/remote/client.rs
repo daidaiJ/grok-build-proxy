@@ -811,6 +811,9 @@ pub(crate) fn parse_remote_model_value(
             .get("reasoningSummary")
             .or_else(|| obj.get("reasoning_summary"))
             .and_then(|v| serde_json::from_value(v.clone()).ok()),
+        // LOCAL: remote catalogs cannot grant the egress proxy; only local
+        // config.toml `[model.<id>] use_proxy = true` opts a model in.
+        use_proxy: false,
         laziness_detector: get_object(obj, "lazinessDetector")
             .or_else(|| get_object(obj, "laziness_detector"))
             .or_else(|| meta.and_then(|m| get_object(m, "lazinessDetector")))

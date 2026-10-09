@@ -1205,6 +1205,10 @@ pub struct SamplingConfig {
     /// model switches) carry the choice with them.
     #[serde(default)]
     pub experimental: ExperimentalSamplingOptions,
+    /// LOCAL: when true, this model's sampling requests ride the process-wide
+    /// egress proxy (`[network]` / `GROK_PROXY`); default false goes direct.
+    #[serde(default)]
+    pub use_proxy: bool,
 }
 
 /// Experimental sampling features, all default-off. Each one changes visible
@@ -1245,6 +1249,8 @@ impl Default for SamplingConfig {
             stream_tool_calls: None,
             // LOCAL(experimental): 本地实验特性集合（全字段默认关）
             experimental: ExperimentalSamplingOptions::default(),
+            // LOCAL: 模型级代理开关，默认直连
+            use_proxy: false,
         }
     }
 }

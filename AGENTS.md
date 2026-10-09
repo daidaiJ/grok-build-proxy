@@ -17,6 +17,19 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 > 补充以文末"后记"追加。规约类完工文档（如 ui-i18n-plan）不归档但须在头部
 > 标明"已完工 + 保留角色"。更新本索引时先核对文件真实存在。
 
+- **模型级代理启用配置（`[model.<id>] use_proxy`）** — 分支
+  `feat/local-model-proxy-toggle`（合 main 发版后更新本条）。`use_proxy = true` 让该
+  模型的采样请求走进程级出口代理（`[network] proxy_url` / `GROK_PROXY`），**默认
+  false 恒直连**——即使配了进程代理，未显式启用的模型也不走（语义与旧版「白名单
+  host 默认过代理」不同，升级注意）。没配代理 / URL 非法：规则丢弃 + warn 一次 +
+  直连；代理运行中故障走既有重试，不做请求级自动绕过。落点：`xai-grok-extra-ca`
+  （`build_reqwest_client_no_proxy` + URL 校验）、`xai-grok-sampler`
+  （`SamplerConfig.use_proxy` + 共享直连 client 双胞胎）、`xai-grok-sampling-types`
+  （`SamplingConfig.use_proxy`，随会话持久化）、`xai-grok-shell`（`ModelEntryConfig` /
+  `ConfigModelOverride` / `ModelInfo` 字段 + 装配点 config.rs / sampler_turn /
+  subagent / spawn / model_switch / tools）。验证：`cargo check -p xai-grok-shell
+  --all-targets` 0 error；sampler 291 / extra-ca 15 / sampling-types 303 lib 全绿；
+  新增 shell `config::tests` 2 例绿（GATE_FORCE 过滤跑）。
 - **欢迎页 XL 熊猫 logo 档（v1.0.39 比例修复）** — v1.0.38 发的 44×13 盲文格
   资产存在**采样宽高比 bug**：`panda_dither.py` 直接把源图 resize 到 `cols*2 ×
   rows*4` 点阵，未补偿终端字符格 1:2（格高≈2×格宽、盲文点物理近正方），方形源图

@@ -1169,6 +1169,43 @@ fn sampling_config_uses_model_api_key_over_fallback() {
     );
     assert_eq!(sampling_config.base_url, "https://test.api/v1");
 }
+// LOCAL(model-proxy): `[model.<id>] use_proxy = true` must reach the sampler
+// config; the default entry stays proxy-free (direct).
+#[test]
+fn sampling_config_carries_per_model_use_proxy() {
+    let mut model = test_model_entry("test-model", "https://test.api/v1", None, None, None);
+    assert!(!sampling_config_for_model(
+        &model,
+        resolve_credentials(&model, None),
+        None,
+        None,
+        None,
+        None,
+    )
+    .use_proxy);
+    model.info.use_proxy = true;
+    assert!(sampling_config_for_model(
+        &model,
+        resolve_credentials(&model, None),
+        None,
+        None,
+        None,
+        None,
+    )
+    .use_proxy);
+}
+// LOCAL(model-proxy): the `[model.<id>]` override applies like the other per-model fields.
+#[test]
+fn model_override_applies_use_proxy() {
+    let mut entry = ModelEntry::fallback("m", &EndpointsConfig::default());
+    assert!(!entry.info.use_proxy);
+    entry = ConfigModelOverride {
+        use_proxy: Some(true),
+        ..Default::default()
+    }
+    .apply("m", Some(entry), &EndpointsConfig::default());
+    assert!(entry.info.use_proxy);
+}
 #[test]
 fn sampling_config_uses_fallback_when_no_model_api_key() {
     let model = test_model_entry("test-model", "https://test.api/v1", None, None, None);

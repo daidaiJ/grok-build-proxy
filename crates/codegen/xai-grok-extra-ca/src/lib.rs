@@ -56,6 +56,15 @@ static PROCESS_PROXY: OnceLock<Option<ProcessProxyRule>> = OnceLock::new();
 /// vec routes all hosts (except loopback). A `None` url leaves the slot unset
 /// so the `GROK_PROXY` env fallback stays reachable.
 pub fn set_process_proxy(url: Option<String>, host_suffixes: Option<Vec<String>>) {
+    // LOCAL: a proxy URL that fails to parse is a config bug, not a route —
+    // drop it and go direct instead of failing every request at match time.
+    let url = url.filter(|u| match reqwest::Url::parse(u.trim()) {
+        Ok(_) => true,
+        Err(error) => {
+            tracing::warn!("invalid egress proxy URL {u:?} ignored; traffic goes direct ({error})");
+            false
+        }
+    });
     let Some(url) = url else {
         return;
     };
@@ -77,6 +86,15 @@ pub fn process_proxy_rule() -> Option<ProcessProxyRule> {
         return rule.clone();
     }
     let url = std::env::var(ENV_GROK_PROXY).ok().filter(|v| !v.trim().is_empty())?;
+    // LOCAL: same parse guard as `set_process_proxy` — a bad `GROK_PROXY`
+    // env value falls back to direct rather than breaking every request.
+    let url = match reqwest::Url::parse(url.trim()) {
+        Ok(parsed) => parsed.to_string(),
+        Err(error) => {
+            tracing::warn!("invalid {ENV_GROK_PROXY} value ignored; traffic goes direct ({error})");
+            return None;
+        }
+    };
     let host_suffixes = std::env::var(ENV_GROK_PROXY_HOSTS).ok().map(|v| {
         v.split(',')
             .map(str::trim)
@@ -180,9 +198,31 @@ pub fn ensure_default_crypto_provider() {
 pub fn build_reqwest_client(
     configure: impl Fn(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
 ) -> reqwest::Result<reqwest::Client> {
+    build_reqwest_client_inner(configure, true)
+}
+
+/// [`build_reqwest_client`] without the process-wide egress proxy: the client
+/// always goes direct. Used by the model-level `use_proxy = false` sampling path.
+pub fn build_reqwest_client_no_proxy(
+    configure: impl Fn(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
+) -> reqwest::Result<reqwest::Client> {
+    build_reqwest_client_inner(configure, false)
+}
+
+fn build_reqwest_client_inner(
+    configure: impl Fn(reqwest::ClientBuilder) -> reqwest::ClientBuilder,
+    apply_proxy: bool,
+) -> reqwest::Result<reqwest::Client> {
     ensure_default_crypto_provider();
-    let mut builder = apply_process_proxy(configure(reqwest::Client::builder()))
-        .use_rustls_tls()
+    let mut builder = {
+        let configured = configure(reqwest::Client::builder());
+        if apply_proxy {
+            apply_process_proxy(configured)
+        } else {
+            configured
+        }
+    }
+    .use_rustls_tls()
         .tls_built_in_native_certs(false)
         .tls_built_in_webpki_certs(true);
     for cert in shared_reqwest_roots() {

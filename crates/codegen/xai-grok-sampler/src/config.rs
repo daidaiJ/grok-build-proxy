@@ -80,6 +80,10 @@ pub struct SamplerConfig {
     /// [`ExperimentalSamplingOptions`](xai_grok_sampling_types::ExperimentalSamplingOptions).
     #[serde(default)]
     pub experimental: xai_grok_sampling_types::ExperimentalSamplingOptions,
+    /// LOCAL: when true, requests ride the process-wide egress proxy
+    /// (`[network]` / `GROK_PROXY`); default false goes direct.
+    #[serde(default)]
+    pub use_proxy: bool,
 
     // Reasoning effort
     pub reasoning_effort: Option<ReasoningEffort>,
@@ -154,6 +158,7 @@ impl Default for SamplerConfig {
             stream_tool_calls: false,
             idle_timeout_secs: None,
             experimental: xai_grok_sampling_types::ExperimentalSamplingOptions::default(),
+            use_proxy: false,
             reasoning_effort: None,
             reasoning_summary: None,
             origin_client: None,
