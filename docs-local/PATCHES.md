@@ -2124,3 +2124,42 @@ rewind-branch-undo 设计 §4-L2 遗留件：`handle_rewind` 原为双路径（�
   过滤子集）+ `cargo check --all-targets`；acp_session rewind 族本机 win-skip
   （族R），行为回归依赖 Linux CI（rewind_cross_compaction / rewind_synthetic_turn）。
 
+
+## 二十三期：模型级出口代理启用配置（2026-10-09，分支 feat/local-model-proxy-toggle）
+
+### 需求与语义
+
+`[model.<id>] use_proxy = true` 让该模型的采样请求走进程级出口代理
+（`[network] proxy_url` / `GROK_PROXY`）；**默认 false 恒直连**——即使配置了
+进程代理，未显式启用的模型也不走。与旧版「白名单 host 默认过代理」语义不同，
+升级注意：依赖旧行为的配置需补 `use_proxy = true`。没配代理 / URL 非法：
+规则丢弃 + warn 一次 + 直连；代理运行中故障走既有重试，不做请求级自动绕过
+（避免静默改道掩盖真实故障）。
+
+### 改动点
+
+1. `xai-grok-extra-ca/src/lib.rs`：`build_reqwest_client_no_proxy()`（内嵌
+   `build_reqwest_client_inner(configure, apply_proxy)` 重构）；
+   `set_process_proxy` 与 `GROK_PROXY` env 回退路径加 `reqwest::Url::parse`
+   校验，非法丢弃 + warn。
+2. `xai-grok-sampler`：`SamplerConfig.use_proxy`（serde default false）；
+   `shared_http.rs` 增共享直连 client 双胞胎（SHARED_H2_NO_PROXY /
+   SHARED_HTTP1_NO_PROXY）；`client.rs` 客户端选择按 `use_proxy`（且规则存在）
+   分流；mTLS 路径行为不变（仍走进程代理匹配）。
+3. `xai-grok-sampling-types/src/types.rs`：`SamplingConfig.use_proxy`（随会话
+   持久化；旧会话反序列化默认 false）。
+4. `xai-grok-shell`：`ModelEntryConfig` / `ConfigModelOverride` / `ModelInfo`
+   加字段（override `apply` 装配）；六处 SamplerConfig/SamplingConfig 装配点接线
+   （config.rs `sampling_config_for_model` / sampler_turn `reconstruct_full_config`
+   / subagent 继承 / spawn 与 model_switch 持久化转换 / tools web-search 直连）；
+   远程目录模型（remote/client.rs）写死 `use_proxy: false`——授代理只认本地
+   config.toml。
+
+### 验证
+
+- `cargo check -p xai-grok-shell --all-targets` 0 error。
+- `ctest.sh -p xai-grok-sampler --lib` 291/291、`xai-grok-extra-ca --lib` 15/15、
+  `xai-grok-sampling-types --lib` 303/303。
+- 新增 shell `agent::config::tests` 2 例（`sampling_config_carries_per_model_use_proxy`
+  / `model_override_applies_use_proxy`，GATE_FORCE 过滤跑）通过。
+- 活回合（真实代理环境）验证未做，待发版后实测。

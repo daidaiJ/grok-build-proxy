@@ -17,8 +17,8 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 > 补充以文末"后记"追加。规约类完工文档（如 ui-i18n-plan）不归档但须在头部
 > 标明"已完工 + 保留角色"。更新本索引时先核对文件真实存在。
 
-- **模型级代理启用配置（`[model.<id>] use_proxy`）** — 分支
-  `feat/local-model-proxy-toggle`（合 main 发版后更新本条）。`use_proxy = true` 让该
+- **模型级代理启用配置（`[model.<id>] use_proxy`）** — 已合 main（`76891f3e`），随
+  **`v1.0.43`** 发版；实现记录见 PATCHES.md 二十三期。`use_proxy = true` 让该
   模型的采样请求走进程级出口代理（`[network] proxy_url` / `GROK_PROXY`），**默认
   false 恒直连**——即使配了进程代理，未显式启用的模型也不走（语义与旧版「白名单
   host 默认过代理」不同，升级注意）。没配代理 / URL 非法：规则丢弃 + warn 一次 +
