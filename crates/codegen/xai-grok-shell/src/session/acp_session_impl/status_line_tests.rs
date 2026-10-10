@@ -46,13 +46,67 @@ fn status_usage_scopes_to_the_current_model() {
 
 #[test]
 fn status_usage_model_known_only_through_failures_reads_zeroed_calls() {
-    // A model the ledger knows only through a terminal failure: scoped totals
-    // have model_calls = 0, which the downstream session-usage filter hides —
-    // the failure itself surfaces through `api_calls`.
+    // A session whose only model call failed: the scoped totals have
+    // model_calls = 0, which the downstream session-usage filter hides — the
+    // failure itself surfaces through `api_calls`. Nothing completed anywhere,
+    // so the shadow-key guard has nothing else to fall back to and the scoped
+    // (zeroed) entry still stands.
     let mut ledger = xai_chat_state::UsageLedger::default();
     ledger.record_main_loop_failure("m-b");
     let usage = scoped_usage(ledger, Some("m-b"));
     assert_eq!(usage.totals.model_calls, 0);
+    assert_eq!(usage.totals.failed_model_calls, 1);
+}
+
+#[test]
+fn status_usage_shadow_key_does_not_freeze_the_row() {
+    // On-site ledger shape after a 429/400: successes carry the provider-echoed
+    // id (`glm-5-3-flash`) while the terminal failure opened a second, call-less
+    // key under the config-side spelling (`glm-5.3-flash`). Scoping to that
+    // shadow froze the row on `✓ 0 ✗ 2` with every token segment hidden, so the
+    // lookup must fall through to the session totals instead.
+    let call = |prompt: u32, completion: u32| xai_grok_sampling_types::TokenUsage {
+        prompt_tokens: prompt,
+        completion_tokens: completion,
+        total_tokens: prompt + completion,
+        reasoning_tokens: 0,
+        cached_prompt_tokens: 0,
+        cache_creation_prompt_tokens: 0,
+    };
+    let mut ledger = xai_chat_state::UsageLedger::default();
+    ledger.record_main_loop_call("glm-5-3-flash", &call(1_000, 100), None, Some(70));
+    ledger.record_main_loop_failure("glm-5.3-flash");
+    ledger.record_main_loop_failure("glm-5.3-flash");
+
+    let usage = scoped_usage(ledger, Some("glm-5.3-flash"));
+    assert_eq!(usage.totals.model_calls, 1);
+    assert_eq!(usage.totals.failed_model_calls, 2);
+    assert_eq!(usage.totals.input_tokens, 1_000);
+    assert_eq!(usage.totals.output_tokens, 100);
+}
+
+#[test]
+fn status_usage_prefers_the_qualified_echo_over_a_shadow_config_key() {
+    // Both spellings of one gateway-qualified echo present: the exact config key
+    // is a call-less shadow, the qualified key holds the calls. The guard must
+    // skip the shadow and still pick the qualified entry, not the session totals
+    // (another model's spend is in the ledger to catch that shortcut), while the
+    // shadow's ✗ rides along — it is this model's endpoint health.
+    let call = |prompt: u32, completion: u32| xai_grok_sampling_types::TokenUsage {
+        prompt_tokens: prompt,
+        completion_tokens: completion,
+        total_tokens: prompt + completion,
+        reasoning_tokens: 0,
+        cached_prompt_tokens: 0,
+        cache_creation_prompt_tokens: 0,
+    };
+    let mut ledger = xai_chat_state::UsageLedger::default();
+    ledger.record_main_loop_call("m-other", &call(25_000, 2_500), None, None);
+    ledger.record_main_loop_call("vendor/glm-5.3-flash", &call(4_000, 400), None, None);
+    ledger.record_main_loop_failure("glm-5.3-flash");
+    let usage = scoped_usage(ledger, Some("glm-5.3-flash"));
+    assert_eq!(usage.totals.model_calls, 1);
+    assert_eq!(usage.totals.input_tokens, 4_000);
     assert_eq!(usage.totals.failed_model_calls, 1);
 }
 
