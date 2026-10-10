@@ -143,6 +143,7 @@ xai-chat-state = { path = "../xai-chat-state" }
 xai-compaction-transcript = { workspace = true }
 xai-grok-compaction = { path = "../../common/xai-grok-compaction" }
 xai-grok-extra-ca = { workspace = true }
+xai-grok-provider-usage = { workspace = true }
 # Leader lock: bounded flock polling behind the machine-local acquire slot.
 xai-grok-file-lock = { workspace = true }
 xai-grok-sampler = { path = "../xai-grok-sampler" }
