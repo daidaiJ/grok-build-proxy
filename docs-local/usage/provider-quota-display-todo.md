@@ -1,16 +1,21 @@
 # 供应商套餐用量上 `/usage` 面板（TODO）
 
-> **状态（2026-10-10）：T1–T3 全部落地，已随 `v1.0.46` 发版（merge `afd4058`，
-> build run 38065337768 / release run 38067181846 双绿，4 资产）；本机客户端已部署
-> v1.0.46，面板活体核验由用户人工进行**（面板 vs
-> `scripts-local/commandcode_usage.py` 对账、OpenCode Go 403 回退、缓存 debug 日志）。
+> **状态（2026-10-11）：T1–T3 落地随 `v1.0.46` 发版后，活体核验发现 Command Code
+> 取数失败（源站延迟尾部 >5s 击穿 5s 超时 + body 读错被吞成 `invalid JSON: EOF`），
+> 修复 + 单飞/缓存/显示分离重构随 `v1.0.47` 发版**（merge `f91592d`，详见
+> PATCHES.md 二十七期）；本机客户端已部署 v1.0.47（`grok 1.0.47 (f91592d5cf5d)`），
+> 面板核验由用户人工继续
+> （面板 vs `scripts-local/commandcode_usage.py` 对账、刷新中旧数据显示、
+> OpenCode Go 403 回退、缓存 debug 日志）。
 > T1 适配器纯函数层已落地（新 crate
 > `xai-grok-provider-usage`，5 家适配器 + 夹具单测 54 绿）；T2 shell 扩展已落地
-> （`x.ai/providerUsage`，base_url 匹配 + TTL 缓存）；T3 pager 接线进行中。
+> （`x.ai/providerUsage`，base_url 匹配 + TTL 缓存 + (provider, SK) 键控单飞）；
+> T3 pager 接线已落地（stale-while-revalidate 渲染）。
 > 端点/凭据/口径全部沿用
 > [`quota-endpoints-and-credentials.md`](quota-endpoints-and-credentials.md)（下称「调研文档」）
 > 的实测与读源码结论，可信度标注沿用[目录约定](README.md#可信度约定)。
-> 基线：2026-10-10 `main`（v1.0.45 `350874c`）。分支 `feat/local-provider-usage-display`。
+> 基线：2026-10-10 `main`（v1.0.45 `350874c`）。分支 `feat/local-provider-usage-display`
+> + `fix/local-provider-usage-fetch`。
 > 解析参照源码：cc-switch `src-tauri/src/services/coding_plan.rs` +
 > yetone/magpie `internal/provider/planquota.go`、`commandcode_plan.go`（magpie 更新：
 > Kimi 完整结构、MiniMax 新路径 `/v1/token_plan/remains`、OpenCode 0% 占位坑）。
@@ -36,6 +41,14 @@
    `usage_provider` 配置；模型 `base_url` host/路径匹配到供应商即启用，匹配不到 =
    未配置（面板零变化）。判定实现：`provider_for_base_url`
    （`xai-grok-provider-usage/src/base_url_match.rs`）。
+9. **请求单发**（2026-10-11，v1.0.47）：在途请求未回包前不允许再发新请求；
+   请求/响应缓存/显示三层分离——回包无条件落 agent 级缓存（模态关闭不丢），
+   显示层只读缓存 + 在途标志。
+10. **缓存/单飞键 = (供应商, SK)**（2026-10-11，纠正初版 model_id 键——「锁带上
+    model id 干嘛，带上 SK 还有点像话」）：上游取数只由端点+凭据决定，同一把 SK
+    跨模型共享缓存与在途去重；键内 SK 用 64 位哈希指纹，不落明文。
+11. **stale-while-revalidate**（2026-10-11）：TTL 到期/刷新中/刷新失败时先显示
+    旧数据（附「查询于 HH:MM」时间点，在途加「刷新中…」），回包到了才换新。
 
 ## 供应商清单（按拍板标准收敛后）
 
@@ -125,25 +138,36 @@ pub struct PlanUsageWindow {
 - 失败分类：401/403（key 无效或无订阅资格，如 OpenCode `EntitlementError`）/
   HTTP 错误 / 解析失败，三层错误进 UI 文案（`error_kind` 随回包给 UI 分层）。
 
-### 取数与缓存（T2，shell 扩展 `x.ai/providerUsage`）
+### 取数与缓存（T2，shell 扩展 `x.ai/providerUsage`；v1.0.47 修订）
 
-- `Effect::FetchProviderUsage { agent_id, model_id, nonce }`，**只在 usage 模态打开时
-  触发**（shell 侧 TTL 缓存使命中即回，turn 结束静默刷新省略——与方案初稿的差异，
-  缓存已覆盖该场景）；GET + 5s 超时；代理语义随该模型 `use_proxy`
+- `Effect::FetchProviderUsage { agent_id, model_id }`，**只在 usage 模态打开时
+  触发，且请求单发**（拍板 9：agent 级在途标志期间重开面板不再发新请求）；GET +
+  15s 超时（v1.0.47：5s 预算会被 Command Code 源站延迟尾部击穿，`Server-Timing`
+  自报 0.7–3s+、实测尖刺 >5s）；代理语义随该模型 `use_proxy`
   （直连 client 为默认，与采样路径一致）。
-- 缓存：shell 进程级 `HashMap<(model_id, provider), (snapshot, Instant)>`；
-  TTL = `[provider_usage] cache_minutes`（默认 **5**，单位分钟，clamp 1–120）。
-  命中期内重复打开不发请求；失败不写缓存（下次打开即重试）。
+- 缓存与单飞（v1.0.47 拍板 10：键不带 model_id，带 SK 才像话）：shell 进程级
+  `HashMap<(provider, SK 指纹), (snapshot, Instant)>`，同一把 SK（同账号）跨模型
+  共享缓存；per-key 单飞锁保证同账号并发至多一个在途请求，后来者等锁后复检缓存
+  直接复用。TTL = `[provider_usage] cache_minutes`（默认 **5**，单位分钟，
+  clamp 1–120）。命中期内重复打开不发请求；失败不写缓存（下次打开即重试）。
+- 协议 A/B 结论（2026-10-11，Python httpx 冷连接交错 5×h1/5×h2）：h1 mean 1749ms /
+  h2 mean 1428ms，10/10 成功，延迟由源站 `Server-Timing` 主导——协议不是耗时因素，
+  保持 reqwest 默认（ALPN 协商），不加 `http1_only`。
 
-### 显示（T3，usage_modal）
+### 回包落库与显示（T3 + v1.0.47 单飞重构）
 
+- 回包无条件落 **agent 级缓存**（`AgentView.provider_usage_cache`：model_id +
+  response + fetched_at_ms），模态关闭不丢回包；失败回包不覆盖已有成功快照。
 - base_url 无匹配（回包 `provider: null`）→ 面板零变化。
 - 有匹配且快照可用 → 「套餐用量（<plan 名>） — <供应商名>」来源标注头 + 每窗口
-  一条 bar（与 SuperGrok 块共用 `usage_bar_line`）+ `Resets` 行 + `note` 行；
-  **SuperGrok 额度块隐藏**（拍板 1）。
+  一条 bar（与 SuperGrok 块共用 `usage_bar_line`）+ `Resets` 行 + `note` 行 +
+  **「查询于 HH:MM」时间戳行**；**SuperGrok 额度块隐藏**（拍板 1）。
+- **stale-while-revalidate**（拍板 11：TTL 到期先保证有显示，再等更新）：刷新中 /
+  刷新失败都继续显示旧快照 + 查询时间点（时间戳取快照 `fetched_at_ms`，shell TTL
+  缓存命中时即真实上游取数时刻），在途时时间戳行追加「刷新中…」。
 - 渲染裁剪：窗口集含 5h 或周时月度不渲染（拍板 2）。
-- 失败且无缓存快照 → 错误行（分类文案）+ 回退渲染 SuperGrok 块。
-- 首开在途（回包未到）→「正在加载套餐用量…」行 + SuperGrok 块照常渲染。
+- 失败且无任何成功快照 → 错误行（分类文案）+ 回退渲染 SuperGrok 块。
+- 首开在途（无缓存）→「正在加载套餐用量…」行 + SuperGrok 块照常渲染。
 - `chat_kind` 网关会话跟随现状整块跳过（待定决策 6）。
 - 文案进 i18n 中英两表（供应商名不翻译）；`Resets` 键已存在复用。
 
@@ -155,8 +179,10 @@ pub struct PlanUsageWindow {
 - **T2 shell 扩展**——已完成（commit `35fb708`）：`extensions/provider_usage.rs`
   （`x.ai/providerUsage`，acp_agent 注册）+ `[provider_usage] cache_minutes` 配置节；
   `cargo check -p xai-grok-shell` 0 error。
-- **T3 UI 接线**——进行中：`Effect::FetchProviderUsage` + `TaskResult::ProviderUsageFetched`
-  （nonce 守卫 settle 自己这代模态）+ `usage_limit_lines` 供应商分流 + i18n。
+- **T3 UI 接线**——已完成（commit `7f4f4ad`，v1.0.47 重构随 `15929e4`）：
+  `Effect::FetchProviderUsage`（无 nonce，触发端单飞守卫）+
+  `TaskResult::ProviderUsageFetched`（带 model_id，回包无条件落 agent 级缓存）+
+  `usage_limit_lines` 供应商分流（stale-while-revalidate + 查询时间点行）+ i18n。
 
 ## 验收标准
 

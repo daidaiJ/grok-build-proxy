@@ -108,7 +108,8 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   现场 QA（pct 已变仍报采样不足 = Δpct < 2 整点门，非无 xAI 消耗）见该文档末节，
   补 user-guide / 文案时复用。
 - [`docs-local/usage/`](docs-local/usage/README.md) — **供应商套餐用量专题（已落地，
-  随 `v1.0.46` 发版 2026-10-10；活体核验待用户回填）**：用户已拍板——当前模型
+  随 `v1.0.46` 发版 2026-10-10；取数修复 + 单飞/缓存/显示分离重构随 `v1.0.47`
+  2026-10-11，PATCHES 二十七期；活体核验待用户回填）**：用户已拍板——当前模型
   属于「推理同一把 SK 可查套餐用量」的供应商时 `/usage` 面板改显该供应商套餐量
   替代 SuperGrok 并标注来源、窗口粒度 5h>周>月、控制台账户/Cookie/AK-SK 类凭据
   一律不支持（火山 Ark / 百炼据此剔除）、缓存默认 5 分钟可配（`[provider_usage]
@@ -249,27 +250,37 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### 供应商套餐用量上 /usage 面板 — 已落地并随 v1.0.46 发版（2026-10-10）
+### 供应商套餐用量上 /usage 面板 — v1.0.46 落地；取数修复+单飞重构随 v1.0.47（2026-10-11）
 
 - **当前状态：** 五家供应商（OpenCode Go / Command Code / 智谱 GLM / Kimi / MiniMax）
   的套餐用量在 Usage limit 标签页替代 SuperGrok 块并标注来源；判定 = 模型 base_url
   host 匹配（无显式配置），缓存 `[provider_usage] cache_minutes` 默认 5 分钟。
   三层落点：新 crate `xai-grok-provider-usage`（纯函数适配器，一家一文件）、shell
   `x.ai/providerUsage` 扩展（TTL 缓存 + GLM 裸key/Bearer 重试 + MiniMax 双路径）、
-  pager `Effect::FetchProviderUsage` + usage_modal 分流渲染。已合 main（merge
-  `afd4058`），tag **`v1.0.46`**；build run 38065337768 与 release run 38067181846
-  双 job success，4 资产；本机客户端已部署，`grok2.exe --version` =
-  `grok 1.0.46 (afd4058c1992)`（旧 v1.0.40 留 `grok2.exe.v1.0.40.bak`）。
-- **验证：** `ctest.sh -p xai-grok-provider-usage --lib` 54/54、
-  `-p xai-grok-pager --lib usage_modal` 37/37、三 crate cargo check 0 error；
-  Linux CI 跑 shell 全套（含新扩展单测）绿。百炼单 key 查询 2026-10-10 复核官方
-  CLI 源码确认不支持（三域分离），不立项。
-- **遗留：** ① 面板活体核验（用户人工：Command Code 模型开 /usage 对账探针
-  `scripts-local/commandcode_usage.py`；OpenCode Go 403 回退；缓存 debug 日志
-  `provider usage: cache hit`）② 发版后小概率发现解析形态偏差 → 修适配器走
+  pager `Effect::FetchProviderUsage` + usage_modal 分流渲染。
+  **v1.0.47（2026-10-11，merge `f91592d`，分支 fix/local-provider-usage-fetch）修复
+  + 重构**：活体核验发现 Command Code 端点源站延迟尾部 >5s 击穿 5s 超时、body 读错
+  被 `unwrap_or_default` 吞成 `invalid JSON: EOF`——修复 = 超时 15s + body 读错真实
+  上报（err_chain 展开源链）+ 缓存/单飞改 **(provider, SK 指纹)** 键控（同 SK 跨模型
+  共享缓存，同账号并发至多一个在途请求，用户拍板「锁带上 SK 才像话」）+ 触发端
+  请求单发（在途期间重开面板不再发新请求）+ 回包无条件落 agent 级缓存（模态关闭
+  不丢，按 model_id 绑定显示过滤）+ **stale-while-revalidate**（刷新中/失败显示旧
+  数据 + 「查询于 HH:MM」，在途加「刷新中…」；用户拍板「TTL 到期先保证有显示」）。
+  协议 A/B（httpx 冷连接 h1/h2 交错 5+5）：h1 mean 1749ms / h2 mean 1428ms、10/10
+  成功、延迟由源站主导——协议不是耗时因素，保持 reqwest 默认。build run
+  38078649203 / release run 38078649198 双 job success（约 27 分钟），4 资产非草稿；
+  本机已部署，`grok2.exe --version` = `grok 1.0.47 (f91592d5cf5d)`，旧 v1.0.46 留
+  `grok2.exe.v1.0.46.bak`。
+- **验证：** provider-usage 54/54、pager usage_modal 38/38（新增 stale-while-revalidate
+  用例）、GATE_FORCE shell provider_usage 5/5（新增单飞锁键共享 + 指纹确定性）、
+  pager check --all-targets 0 error、i18n 扫描 0 挂。百炼单 key 查询 2026-10-10 复核
+  官方 CLI 源码确认不支持（三域分离），不立项。
+- **遗留：** ① 面板活体核验（用户人工继续：Command Code 模型开 /usage 对账探针
+  `scripts-local/commandcode_usage.py`、刷新中旧数据显示、OpenCode Go 403 回退、
+  缓存 debug 日志 `provider usage: cache hit`）② 解析形态偏差 → 修适配器走
   patch 发版，纯函数层改起来最快。
 - **详情指针：** [`docs-local/usage/provider-quota-display-todo.md`](docs-local/usage/provider-quota-display-todo.md)
-  （分期实况 + 剩余待定决策）；PATCHES.md 二十六期。
+  （拍板 9–11 + 分期实况）；PATCHES.md 二十六 / 二十七期。
 
 ### 状态行 429/400 后冻结 — 已修并随 v1.0.45 发版（2026-10-10）
 

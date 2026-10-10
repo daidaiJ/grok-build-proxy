@@ -2270,3 +2270,48 @@ usage_modal` 37/37（含 替代/裁剪/回退/loading 四个新用例）；i18n 
 sha256 实测一致）。产物已部署本机 `D:\tool-cli\grok2\grok2.exe`，实测
 `grok2.exe --version` = `grok 1.0.46 (afd4058c1992)`；旧 v1.0.40 留
 `grok2.exe.v1.0.40.bak` 供回滚。面板活体核验由用户人工进行。
+
+## 二十七期：套餐取数修复 + 单飞/缓存/显示分离（2026-10-11，分支 fix/local-provider-usage-fetch）
+
+v1.0.46 活体核验发现 Command Code 套餐取数失败：`/alpha/billing/credits` 端点
+**源站延迟尾部超 5s**（响应头 `Server-Timing: total` 自报 0.7–3s+，复现探针实测
+尖刺 >5s），单请求 5s 总超时撞线；且 body 读取失败被 `text().unwrap_or_default()`
+**吞成空串**，日志伪装成 `invalid JSON: EOF`，真实原因（超时/流中断）不可见。
+探针矩阵排除 UA、h2、代理、直连四嫌疑（h1-only 同样超时；httpx h2 成功；
+直连/代理都通）——失败只与「5s 预算 vs 源站尾部」相关。协议 A/B（Python httpx
+冷连接交错 5×h1/5×h2）：h1 mean 1749ms / h2 mean 1428ms，10/10 成功，延迟由源站
+主导——**协议不是耗时因素，保持 reqwest 默认，不加 `http1_only`**。
+
+改动（均带 `// LOCAL:`，请求/响应缓存/显示三层分离）：
+
+1. shell `extensions/provider_usage.rs`：单请求超时 5s→15s（`REQUEST_TIMEOUT`）；
+   body 读取失败与传输层失败同待遇（真实上报 + 可换下一个 PreparedRequest），
+   `err_chain` 展开 reqwest source 链保留根因；缓存与单飞改按 **(provider, SK 指纹)**
+   键控（`key_fingerprint` 64 位哈希，不落密钥明文）——同一把 SK 跨模型共享缓存，
+   同账号并发至多一个在途请求（per-key tokio Mutex 单飞锁，等锁后复检缓存直接复用）；
+   缓存命中回包提取 `cached_response` 共用。
+2. pager 触发/落库（用户拍板「请求单发，不允许上个没到响应就再发；请求和响应缓存
+   和显示分离」）：`Effect::FetchProviderUsage` 去 nonce、`TaskResult::ProviderUsageFetched`
+   带 `model_id`；触发端在途守卫（`agent.provider_usage_loading` 期间重开面板不再发
+   新请求）；回包**无条件落 agent 级缓存**（`AgentView.provider_usage_cache`
+   `ProviderUsageCache{model_id, response, fetched_at_ms}`，模态关闭不丢、换模型显示
+   过滤），失败回包不覆盖已有成功快照，与 billing nonce 解耦。
+3. pager 渲染（用户拍板「TTL 到期先保证有显示，再等更新」）：stale-while-revalidate
+   —— 有旧快照时刷新中/刷新失败都继续显示旧数据并附**「查询于 HH:MM」**（时间戳取
+   快照 `fetched_at_ms`，shell TTL 缓存命中时即真实上游取数时刻；在途时加
+   「刷新中…」）；无任何缓存才显示加载行/错误行。i18n 新增两组键
+   （`Queried at {time}` / `Refreshing…`）。
+
+验证：`ctest.sh -p xai-grok-pager --lib usage_modal` 38/38（新增
+stale_cache_keeps_showing_with_timestamp_and_refresh_marker）；
+`GATE_FORCE ctest.sh -p xai-grok-shell --lib provider_usage` 5/5（新增单飞锁键共享 +
+指纹确定性两用例）；`cargo check -p xai-grok-pager --all-targets` 0 error；
+i18n 扫描 0 挂。
+
+发版：合 main `f91592d`，tag **`v1.0.47`**（轻量 tag，修复直接进本 tag，无版本
+号分叉）。build run 38078649203 与 release run 38078649198 双双 job success
+（约 27 分钟），release 页 4 资产（非草稿），Windows zip 本机下载 sha256
+实测一致（`966a73aa…`）。产物已部署本机 `D:\tool-cli\grok2\grok2.exe`，实测
+`grok2.exe --version` = `grok 1.0.47 (f91592d5cf5d)`；旧 v1.0.46 留
+`grok2.exe.v1.0.46.bak`（更早的 `.v1.0.40.bak` 仍在，待用户核验后自行清理）。
+面板活体核验由用户人工继续。
