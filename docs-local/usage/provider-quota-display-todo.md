@@ -1,6 +1,8 @@
 # 供应商套餐用量上 `/usage` 面板（TODO）
 
-> **状态（2026-10-10）：施工中。** T1 适配器纯函数层已落地（新 crate
+> **状态（2026-10-10）：T1–T3 全部落地，随 `v1.0.46` 发版；活体验证未做**（面板 vs
+> `scripts-local/commandcode_usage.py` 对账、OpenCode Go 403 回退、缓存 debug 日志）。
+> T1 适配器纯函数层已落地（新 crate
 > `xai-grok-provider-usage`，5 家适配器 + 夹具单测 54 绿）；T2 shell 扩展已落地
 > （`x.ai/providerUsage`，base_url 匹配 + TTL 缓存）；T3 pager 接线进行中。
 > 端点/凭据/口径全部沿用

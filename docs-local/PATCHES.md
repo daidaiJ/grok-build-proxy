@@ -2222,3 +2222,45 @@ build run 38037822957（Linux `cargo test -p xai-grok-shell` 全套 + Windows ch
 release run 38039766302（Linux 原生 + Windows 交叉编译）双双 job success，
 release 页 4 资产（`grok2-v1.0.45-x86_64-{linux.tar.gz,windows.zip}` 各带 sha256），
 产物实测 `grok2.exe --version` = `grok 1.0.45 (350874c36b81)`。活体 TUI 复现仍未做。
+
+## 二十六期：供应商套餐用量上 /usage 面板（2026-10-10，分支 feat/local-provider-usage-display）
+
+当模型 `base_url` host 匹配到「推理同一把 SK 可查套餐用量」的供应商时，Usage limit
+标签页改显该供应商的套餐窗口用量并标注来源，替代 SuperGrok 额度块；失败回退
+SuperGrok，不静默互换。方案与验收见
+[`usage/provider-quota-display-todo.md`](usage/provider-quota-display-todo.md)，端点/
+口径依据 [`usage/quota-endpoints-and-credentials.md`](usage/quota-endpoints-and-credentials.md)，
+解析参照 cc-switch `coding_plan.rs` + yetone/magpie `planquota.go`/`commandcode_plan.go`。
+供应商判定 = base_url host 匹配（用户拍板，无显式配置）；首批五家：OpenCode Go /
+Command Code / 智谱 GLM / Kimi / MiniMax（GLM 裸 key→`code:1001` 信封再换 Bearer、
+MiniMax 新旧双路径 404 切换）；火山 Ark / 百炼 / Cline / Token Unlimited 不做
+（百炼 2026-10-10 复核官方 CLI 源码：单 API key 仍查不了套餐余量，三域分离）。
+
+改动（均带 `// LOCAL:`）：
+
+1. 新 crate `xai-grok-provider-usage`（纯函数适配层，一家一文件）：
+   `types.rs`（`PlanUsageSnapshot`/`PlanUsageWindow`/`UsageProviderId`/`UsageWindowKind`）、
+   `requests.rs`（`PreparedRequest` 按序尝试表）、`parse.rs`（状态码分层 + 时间戳宽容
+   解析 秒/毫秒/RFC3339）、`base_url_match.rs`（`provider_for_base_url`）、
+   `providers/{opencode_go,commandcode,glm,kimi,minimax}.rs`（百分比语义归一为已用：
+   OpenCode/GLM 原生、Command Code 美元 used/cap 换算 + `exceeded`/`limited` 进 note、
+   Kimi 计数换算、MiniMax 剩余反转 + status 2=用尽/3=无此限）。
+2. `xai-grok-shell`：`extensions/provider_usage.rs`（`x.ai/providerUsage` 扩展，
+   acp_agent.rs 注册）——base_url 匹配 + `own_credential` 取 key + 按序尝试 +
+   进程级 TTL 缓存（`[provider_usage] cache_minutes`，默认 5，clamp 1–120，拍板 4）
+   + `use_proxy` 代理语义与采样路径一致 + unified.jsonl 成败各记一条。
+   `agent/config.rs` 增 `ProviderUsageConfig` 配置节。
+3. `xai-grok-pager`：`Effect::FetchProviderUsage`（usage 模态打开时触发，与 billing
+   共用 fetch generation）+ `TaskResult::ProviderUsageFetched`（nonce 守卫只 settle
+   自己这代模态）+ `usage_modal.rs` `usage_limit_lines` 供应商分流渲染（快照→套餐块
+   替代 SuperGrok；失败→错误行+回退 SuperGrok；5h/周在时月度裁剪；`usage_bar_line`
+   提取两处共用）+ i18n 五组新键。
+
+验证：`cargo check` 三 crate（provider-usage --all-targets / shell / pager）0 error；
+`ctest.sh -p xai-grok-provider-usage --lib` 54/54（夹具单测：各家窗口归一/百分比反转/
+`code:1001` 信封/无订阅 403/双路径/配置值轮转）；`ctest.sh -p xai-grok-pager --lib
+usage_modal` 37/37（含 替代/裁剪/回退/loading 四个新用例）；i18n 扫描器分类一致。
+活体验证（面板 vs `scripts-local/commandcode_usage.py` 对账）未做，待新客户端实跑。
+
+发版：合 main（merge 提交）、tag **`v1.0.46`**（轻量 tag）。build/release run id
+发版后补记。
