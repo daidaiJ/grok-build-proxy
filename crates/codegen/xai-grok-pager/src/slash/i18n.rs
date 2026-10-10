@@ -1799,6 +1799,15 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Weekly limit", "每周限额"),
         ("Monthly limit", "每月限额"),
         ("Resets", "重置时间"),
+        // -- LOCAL: 供应商套餐用量（usage_modal 的 Usage limit 标签页） --
+        ("Plan usage", "套餐用量"),
+        ("Couldn't load plan usage", "套餐用量加载失败"),
+        ("Loading plan usage\u{2026}", "正在加载套餐用量…"),
+        ("5h window", "5 小时窗口"),
+        (
+            "Usage unknown (provider gave no usable figure).",
+            "用量未知（供应商未给出可用数值）",
+        ),
         ("Credits", "积分"),
         ("Pay as you go: Enabled", "按量付费：已启用"),
         ("Usage: ${used} / ${cap} per month", "每月用量：${used} / ${cap}"),

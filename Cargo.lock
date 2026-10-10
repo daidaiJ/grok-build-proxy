@@ -14191,6 +14191,7 @@ dependencies = [
  "xai-grok-pager-diff",
  "xai-grok-pager-render",
  "xai-grok-plugin-marketplace",
+ "xai-grok-provider-usage",
  "xai-grok-sampling-types",
  "xai-grok-sandbox",
  "xai-grok-shell",
@@ -14395,6 +14396,16 @@ dependencies = [
  "xai-grok-config",
  "xai-hooks-plugins-types",
  "xai-tty-utils",
+]
+
+[[package]]
+name = "xai-grok-provider-usage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -14658,6 +14669,7 @@ dependencies = [
  "xai-grok-otel",
  "xai-grok-paths",
  "xai-grok-plugin-marketplace",
+ "xai-grok-provider-usage",
  "xai-grok-sampler",
  "xai-grok-sampling-types",
  "xai-grok-sandbox",

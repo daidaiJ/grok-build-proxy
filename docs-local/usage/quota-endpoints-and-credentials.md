@@ -171,6 +171,17 @@ Windows 上的等价做法是 Chrome/Edge 的 `Local State` + DPAPI 解密，未
   （同一把 key 打模型端点正常）→ **套餐 key 只授权模型调用**；RAM 子账号还需先加入百炼业务空间，
   否则 `BailianGateway.Team.NotAuthorised`；`per5HourPercentage` 缺失表示该窗口可能不限量。
   cc-switch 暂未实现的原因：现有 `execute_usage_script` 是单请求模型，跑不了「签名换 token → 再查用量」两步链路。
+- **2026-10-10 复核（官方 CLI `modelstudioai/cli` 全量读源码）→ 维持「单 API key 不支持」**：
+  全部用量查询命令（`usage/{summary,stats,token-plan,coding-plan,free,freetier}`、
+  `token-plan/harness-quota`、`quota/check`）均声明 `auth: "console"`——console 域凭据只有
+  `file.access_token`（浏览器 `bl auth login --console`，或 AK/SK 经 `GenerateCLIAccessToken`
+  ACS3 签名换取），与模型域 API key 三域彻底分离（model=api key / console=access token /
+  openapi=AK/SK，见 `packages/core/src/auth/resolver.ts`）。唯一 `auth: "apiKey"` 的配额命令
+  `quota/list`（`GET /api/v1/models/limits`）查的是 RPM/TPM 静态限流配置，非套餐窗口余量。
+  Coding Plan 用量端点 `zeldaEasy.broadscope-bailian.codingPlan.queryCodingPlanInstanceInfoV2`
+  （per5Hour/perWeek/perBillMonth 三窗，窗口结构可参考）同样 console 门控。套餐 key 专用推理
+  host `token-plan.{cn-beijing,ap-southeast-1}.maas.aliyuncs.com/compatible-mode/v1` 只有模型
+  调用面。与 #7484 实测、CodexBar「API-key auth not supported」三方互证。
 
 ### 智谱 / z.ai GLM Coding Plan
 

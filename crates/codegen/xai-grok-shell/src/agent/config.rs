@@ -145,6 +145,16 @@ pub struct NetworkConfig {
     pub proxy_hosts: Option<Vec<String>>,
 }
 
+/// LOCAL: `[provider_usage]` — 供应商套餐用量查询（`/usage` 面板）。当前模型的
+/// `base_url` 匹配到支持「推理 SK 直查套餐用量」的供应商时，取数走该供应商端点。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProviderUsageConfig {
+    /// 快照缓存分钟数；缺省 5，读取时 clamp 1–120。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_minutes: Option<u64>,
+}
+
 /// LOCAL: `[shell]` — Windows shell backend selection for the bash tool.
 /// Unix shells are unaffected (they follow `$SHELL`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -161,8 +171,7 @@ pub struct ShellBackendConfig {
 
 /// LOCAL: `[notifications]` — out-of-box notifications on Notification hook
 /// events (permission_prompt / idle_prompt / task_complete). Everything is
-/// opt-in: with the section absent (the default) behavior is exactly upstream.
-/// Desktop notification rides terminal OSC 9 + OSC 777 escape sequences (zero
+/// opt-in: with the section absent (the default) behavior is exactly upstream./// Desktop notification rides terminal OSC 9 + OSC 777 escape sequences (zero
 /// dependencies; supported by Windows Terminal, iTerm2, kitty, WezTerm, rxvt),
 /// sound is a terminal BEL.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1386,6 +1395,9 @@ pub struct Config {
     /// LOCAL: `[network]` egress proxy; resolved into the HTTP layer at config load.
     #[serde(default, skip_serializing)]
     pub network: NetworkConfig,
+    /// LOCAL: `[provider_usage]` 供应商套餐用量查询设置.
+    #[serde(default, skip_serializing)]
+    pub provider_usage: ProviderUsageConfig,
     /// LOCAL: `[shell]` Windows shell backend; resolved into the shell cascade at config load.
     #[serde(default, skip_serializing)]
     pub shell: ShellBackendConfig,
@@ -1671,6 +1683,7 @@ impl Default for Config {
         let mut cfg = Self {
             features: Features::default(),
             network: NetworkConfig::default(),
+            provider_usage: ProviderUsageConfig::default(),
             shell: ShellBackendConfig::default(),
             notification_settings: NotificationsConfig::default(),
             tool_output_compression: Default::default(),
