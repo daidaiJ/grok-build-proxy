@@ -9,3 +9,4 @@ xai-compaction-transcript
 xai-grok-extra-ca
 xai-grok-status-line
 xai-grok-pager
+xai-grok-provider-usage

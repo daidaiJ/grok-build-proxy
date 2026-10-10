@@ -14398,6 +14398,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "xai-grok-provider-usage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "xai-grok-sampler"
 version = "0.1.0"
 dependencies = [
