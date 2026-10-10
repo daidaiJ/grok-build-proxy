@@ -625,6 +625,66 @@ async fn prompt_usage_ledger_via_handle_resets_and_clears() {
 }
 
 #[tokio::test]
+async fn terminal_failure_lands_on_the_echoed_model_key() {
+    use xai_grok_sampling_types::TokenUsage;
+
+    let call = TokenUsage {
+        prompt_tokens: 10,
+        completion_tokens: 2,
+        total_tokens: 12,
+        reasoning_tokens: 0,
+        cached_prompt_tokens: 0,
+        cache_creation_prompt_tokens: 0,
+    };
+
+    let h = TestHarness::new();
+    // The provider echoes a differently spelled id for the configured `test-model`.
+    h.handle
+        .record_model_call_usage(Some("glm-5-3-flash".into()), call, None, None);
+    h.handle.record_model_call_failure(None);
+    let ledger = h.handle.try_get_session_usage().await.expect("actor alive");
+    assert_eq!(ledger.by_model["glm-5-3-flash"].model_calls, 1);
+    assert_eq!(ledger.by_model["glm-5-3-flash"].failed_model_calls, 1);
+    // The config-side spelling must not open a second, success-less key.
+    assert_eq!(ledger.by_model.len(), 1);
+}
+
+#[tokio::test]
+async fn terminal_failure_without_an_echo_lands_on_the_configured_model() {
+    let h = TestHarness::new();
+    h.handle.record_model_call_failure(None);
+    let ledger = h.handle.try_get_session_usage().await.expect("actor alive");
+    assert_eq!(ledger.by_model["test-model"].failed_model_calls, 1);
+    assert_eq!(ledger.by_model.len(), 1);
+}
+
+#[tokio::test]
+async fn terminal_failure_after_a_model_switch_ignores_the_stale_echo() {
+    use xai_grok_sampling_types::TokenUsage;
+
+    let call = TokenUsage {
+        prompt_tokens: 10,
+        completion_tokens: 2,
+        total_tokens: 12,
+        reasoning_tokens: 0,
+        cached_prompt_tokens: 0,
+        cache_creation_prompt_tokens: 0,
+    };
+
+    let h = TestHarness::new();
+    h.handle
+        .record_model_call_usage(Some("echoed-a".into()), call, None, None);
+    let mut switched = test_config();
+    switched.model = "model-b".to_string();
+    h.handle.update_sampling_config(switched);
+    h.handle.record_model_call_failure(None);
+    let ledger = h.handle.try_get_session_usage().await.expect("actor alive");
+    // The previous model's echo must not absorb the new model's failure.
+    assert_eq!(ledger.by_model["model-b"].failed_model_calls, 1);
+    assert_eq!(ledger.by_model["echoed-a"].failed_model_calls, 0);
+}
+
+#[tokio::test]
 async fn estimated_tokens_tracks_tool_result_delta() {
     let h = TestHarness::new();
     h.handle.record_token_usage(100_000);

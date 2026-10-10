@@ -453,6 +453,15 @@ impl ChatStateActor {
         api_duration_ms: Option<u64>,
         cost_usd_ticks: Option<i64>,
     ) {
+        // LOCAL: remember which wire id the provider echoes for the configured
+        // model. A terminal failure has no echo of its own and reuses it, so ✓
+        // and ✗ stay on one ledger key even when the config-side spelling differs.
+        if let Some(id) = model_id.as_deref().filter(|id| !id.is_empty()) {
+            self.state.last_echoed_model = Some((
+                self.state.sampling_config.model.clone(),
+                id.to_owned(),
+            ));
+        }
         let model_key = match model_id.as_deref() {
             Some(id) if !id.is_empty() => id,
             _ => self.state.sampling_config.model.as_str(),
@@ -474,10 +483,18 @@ impl ChatStateActor {
     /// Session ledger only — the status line reads cumulative session health, per-prompt bills stay token/cost shaped.
     pub(super) fn record_model_call_failure(&mut self, model_id: Option<String>) {
         let model_key = match model_id.as_deref() {
-            Some(id) if !id.is_empty() => id,
-            _ => self.state.sampling_config.model.as_str(),
-        }
-        .to_owned();
+            Some(id) if !id.is_empty() => id.to_owned(),
+            // LOCAL: book the failure under the id the provider echoed for the model
+            // still configured; the config-side spelling would open a second,
+            // success-less key that then shadows the model's real totals.
+            _ => self
+                .state
+                .last_echoed_model
+                .as_ref()
+                .filter(|(configured, _)| *configured == self.state.sampling_config.model)
+                .map(|(_, echoed)| echoed.clone())
+                .unwrap_or_else(|| self.state.sampling_config.model.clone()),
+        };
         self.state
             .session_usage
             .record_main_loop_failure(&model_key);

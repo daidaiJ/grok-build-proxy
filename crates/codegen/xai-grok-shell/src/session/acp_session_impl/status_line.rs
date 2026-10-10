@@ -6,6 +6,7 @@ use std::sync::atomic::Ordering;
 use super::*;
 
 use crate::extensions::notification::{PromptUsage, PromptUsageModel, ticks_to_usd};
+use xai_chat_state::UsageTotals;
 use xai_grok_status_line::{
     STATUS_LINE_SCHEMA_VERSION, StatusLineApiCalls, StatusLineContext, StatusLineContextWindow,
     StatusLineCost, StatusLineEffort, StatusLineModel, StatusLineRepo, StatusLineSessionUsage,
@@ -123,14 +124,25 @@ fn live_turn(started_at_ms: Option<i64>, prompt_id: Option<&str>) -> Option<Stat
 /// assistant message, which a gateway can qualify (`deepseek/deepseek-v4.1-flash`
 /// for a request sent as `deepseek-v4.1-flash`), so the lookup also tries that
 /// suffix form; an unknown current model keeps the cross-model totals rather
-/// than zeroing the row.
+/// than zeroing the row. A hit with no completed call is a shadow key and is
+/// passed over, which also lands on the cross-model totals (see the guard below).
 fn scoped_usage(ledger: xai_chat_state::UsageLedger, model_id: Option<&str>) -> PromptUsage {
     let mut ledger = ledger;
     if let Some(id) = model_id {
         let qualified = format!("/{id}");
+        // LOCAL: an entry that never completed a call is an endpoint-health-only
+        // shadow key — a terminal failure booked under the config-side spelling
+        // while the calls landed under a differently spelled echoed id. Adopting
+        // it freezes the row on `✓ 0 ✗ m` and hides the token/cache/think
+        // segments, so skip such a candidate and keep looking; the cross-model
+        // totals are the last resort. A session with no completed call at all has
+        // nothing to fall back to and reads its zeroed entry as before.
+        let session_has_calls = ledger.totals.model_calls > 0;
+        let live = |totals: &UsageTotals| totals.model_calls > 0 || !session_has_calls;
         let scoped = ledger
             .by_model
             .get(id)
+            .filter(|totals| live(totals))
             .or_else(|| {
                 ledger
                     .by_model
@@ -138,9 +150,19 @@ fn scoped_usage(ledger: xai_chat_state::UsageLedger, model_id: Option<&str>) -> 
                     .rev()
                     .find(|(key, _)| key.ends_with(&qualified))
                     .map(|(_, totals)| totals)
+                    .filter(|totals| live(totals))
             })
             .cloned();
-        if let Some(totals) = scoped {
+        if let Some(mut totals) = scoped {
+            // The shadow the guard just skipped still owns this model's terminal
+            // failures, and the row's ✗ counter is session endpoint health — ride it
+            // along while another key supplies the ✓. With no candidate adopted the
+            // whole-session fallback below already carries every failure.
+            if let Some(shadow) = ledger.by_model.get(id).filter(|totals| !live(totals)) {
+                totals.failed_model_calls = totals
+                    .failed_model_calls
+                    .saturating_add(shadow.failed_model_calls);
+            }
             ledger.totals = totals;
         }
     }

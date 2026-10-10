@@ -1163,7 +1163,9 @@ impl SessionActor {
     }
 
     fn log_terminal_failure(&self, error_type: &str, status_code: Option<u16>, message: &str) {
-        // LOCAL: feed the status-line endpoint-health counters; the actor attributes by its current sampling model when None.
+        // LOCAL: feed the status-line endpoint-health counters; with None the actor
+        // attributes by the model's last echoed wire id (configured id before any echo),
+        // so a model's ✓ and ✗ share one ledger key.
         self.chat_state_handle.record_model_call_failure(None);
         // LOCAL(minimal-style): a model request has happened — the /style toggle
         // stops rewriting the live prompt from this point on.
