@@ -107,8 +107,8 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   `isUnifiedBillingUser=true`、`historyLen=0`。
   现场 QA（pct 已变仍报采样不足 = Δpct < 2 整点门，非无 xAI 消耗）见该文档末节，
   补 user-guide / 文案时复用。
-- [`docs-local/usage/`](docs-local/usage/README.md) — **供应商套餐用量专题（施工中
-  2026-10-10，分支 `feat/local-provider-usage-display`）**：用户已拍板——当前模型
+- [`docs-local/usage/`](docs-local/usage/README.md) — **供应商套餐用量专题（已落地，
+  随 `v1.0.46` 发版 2026-10-10；活体核验待用户回填）**：用户已拍板——当前模型
   属于「推理同一把 SK 可查套餐用量」的供应商时 `/usage` 面板改显该供应商套餐量
   替代 SuperGrok 并标注来源、窗口粒度 5h>周>月、控制台账户/Cookie/AK-SK 类凭据
   一律不支持（火山 Ark / 百炼据此剔除）、缓存默认 5 分钟可配（`[provider_usage]
@@ -248,6 +248,28 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   文末「结论（二）」与 PATCHES.md 二十五期。
 
 ## 🔄 Handoff 摘要
+
+### 供应商套餐用量上 /usage 面板 — 已落地并随 v1.0.46 发版（2026-10-10）
+
+- **当前状态：** 五家供应商（OpenCode Go / Command Code / 智谱 GLM / Kimi / MiniMax）
+  的套餐用量在 Usage limit 标签页替代 SuperGrok 块并标注来源；判定 = 模型 base_url
+  host 匹配（无显式配置），缓存 `[provider_usage] cache_minutes` 默认 5 分钟。
+  三层落点：新 crate `xai-grok-provider-usage`（纯函数适配器，一家一文件）、shell
+  `x.ai/providerUsage` 扩展（TTL 缓存 + GLM 裸key/Bearer 重试 + MiniMax 双路径）、
+  pager `Effect::FetchProviderUsage` + usage_modal 分流渲染。已合 main（merge
+  `afd4058`），tag **`v1.0.46`**；build run 38065337768 与 release run 38067181846
+  双 job success，4 资产；本机客户端已部署，`grok2.exe --version` =
+  `grok 1.0.46 (afd4058c1992)`（旧 v1.0.40 留 `grok2.exe.v1.0.40.bak`）。
+- **验证：** `ctest.sh -p xai-grok-provider-usage --lib` 54/54、
+  `-p xai-grok-pager --lib usage_modal` 37/37、三 crate cargo check 0 error；
+  Linux CI 跑 shell 全套（含新扩展单测）绿。百炼单 key 查询 2026-10-10 复核官方
+  CLI 源码确认不支持（三域分离），不立项。
+- **遗留：** ① 面板活体核验（用户人工：Command Code 模型开 /usage 对账探针
+  `scripts-local/commandcode_usage.py`；OpenCode Go 403 回退；缓存 debug 日志
+  `provider usage: cache hit`）② 发版后小概率发现解析形态偏差 → 修适配器走
+  patch 发版，纯函数层改起来最快。
+- **详情指针：** [`docs-local/usage/provider-quota-display-todo.md`](docs-local/usage/provider-quota-display-todo.md)
+  （分期实况 + 剩余待定决策）；PATCHES.md 二十六期。
 
 ### 状态行 429/400 后冻结 — 已修并随 v1.0.45 发版（2026-10-10）
 

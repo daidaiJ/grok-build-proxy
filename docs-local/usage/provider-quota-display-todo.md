@@ -1,6 +1,8 @@
 # 供应商套餐用量上 `/usage` 面板（TODO）
 
-> **状态（2026-10-10）：T1–T3 全部落地，随 `v1.0.46` 发版；活体验证未做**（面板 vs
+> **状态（2026-10-10）：T1–T3 全部落地，已随 `v1.0.46` 发版（merge `afd4058`，
+> build run 38065337768 / release run 38067181846 双绿，4 资产）；本机客户端已部署
+> v1.0.46，面板活体核验由用户人工进行**（面板 vs
 > `scripts-local/commandcode_usage.py` 对账、OpenCode Go 403 回退、缓存 debug 日志）。
 > T1 适配器纯函数层已落地（新 crate
 > `xai-grok-provider-usage`，5 家适配器 + 夹具单测 54 绿）；T2 shell 扩展已落地

@@ -2262,5 +2262,11 @@ MiniMax 新旧双路径 404 切换）；火山 Ark / 百炼 / Cline / Token Unli
 usage_modal` 37/37（含 替代/裁剪/回退/loading 四个新用例）；i18n 扫描器分类一致。
 活体验证（面板 vs `scripts-local/commandcode_usage.py` 对账）未做，待新客户端实跑。
 
-发版：合 main（merge 提交）、tag **`v1.0.46`**（轻量 tag）。build/release run id
-发版后补记。
+发版：合 main `afd4058`（merge 提交，含 `3df24b7` 索引文档），tag **`v1.0.46`**
+（轻量 tag）。build run 38065337768（Windows job 先绿；Linux `cargo test -p …
+-p xai-grok-shell` 全套，本分支的 shell 扩展单测由该套件覆盖）与 release run
+38067181846 双双 job success，release 页 4 资产
+（`grok2-v1.0.46-x86_64-{linux.tar.gz,windows.zip}` 各带 sha256，zip 本机下载
+sha256 实测一致）。产物已部署本机 `D:\tool-cli\grok2\grok2.exe`，实测
+`grok2.exe --version` = `grok 1.0.46 (afd4058c1992)`；旧 v1.0.40 留
+`grok2.exe.v1.0.40.bak` 供回滚。面板活体核验由用户人工进行。
