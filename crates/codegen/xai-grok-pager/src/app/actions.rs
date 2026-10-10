@@ -2190,6 +2190,15 @@ pub enum Effect {
     /// LOCAL: 重算周额度估算（读 billing 采样 + 模型账本 + config 直连判定，spawn_blocking）。
     /// `agent_id` 为发起方（会话模态），`None` = 仪表盘路径；结果同步落到对应镜像。
     FetchQuotaEstimate { agent_id: Option<AgentId> },
+    /// LOCAL: 当前模型供应商的套餐用量（`x.ai/providerUsage` 扩展）。shell 侧按
+    /// base_url 匹配供应商 + TTL 缓存；`provider: null` = 无匹配供应商（面板零变化）。
+    FetchProviderUsage {
+        agent_id: AgentId,
+        /// 当前模型 id（目录键），shell 据此取 entry 的 base_url / 凭据。
+        model_id: String,
+        /// Usage-modal fetch generation，语义同 [`Effect::FetchBilling`] 的 `nonce`。
+        nonce: u64,
+    },
     /// Fetch billing data at the app level (no agent required).
     /// Used on startup to populate the welcome-screen credit warning, and by the dashboard's `/usage` modal.
     FetchAppBilling {
@@ -3159,6 +3168,13 @@ pub enum TaskResult {
     QuotaEstimateComputed {
         agent_id: Option<AgentId>,
         estimate: Option<xai_grok_tools::quota_estimate::QuotaEstimate>,
+    },
+    /// LOCAL: 供应商套餐用量查询完成（含 `provider: null` 的未配置回包）。
+    ProviderUsageFetched {
+        agent_id: AgentId,
+        response: xai_grok_shell::extensions::provider_usage::ProviderUsageResponse,
+        /// Usage-modal fetch generation，语义同 `BillingFetched` 的 `nonce`。
+        nonce: u64,
     },
     /// App-level billing fetch failed (transport or parse); the cached balance is kept.
     AppBillingError {

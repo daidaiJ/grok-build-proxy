@@ -5037,6 +5037,54 @@ pub(crate) fn execute(
                 TaskResult::QuotaEstimateComputed { agent_id, estimate }
             });
         }
+        // LOCAL: 供应商套餐用量（`x.ai/providerUsage`）。shell 侧做 base_url 匹配 +
+        // TTL 缓存，未匹配供应商回 `provider: null`，错误也在回包体内（不进 Err 通道）。
+        Effect::FetchProviderUsage {
+            agent_id,
+            model_id,
+            nonce,
+        } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let req = acp::ExtRequest::new(
+                    "x.ai/providerUsage",
+                    serde_json::value::to_raw_value(&serde_json::json!({
+                        "model_id": model_id,
+                    }))
+                    .expect("serialize provider usage params")
+                    .into(),
+                );
+                let response = match acp_send(req, &tx).await {
+                    Ok(resp) => {
+                        let wrapper: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        let result = wrapper.get("result").unwrap_or(&wrapper);
+                        serde_json::from_value::<
+                            xai_grok_shell::extensions::provider_usage::ProviderUsageResponse,
+                        >(result.clone())
+                        .unwrap_or_else(|e| {
+                            xai_grok_shell::extensions::provider_usage::ProviderUsageResponse {
+                                provider: None,
+                                snapshot: None,
+                                error: Some(format!("Parse error: {e}")),
+                                error_kind: Some("parse".into()),
+                            }
+                        })
+                    }
+                    Err(e) => xai_grok_shell::extensions::provider_usage::ProviderUsageResponse {
+                        provider: None,
+                        snapshot: None,
+                        error: Some(sanitize_user_error(&format!("{e}"))),
+                        error_kind: Some("http".into()),
+                    },
+                };
+                TaskResult::ProviderUsageFetched {
+                    agent_id,
+                    response,
+                    nonce,
+                }
+            });
+        }
         Effect::RefreshGate => {
             tasks
                 .spawn(async move {

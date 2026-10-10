@@ -601,6 +601,22 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        // LOCAL: 供应商套餐用量。只 settle 自己这代打开的模态（nonce 守卫同 billing）；
+        // `provider: null`（无匹配供应商）也落库，让 loading 行收起、面板回现状。
+        TaskResult::ProviderUsageFetched {
+            agent_id,
+            response,
+            nonce,
+        } => {
+            if let Some(agent) = app.agents.get_mut(&agent_id)
+                && let Some(state) = usage_modal_state_mut(agent)
+                && state.fetch_nonce == nonce
+            {
+                state.provider_usage_loading = false;
+                state.provider_usage = Some(response);
+            }
+            vec![]
+        }
         TaskResult::AppBillingFetched {
             balance,
             autotopup,

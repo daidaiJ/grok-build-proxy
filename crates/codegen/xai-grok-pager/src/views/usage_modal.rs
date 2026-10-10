@@ -96,6 +96,10 @@ pub struct UsageInfoModalState {
     pub session_usage_text: Option<String>,
     pub billing_loading: bool,
     pub billing_error: Option<String>,
+    /// LOCAL: 供应商套餐用量回包（`provider: None` = 当前模型无匹配供应商）。
+    pub provider_usage: Option<xai_grok_shell::extensions::provider_usage::ProviderUsageResponse>,
+    /// LOCAL: 供应商套餐用量在途标志（首开时先于回包渲染）。
+    pub provider_usage_loading: bool,
     /// Fetch generation stamped at open; results from an earlier open (same session, modal reopened) are dropped instead of overwriting.
     pub fetch_nonce: u64,
     /// Hit rects for copyable value rows, refreshed every render.
@@ -150,6 +154,8 @@ impl UsageInfoModalState {
             session_usage_text: None,
             billing_loading: false,
             billing_error: None,
+            provider_usage: None,
+            provider_usage_loading: false,
             fetch_nonce: Default::default(),
             session_fields: None,
             copy_hits: Vec::new(),
@@ -775,7 +781,36 @@ fn usage_limit_lines(
             theme,
             tr("Please check your usage on {url}").replace("{url}", url),
         ));
+    } else if let Some(resp) = state
+        .provider_usage
+        .as_ref()
+        .filter(|resp| resp.provider.is_some())
+    {
+        // LOCAL: 当前模型 base_url 匹配到供应商 → 套餐用量块替代 SuperGrok 额度块（拍板 1）。
+        match (&resp.snapshot, &resp.error) {
+            (Some(snapshot), _) => {
+                lines.extend(provider_usage_lines(snapshot, theme));
+            }
+            (None, Some(error)) => {
+                // 失败且无缓存快照：错误行 + 回退渲染 SuperGrok 块。
+                lines.push(muted_line(
+                    theme,
+                    format!("{}: {error}", tr("Couldn't load plan usage")),
+                ));
+                lines.push(Line::default());
+                if let Some(bal) = balance {
+                    lines.extend(allowance_lines(state, bal, quota_estimate, theme));
+                }
+            }
+            (None, None) => {
+                lines.push(muted_line(theme, tr("Loading plan usage\u{2026}")));
+            }
+        }
     } else if let Some(bal) = balance {
+        if state.provider_usage_loading {
+            lines.push(muted_line(theme, tr("Loading plan usage\u{2026}")));
+            lines.push(Line::default());
+        }
         lines.extend(allowance_lines(state, bal, quota_estimate, theme));
     } else if let Some(error) = &state.billing_error {
         lines.push(muted_line(
@@ -808,6 +843,95 @@ fn usage_limit_lines(
     lines
 }
 
+/// LOCAL: 供应商套餐用量块——来源标注头 + 每窗口一条 bar + Resets + note（拍板 1/2）。
+fn provider_usage_lines(
+    snapshot: &xai_grok_provider_usage::PlanUsageSnapshot,
+    theme: &Theme,
+) -> Vec<Line<'static>> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    let mut header = match &snapshot.plan_name {
+        Some(plan) => format!("{} ({plan})", tr("Plan usage")),
+        None => tr("Plan usage").to_string(),
+    };
+    header.push_str(&format!(" \u{2014} {}", snapshot.provider.display_name()));
+    lines.push(Line::styled(header, header_style(theme)));
+    lines.push(Line::default());
+
+    // 窗口裁剪（拍板 2）：有 5h 或周窗口时月度不渲染。
+    let has_short = snapshot
+        .windows
+        .iter()
+        .any(|w| w.kind != xai_grok_provider_usage::UsageWindowKind::Monthly);
+    for (index, win) in snapshot.windows.iter().enumerate() {
+        if has_short && win.kind == xai_grok_provider_usage::UsageWindowKind::Monthly {
+            continue;
+        }
+        if index > 0 {
+            lines.push(Line::default());
+        }
+        lines.push(Line::styled(
+            tr(window_kind_label(win.kind)).to_string(),
+            header_style(theme),
+        ));
+        lines.push(usage_bar_line(win.used_pct.unwrap_or(0.0), theme));
+        if win.used_pct.is_none() {
+            lines.push(muted_line(theme, tr("Usage unknown (provider gave no usable figure).")));
+        }
+        if let Some(resets) = win.resets_at_ms {
+            lines.push(muted_line(
+                theme,
+                format!("{}: {}", tr("Resets"), local_stamp(resets)),
+            ));
+        }
+        if let Some(note) = &win.note {
+            lines.push(muted_line(theme, note.clone()));
+        }
+    }
+    lines
+}
+
+/// 窗口粒度标签（复用既有「Weekly limit」/「Monthly limit」键；5h 新增）。
+fn window_kind_label(kind: xai_grok_provider_usage::UsageWindowKind) -> &'static str {
+    match kind {
+        xai_grok_provider_usage::UsageWindowKind::FiveHour => "5h window",
+        xai_grok_provider_usage::UsageWindowKind::Weekly => "Weekly limit",
+        xai_grok_provider_usage::UsageWindowKind::Monthly => "Monthly limit",
+    }
+}
+
+/// epoch ms → 本地时区「MM-DD HH:MM」（与周额度估算块同一格式）。
+fn local_stamp(ms: u64) -> String {
+    chrono::DateTime::from_timestamp_millis(ms as i64)
+        .map(|dt| {
+            dt.with_timezone(&chrono::Local)
+                .format("%m-%d %H:%M")
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+/// 用量 bar（BAR_WIDTH=30，已用口径），SuperGrok 块与供应商块共用。
+fn usage_bar_line(pct: f64, theme: &Theme) -> Line<'static> {
+    const BAR_WIDTH: usize = 30;
+    let pct = pct.clamp(0.0, 100.0);
+    let filled = (((pct / 100.0) * BAR_WIDTH as f64).round() as usize).min(BAR_WIDTH);
+    Line::from(vec![
+        Span::styled(
+            "\u{2588}".repeat(filled),
+            Style::default().fg(theme.gray_bright),
+        ),
+        Span::styled(
+            "\u{2591}".repeat(BAR_WIDTH - filled),
+            Style::default().fg(theme.gray_dim),
+        ),
+        // Floored to match the backend's truncation.
+        Span::styled(
+            format!("  {}%", pct.floor() as i64),
+            Style::default().fg(theme.text_primary),
+        ),
+    ])
+}
+
 fn allowance_lines(
     state: &UsageInfoModalState,
     bal: &CreditBalance,
@@ -824,24 +948,7 @@ fn allowance_lines(
     lines.push(Line::styled(header, header_style(theme)));
     lines.push(Line::default());
 
-    const BAR_WIDTH: usize = 30;
-    let pct = bal.usage_pct.clamp(0.0, 100.0);
-    let filled = (((pct / 100.0) * BAR_WIDTH as f64).round() as usize).min(BAR_WIDTH);
-    lines.push(Line::from(vec![
-        Span::styled(
-            "\u{2588}".repeat(filled),
-            Style::default().fg(theme.gray_bright),
-        ),
-        Span::styled(
-            "\u{2591}".repeat(BAR_WIDTH - filled),
-            Style::default().fg(theme.gray_dim),
-        ),
-        // Floored to match the backend's truncation.
-        Span::styled(
-            format!("  {}%", bal.usage_pct.floor() as i64),
-            Style::default().fg(theme.text_primary),
-        ),
-    ]));
+    lines.push(usage_bar_line(bal.usage_pct, theme));
 
     if let Some(reset) = &bal.period_end_display {
         lines.push(muted_line(theme, format!("{}: {reset}", tr("Resets"))));
@@ -1244,6 +1351,147 @@ mod tests {
         state.ctx.chat_kind = true;
         let lines = usage_limit_lines(&state, None, None, &theme);
         assert!(lines[0].to_string().contains("Loading session usage"));
+    }
+
+    // -- LOCAL: 供应商套餐用量块 --
+
+    fn provider_response(
+        snapshot: Option<xai_grok_provider_usage::PlanUsageSnapshot>,
+        error: Option<String>,
+    ) -> xai_grok_shell::extensions::provider_usage::ProviderUsageResponse {
+        xai_grok_shell::extensions::provider_usage::ProviderUsageResponse {
+            provider: Some(xai_grok_provider_usage::UsageProviderId::CommandCode),
+            snapshot,
+            error_kind: error.as_ref().map(|_| "unauthorized".to_string()),
+            error,
+        }
+    }
+
+    fn provider_snapshot() -> xai_grok_provider_usage::PlanUsageSnapshot {
+        use xai_grok_provider_usage::{PlanUsageSnapshot, PlanUsageWindow, UsageProviderId, UsageWindowKind};
+        PlanUsageSnapshot {
+            provider: UsageProviderId::CommandCode,
+            plan_name: Some("individual-goat-monthly".to_string()),
+            windows: vec![
+                PlanUsageWindow {
+                    kind: UsageWindowKind::FiveHour,
+                    used_pct: Some(31.0),
+                    resets_at_ms: Some(1_787_753_523_000),
+                    note: Some("$3.10 / $10 · limited".to_string()),
+                },
+                PlanUsageWindow {
+                    kind: UsageWindowKind::Weekly,
+                    used_pct: Some(30.0),
+                    resets_at_ms: None,
+                    note: None,
+                },
+                PlanUsageWindow {
+                    kind: UsageWindowKind::Monthly,
+                    used_pct: Some(12.0),
+                    resets_at_ms: None,
+                    note: None,
+                },
+            ],
+            fetched_at_ms: 0,
+        }
+    }
+
+    #[test]
+    fn provider_block_replaces_supergrok_and_drops_monthly() {
+        let mut state = state_with_session();
+        state.provider_usage = Some(provider_response(Some(provider_snapshot()), None));
+        let theme = Theme::current();
+        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        // 头行带套餐名与供应商来源标注。
+        assert!(
+            text[0].contains("Plan usage") && text[0].contains("Command Code"),
+            "{text:?}"
+        );
+        assert!(text[0].contains("individual-goat-monthly"));
+        // SuperGrok 额度块被替代。
+        assert!(!text.iter().any(|l| l.contains("SuperGrok")), "{text:?}");
+        // 5h + 周 + note/Resets 都在；月度被裁剪（拍板 2）。
+        assert!(text.iter().any(|l| l.contains("5h window")));
+        assert!(text.iter().any(|l| l.contains("Weekly limit")));
+        assert!(!text.iter().any(|l| l.contains("Monthly limit")), "{text:?}");
+        assert!(text.iter().any(|l| l.contains("$3.10 / $10 · limited")));
+        assert!(text.iter().any(|l| l.contains("Resets:")));
+        assert!(text.iter().any(|l| l.ends_with("31%")));
+    }
+
+    fn sample_balance() -> CreditBalance {
+        CreditBalance {
+            usage_pct: 50.67,
+            effective_usage_pct: 50.67,
+            period_end_display: None,
+            pay_as_you_go: false,
+            on_demand_cap_cents: None,
+            on_demand_used_cents: None,
+            prepaid_balance_cents: None,
+            period_type: Some("USAGE_PERIOD_TYPE_WEEKLY".to_string()),
+            is_unified_billing_user: None,
+        }
+    }
+
+    #[test]
+    fn provider_error_falls_back_to_supergrok() {
+        let mut state = state_with_session();
+        state.provider_usage =
+            Some(provider_response(None, Some("OpenCode Go subscription required.".to_string())));
+        let theme = Theme::current();
+        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        assert!(
+            text.iter()
+                .any(|l| l.contains("Couldn't load plan usage") && l.contains("subscription")),
+            "{text:?}"
+        );
+        // 回退渲染 SuperGrok 块。
+        assert!(text.iter().any(|l| l.contains("SuperGrok")), "{text:?}");
+    }
+
+    #[test]
+    fn provider_unconfigured_keeps_current_panel() {
+        let mut state = state_with_session();
+        let theme = Theme::current();
+        // provider: None（无匹配）不改现状。
+        state.provider_usage =
+            Some(xai_grok_shell::extensions::provider_usage::ProviderUsageResponse {
+                provider: None,
+                snapshot: None,
+                error: None,
+                error_kind: None,
+            });
+        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        assert!(text[0].contains("SuperGrok"), "{text:?}");
+        assert!(!text.iter().any(|l| l.contains("Plan usage")));
+
+        // 回包未到且未标记在途：同样不出 loading 行。
+        let state = state_with_session();
+        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        assert!(
+            !lines
+                .iter()
+                .any(|l| l.to_string().contains("Loading plan usage")),
+            "回包未到且未标记在途时不出 loading 行"
+        );
+    }
+
+    #[test]
+    fn provider_loading_line_shows_above_balance() {
+        let mut state = state_with_session();
+        state.provider_usage_loading = true;
+        let theme = Theme::current();
+        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        assert!(
+            text.iter()
+                .any(|l| l.contains("Loading plan usage")),
+            "{text:?}"
+        );
+        assert!(text.iter().any(|l| l.contains("SuperGrok")));
     }
 
     #[test]
