@@ -14,11 +14,13 @@
 //! [`ProviderUsageError::TryNextAttempt`] 或 HTTP 404 且还有剩余尝试时，调用方换
 //! 下一个请求重试。
 
+mod base_url_match;
 mod parse;
 mod providers;
 mod requests;
 mod types;
 
+pub use base_url_match::provider_for_base_url;
 pub use requests::prepare_requests;
 pub use types::{
     PlanUsageSnapshot, PlanUsageWindow, PreparedRequest, ProviderUsageError, UsageProviderId,
