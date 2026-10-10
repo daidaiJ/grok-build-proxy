@@ -2191,13 +2191,12 @@ pub enum Effect {
     /// `agent_id` 为发起方（会话模态），`None` = 仪表盘路径；结果同步落到对应镜像。
     FetchQuotaEstimate { agent_id: Option<AgentId> },
     /// LOCAL: 当前模型供应商的套餐用量（`x.ai/providerUsage` 扩展）。shell 侧按
-    /// base_url 匹配供应商 + TTL 缓存；`provider: null` = 无匹配供应商（面板零变化）。
+    /// base_url 匹配供应商 + TTL 缓存 + 单飞；`provider: null` = 无匹配供应商。
+    /// 触发方保证单发（agent 级在途标志），无 nonce —— 回包无条件落 agent 级缓存。
     FetchProviderUsage {
         agent_id: AgentId,
         /// 当前模型 id（目录键），shell 据此取 entry 的 base_url / 凭据。
         model_id: String,
-        /// Usage-modal fetch generation，语义同 [`Effect::FetchBilling`] 的 `nonce`。
-        nonce: u64,
     },
     /// Fetch billing data at the app level (no agent required).
     /// Used on startup to populate the welcome-screen credit warning, and by the dashboard's `/usage` modal.
@@ -3169,12 +3168,13 @@ pub enum TaskResult {
         agent_id: Option<AgentId>,
         estimate: Option<xai_grok_tools::quota_estimate::QuotaEstimate>,
     },
-    /// LOCAL: 供应商套餐用量查询完成（含 `provider: null` 的未配置回包）。
+    /// LOCAL: 供应商套餐用量查询完成（含 `provider: null` 的未配置回包）。模态无关：
+    /// 无条件落 agent 级缓存（按 model_id 绑定），显示层过滤当前模型。
     ProviderUsageFetched {
         agent_id: AgentId,
+        /// 发起取数时的模型 id，缓存按它绑定。
+        model_id: String,
         response: xai_grok_shell::extensions::provider_usage::ProviderUsageResponse,
-        /// Usage-modal fetch generation，语义同 `BillingFetched` 的 `nonce`。
-        nonce: u64,
     },
     /// App-level billing fetch failed (transport or parse); the cached balance is kept.
     AppBillingError {

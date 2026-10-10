@@ -131,6 +131,8 @@ impl AgentView {
         let prompt = PromptWidget::new_with_cwd(&session.cwd);
         let mut view = Self {
             session,
+            provider_usage_cache: None,
+            provider_usage_loading: false,
             session_binding_epoch: 0,
             scrollback,
             prompt,

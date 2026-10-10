@@ -96,10 +96,6 @@ pub struct UsageInfoModalState {
     pub session_usage_text: Option<String>,
     pub billing_loading: bool,
     pub billing_error: Option<String>,
-    /// LOCAL: 供应商套餐用量回包（`provider: None` = 当前模型无匹配供应商）。
-    pub provider_usage: Option<xai_grok_shell::extensions::provider_usage::ProviderUsageResponse>,
-    /// LOCAL: 供应商套餐用量在途标志（首开时先于回包渲染）。
-    pub provider_usage_loading: bool,
     /// Fetch generation stamped at open; results from an earlier open (same session, modal reopened) are dropped instead of overwriting.
     pub fetch_nonce: u64,
     /// Hit rects for copyable value rows, refreshed every render.
@@ -154,8 +150,6 @@ impl UsageInfoModalState {
             session_usage_text: None,
             billing_loading: false,
             billing_error: None,
-            provider_usage: None,
-            provider_usage_loading: false,
             fetch_nonce: Default::default(),
             session_fields: None,
             copy_hits: Vec::new(),
@@ -546,6 +540,9 @@ pub fn render_usage_modal(
     buf: &mut Buffer,
     area: Rect,
     state: &mut UsageInfoModalState,
+    // LOCAL: 供应商套餐用量视图（agent 级缓存按当前模型过滤后的条目）+ 在途标志。
+    provider_usage: Option<&crate::app::agent_view::ProviderUsageCache>,
+    provider_usage_loading: bool,
     balance: Option<&CreditBalance>,
     quota_estimate: Option<&xai_grok_tools::quota_estimate::QuotaEstimate>,
     compact: bool,
@@ -632,7 +629,15 @@ pub fn render_usage_modal(
         return;
     };
     let content = mca.content;
-    let tab = tab_content(state, balance, quota_estimate, theme, content.width);
+    let tab = tab_content(
+        state,
+        provider_usage,
+        provider_usage_loading,
+        balance,
+        quota_estimate,
+        theme,
+        content.width,
+    );
     state.content_rect = content;
     let plain_lines: Vec<String> = tab.lines.iter().map(ToString::to_string).collect();
     // Endpoints index these strings; drop any gesture if the painted text changed.
@@ -714,6 +719,8 @@ impl TabContent {
 
 fn tab_content(
     state: &UsageInfoModalState,
+    provider_usage: Option<&crate::app::agent_view::ProviderUsageCache>,
+    provider_usage_loading: bool,
     balance: Option<&CreditBalance>,
     quota_estimate: Option<&xai_grok_tools::quota_estimate::QuotaEstimate>,
     theme: &Theme,
@@ -723,9 +730,14 @@ fn tab_content(
         UsageInfoTab::ContextUsage => {
             TabContent::from_lines(context_tab_lines(state, theme, width))
         }
-        UsageInfoTab::UsageLimit => {
-            TabContent::from_lines(usage_limit_lines(state, balance, quota_estimate, theme))
-        }
+        UsageInfoTab::UsageLimit => TabContent::from_lines(usage_limit_lines(
+            state,
+            provider_usage,
+            provider_usage_loading,
+            balance,
+            quota_estimate,
+            theme,
+        )),
         UsageInfoTab::SessionInfo => session_info_content(state, theme),
     }
 }
@@ -763,6 +775,8 @@ fn context_tab_lines(state: &UsageInfoModalState, theme: &Theme, width: u16) -> 
 /// Account allowance followed by this session's token/cost totals.
 fn usage_limit_lines(
     state: &UsageInfoModalState,
+    provider_usage: Option<&crate::app::agent_view::ProviderUsageCache>,
+    provider_usage_loading: bool,
     balance: Option<&CreditBalance>,
     quota_estimate: Option<&xai_grok_tools::quota_estimate::QuotaEstimate>,
     theme: &Theme,
@@ -781,15 +795,19 @@ fn usage_limit_lines(
             theme,
             tr("Please check your usage on {url}").replace("{url}", url),
         ));
-    } else if let Some(resp) = state
-        .provider_usage
-        .as_ref()
-        .filter(|resp| resp.provider.is_some())
-    {
-        // LOCAL: 当前模型 base_url 匹配到供应商 → 套餐用量块替代 SuperGrok 额度块（拍板 1）。
-        match (&resp.snapshot, &resp.error) {
+    } else if let Some(entry) = provider_usage.filter(|c| c.response.provider.is_some()) {
+        // LOCAL: 当前模型有缓存 → 套餐块 + 查询时间点（stale-while-revalidate：刷新中 /
+        // 刷新失败都保留旧快照，时间戳标注数据新鲜度）。
+        match (&entry.response.snapshot, &entry.response.error) {
             (Some(snapshot), _) => {
                 lines.extend(provider_usage_lines(snapshot, theme));
+                let mut stamp = tr("Queried at {time}")
+                    .replace("{time}", &local_stamp(entry.fetched_at_ms));
+                if provider_usage_loading {
+                    stamp.push_str(" \u{b7} ");
+                    stamp.push_str(&tr("Refreshing\u{2026}"));
+                }
+                lines.push(muted_line(theme, stamp));
             }
             (None, Some(error)) => {
                 // 失败且无缓存快照：错误行 + 回退渲染 SuperGrok 块。
@@ -807,7 +825,7 @@ fn usage_limit_lines(
             }
         }
     } else if let Some(bal) = balance {
-        if state.provider_usage_loading {
+        if provider_usage_loading {
             lines.push(muted_line(theme, tr("Loading plan usage\u{2026}")));
             lines.push(Line::default());
         }
@@ -1206,7 +1224,7 @@ mod tests {
             is_unified_billing_user: None,
         };
         let theme = Theme::current();
-        let lines = usage_limit_lines(&state, Some(&bal), None, &theme);
+        let lines = usage_limit_lines(&state, None, false, Some(&bal), None, &theme);
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         assert_eq!(
             text.first().map(String::as_str),
@@ -1256,7 +1274,7 @@ mod tests {
             is_unified_billing_user: None,
         };
         let theme = Theme::current();
-        let lines = usage_limit_lines(&state, Some(&bal), Some(&tight_estimate()), &theme);
+        let lines = usage_limit_lines(&state, None, false, Some(&bal), Some(&tight_estimate()), &theme);
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         assert!(
             text.iter()
@@ -1272,7 +1290,7 @@ mod tests {
             "multi-device caveat missing: {text:?}"
         );
         // 没有任何采样镜像时不渲染估算块（升级前/首周静默）
-        let lines = usage_limit_lines(&state, Some(&bal), None, &theme);
+        let lines = usage_limit_lines(&state, None, false, Some(&bal), None, &theme);
         assert!(
             !lines
                 .iter()
@@ -1307,6 +1325,8 @@ mod tests {
         };
         let lines = usage_limit_lines(
             &state,
+            None,
+            false,
             Some(&bal),
             Some(&nodata(NoDataReason::NoLocalUsage)),
             &theme,
@@ -1319,6 +1339,8 @@ mod tests {
         );
         let lines = usage_limit_lines(
             &state,
+            None,
+            false,
             Some(&bal),
             Some(&nodata(NoDataReason::InsufficientSamples)),
             &theme,
@@ -1336,20 +1358,20 @@ mod tests {
         let theme = Theme::current();
         let mut state = state_with_session();
         state.billing_loading = true;
-        let lines = usage_limit_lines(&state, None, None, &theme);
+        let lines = usage_limit_lines(&state, None, false, None, None, &theme);
         assert!(lines[0].to_string().contains("Loading usage"));
 
         state.ctx.billing_redirect_url = Some("https://x.example/usage".to_string());
-        let lines = usage_limit_lines(&state, None, None, &theme);
+        let lines = usage_limit_lines(&state, None, false, None, None, &theme);
         assert!(lines[0].to_string().contains("https://x.example/usage"));
 
         state.ctx.usage_visible = false;
-        let lines = usage_limit_lines(&state, None, None, &theme);
+        let lines = usage_limit_lines(&state, None, false, None, None, &theme);
         assert!(lines[0].to_string().contains("managed by your team"));
 
         // Gateway chat sessions show no billing at all
         state.ctx.chat_kind = true;
-        let lines = usage_limit_lines(&state, None, None, &theme);
+        let lines = usage_limit_lines(&state, None, false, None, None, &theme);
         assert!(lines[0].to_string().contains("Loading session usage"));
     }
 
@@ -1364,6 +1386,20 @@ mod tests {
             snapshot,
             error_kind: error.as_ref().map(|_| "unauthorized".to_string()),
             error,
+        }
+    }
+
+    fn provider_cache_entry(
+        response: xai_grok_shell::extensions::provider_usage::ProviderUsageResponse,
+    ) -> crate::app::agent_view::ProviderUsageCache {
+        crate::app::agent_view::ProviderUsageCache {
+            model_id: "test-model".to_string(),
+            fetched_at_ms: response
+                .snapshot
+                .as_ref()
+                .map(|s| s.fetched_at_ms)
+                .unwrap_or(1_760_000_000_000),
+            response,
         }
     }
 
@@ -1392,16 +1428,23 @@ mod tests {
                     note: None,
                 },
             ],
-            fetched_at_ms: 0,
+            fetched_at_ms: 1_760_000_000_000,
         }
     }
 
     #[test]
     fn provider_block_replaces_supergrok_and_drops_monthly() {
-        let mut state = state_with_session();
-        state.provider_usage = Some(provider_response(Some(provider_snapshot()), None));
+        let state = state_with_session();
+        let entry = provider_cache_entry(provider_response(Some(provider_snapshot()), None));
         let theme = Theme::current();
-        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        let lines = usage_limit_lines(
+            &state,
+            Some(&entry),
+            false,
+            Some(&sample_balance()),
+            None,
+            &theme,
+        );
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         // 头行带套餐名与供应商来源标注。
         assert!(
@@ -1418,6 +1461,9 @@ mod tests {
         assert!(text.iter().any(|l| l.contains("$3.10 / $10 · limited")));
         assert!(text.iter().any(|l| l.contains("Resets:")));
         assert!(text.iter().any(|l| l.ends_with("31%")));
+        // 查询时间点行（非在途：无刷新标记）。
+        assert!(text.iter().any(|l| l.contains("Queried at")), "{text:?}");
+        assert!(!text.iter().any(|l| l.contains("Refreshing")), "{text:?}");
     }
 
     fn sample_balance() -> CreditBalance {
@@ -1436,11 +1482,20 @@ mod tests {
 
     #[test]
     fn provider_error_falls_back_to_supergrok() {
-        let mut state = state_with_session();
-        state.provider_usage =
-            Some(provider_response(None, Some("OpenCode Go subscription required.".to_string())));
+        let state = state_with_session();
+        let entry = provider_cache_entry(provider_response(
+            None,
+            Some("OpenCode Go subscription required.".to_string()),
+        ));
         let theme = Theme::current();
-        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        let lines = usage_limit_lines(
+            &state,
+            Some(&entry),
+            false,
+            Some(&sample_balance()),
+            None,
+            &theme,
+        );
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         assert!(
             text.iter()
@@ -1453,24 +1508,32 @@ mod tests {
 
     #[test]
     fn provider_unconfigured_keeps_current_panel() {
-        let mut state = state_with_session();
+        let state = state_with_session();
         let theme = Theme::current();
         // provider: None（无匹配）不改现状。
-        state.provider_usage =
-            Some(xai_grok_shell::extensions::provider_usage::ProviderUsageResponse {
+        let entry = provider_cache_entry(
+            xai_grok_shell::extensions::provider_usage::ProviderUsageResponse {
                 provider: None,
                 snapshot: None,
                 error: None,
                 error_kind: None,
-            });
-        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+            },
+        );
+        let lines = usage_limit_lines(
+            &state,
+            Some(&entry),
+            false,
+            Some(&sample_balance()),
+            None,
+            &theme,
+        );
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         assert!(text[0].contains("SuperGrok"), "{text:?}");
         assert!(!text.iter().any(|l| l.contains("Plan usage")));
 
         // 回包未到且未标记在途：同样不出 loading 行。
         let state = state_with_session();
-        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        let lines = usage_limit_lines(&state, None, false, Some(&sample_balance()), None, &theme);
         assert!(
             !lines
                 .iter()
@@ -1481,10 +1544,16 @@ mod tests {
 
     #[test]
     fn provider_loading_line_shows_above_balance() {
-        let mut state = state_with_session();
-        state.provider_usage_loading = true;
+        let state = state_with_session();
         let theme = Theme::current();
-        let lines = usage_limit_lines(&state, Some(&sample_balance()), None, &theme);
+        let lines = usage_limit_lines(
+            &state,
+            None,
+            true,
+            Some(&sample_balance()),
+            None,
+            &theme,
+        );
         let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         assert!(
             text.iter()
@@ -1495,13 +1564,39 @@ mod tests {
     }
 
     #[test]
+    fn stale_cache_keeps_showing_with_timestamp_and_refresh_marker() {
+        // 单飞优化：TTL 到期重新拉取期间，旧快照继续显示 + 查询时间点 + 刷新标记。
+        let state = state_with_session();
+        let entry = provider_cache_entry(provider_response(Some(provider_snapshot()), None));
+        let theme = Theme::current();
+        let lines = usage_limit_lines(
+            &state,
+            Some(&entry),
+            true,
+            Some(&sample_balance()),
+            None,
+            &theme,
+        );
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        assert!(text.iter().any(|l| l.contains("Plan usage")), "{text:?}");
+        assert!(text.iter().any(|l| l.contains("Queried at")), "{text:?}");
+        assert!(text.iter().any(|l| l.contains("Refreshing")), "{text:?}");
+        // 在途时不出裸 loading 行（有旧数据可看）。
+        assert!(
+            !text.iter()
+                .any(|l| l.contains("Loading plan usage")),
+            "{text:?}"
+        );
+    }
+
+    #[test]
     fn render_smoke_shows_tabs_and_copy_shortcut() {
         let area = Rect::new(0, 0, 80, 24);
         let mut buf = Buffer::empty(area);
         let mut state = state_with_session();
         state.session_usage_text = Some("Session usage: no model calls yet.".to_string());
         let theme = Theme::current();
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &theme);
         let text: String = (0..area.height)
             .map(|y| {
                 (0..area.width)
@@ -1541,7 +1636,7 @@ mod tests {
             Some("Session ID: sid-123\nModel Hash: fp-abc\nTurn: 3")
         );
         let theme = Theme::current();
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &theme);
         let text: String = (0..area.height)
             .map(|y| {
                 (0..area.width)
@@ -1582,7 +1677,7 @@ mod tests {
             field("Session ID", "sid-123", false),
             field("Model Hash", "fp-abc", true),
         ]);
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &Theme::current());
         let values: Vec<&str> = state.copy_hits.iter().map(|h| h.value.as_str()).collect();
         assert_eq!(values, ["sid-123", "Model Hash: fp-abc"]);
         let hit = state
@@ -1619,7 +1714,7 @@ mod tests {
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Model Hash", "fp-abc", true)]);
         let theme = Theme::current();
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &theme);
 
         let line_idx = state
             .plain_lines
@@ -1649,7 +1744,7 @@ mod tests {
             UsageModalOutcome::Changed
         );
 
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &theme);
         let cell = &buf[(x0, y)];
         if theme.text_primary != ratatui::style::Color::Reset
             && theme.bg_base != ratatui::style::Color::Reset
@@ -1673,7 +1768,7 @@ mod tests {
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Title", "t", false)]);
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &Theme::current());
 
         let blank = state
             .plain_lines
@@ -1717,7 +1812,7 @@ mod tests {
         let mut buf = Buffer::empty(area);
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &Theme::current());
         let rect = state.content_rect;
         assert_eq!(
             handle_usage_modal_mouse(
@@ -1729,7 +1824,7 @@ mod tests {
             UsageModalOutcome::Changed
         );
         state.session_fields = Some(vec![field("Title", "t", false)]);
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &Theme::current());
         assert_eq!(
             handle_usage_modal_mouse(
                 &mut state,
@@ -1748,7 +1843,7 @@ mod tests {
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Model Hash", "fp-abc", true)]);
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &Theme::current());
         let hit = state.copy_hits[0].clone();
         let line = state
             .plain_lines
@@ -1787,7 +1882,7 @@ mod tests {
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Model Hash", "fp-abc", true)]);
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &Theme::current());
         let hit = state.copy_hits[0].clone();
         handle_usage_modal_mouse(
             &mut state,
@@ -1818,7 +1913,7 @@ mod tests {
         let mut state = state_with_session();
         state.set_tab(UsageInfoTab::SessionInfo);
         state.session_fields = Some(vec![field("Session ID", "sid-123", false)]);
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &Theme::current());
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &Theme::current());
         let rect = state.content_rect;
         assert!(rect.width > 0 && rect.height > 0);
         assert_eq!(
@@ -1859,7 +1954,7 @@ mod tests {
         let mut buf = Buffer::empty(area);
         let mut state = state_with_session();
         let theme = Theme::current();
-        render_usage_modal(&mut buf, area, &mut state, None, None, false, &theme);
+        render_usage_modal(&mut buf, area, &mut state, None, false, None, None, false, &theme);
         let popup = state.window.popup_area.expect("popup rendered");
         assert_eq!(popup.height, 30);
         // Still vertically centered.

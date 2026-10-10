@@ -355,6 +355,9 @@ pub(crate) fn render_dashboard(
             buf,
             area,
             modal,
+            // 仪表盘无当前模型上下文：无供应商套餐块（不触发起取数）。
+            None,
+            false,
             credit_balance,
             quota_estimate,
             /* compact */ false,

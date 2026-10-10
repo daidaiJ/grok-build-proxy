@@ -734,6 +734,18 @@ pub(crate) struct BlockViewerResume {
     pub scroll_offset: usize,
     pub follow_mode: bool,
 }
+/// LOCAL: 供应商套餐用量缓存条目。响应与显示分离的关键：回包无条件落到这里
+/// （模态关了也不丢），显示层按当前模型过滤后渲染。
+#[derive(Debug, Clone)]
+pub struct ProviderUsageCache {
+    /// 缓存所属模型（模型目录键）；换模型后旧缓存对当前模型不可见。
+    pub model_id: String,
+    /// shell 回包（成功快照 / 错误 / `provider: null` 未配置）。
+    pub response: xai_grok_shell::extensions::provider_usage::ProviderUsageResponse,
+    /// 查询时间点（优先快照里的上游取数时刻，缺省回包落库时刻），渲染「查询于」用。
+    pub fetched_at_ms: u64,
+}
+
 pub struct AgentView {
     pub session: AgentSession,
     pub(crate) session_binding_epoch: u32,
@@ -902,6 +914,10 @@ pub struct AgentView {
     pub credit_balance: Option<crate::views::credit_bar::CreditBalance>,
     /// LOCAL: 周额度反推镜像（账号级数据，随 billing 拉取刷新；Usage limit 标签页渲染用）。
     pub quota_estimate: Option<xai_grok_tools::quota_estimate::QuotaEstimate>,
+    /// LOCAL: 供应商套餐用量缓存（agent 级；模态关闭也保留，显示层按当前模型过滤）。
+    pub provider_usage_cache: Option<ProviderUsageCache>,
+    /// LOCAL: 供应商套餐用量单飞在途标志（true = 已有请求未回包，期间不再触发新请求）。
+    pub provider_usage_loading: bool,
     /// Auto top-up rule paired with `credit_balance` for the prompt warning.
     pub auto_topup: Option<crate::views::credit_bar::AutoTopupInfo>,
     /// Current goal orchestration state. Set by `GoalUpdated` session
