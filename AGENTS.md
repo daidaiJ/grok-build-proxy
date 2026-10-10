@@ -107,6 +107,17 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   `isUnifiedBillingUser=true`、`historyLen=0`。
   现场 QA（pct 已变仍报采样不足 = Δpct < 2 整点门，非无 xAI 消耗）见该文档末节，
   补 user-guide / 文案时复用。
+- [`docs-local/usage/`](docs-local/usage/README.md) — **供应商套餐用量专题（方案定稿
+  2026-10-10，供应商清单待拍板）**：用户已拍板四原则——当前模型属于「推理同一把 SK
+  可查套餐用量」的供应商时 `/usage` 面板改显该供应商套餐量替代 SuperGrok 并标注来源、
+  窗口粒度 5h>周>月、控制台账户/Cookie/AK-SK 类凭据一律不支持（火山 Ark / 百炼据此
+  剔除）、缓存默认 5 分钟可配（单位分钟）。首批 OpenCode Go + Command Code（后者已
+  端到端实测）；GLM Coding Plan / Kimi For Coding / MiniMax 三家候选待用户挑选。
+  目录内：[`quota-endpoints-and-credentials.md`](docs-local/usage/quota-endpoints-and-credentials.md)
+  （2026-09-27 调研：七家端点/凭据/百分比口径，含开源参照 MyTokenDashboard /
+  cc-switch / OpenChamber / CodexBar 矩阵）、
+  [`provider-quota-display-todo.md`](docs-local/usage/provider-quota-display-todo.md)
+  （施工方案：现状锚点 / 数据模型 / T1–T4 分期 / 验收标准 / 6 条待定决策）。
 - [`docs-local/status-line-perf-wiki.md`](docs-local/status-line-perf-wiki.md) — 状态行性能段
   （ttft/tps）专题 wiki：TTFT 三参考点对照、网关响应头行为分类（Command Code 早头 vs
   火山 Ark 晚头）、0ms 过滤×晚响应头的相互作用、unified.jsonl 取证 playbook、双 tps 口径。

@@ -1,6 +1,9 @@
 # 订阅套餐用量接口与凭据方式（调研记录）
 
 > **状态（2026-09-27）：调研完成，未提交推送。**
+> **后续（2026-10-10）**：施工方案见
+> [`provider-quota-display-todo.md`](provider-quota-display-todo.md)（用户已拍板：
+> 只支持与推理同一把 SK 的供应商、窗口粒度 5h>周>月、缓存默认 5 分钟）。
 > **更新（同日）：Command Code 已用真实 key 端到端验证**（四个端点、真实字段名、月度上限
 > 推导口径、订阅取消标记），配套只读探针 `scripts-local/commandcode_usage.py`（未入库）。
 > 触发：研究 `lostexile/MyTokenDashboard`（macOS 菜单栏额度监控，Tauri 2 + Rust）的

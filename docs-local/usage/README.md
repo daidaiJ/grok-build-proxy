@@ -21,6 +21,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | [`quota-endpoints-and-credentials.md`](quota-endpoints-and-credentials.md) | 主记录：MyTokenDashboard 的取数策略归纳、同类项目的凭据获取方式矩阵、opencode go / Command Code / 火山 Ark Coding Plan / 百炼 Token Plan / 智谱·z.ai GLM Coding Plan 五家的端点与凭据，另补 Kimi / MiniMax 两家国产套餐（模型口碑与性价比达标；小米 MiMo 按约定除外），含已验证 vs 未验证标注与待确认清单。**Command Code 已用真实 key 端到端验证**（含配套探针 `scripts-local/commandcode_usage.py`） |
+| [`provider-quota-display-todo.md`](provider-quota-display-todo.md) | 施工方案：供应商套餐用量上 `/usage` 面板（替代 SuperGrok 块 + 来源标注）。用户已拍板：窗口粒度 5h>周>月、只支持与推理同一把 SK（Ark/百炼凭据不符出局）、缓存默认 5 分钟可配（单位分钟）。含现状锚点 / 数据模型 / 分期 T1–T4 / 验收标准 / 待定决策；**供应商清单待拍板后开工** |
 
 ## 与本目录同主题的既有文档（仍在 docs-local 根目录）
 
