@@ -221,7 +221,32 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   PATCHES 十八期）；P2 分支树随 kimicode P1 落地（branch summarization 未做）；
   P3/P4 未动。
 
+- [`docs-local/issues/`](docs-local/issues/README.md) — **使用问题台账（一 issue 一文件）**。
+  当前 open/reproduced 条：**无**。最近一条 **429/400 后状态行不再更新（P2）已修
+  （2026-10-10，分支 `fix/local-status-line-shadow-key`）**——根因 = 显示侧按「当前模型
+  配置 id」精确取账本，而成功调用记在「上游回显 model id」、终止性失败（429/400）记在
+  「配置 id」，两拼写不同（`glm-5.3-flash` vs 回显 `glm-5-3-flash`）时行冻死在只有 ✗ 的
+  影子条目上（tokens/cache/think 段整段消失）。修复 P1（显示侧影子键守卫，逐候选判定 +
+  叠回被跳过影子的 ✗）+ P2（失败归因改用最近回显 id）已落分支，验证与遗留见
+  [`issues/2026-10-11-status-line-stale-after-429-400.md`](docs-local/issues/2026-10-11-status-line-stale-after-429-400.md)
+  文末「结论（二）」与 PATCHES.md 二十五期。
+
 ## 🔄 Handoff 摘要
+
+### 状态行 429/400 后冻结 — 已修（分支 fix/local-status-line-shadow-key，待合 main/发版）
+
+- **当前状态：** P1（显示侧影子键守卫 + 叠回被跳过影子的 ✗）+ P2（终止性失败归因改用
+  「最近一次成功回显的 model id」）已落分支 `fix/local-status-line-shadow-key`，
+  **未合 main、未发版**；单测全绿。文档已回填 issue 文末「结论（二）」、PATCHES.md 二十五期、
+  win-skip 族R 补登记（`subagent_usage_fold_tests` 同 `/tmp` 夹具环境族，非本补丁引入）。
+- **验证：** `GATE_FORCE=1 ctest.sh -p xai-grok-shell --lib status_line` 18/0
+  （含 `b68a036`「按当前模型 scoped」与 `c66d29e`「qualified 后缀匹配」两个历史修复用例）；
+  `ctest.sh -p xai-chat-state --lib` 399/0。
+- **下一步（按序）：** ① 按分支纪律合 main（发版走 `vX.Y.Z` tag + release）；
+  ② 活体 TUI 复现（新客户端实跑"先 429/400 再成功"），并核对 perf 段是否也冻（未决项）；
+  ③ P3（拼写容忍匹配 / 客户端下送 catalog key）待活体与账本复核后再判。
+- **详情指针：** [`docs-local/issues/2026-10-11-status-line-stale-after-429-400.md`](docs-local/issues/2026-10-11-status-line-stale-after-429-400.md)
+  文末「结论（二）」（改动 / 验证 / 未做完）；PATCHES.md 二十五期。
 
 ### think-split-quoted-marker-fold — verified（preview.6 实测通过）
 

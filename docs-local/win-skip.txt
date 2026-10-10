@@ -90,5 +90,6 @@ session::acp_session::parent_message::
 session::acp_session::prompt_queue_actor_tests::
 session::acp_session::rewind_cross_compaction_tests::
 session::acp_session::rewind_synthetic_turn_tests::
+session::acp_session::subagent_usage_fold_tests::
 session::acp_session::turn_completion_emit_tests::
 session::acp_session::turn_end_reporting_tests::

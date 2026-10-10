@@ -2180,3 +2180,39 @@ Settings 的 `ProxyEnable` + `ProxyServer`，`https=`/`http=` 分项优先于裸
 经 `windows` crate 读注册表；workspace windows dep 增 `Win32_System_Registry`
 feature）、`Cargo.toml`。验证：`cargo check -p xai-grok-extra-ca` 0 error、
 extra-ca 15/15 + sampler 291/291；活回合验证随 v1.0.44。
+
+## 二十五期：状态行影子键冻结修复（2026-10-10，分支 fix/local-status-line-shadow-key）
+
+现象：上游网关 429/400 终止性失败后，状态行冻在 `✓ 0 ✗ m`（tokens/cache/cache-misses/think
+四段整段消失），此后无论多少轮都不刷新。根因（issue
+[`docs-local/issues/2026-10-11-status-line-stale-after-429-400.md`](issues/2026-10-11-status-line-stale-after-429-400.md)）：
+账本键分裂——成功调用按「上游回显 model id」记账（`glm-5-3-flash`），
+终止性失败按「配置 id」记账（`glm-5.3-flash`）；两种拼写不同时，显示侧
+`scoped_usage` 精确命中那条只有 ✗ 的影子条目（`model_calls == 0`），
+`window_totals` 的 `model_calls > 0` 过滤又把四段全滤掉，行从此冻死。
+
+改动（全部带 `// LOCAL:`）：
+
+1. `xai-chat-state`
+   - `src/actor/state.rs`：`ChatState.last_echoed_model: Option<(String, String)>`
+     （配置 id → 上游回显 id）；唯一构造点 `state.rs:237` 初始化，会话账本本就不持久化。
+   - `src/actor/mutations.rs`：`record_model_call_usage` 成功路径记该配对；
+     `record_model_call_failure(None)` 兜底键改为「仍与当前 `sampling_config.model` 配对的回显 id」
+     （换过模型不吃陈旧回显），从未回显过才退回配置 id。唯一调用点
+     `xai-grok-shell/…/sampler_turn.rs` 的 `log_terminal_failure` 语义随之变化（注释同步）。
+   - `src/actor/tests.rs`：三例（回显优先 / 从未回显退回配置 / 换模型不吃陈旧回显）。
+2. `xai-grok-shell`
+   - `src/session/acp_session_impl/status_line.rs`：`scoped_usage` 加影子键守卫——
+     候选条目 `model_calls == 0` 且全会话有已完成调用时不采用，继续试 provider-qualified
+     后缀候选，都不中才退回全会话合计；采用候选时把被跳过的精确影子的
+     `failed_model_calls` 叠回（✗ = 会话级 endpoint health，不因换取数键而丢）。
+     守卫逐候选生效，避免精确影子短路掉 `c66d29e` 的 qualified 命中。
+   - `src/session/acp_session_impl/status_line_tests.rs`：新增
+     `status_usage_shadow_key_does_not_freeze_the_row`（现场账本夹具）、
+     `status_usage_prefers_the_qualified_echo_over_a_shadow_config_key`；
+     `status_usage_model_known_only_through_failures_reads_zeroed_calls` 按新语义改写。
+
+验证（本机 Windows 门控）：`GATE_FORCE=1 ctest.sh -p xai-grok-shell --lib status_line`
+18/0（含 `b68a036`、`c66d29e` 两个历史修复用例）；`ctest.sh -p xai-chat-state --lib` 399/0。
+顺带按 win-skip 族R 格式登记 `session::acp_session::subagent_usage_fold_tests::`
+（同一条 `/tmp` 夹具环境族，非本补丁引入）。活体 TUI 复现未做（发版后新客户端实跑）。
