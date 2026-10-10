@@ -1,7 +1,7 @@
 # 429/400 后状态行不再更新
 
-- **状态**：fixed（P1 显示侧守卫 + P2 归因键统一已施工、单测全绿；**TUI 活体复现未做**，见文末「结论（二）」）
-- **施工**：已完成主体（2026-10-10，分支 `fix/local-status-line-shadow-key`；P3 未做）
+- **状态**：fixed（P1 显示侧守卫 + P2 归因键统一已合 main、随 **`v1.0.45`** 发版；**TUI 活体复现未做**，见文末「结论（二）」）
+- **施工**：已完成主体（2026-10-10；merge `350874c`、tag `v1.0.45`；P3 未做）
 - **现场补充（用户口述，2026-10-10）**：行形态 `model id | ✓ n ✗ m | ttft · tps`
   （用户澄清：**数值是占位，只看样式**），关键是**无 tokens / cache / think 段**，
   之后无论多少轮都不变
@@ -286,3 +286,12 @@ tokens / cache / think 段，正是 `model_calls == 0` 命中条目的渲染结�
   同时回答「perf 段是否也冻」（见 §未决）。低成本备选：`xai-grok-pager-pty-harness` 的 mock
   端点（`ScriptedResponse::json(429, …)` → 200 SSE，SSE 里 model id 与配置拼写故意不同）。
 - **P3 未做**：拼写容忍匹配 / 客户端下送 catalog key，待活体与账本复核后再判。
+
+### 发版（2026-10-10）
+
+分支 `fix/local-status-line-shadow-key`（代码提交 `6c912a8`）已合 main（merge `350874c`）并随
+tag **`v1.0.45`** 发版：build run `38037822957`（Linux `cargo test -p xai-grok-shell` 全套 + Windows）
+与 release run `38039766302`（Linux 原生 + Windows 交叉编译）双双 job success，release 页 4 资产，
+产物实测 `grok2.exe --version` = `grok 1.0.45 (350874c36b81)`。
+
+「未做完」两条不变：活体 TUI 复现（含 perf 段是否也冻）与 P3。

@@ -2216,3 +2216,9 @@ extra-ca 15/15 + sampler 291/291；活回合验证随 v1.0.44。
 18/0（含 `b68a036`、`c66d29e` 两个历史修复用例）；`ctest.sh -p xai-chat-state --lib` 399/0。
 顺带按 win-skip 族R 格式登记 `session::acp_session::subagent_usage_fold_tests::`
 （同一条 `/tmp` 夹具环境族，非本补丁引入）。活体 TUI 复现未做（发版后新客户端实跑）。
+
+发版：合 main `350874c`（merge 提交），tag **`v1.0.45`**（轻量 tag，指向该 merge）。
+build run 38037822957（Linux `cargo test -p xai-grok-shell` 全套 + Windows chat-state）与
+release run 38039766302（Linux 原生 + Windows 交叉编译）双双 job success，
+release 页 4 资产（`grok2-v1.0.45-x86_64-{linux.tar.gz,windows.zip}` 各带 sha256），
+产物实测 `grok2.exe --version` = `grok 1.0.45 (350874c36b81)`。活体 TUI 复现仍未做。
