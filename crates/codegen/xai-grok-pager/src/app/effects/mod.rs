@@ -5038,18 +5038,14 @@ pub(crate) fn execute(
             });
         }
         // LOCAL: 供应商套餐用量（`x.ai/providerUsage`）。shell 侧做 base_url 匹配 +
-        // TTL 缓存，未匹配供应商回 `provider: null`，错误也在回包体内（不进 Err 通道）。
-        Effect::FetchProviderUsage {
-            agent_id,
-            model_id,
-            nonce,
-        } => {
+        // TTL 缓存 + 单飞，未匹配供应商回 `provider: null`，错误也在回包体内（不进 Err 通道）。
+        Effect::FetchProviderUsage { agent_id, model_id } => {
             let tx = acp_tx.clone();
             tasks.spawn(async move {
                 let req = acp::ExtRequest::new(
                     "x.ai/providerUsage",
                     serde_json::value::to_raw_value(&serde_json::json!({
-                        "model_id": model_id,
+                        "model_id": model_id.clone(),
                     }))
                     .expect("serialize provider usage params")
                     .into(),
@@ -5080,8 +5076,8 @@ pub(crate) fn execute(
                 };
                 TaskResult::ProviderUsageFetched {
                     agent_id,
+                    model_id,
                     response,
-                    nonce,
                 }
             });
         }

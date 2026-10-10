@@ -2391,10 +2391,22 @@ impl AgentView {
                     );
                 }
             } else if let modal::ActiveModal::UsageInfo { state } = active_modal {
+                // LOCAL: 套餐用量缓存按当前模型过滤（换模型后旧缓存不可见）。
+                let current_model = self
+                    .session
+                    .models
+                    .current_model_id_str()
+                    .map(str::to_string);
+                let provider_usage = self
+                    .provider_usage_cache
+                    .as_ref()
+                    .filter(|c| Some(&c.model_id) == current_model.as_ref());
                 crate::views::usage_modal::render_usage_modal(
                     buf,
                     area,
                     state,
+                    provider_usage,
+                    self.provider_usage_loading,
                     self.credit_balance.as_ref(),
                     self.quota_estimate.as_ref(),
                     compact,

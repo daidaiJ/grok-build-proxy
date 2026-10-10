@@ -109,20 +109,21 @@ pub(super) fn open_usage_info_modal(
             nonce,
         });
     }
-    // LOCAL: 供应商套餐用量（当前模型 base_url 匹配在 shell 侧做；命中 TTL 缓存即时回包）。
-    // 与 billing 共用同一 fetch generation：结果只 settle 自己这代打开的模态。
+    // LOCAL: 供应商套餐用量单飞（请求单发：在途期间重开面板不再触发新请求）。
+    // 回包无条件落 agent 级缓存（模态无关，重开先显示旧值+查询时间点），显示层读缓存。
     if let Some(model_id) = agent
         .session
         .models
         .current_model_id_str()
         .map(str::to_string)
     {
-        state.provider_usage_loading = true;
-        effects.push(Effect::FetchProviderUsage {
-            agent_id: id,
-            model_id,
-            nonce,
-        });
+        if !agent.provider_usage_loading {
+            agent.provider_usage_loading = true;
+            effects.push(Effect::FetchProviderUsage {
+                agent_id: id,
+                model_id,
+            });
+        }
     }
     agent.active_modal = Some(ActiveModal::UsageInfo {
         state: Box::new(state),

@@ -2,15 +2,17 @@
 //!
 //! 当前模型 `base_url` 匹配到支持「推理同一把 SK 查套餐用量」的供应商时，按序请求
 //! 该供应商的用量端点并归一成 [`PlanUsageSnapshot`]；TTL 内直接回缓存（默认 5 分钟，
-//! `[provider_usage] cache_minutes` 可调）。`provider: null` = 无匹配供应商，面板
-//! 保持现状。设计见 `docs-local/usage/provider-quota-display-todo.md`。
+//! `[provider_usage] cache_minutes` 可调）。缓存与单飞都按 (供应商, SK 指纹) 键控：
+//! 同一把 SK 跨模型共享缓存与在途去重，同账号并发至多一个在途请求。`provider: null`
+//! = 无匹配供应商，面板保持现状。设计见 `docs-local/usage/provider-quota-display-todo.md`。
 
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use agent_client_protocol as acp;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex as TokioMutex;
 
 use super::{ExtResult, to_raw_response};
 use crate::agent::MvpAgent;
@@ -21,6 +23,10 @@ use xai_grok_provider_usage::{
 
 /// 默认缓存分钟数（用户拍板：默认 5 分钟，单位分钟）。
 const DEFAULT_CACHE_MINUTES: u64 = 5;
+
+/// 单请求总超时（含 body 读取）。Command Code 的 billing 端点源站延迟尾部实测
+/// 可超 5s（响应头 `Server-Timing: total` 自报 3s+），5s 预算会把慢响应当失败。
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// 响应体。`provider: None` = 当前模型无匹配供应商。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,14 +77,15 @@ fn error_response(provider: UsageProviderId, error: &ProviderUsageError) -> Prov
     }
 }
 
-/// 进程级快照缓存：键 = (model_id, provider)。换模型天然换键，TTL 兜底陈旧。
+/// 进程级快照缓存：键 = (provider, SK 指纹)。上游取数只由供应商端点 + 凭据决定，
+/// 同一把 SK（同账号）跨模型共享缓存；换 SK 天然隔离。
 struct Cached {
     snapshot: PlanUsageSnapshot,
     at: Instant,
 }
 
-fn cache() -> &'static Mutex<HashMap<(String, UsageProviderId), Cached>> {
-    static CACHE: OnceLock<Mutex<HashMap<(String, UsageProviderId), Cached>>> = OnceLock::new();
+fn cache() -> &'static Mutex<HashMap<(UsageProviderId, u64), Cached>> {
+    static CACHE: OnceLock<Mutex<HashMap<(UsageProviderId, u64), Cached>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -94,29 +101,60 @@ fn cache_ttl(agent: &MvpAgent) -> Duration {
     Duration::from_secs(minutes * 60)
 }
 
+/// SK 指纹（64 位哈希）：缓存/单飞键不落密钥明文。
+fn key_fingerprint(api_key: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    api_key.hash(&mut hasher);
+    hasher.finish()
+}
+
 fn cache_get(
-    model_id: &str,
     provider: UsageProviderId,
+    fingerprint: u64,
     ttl: Duration,
 ) -> Option<PlanUsageSnapshot> {
     let map = cache().lock().ok()?;
-    let cached = map.get(&(model_id.to_string(), provider))?;
+    let cached = map.get(&(provider, fingerprint))?;
     if cached.at.elapsed() >= ttl {
         return None;
     }
     Some(cached.snapshot.clone())
 }
 
-fn cache_put(model_id: &str, provider: UsageProviderId, snapshot: PlanUsageSnapshot) {
+fn cache_put(provider: UsageProviderId, fingerprint: u64, snapshot: PlanUsageSnapshot) {
     if let Ok(mut map) = cache().lock() {
         map.insert(
-            (model_id.to_string(), provider),
+            (provider, fingerprint),
             Cached {
                 snapshot,
                 at: Instant::now(),
             },
         );
     }
+}
+
+/// 进程级单飞锁：同 (provider, SK 指纹) 的并发请求共用一把锁，后来者等锁后复检
+/// TTL 缓存（前一个请求多半已写入），避免并发重复打上游。
+fn inflight_locks() -> &'static Mutex<HashMap<(UsageProviderId, u64), Arc<TokioMutex<()>>>> {
+    static LOCKS: OnceLock<Mutex<HashMap<(UsageProviderId, u64), Arc<TokioMutex<()>>>>> =
+        OnceLock::new();
+    LOCKS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn inflight_lock(provider: UsageProviderId, fingerprint: u64) -> Arc<TokioMutex<()>> {
+    let mut map = inflight_locks().lock().expect("inflight locks poisoned");
+    map.entry((provider, fingerprint)).or_default().clone()
+}
+
+/// TTL 缓存命中回包（首查与单飞等待后复检共用）。
+fn cached_response(provider: UsageProviderId, snapshot: PlanUsageSnapshot) -> ExtResult {
+    to_raw_response(&ProviderUsageResponse {
+        provider: Some(provider),
+        snapshot: Some(snapshot),
+        error: None,
+        error_kind: None,
+    })
 }
 
 #[tracing::instrument(skip_all, fields(method = %args.method))]
@@ -139,15 +177,6 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     };
 
     let ttl = cache_ttl(agent);
-    if let Some(snapshot) = cache_get(&model_id, provider, ttl) {
-        tracing::debug!(provider = provider.as_str(), %model_id, "provider usage: cache hit");
-        return to_raw_response(&ProviderUsageResponse {
-            provider: Some(provider),
-            snapshot: Some(snapshot),
-            error: None,
-            error_kind: None,
-        });
-    }
 
     let Some(api_key) = entry.own_credential() else {
         tracing::debug!(provider = provider.as_str(), %model_id, "provider usage: no own credential");
@@ -156,6 +185,25 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
             &ProviderUsageError::MissingKey,
         ));
     };
+    let fingerprint = key_fingerprint(&api_key);
+
+    if let Some(snapshot) = cache_get(provider, fingerprint, ttl) {
+        tracing::debug!(provider = provider.as_str(), %model_id, "provider usage: cache hit");
+        return cached_response(provider, snapshot);
+    }
+
+    // 单飞：等同一把 (provider, SK) 锁；等锁期间前一个请求可能已完成取数，
+    // 复检缓存直接复用，保证上游每个账号同一时刻至多一个在途请求。
+    let inflight = inflight_lock(provider, fingerprint);
+    let _guard = inflight.lock().await;
+    if let Some(snapshot) = cache_get(provider, fingerprint, ttl) {
+        tracing::debug!(
+            provider = provider.as_str(),
+            %model_id,
+            "provider usage: cache hit after single-flight wait"
+        );
+        return cached_response(provider, snapshot);
+    }
 
     let requests = prepare_requests(provider, &api_key, Some(&entry.info().base_url));
     let client = http_client(entry.info().use_proxy);
@@ -170,13 +218,8 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
                     "windows": snapshot.windows.len(),
                 })),
             );
-            cache_put(&model_id, provider, snapshot.clone());
-            to_raw_response(&ProviderUsageResponse {
-                provider: Some(provider),
-                snapshot: Some(snapshot),
-                error: None,
-                error_kind: None,
-            })
+            cache_put(provider, fingerprint, snapshot.clone());
+            cached_response(provider, snapshot)
         }
         Err(e) => {
             let message = match &e {
@@ -213,7 +256,8 @@ fn http_client(use_proxy: bool) -> reqwest::Client {
 }
 
 /// 按序尝试 [`PreparedRequest`]：GLM 的裸 key/Bearer 信封重试与 MiniMax 的新旧
-/// 路径 404 都换下一个；其余错误直接落。
+/// 路径 404 都换下一个；传输层失败与 body 读取失败同样换下一个（记入 last），
+/// 其余错误直接落。
 async fn fetch_snapshot(
     client: &reqwest::Client,
     provider: UsageProviderId,
@@ -225,7 +269,7 @@ async fn fetch_snapshot(
     let mut last: Option<ProviderUsageError> = None;
     for (index, req) in requests.iter().enumerate() {
         let has_more = index + 1 < requests.len();
-        let mut builder = client.get(&req.url).timeout(Duration::from_secs(5));
+        let mut builder = client.get(&req.url).timeout(REQUEST_TIMEOUT);
         for (key, value) in &req.headers {
             builder = builder.header(key, value);
         }
@@ -235,13 +279,23 @@ async fn fetch_snapshot(
                 tracing::debug!(provider = provider.as_str(), url = %req.url, error = %e, "provider usage: request failed");
                 last = Some(ProviderUsageError::Http {
                     status: 0,
-                    message: format!("request failed: {e}"),
+                    message: format!("request failed: {}", err_chain(&e)),
                 });
                 continue;
             }
         };
         let status = response.status().as_u16();
-        let body = response.text().await.unwrap_or_default();
+        // body 读取失败（超时/流中断）与传输层失败同待遇：换下一个尝试并记住最后
+        // 错误，绝不能吞成空串——那会把真实原因伪装成 "invalid JSON: EOF"。
+        let body = match response.text().await {
+            Ok(body) => body,
+            Err(e) => {
+                let message = format!("response body read failed: {}", err_chain(&e));
+                tracing::debug!(provider = provider.as_str(), status, message, "provider usage: body read failed");
+                last = Some(ProviderUsageError::Http { status, message });
+                continue;
+            }
+        };
         match parse_response(provider, status, &body, now_unix_ms()) {
             Ok(snapshot) => return Ok(snapshot),
             Err(ProviderUsageError::TryNextAttempt { message }) if has_more => {
@@ -274,6 +328,19 @@ fn now_unix_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+/// reqwest 错误的 Display 不含 source 链（超时只显示 "error sending request"），
+/// 展开整链保留根因（如 "operation timed out"）。
+fn err_chain(e: &reqwest::Error) -> String {
+    let mut text = e.to_string();
+    let mut source = std::error::Error::source(e);
+    while let Some(err) = source {
+        text.push_str(": ");
+        text.push_str(&err.to_string());
+        source = err.source();
+    }
+    text
 }
 
 #[cfg(test)]
@@ -336,5 +403,20 @@ mod tests {
     fn response_serializes_camel_case_and_omits_empty() {
         let json = serde_json::to_value(not_configured()).unwrap();
         assert_eq!(json, serde_json::json!({ "provider": null }));
+    }
+
+    #[test]
+    fn inflight_lock_same_key_shares_arc() {
+        let a = inflight_lock(UsageProviderId::CommandCode, 42);
+        let b = inflight_lock(UsageProviderId::CommandCode, 42);
+        let c = inflight_lock(UsageProviderId::CommandCode, 43);
+        assert!(Arc::ptr_eq(&a, &b));
+        assert!(!Arc::ptr_eq(&a, &c));
+    }
+
+    #[test]
+    fn key_fingerprint_is_deterministic_and_discriminating() {
+        assert_eq!(key_fingerprint("sk-abc"), key_fingerprint("sk-abc"));
+        assert_ne!(key_fingerprint("sk-abc"), key_fingerprint("sk-xyz"));
     }
 }

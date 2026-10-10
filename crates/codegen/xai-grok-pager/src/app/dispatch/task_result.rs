@@ -601,19 +601,37 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
-        // LOCAL: 供应商套餐用量。只 settle 自己这代打开的模态（nonce 守卫同 billing）；
-        // `provider: null`（无匹配供应商）也落库，让 loading 行收起、面板回现状。
+        // LOCAL: 供应商套餐用量。单飞 + 模态无关：回包无条件落 agent 级缓存（按
+        // model_id 绑定，显示层过滤当前模型）；失败回包不覆盖已有成功快照 —— TTL
+        // 到期刷新失败时面板继续显示旧数据 + 查询时间点。`provider: null` 也落库。
         TaskResult::ProviderUsageFetched {
             agent_id,
+            model_id,
             response,
-            nonce,
         } => {
-            if let Some(agent) = app.agents.get_mut(&agent_id)
-                && let Some(state) = usage_modal_state_mut(agent)
-                && state.fetch_nonce == nonce
-            {
-                state.provider_usage_loading = false;
-                state.provider_usage = Some(response);
+            if let Some(agent) = app.agents.get_mut(&agent_id) {
+                let keep_previous = response.snapshot.is_none()
+                    && agent.provider_usage_cache.as_ref().is_some_and(|c| {
+                        c.model_id == model_id && c.response.snapshot.is_some()
+                    });
+                if !keep_previous {
+                    let fetched_at_ms = response
+                        .snapshot
+                        .as_ref()
+                        .map(|s| s.fetched_at_ms)
+                        .unwrap_or_else(|| {
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_millis() as u64
+                        });
+                    agent.provider_usage_cache = Some(crate::app::agent_view::ProviderUsageCache {
+                        model_id,
+                        response,
+                        fetched_at_ms,
+                    });
+                }
+                agent.provider_usage_loading = false;
             }
             vec![]
         }

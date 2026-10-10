@@ -1803,6 +1803,8 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Plan usage", "套餐用量"),
         ("Couldn't load plan usage", "套餐用量加载失败"),
         ("Loading plan usage\u{2026}", "正在加载套餐用量…"),
+        ("Queried at {time}", "查询于 {time}"),
+        ("Refreshing\u{2026}", "刷新中…"),
         ("5h window", "5 小时窗口"),
         (
             "Usage unknown (provider gave no usable figure).",
