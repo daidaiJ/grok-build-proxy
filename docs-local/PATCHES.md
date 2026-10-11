@@ -2541,3 +2541,13 @@ config `[model.*]` 表键 8/8、路由 slug 8/8、账本回显 6/6（并集 11 i
 原厂价——`glm-5.3-flash`→`z-ai/glm-5.3-flash` $0.15/$0.50、`gpt-6-luna`→
 `openai/gpt-6-luna` $0.10/$0.50、`grok-4.6`→`x-ai/grok-4.6` $2/$6 等。
 发版：v1.0.51 tag 重指本次 merge 重发（run id 发版后回填本节）。
+
+**补修（同 tag 重发内，用户活回合复现「成本全 `–` 连 v4.1 flash 也无」）**：
+`completed_entries` 回包用了调用方旧快照——首次 /stats 时薄表尚空（启动预热只放
+空表），lazy 补齐算出的匹配只并回共享薄表、回包仍全 null，pager store 按「已知
+无价」缓存 6h 不重问 → 全部模型显示 `–`。修：回包基于并回后的合并视图组包
+（shell model_catalog 8/8，新增回归用例
+`completed_entries_backfills_from_disk_and_returns_prices` 钉死）。**补运行时
+价格日志**（用户要求）：每次取价回包打 unified `model catalog: priced`——
+`priced: {id: {entry, score, in, out}}` + `unpriced: [...]` + `cache` 档位，
+覆盖 hit/disk/fetch/stale/error 全部回包路径。

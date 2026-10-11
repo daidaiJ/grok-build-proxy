@@ -172,6 +172,8 @@ fn results_subset(
 
 /// 薄表按需补齐（lazy）：请求 id 缺失时从磁盘全量库**临时**物化重匹配，并并回
 /// 进程薄表（缓存仍在 TTL 内 = 目录同代）。返回请求 id 的结果子集。
+/// 回包必须基于**并回后**的合并视图——修前用调用方旧快照组包，首次 /stats（薄表
+/// 尚空）时匹配白算、回包全 null，pager store 按「已知无价」缓存 6h 不重问。
 fn completed_entries(
     results: &BTreeMap<String, Option<CatalogMatch>>,
     requested: &BTreeSet<String>,
@@ -182,9 +184,13 @@ fn completed_entries(
         .filter(|id| !results.contains_key(*id))
         .cloned()
         .collect();
+    let mut merged = results.clone();
     if !missing.is_empty() {
         if let Some((catalog, _)) = disk_cache_load(disk_path) {
             let matched = match_results(&catalog, &missing);
+            for (id, matched) in &matched {
+                merged.entry(id.clone()).or_insert_with(|| matched.clone());
+            }
             if let Ok(mut slot) = cache().lock() {
                 if let Some(cached) = slot.as_mut() {
                     for (id, matched) in matched {
@@ -194,7 +200,7 @@ fn completed_entries(
             }
         }
     }
-    results_subset(results, requested)
+    results_subset(&merged, requested)
 }
 
 // --- 磁盘缓存 `~/.grok/cache/prices.cache`（拍板 2026-10-11：价格数据变动极少，
@@ -397,6 +403,38 @@ pub fn spawn_startup_prefetch(cache_minutes: Option<u64>) {
 }
 
 /// 匹配请求 id 并组装回包（纯函数，便于测试）。
+/// 请求回包的价格落地日志（unified）：一次取价在日志里直接可见
+/// id → 命中条目 + 置信分 + 单价，无价 id 单列（用户排障要求 2026-10-11）。
+fn log_priced(entries: &BTreeMap<String, Option<CatalogMatch>>, cache_kind: &str) {
+    let mut priced = serde_json::Map::new();
+    let mut unpriced = Vec::new();
+    for (id, matched) in entries {
+        match matched {
+            Some(m) => {
+                priced.insert(
+                    id.clone(),
+                    serde_json::json!({
+                        "entry": m.model_id,
+                        "score": m.match_score,
+                        "in": m.pricing.input,
+                        "out": m.pricing.output,
+                    }),
+                );
+            }
+            None => unpriced.push(id.clone()),
+        }
+    }
+    xai_grok_telemetry::unified_log::info(
+        "model catalog: priced",
+        None,
+        Some(serde_json::json!({
+            "cache": cache_kind,
+            "priced": priced,
+            "unpriced": unpriced,
+        })),
+    );
+}
+
 fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -425,8 +463,10 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     let disk_path = disk_cache_path();
     if let Some(cached) = cache_get(Some(ttl)) {
         tracing::debug!("model catalog: cache hit");
+        let entries = completed_entries(&cached.results, &requested, &disk_path);
+        log_priced(&entries, "hit");
         return to_raw_response(&ModelCatalogResponse {
-            entries: completed_entries(&cached.results, &requested, &disk_path),
+            entries,
             fetched_at_ms: cached.at_ms,
             cache: "hit".to_string(),
             error: None,
@@ -437,8 +477,10 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     let _guard = inflight_lock().lock().await;
     if let Some(cached) = cache_get(Some(ttl)) {
         tracing::debug!("model catalog: cache hit after single-flight wait");
+        let entries = completed_entries(&cached.results, &requested, &disk_path);
+        log_priced(&entries, "hit");
         return to_raw_response(&ModelCatalogResponse {
-            entries: completed_entries(&cached.results, &requested, &disk_path),
+            entries,
             fetched_at_ms: cached.at_ms,
             cache: "hit".to_string(),
             error: None,
@@ -451,6 +493,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     if let Some((catalog, at_ms)) = disk.as_ref().filter(|(_, at)| disk_fresh(*at, ttl)) {
         tracing::debug!("model catalog: disk cache hit");
         let results = match_results(catalog, &requested);
+        log_priced(&results, "disk");
         cache_put_results(results.clone(), *at_ms);
         return to_raw_response(&ModelCatalogResponse {
             entries: results,
@@ -464,6 +507,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     match fetch_catalog(&client).await {
         Ok((source, catalog, at_ms)) => {
             let results = match_results(&catalog, &requested);
+            log_priced(&results, "fetch");
             install_fetched(&source, &catalog, at_ms, "panel");
             cache_put_results(results.clone(), at_ms);
             to_raw_response(&ModelCatalogResponse {
@@ -481,8 +525,10 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
             );
             // 价格面宁旧勿空：取数失败回退旧目录（进程内过期薄表 → 磁盘任意龄期）。
             if let Some(cached) = cache_get(None) {
+                let entries = results_subset(&cached.results, &requested);
+                log_priced(&entries, "stale");
                 return to_raw_response(&ModelCatalogResponse {
-                    entries: results_subset(&cached.results, &requested),
+                    entries,
                     fetched_at_ms: cached.at_ms,
                     cache: "stale".to_string(),
                     error: Some(e),
@@ -490,6 +536,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
             }
             if let Some((catalog, at_ms)) = disk.or_else(|| disk_cache_load(&disk_path)) {
                 let results = match_results(&catalog, &requested);
+                log_priced(&results, "stale");
                 cache_put_results(results.clone(), at_ms);
                 return to_raw_response(&ModelCatalogResponse {
                     entries: results,
@@ -498,8 +545,10 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
                     error: Some(e),
                 });
             }
+            let entries = results_subset(&BTreeMap::new(), &requested);
+            log_priced(&entries, "error");
             to_raw_response(&ModelCatalogResponse {
-                entries: results_subset(&BTreeMap::new(), &requested),
+                entries,
                 fetched_at_ms: now_unix_ms(),
                 cache: "error".to_string(),
                 error: Some(e),
@@ -632,6 +681,34 @@ mod tests {
             error: None,
         };
         assert!(resp.entries.is_empty());
+    }
+
+    #[test]
+    fn completed_entries_backfills_from_disk_and_returns_prices() {
+        // 回归（v1.0.51 复发二次修复翻车现场）：首次 /stats 薄表尚空，lazy 补齐
+        // 算出的匹配必须进回包——修前只并共享薄表、回包仍用旧快照 → 全 null，
+        // pager store 按「已知无价」缓存 6h 不重问，连 100 档命中的模型也显示 –。
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("prices.cache");
+        disk_cache_store(&path, &fixture_catalog(), 1234);
+        cache_put_results(BTreeMap::new(), 1234);
+        let requested: BTreeSet<String> = ["glm-5.3-flash", "totally-unknown"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let entries = completed_entries(&BTreeMap::new(), &requested, &path);
+        let glm = entries
+            .get("glm-5.3-flash")
+            .expect("glm entry")
+            .as_ref()
+            .expect("must be priced in the same response");
+        assert_eq!(glm.model_id, "glm-5.3-flash");
+        assert_eq!(glm.match_score, 100);
+        assert!(entries.get("totally-unknown").expect("unknown").is_none());
+        // 并回共享薄表：空快照再来一次也带价（真实调用方传 cache_get 的最新薄表）。
+        let entries = completed_entries(&BTreeMap::new(), &requested, &path);
+        assert!(entries["glm-5.3-flash"].is_some());
+        cache_put_results(BTreeMap::new(), 0);
     }
 
     #[test]
