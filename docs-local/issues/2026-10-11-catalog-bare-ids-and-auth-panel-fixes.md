@@ -53,3 +53,49 @@
 - models.dev 白名单核对与国内延迟采样数据见 design doc 二轮拍板 8；样本与仿真脚本
   为会话临时产物（`D:/cargo-tmp/`），未入库。
 - `/tmp` 落盘坑（MINGW64 curl -o 文件消失）已另录全局记忆，与本 issue 无关。
+
+## 复发（2026-10-11 晚，v1.0.51 活回合）与二次修复
+
+**现场**：/stats 成本列依旧只有 `deepseek/deepseek-v4.1-flash`（$8.07），
+`glm-5.3-flash` 与 `gpt-6-luna` 仍为 `–`。当前会话 pid 8176（v1.0.51）
+unified.jsonl：12:04:46 `model catalog: fetched` **entries=458** —— 与 v1.0.50
+OpenRouter 单源条数一致，models.dev 主源一条未进；`~/.grok/prices.cache` 458 条
+全部 `source: open_router`。
+
+**根因（三件叠加）**：
+
+1. **主源静默失败**：`fetch_one` 的 Err 只落 `tracing::debug!`，不进
+   unified.jsonl（全量 grep ver=1.0.51 无任何 catalog 失败行）——models.dev 瞬时
+   不可达时整库静默回退 OpenRouter，现场无从排查。复测两源直连均 200
+   （models.dev 5.4MB / 5.1s，在 30s 超时内），确系瞬时。
+2. **匹配器裸 id 分支只认裸条目**：84 档兜底写死 `!entry.id.contains('/')`；
+   目录只剩 `vendor/model` 形态（OpenRouter）时裸 id 必失配——三十一期修复的
+   前提（models.dev 供裸 id）被 1 掏空后裸 id 全灭。
+3. **缓存位置**：prices.cache 写在 `~/.grok/` 根而非 `cache/` 专用目录（用户指出，
+   同目录已有 model-usage / billing-samples）。
+
+**二次修复（分支 `fix/local-catalog-bare-id-cache-dir`，PATCHES.md 三十二期；
+按用户指示不切新 tag，v1.0.51 重指重发）**：
+
+- 匹配：裸 id 对 `vendor/model` 条目按 model 段命中（`:variant` 条目键自带后缀
+  不参与，`:free` 零价不冒充牌价）；匹配索引化（fetch 时预建 by_id /
+  by_canonical / by_vendor / by_segment 倒排，查询 O(1) 候选，全库线性扫描退役）。
+- 可见性：单源失败 warn 进 unified.jsonl（source/url/error），fetched 日志带
+  `source` + `trigger`——再发生回退一眼可见。
+- 缓存：迁 `~/.grok/cache/prices.cache`（version 2），首次成功取数后清除根下旧
+  文件；进程常驻改「请求 id → 参数」薄表（冷热分离：磁盘 = 唯一全量副本，
+  全量目录只在取数 / 薄表补齐瞬间物化，用完即弃）。
+- 启动预热：进程拉起异步取数一次/天（TTL + 单飞 + 磁盘缓存去重），/stats 与
+  /auth 首开即有热数据，避免重复下载。
+- /auth 回填：目录 `reasoning` = Some(true) 时写 `supports_reasoning_effort = true`
+  接入既有 effort 机制（context_window / max_completion_tokens 回填链路三十一期
+  已有，此前因裸 id 失配而空转）。
+
+**验证（真实数据仿真 `catalog-sim`，读本机 v1.0.51 遗留 OpenRouter-only 458 条
+缓存 = 最坏情形）**：config `[model.*]` 表键 **8/8**、条目路由 slug **8/8**、账本
+回显 id **6/6**（去重并集 11 个 id）——全部命中原厂/官方价；此前两 miss 现命中：
+`glm-5.3-flash` → `z-ai/glm-5.3-flash`（84 档，$0.15/$0.50 per 1M）、
+`gpt-6-luna` → `openai/gpt-6-luna`（84 档，$0.10/$0.50 per 1M）；
+`grok-4.6` → `x-ai/grok-4.6`、`gpt-5.6-luna` → `openai/gpt-5.6-luna` 同按段命中。
+crate 测试数字见 PATCHES.md 三十二期。待活回合：新客户端 /stats 三模型成本列 +
+/auth 五步回填 + unified.jsonl 里 `source` 字段核对。

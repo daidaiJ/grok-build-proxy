@@ -10,6 +10,7 @@ pub fn openrouter_fixture() -> &'static str {
       "canonical_slug": "x-ai/grok-4",
       "name": "Grok 4",
       "context_length": 256000,
+      "supported_parameters": ["reasoning", "temperature"],
       "pricing": {
         "prompt": "0.000003",
         "completion": "0.000015",
@@ -25,6 +26,7 @@ pub fn openrouter_fixture() -> &'static str {
       "canonical_slug": "deepseek/deepseek-chat-v3.1",
       "name": "DeepSeek V3.1",
       "context_length": 163840,
+      "supported_parameters": ["temperature"],
       "pricing": {
         "prompt": "0.0000002",
         "completion": "0.0000008",
@@ -79,6 +81,7 @@ pub fn models_dev_fixture() -> &'static str {
     "models": {
       "glm-5.3-flash": {
         "name": "GLM-5.3-Flash",
+        "reasoning": true,
         "limit": { "context": 128000, "output": 96000 },
         "cost": { "input": 0.15, "output": 2.5, "cache_read": 0.02 }
       }
@@ -91,6 +94,7 @@ pub fn models_dev_fixture() -> &'static str {
       "claude-sonnet-4-5": {
         "name": "Claude Sonnet 4.5",
         "canonical_model_id": "anthropic/claude-sonnet-4-5",
+        "reasoning": false,
         "limit": { "context": 200000, "output": 64000 },
         "cost": { "input": 3.0, "output": 15.0, "cache_read": 0.3, "cache_write": 3.75 }
       }
@@ -107,9 +111,10 @@ pub fn models_dev_fixture() -> &'static str {
 }
 
 /// 测试目录：双源夹具合并（真实运行是单源生效，这里只为覆盖匹配档位）。
+/// 经 [`ModelCatalog::new`] 重建索引（直接 extend 会绕过索引不变式）。
 pub fn test_catalog() -> crate::types::ModelCatalog {
     let mut cat = crate::openrouter::parse(openrouter_fixture()).expect("openrouter fixture");
     let dev = crate::modelsdev::parse(models_dev_fixture()).expect("models.dev fixture");
     cat.entries.extend(dev.entries);
-    cat
+    crate::types::ModelCatalog::new(cat.entries)
 }

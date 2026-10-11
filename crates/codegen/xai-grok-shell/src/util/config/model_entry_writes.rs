@@ -30,6 +30,9 @@ pub struct ModelEntryDraft {
     pub context_window: Option<u64>,
     /// 目录回填的最大输出（缺省语义 = 不发送，目录有值即写）。
     pub max_completion_tokens: Option<u64>,
+    /// 目录回填的思考支持位（目录 `reasoning` = Some(true) 才写 true，
+    /// 开启既有 reasoning-effort 机制；缺省不写）。
+    pub supports_reasoning_effort: bool,
 }
 
 impl std::fmt::Debug for ModelEntryDraft {
@@ -42,6 +45,7 @@ impl std::fmt::Debug for ModelEntryDraft {
             .field("api_backend", &self.api_backend)
             .field("context_window", &self.context_window)
             .field("max_completion_tokens", &self.max_completion_tokens)
+            .field("supports_reasoning_effort", &self.supports_reasoning_effort)
             .finish()
     }
 }
@@ -132,6 +136,9 @@ fn draft_to_item(entry: &ModelEntryDraft) -> toml_edit::Item {
     if let Some(max_tokens) = entry.max_completion_tokens {
         table.insert("max_completion_tokens", toml_edit::value(max_tokens as i64));
     }
+    if entry.supports_reasoning_effort {
+        table.insert("supports_reasoning_effort", toml_edit::value(true));
+    }
     toml_edit::Item::Table(table)
 }
 
@@ -148,6 +155,7 @@ mod tests {
             api_backend,
             context_window: None,
             max_completion_tokens: None,
+            supports_reasoning_effort: false,
         }
     }
 
@@ -185,6 +193,7 @@ mod tests {
             &[ModelEntryDraft {
                 context_window: Some(1_048_576),
                 max_completion_tokens: Some(131_072),
+                supports_reasoning_effort: true,
                 ..draft("glm", "glm-5.3-flash", ApiBackend::Messages)
             }],
         );
@@ -199,6 +208,10 @@ mod tests {
         );
         assert!(body.contains("context_window = 1048576"), "backfill must be written:\n{body}");
         assert!(body.contains("max_completion_tokens = 131072"), "backfill must be written:\n{body}");
+        assert!(
+            body.contains("supports_reasoning_effort = true"),
+            "reasoning backfill must be written:\n{body}"
+        );
         assert!(
             !body.contains("api_backend") || body.matches("api_backend").count() == 1,
             "default backend must be omitted:\n{body}"
@@ -218,6 +231,10 @@ mod tests {
         write_at(&path, &[draft("m", "m-1", ApiBackend::ChatCompletions)]);
         let body = std::fs::read_to_string(&path).unwrap();
         assert!(!body.contains("api_backend"), "default backend must be omitted:\n{body}");
+        assert!(
+            !body.contains("supports_reasoning_effort"),
+            "false reasoning flag must be omitted:\n{body}"
+        );
     }
 
     #[test]

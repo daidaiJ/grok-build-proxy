@@ -228,6 +228,33 @@ v1.0.50 活回合用后反馈三问题，逐条拍板并随 `v1.0.51` 修复：
     （Step x/5 页脚之上），对齐全局面板惯例；editing 态提示 Enter/Esc 保存 id；
     顺带补 `next`/`retry`/`add manually` 等漏登记的 i18n 键。
 
+## 拍板增补（2026-10-11 五轮）：v1.0.51 复发二次修复——裸 id↔vendor/model 段命中 + 缓存治理 + 启动预热
+
+> v1.0.51 活回合成本列依旧只剩 v4.1 flash（复发现场与根因见 issue 文末「复发与
+> 二次修复」节）。用户五轮拍板 14–18，全数落地于分支
+> `fix/local-catalog-bare-id-cache-dir`；**按用户指示不切新 tag，v1.0.51 重指重发**
+> （连续提交同属 /auth + /stats 两个需求，沿用 v1.0.39 覆盖发版先例）。
+
+14. **匹配对称性**（用户：「OpenRouter model id 适配就是解析成厂商和 model id 两部分」）：
+    裸 id 查询对 `vendor/model` 条目按 model 段命中（84 档）；`:variant` 条目段键
+    自带后缀不参与（`:free` 零价不冒充牌价）。
+15. **缓存目录**（用户）：prices.cache 迁 `~/.grok/cache/`（与 model-usage /
+    billing-samples 同目录）；旧位置文件首次成功取数后清除。
+16. **取数时点**（用户）：进程启动异步预热一次/天（TTL + 单飞 + 磁盘缓存去重），
+    面板首开即有热数据，避免重复下载。
+17. **参数回填**（用户）：目录 `context_length` / `max_completion_tokens` 回填
+    /auth 新增模型（链路三十一期已有，此前因裸 id 失配空转）；支持思考的模型写
+    `supports_reasoning_effort = true`（本仓 effort 为枚举档位、无数值思考字段，
+    「最大思考值」的对应物即支持位 + 既有默认档）。
+18. **存储形态**（用户：先要求按厂商/model 拆段设计持久化结构 + 冷热分离 lazy
+    取，后**撤回格式细节、保留性能标准**）：内存常驻 =「请求 id → 参数」薄表
+    （/stats、/auth 热数据，几十 KB 级）；磁盘 = 唯一全量副本（条目化 JSON +
+    版本守卫，几百 KB）；匹配 = fetch 时预建哈希倒排索引（by_id / by_canonical /
+    by_vendor / by_segment），O(1) 候选取回；全量目录只在取数 / 薄表补齐瞬间
+    物化、用完即弃；models.dev 解析按 provider 白名单提前跳过转售商（条目不
+    物化，压低 5.4MB 响应的解析峰值）。自造二进制偏移格式不采纳（几百 KB 级
+    数据下复杂度不成比例，目录涨到万级条目再议）。
+
 ## 验收标准
 
 - A：全新配置（无 `[model.*]`）走 /auth 五步产出一条可用条目，采样请求成功；目录值与默认

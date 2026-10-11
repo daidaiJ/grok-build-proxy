@@ -250,23 +250,33 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### /auth 面板 + /stats API 成本 + /login→/grok — 全线随 v1.0.51（含活回合三修复）；T4/T5 待做
+### /auth 面板 + /stats API 成本 + /login→/grok — 全线随 v1.0.51（含活回合三修复 + 复发二次修复，tag 重指重发）；T4/T5 待做
 
 - **当前状态：** T0（`/login`→`/grok` 硬改名 + 零配置首启 BYOK 引导）随 `v1.0.48`、
   T1+特性B（模型目录取数 + /stats 成本列）随 `v1.0.49`、T2/T3（/auth 五步面板 +
-  目录回填 + config 写回）随 `v1.0.50`；**v1.0.51（2026-10-11，merge `14561c0`，
-  分支 `fix/local-catalog-bare-ids-auth-panel`，PATCHES 三十一期）修复 v1.0.50
-  活回合三问题**：① 目录源换序（models.dev 主 + OpenRouter 兜底；models.dev 直连
-  稳定且裸 id/`openrouter` 镜像双形态覆盖）+ 原厂白名单过滤（21 项 provider，
-  转售条目整库不留）+ 匹配扩展（剥壳取 `xx/` 后半段 / 分隔符变体 / 部署戳容忍
-  三路 84 档 + canonical 自证平局，deepseek 自家价压过 alibaba-cn 托管价）+
-  `~/.grok/prices.cache` 磁盘缓存（TTL 内跨进程免请求，取数失败宁旧勿空回退）；
-  ② /auth 提示行固定贴面板底；③ 写回后 pager 显式发 `x.ai/internal/reload_models`
-  （embedded 模式无 config watcher，v1.0.50 热重载文案为空头支票），重载失败完成页
-  提示重启。release run `38135151264` / build run `38135151234` 双 job success、
-  4 资产非草稿；本机已部署 `grok 1.0.51 (14561c01201f)`。
-  匹配仿真（线上两源）：本机 10 个在用 model id 8 命中全原厂价，2 miss 均
-  sensenova（商汤不在 models.dev 白名单，用户豁免）。
+  目录回填 + config 写回）随 `v1.0.50`；v1.0.51（merge `14561c0`，分支
+  `fix/local-catalog-bare-ids-auth-panel`，PATCHES 三十一期）修复 v1.0.50
+  活回合三问题：① 目录源换序（models.dev 主 + OpenRouter 兜底）+ 原厂白名单过滤
+  （21 项 provider，转售条目整库不留）+ 匹配扩展（剥壳取 `xx/` 后半段 / 分隔符
+  变体 / 部署戳容忍三路 84 档 + canonical 自证平局）+ prices.cache 磁盘缓存；
+  ② /auth 提示行固定贴面板底；③ 写回后 pager 显式发 `x.ai/internal/reload_models`。
+  **v1.0.51 复发二次修复（2026-10-11 晚，分支 `fix/local-catalog-bare-id-cache-dir`，
+  PATCHES 三十二期；用户拍板不切新 tag、v1.0.51 重指重发）**：活回合成本列依旧
+  只剩 v4.1 flash——根因三件叠加：models.dev 主源瞬时失败只落 tracing::debug!
+  静默回退（unified.jsonl 无任何失败行）、匹配器裸 id 分支写死只认裸条目
+  （`!entry.id.contains('/')`，OpenRouter-only 目录下必失配）、缓存误写 home 根。
+  修复：**裸 id 对 `vendor/model` 条目按 model 段命中** + 匹配索引化（fetch 时预建
+  by_id/by_canonical/by_vendor/by_segment 倒排，O(1) 候选）+ 单源失败 warn 进
+  unified.jsonl + fetched 日志带 source/trigger + 缓存迁 `~/.grok/cache/`
+  （version 2，旧文件清除）+ 进程常驻改「请求 id → 参数」薄表（全量目录只在取数/
+  补齐瞬间物化，冷热分离）+ 启动异步预热一次/天 + /auth 回填思考支持位
+  （目录 reasoning=Some(true) → `supports_reasoning_effort = true`）。
+- **复发修复验证（真实数据仿真，本机 v1.0.51 遗留 OpenRouter-only 458 条缓存
+  = 最坏情形）：config `[model.*]` 表键 8/8、路由 slug 8/8、账本回显 6/6
+  （并集 11 id）全命中原厂价**——此前两 miss 现命中：`glm-5.3-flash` →
+  `z-ai/glm-5.3-flash`（$0.15/$0.50 per 1M）、`gpt-6-luna` → `openai/gpt-6-luna`
+  （$0.10/$0.50 per 1M）。crate 测试数字见 PATCHES 三十二期；release/build run id
+  发版后回填。
 - **T2/T3 落地面**：`views/auth_modal` 五步向导（协议→baseUrl→SK 掩码→模型列表
   过滤勾选/手填回退→确认写回，行 id 可编辑冲突标红）+ shell 扩展
   `x.ai/providerModels` + `write_model_entries`（toml_edit 定点写回
@@ -275,15 +285,21 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   `api_key` 直写（`SecretKey` Debug 打码不进日志）、id 用户缩写唯一冲突即拒、
   toml_edit 定点编辑；回填「与新建模型兜底不同才写」；~~写回后 ModelsChanged
   热重载~~ **勘误：embedded 模式无 watcher，v1.0.51 改显式 reload_models**。
-- **验证：** model-catalog lib 38/38；shell GATE_FORCE model_catalog 7/7 +
-  ext_method_reload_models 1/1；pager GATE_FORCE auth_modal 14/14 +
-  dispatch::tests::auth 25/25；双 crate check --all-targets 0 error；i18n 基线不变。
-- **遗留：** ① 活回合验证（新客户端实跑：/stats 成本列三模型、/auth 五步写回后
-  免重启 /model、prices.cache 断网回退、SK 不落 transcript/日志抽查）
+- **验证：** 复发修复：model-catalog lib 41/41（含裸 id↔vendor/model 段命中、
+  双源优先级、Deserialize 重建索引）；shell GATE_FORCE model_catalog 7/7（磁盘
+  往返抓出手写 Deserialize 形状 bug 已修）+ model_entry 7/7；pager auth_modal
+  （backfill 三元含思考位）+ dispatch::tests::auth + stats_modal +
+  model_catalog_store 过滤绿；真实数据仿真 11/11 id 全命中（见上）。
+  三十一期基线：model-catalog 38/38；shell model_catalog 7/7 +
+  ext_method_reload_models 1/1；pager auth_modal 14/14 + dispatch::tests::auth
+  25/25；i18n 基线不变。
+- **遗留：** ① 活回合验证（新客户端实跑：/stats 成本列多模型、/auth 五步回填
+  ctx/max_out/think、unified.jsonl 核对 `source` 字段、旧 prices.cache 根文件清除）
   ② T5 特性 C（模型能力门控，T1 增模态字段扩展）待开工
   ③ T4 i18n 扫尾实质挂起（面板字符串已带 zh，扫描 0 挂）。
 - **详情指针：** [`docs-local/provider-onboarding-api-cost-todo.md`](docs-local/provider-onboarding-api-cost-todo.md)
-  （拍板二轮 8–13）与 [`docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md`](docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md)
+  （拍板二轮 8–13 + 五轮 14–18）与 [`docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md`](docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md)
+  （文末「复发与二次修复」节）
 
 ### /auth 面板 + /stats API 成本 + /login→/grok — T0 随 v1.0.48 发版；T1+特性B 已落地（分支待合），T2/T3 待施工
 

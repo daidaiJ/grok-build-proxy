@@ -5,7 +5,9 @@
 //! 写回走 toml_edit 定点编辑 + flock 守卫（shell `write_model_entries`）。
 //! 模型列表步 = 关键词过滤 + 空格勾选多选（六轮拍板）；取数失败回退手填 slug。
 //! 目录回填只在与新建模型兜底不同时写入（context_window 兜底 200_000，
-//! `agent/config.rs:3704`；max_completion_tokens 缺省 = 不发送，目录有值即写）。
+//! `agent/config.rs:3704`；max_completion_tokens 缺省 = 不发送，目录有值即写；
+//! 目录 `reasoning` = Some(true) 时写 `supports_reasoning_effort = true`，接入
+//! 既有 reasoning-effort 机制）。
 //!
 //! 双宿主：会话内挂 `ActiveModal::AuthPanel`（AgentView），零配置首启的 welcome
 //! 门挂 `AppView::welcome_auth_panel`（welcome 无会话上下文，而 BYOK 用户恰被困在
@@ -90,6 +92,8 @@ pub struct ConfirmRow {
     pub id: String,
     pub context_window: Option<u64>,
     pub max_completion_tokens: Option<u64>,
+    /// 目录标注支持思考 → 写 `supports_reasoning_effort = true`。
+    pub supports_reasoning_effort: bool,
 }
 
 /// 面板状态机。两宿主各持一份（同一时刻至多一个打开）。
@@ -173,13 +177,15 @@ impl AuthModalState {
             .iter()
             .filter(|model| self.selected.contains(*model))
             .map(|model| {
-                let (context_window, max_completion_tokens) = catalog_backfill(model);
+                let (context_window, max_completion_tokens, supports_reasoning_effort) =
+                    catalog_backfill(model);
                 ids.push(model.clone());
                 ConfirmRow {
                     id: derive_entry_id(model, &self.existing_ids),
                     model: model.clone(),
                     context_window,
                     max_completion_tokens,
+                    supports_reasoning_effort,
                 }
             })
             .collect();
@@ -240,9 +246,11 @@ impl AuthModalState {
     /// 目录回包落库后重算确认行的回填值（id 保持用户已编辑的形态）。
     pub fn refresh_backfill(&mut self) {
         for row in &mut self.rows {
-            let (context_window, max_completion_tokens) = catalog_backfill(&row.model);
+            let (context_window, max_completion_tokens, supports_reasoning_effort) =
+                catalog_backfill(&row.model);
             row.context_window = context_window;
             row.max_completion_tokens = max_completion_tokens;
+            row.supports_reasoning_effort = supports_reasoning_effort;
         }
     }
 
@@ -264,16 +272,21 @@ impl AuthModalState {
 
 /// 目录回填（T1 store）：命中才带值；`context_window` 与新建兜底相同则省略
 /// （拍板「和默认配置值不一样」）；`max_completion_tokens` 缺省语义 = 不发送，
-/// 目录有值即写。
-fn catalog_backfill(model_id: &str) -> (Option<u64>, Option<u64>) {
+/// 目录有值即写；`reasoning` = Some(true) 才开 `supports_reasoning_effort`
+///（None/false 都不写，网关不支持时不冒充）。
+fn catalog_backfill(model_id: &str) -> (Option<u64>, Option<u64>, bool) {
     let matched = match crate::app::model_catalog_store::get(model_id) {
         Some(Some(matched)) => matched,
-        _ => return (None, None),
+        _ => return (None, None, false),
     };
     let context_window = matched
         .context_length
         .filter(|window| *window != CONTEXT_WINDOW_FALLBACK);
-    (context_window, matched.max_completion_tokens)
+    (
+        context_window,
+        matched.max_completion_tokens,
+        matched.reasoning == Some(true),
+    )
 }
 
 /// slug → 配置 id 缩写：非 `[a-zA-Z0-9_-]` 折成 `-`，收紧连字符，撞名追加序号。
@@ -600,6 +613,7 @@ fn submit_persist(state: &mut AuthModalState) -> AuthModalOutcome {
             api_backend: protocol_at(state.protocol_cursor),
             context_window: row.context_window,
             max_completion_tokens: row.max_completion_tokens,
+            supports_reasoning_effort: row.supports_reasoning_effort,
         })
         .collect();
     state.persist_error = None;
@@ -937,6 +951,9 @@ fn render_confirm(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<Li
         if let Some(max) = row.max_completion_tokens {
             detail.push_str(&format!("  max_out={max}"));
         }
+        if row.supports_reasoning_effort {
+            detail.push_str("  think=on");
+        }
         let conflict_note = if conflicted { tr("  (id taken)") } else { "" };
         lines.push(Line::from(Span::styled(
             format!("[{id_display}] model={}{}{detail}{conflict_note}", row.model, ""),
@@ -1223,6 +1240,7 @@ mod tests {
             id: "taken".into(),
             context_window: None,
             max_completion_tokens: None,
+            supports_reasoning_effort: false,
         }];
         // 冲突 → Enter 只刷屏不提交。
         assert_eq!(route_auth_modal_key(&mut state, &key(KeyCode::Enter)), AuthModalOutcome::Changed);
@@ -1265,6 +1283,7 @@ mod tests {
             id: "m".into(),
             context_window: None,
             max_completion_tokens: None,
+            supports_reasoning_effort: false,
         }];
         state.apply_persist_result(Err("boom".into()));
         assert_eq!(state.step, AuthStep::Confirm);
@@ -1310,6 +1329,7 @@ mod tests {
                 pricing: ModelPricing::default(),
                 context_length: Some(CONTEXT_WINDOW_FALLBACK),
                 max_completion_tokens: Some(131_072),
+                reasoning: Some(false),
             }),
         );
         entries.insert(
@@ -1323,6 +1343,7 @@ mod tests {
                 pricing: ModelPricing::default(),
                 context_length: Some(1_048_576),
                 max_completion_tokens: None,
+                reasoning: Some(true),
             }),
         );
         crate::app::model_catalog_store::install(&ModelCatalogResponse {
@@ -1331,14 +1352,16 @@ mod tests {
             cache: "fetch".into(),
             error: None,
         });
-        let (window, max) = catalog_backfill("auth-panel-ctx-fallback");
+        let (window, max, reasoning) = catalog_backfill("auth-panel-ctx-fallback");
         assert_eq!(window, None, "fallback value must be omitted");
         assert_eq!(max, Some(131_072));
-        let (window, max) = catalog_backfill("auth-panel-ctx-real");
+        assert!(!reasoning, "reasoning=false 不写支持位");
+        let (window, max, reasoning) = catalog_backfill("auth-panel-ctx-real");
         assert_eq!(window, Some(1_048_576));
         assert_eq!(max, None, "None stays None (do not send)");
+        assert!(reasoning, "reasoning=true 写支持位");
         // 目录未命中 = 能力未知，不写值。
-        let (window, max) = catalog_backfill("unknown-model");
-        assert_eq!((window, max), (None, None));
+        let backfill = catalog_backfill("unknown-model");
+        assert_eq!(backfill, (None, None, false));
     }
 }

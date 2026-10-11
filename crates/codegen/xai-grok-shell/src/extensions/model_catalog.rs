@@ -5,8 +5,9 @@
 //! 拍板口径（`docs-local/provider-onboarding-api-cost-todo.md`）：价格目录 TTL
 //! **1 天起步**（`[model_catalog] cache_minutes` 缺省 1440，可配）；只留官方价格
 //! （一方原厂优先，见 match_model 白名单）。目录与账号无关 → 进程级单条目缓存 +
-//! 全局单飞锁；价格数据变动极少，落盘 `prices.cache`，TTL 内重启/新进程免请求，
-//! 取数失败回退旧目录（进程内 → 磁盘，宁旧勿空，与 provider usage 同语义）。
+//! 全局单飞锁；价格数据变动极少，落盘 `~/.grok/cache/prices.cache`，TTL 内重启/
+//! 新进程免请求，取数失败回退旧目录（进程内 → 磁盘，宁旧勿空，与 provider usage
+//! 同语义）；进程启动时异步预热一次/天（与面板触发共用单飞 + 磁盘缓存去重）。
 //!
 //! 匹配语义见纯 crate：置信档（exact/variant/vendor/canonical/normalized），
 //! fuzzy 子串噪声不富化。
@@ -49,6 +50,8 @@ pub struct CatalogMatch {
     pub pricing: ModelPricing,
     pub context_length: Option<u64>,
     pub max_completion_tokens: Option<u64>,
+    /// 是否支持思考/推理（/auth 目录回填 `supports_reasoning_effort` 用）。
+    pub reasoning: Option<bool>,
 }
 
 impl CatalogMatch {
@@ -62,6 +65,7 @@ impl CatalogMatch {
             pricing: entry.pricing,
             context_length: entry.context_length,
             max_completion_tokens: entry.max_completion_tokens,
+            reasoning: entry.reasoning,
         }
     }
 }
@@ -81,10 +85,15 @@ pub struct ModelCatalogResponse {
     pub error: Option<String>,
 }
 
-/// 进程级目录缓存（单条目：目录与账号无关）。
+/// 进程级缓存 = 「请求 id → 匹配结果」薄表（单条目：目录与账号无关）。
+///
+/// 存储按对齐难度分层（拍板 2026-10-11）：难对齐的 fuzzy 匹配只在低频物化窗口
+/// 发生（取数 / 新 id 未命中时临时读盘重匹配）；好对齐的模型参数（价格 / 上下文
+/// 窗口 / 思考位）以薄表为唯一常驻形态——全量目录在内存里**不驻留**，磁盘
+/// `prices.cache` 是唯一全量副本与 lazy 数据源。
 #[derive(Clone)]
 struct Cached {
-    catalog: ModelCatalog,
+    results: BTreeMap<String, Option<CatalogMatch>>,
     at_ms: u64,
     at: Instant,
 }
@@ -102,14 +111,17 @@ fn inflight_lock() -> &'static TokioMutex<()> {
 
 /// 缓存 TTL（配置 `[model_catalog] cache_minutes`，缺省 1440，clamp 5–20160）。
 fn cache_ttl(agent: &MvpAgent) -> Duration {
-    let minutes = agent
-        .cfg
-        .borrow()
-        .model_catalog
-        .cache_minutes
-        .unwrap_or(DEFAULT_CACHE_MINUTES)
-        .clamp(*CACHE_MINUTES_RANGE.start(), *CACHE_MINUTES_RANGE.end());
-    Duration::from_secs(minutes * 60)
+    catalog_ttl_from(agent.cfg.borrow().model_catalog.cache_minutes)
+}
+
+/// 配置分钟数 → TTL（面板路径与启动预热共用同一 clamp 语义）。
+fn catalog_ttl_from(cache_minutes: Option<u64>) -> Duration {
+    Duration::from_secs(
+        cache_minutes
+            .unwrap_or(DEFAULT_CACHE_MINUTES)
+            .clamp(*CACHE_MINUTES_RANGE.start(), *CACHE_MINUTES_RANGE.end())
+            * 60,
+    )
 }
 
 fn cache_get(ttl: Option<Duration>) -> Option<Cached> {
@@ -122,21 +134,76 @@ fn cache_get(ttl: Option<Duration>) -> Option<Cached> {
     Some(cached)
 }
 
-fn cache_put(catalog: ModelCatalog, at_ms: u64) {
+fn cache_put_results(results: BTreeMap<String, Option<CatalogMatch>>, at_ms: u64) {
     if let Ok(mut slot) = cache().lock() {
         *slot = Some(Cached {
-            catalog,
+            results,
             at_ms,
             at: Instant::now(),
         });
     }
 }
 
-// --- 磁盘缓存 `~/.grok/prices.cache`（拍板 2026-10-11：价格数据变动极少，
-// 落盘跨进程复用；TTL 内免请求，取数失败时宁旧勿空回退旧值） ---
+/// 请求 id 批量匹配（索引化 O(1) 候选）；全量目录只在调用瞬间借用，不驻留。
+fn match_results(
+    catalog: &ModelCatalog,
+    requested: &BTreeSet<String>,
+) -> BTreeMap<String, Option<CatalogMatch>> {
+    requested
+        .iter()
+        .map(|id| {
+            let matched =
+                match_model(catalog, id).map(|m| CatalogMatch::from_match(m.entry, m.score));
+            (id.clone(), matched)
+        })
+        .collect()
+}
+
+/// 回包条目 = 请求 id 的结果子集（薄表缺的 id 落 `null` = 已知无价）。
+fn results_subset(
+    results: &BTreeMap<String, Option<CatalogMatch>>,
+    requested: &BTreeSet<String>,
+) -> BTreeMap<String, Option<CatalogMatch>> {
+    requested
+        .iter()
+        .map(|id| (id.clone(), results.get(id).cloned().unwrap_or(None)))
+        .collect()
+}
+
+/// 薄表按需补齐（lazy）：请求 id 缺失时从磁盘全量库**临时**物化重匹配，并并回
+/// 进程薄表（缓存仍在 TTL 内 = 目录同代）。返回请求 id 的结果子集。
+fn completed_entries(
+    results: &BTreeMap<String, Option<CatalogMatch>>,
+    requested: &BTreeSet<String>,
+    disk_path: &Path,
+) -> BTreeMap<String, Option<CatalogMatch>> {
+    let missing: BTreeSet<String> = requested
+        .iter()
+        .filter(|id| !results.contains_key(*id))
+        .cloned()
+        .collect();
+    if !missing.is_empty() {
+        if let Some((catalog, _)) = disk_cache_load(disk_path) {
+            let matched = match_results(&catalog, &missing);
+            if let Ok(mut slot) = cache().lock() {
+                if let Some(cached) = slot.as_mut() {
+                    for (id, matched) in matched {
+                        cached.results.entry(id).or_insert(matched);
+                    }
+                }
+            }
+        }
+    }
+    results_subset(results, requested)
+}
+
+// --- 磁盘缓存 `~/.grok/cache/prices.cache`（拍板 2026-10-11：价格数据变动极少，
+// 落盘跨进程复用；TTL 内免请求，取数失败时宁旧勿空回退旧值；缓存一律放
+// grok_home/cache 专用目录，v1.0.51 误写在 home 根的旧文件首次成功取数后清除） ---
 
 const DISK_CACHE_FILE: &str = "prices.cache";
-const DISK_CACHE_VERSION: u32 = 1;
+/// v2：条目新增 `reasoning` 位 + 缓存迁入 `cache/`（v1 一律视为过期重新取数）。
+const DISK_CACHE_VERSION: u32 = 2;
 /// 读上限：models.dev 全量原始 JSON 5.4MB，条目化后更小；超限视为损坏。
 const DISK_CACHE_READ_CAP: u64 = 32 * 1024 * 1024;
 /// tmp 残留清扫龄期（write_atomic 的 best-effort 清扫参数）。
@@ -150,7 +217,20 @@ struct DiskCache {
 }
 
 fn disk_cache_path() -> PathBuf {
-    grok_home().join(DISK_CACHE_FILE)
+    grok_home().join("cache").join(DISK_CACHE_FILE)
+}
+
+/// v1.0.51 误写在 grok_home 根的旧磁盘缓存（`~/.grok/prices.cache`）：迁移进
+/// `cache/` 专用目录后清除（best-effort，首次成功取数时调用）。
+fn remove_legacy_disk_cache() {
+    let legacy = grok_home().join(DISK_CACHE_FILE);
+    match std::fs::remove_file(&legacy) {
+        Ok(()) => {
+            tracing::debug!(path = %legacy.display(), "model catalog: legacy disk cache removed")
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => tracing::debug!(error = %e, "model catalog: legacy disk cache remove failed"),
+    }
 }
 
 /// 读取磁盘缓存；版本不符 / 解析失败一律按缺失处理。
@@ -207,14 +287,22 @@ fn http_client() -> reqwest::Client {
 
 /// 按序尝试目录源：models.dev 主、OpenRouter 兜底（拍板 4，2026-10-11 修订——
 /// models.dev 裸 id + openrouter 镜像双覆盖，见 `prepare_requests`）。传输层失败、
-/// 非 200、解析失败都换下一个；全部失败返回拼接错误。
-async fn fetch_catalog(client: &reqwest::Client) -> Result<(ModelCatalog, u64), String> {
+/// 非 200、解析失败都换下一个；全部失败返回拼接错误。**单源失败一律进
+/// unified.jsonl**（v1.0.51 活回合教训：models.dev 瞬时失败曾只落 tracing::debug!，
+/// 静默回退 OpenRouter 导致裸 id 全灭，现场无从排查）。
+async fn fetch_catalog(
+    client: &reqwest::Client,
+) -> Result<(CatalogSource, ModelCatalog, u64), String> {
     let mut last: Option<String> = None;
     for (source, req) in prepare_requests() {
         match fetch_one(client, source, &req).await {
-            Ok(catalog) => return Ok((catalog, now_unix_ms())),
+            Ok(catalog) => return Ok((source, catalog, now_unix_ms())),
             Err(e) => {
-                tracing::debug!(source = ?source, url = %req.url, error = %e, "model catalog: source failed");
+                xai_grok_telemetry::unified_log::warn(
+                    "model catalog: source failed",
+                    None,
+                    Some(serde_json::json!({ "source": source, "url": req.url, "error": e })),
+                );
                 last = Some(e);
             }
         }
@@ -250,29 +338,65 @@ async fn fetch_one(
     parse_response(source, &body).map_err(|e| e.to_string())
 }
 
-/// 匹配请求 id 并组装回包（纯函数，便于测试）。
-fn response_for(
-    catalog: &ModelCatalog,
-    fetched_at_ms: u64,
-    cache_kind: &str,
-    requested: &BTreeSet<String>,
-    error: Option<String>,
-) -> ModelCatalogResponse {
-    let entries = requested
-        .iter()
-        .map(|id| {
-            let matched = match_model(catalog, id).map(|m| CatalogMatch::from_match(m.entry, m.score));
-            (id.clone(), matched)
-        })
-        .collect();
-    ModelCatalogResponse {
-        entries,
-        fetched_at_ms,
-        cache: cache_kind.to_string(),
-        error,
-    }
+/// 取数落地：unified 日志（带生效源与触发点）→ 磁盘缓存全量库（顺手清除
+/// v1.0.51 写在 home 根的旧文件）→ 进程薄表置空（面板/预热首次查询时经
+/// `completed_entries` 从磁盘 lazy 补齐匹配，全量条目不驻留内存）。
+fn install_fetched(source: &CatalogSource, catalog: &ModelCatalog, at_ms: u64, trigger: &str) {
+    xai_grok_telemetry::unified_log::info(
+        "model catalog: fetched",
+        None,
+        Some(serde_json::json!({
+            "entries": catalog.len(),
+            "source": source,
+            "trigger": trigger,
+        })),
+    );
+    disk_cache_store(&disk_cache_path(), catalog, at_ms);
+    remove_legacy_disk_cache();
+    cache_put_results(BTreeMap::new(), at_ms);
 }
 
+/// 启动预热（进程拉起异步触发，TTL 内至多一次真实取数）：磁盘缓存新鲜则并入
+/// 进程薄表即返回；过期才后台取数。与面板触发共用全局单飞锁 + 同一份磁盘
+/// 缓存，天然去重；失败仅记日志（宁旧勿空，缓存维持旧值，下次面板/启动再试）。
+/// 目的：/stats 成本列与 /auth 目录回填在首次打开时就有热数据。
+pub fn spawn_startup_prefetch(cache_minutes: Option<u64>) {
+    // 无 tokio runtime（纯同步测试等）静默跳过，与 spawn_purge_stale_upload_scratch 同守卫。
+    if tokio::runtime::Handle::try_current().is_err() {
+        return;
+    }
+    let ttl = catalog_ttl_from(cache_minutes);
+    tokio::spawn(async move {
+        if cache_get(Some(ttl)).is_some() {
+            return;
+        }
+        let _guard = inflight_lock().lock().await;
+        if cache_get(Some(ttl)).is_some() {
+            return;
+        }
+        let disk_path = disk_cache_path();
+        if let Some((_, at)) =
+            disk_cache_load(&disk_path).filter(|(_, at)| disk_fresh(*at, ttl))
+        {
+            tracing::debug!("model catalog: disk cache hit (startup prefetch)");
+            cache_put_results(BTreeMap::new(), at);
+            return;
+        }
+        let client = http_client();
+        match fetch_catalog(&client).await {
+            Ok((source, catalog, at_ms)) => install_fetched(&source, &catalog, at_ms, "startup"),
+            Err(e) => {
+                xai_grok_telemetry::unified_log::warn(
+                    "model catalog: prefetch failed",
+                    None,
+                    Some(serde_json::json!({ "error": e })),
+                );
+            }
+        }
+    });
+}
+
+/// 匹配请求 id 并组装回包（纯函数，便于测试）。
 fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -298,54 +422,56 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         .unwrap_or_default();
 
     let ttl = cache_ttl(agent);
+    let disk_path = disk_cache_path();
     if let Some(cached) = cache_get(Some(ttl)) {
         tracing::debug!("model catalog: cache hit");
-        return to_raw_response(&response_for(
-            &cached.catalog,
-            cached.at_ms,
-            "hit",
-            &requested,
-            None,
-        ));
+        return to_raw_response(&ModelCatalogResponse {
+            entries: completed_entries(&cached.results, &requested, &disk_path),
+            fetched_at_ms: cached.at_ms,
+            cache: "hit".to_string(),
+            error: None,
+        });
     }
 
     // 单飞：等全局锁；等锁期间前一个请求多半已写入缓存，复检直接复用。
     let _guard = inflight_lock().lock().await;
     if let Some(cached) = cache_get(Some(ttl)) {
         tracing::debug!("model catalog: cache hit after single-flight wait");
-        return to_raw_response(&response_for(
-            &cached.catalog,
-            cached.at_ms,
-            "hit",
-            &requested,
-            None,
-        ));
+        return to_raw_response(&ModelCatalogResponse {
+            entries: completed_entries(&cached.results, &requested, &disk_path),
+            fetched_at_ms: cached.at_ms,
+            cache: "hit".to_string(),
+            error: None,
+        });
     }
 
-    // 磁盘缓存 TTL 内直接复用：重启 / 新进程免 5MB 级请求。命中后并入进程缓存。
-    let disk_path = disk_cache_path();
+    // 磁盘缓存 TTL 内直接复用：重启 / 新进程免 5MB 级请求。全量库临时物化匹配
+    // 请求 id 后只驻留薄表。
     let disk = disk_cache_load(&disk_path);
     if let Some((catalog, at_ms)) = disk.as_ref().filter(|(_, at)| disk_fresh(*at, ttl)) {
         tracing::debug!("model catalog: disk cache hit");
-        cache_put(catalog.clone(), *at_ms);
-        return to_raw_response(&response_for(
-            catalog, *at_ms, "disk", &requested, None,
-        ));
+        let results = match_results(catalog, &requested);
+        cache_put_results(results.clone(), *at_ms);
+        return to_raw_response(&ModelCatalogResponse {
+            entries: results,
+            fetched_at_ms: *at_ms,
+            cache: "disk".to_string(),
+            error: None,
+        });
     }
 
     let client = http_client();
     match fetch_catalog(&client).await {
-        Ok((catalog, at_ms)) => {
-            xai_grok_telemetry::unified_log::info(
-                "model catalog: fetched",
-                None,
-                Some(serde_json::json!({ "entries": catalog.len() })),
-            );
-            cache_put(catalog.clone(), at_ms);
-            disk_cache_store(&disk_path, &catalog, at_ms);
-            to_raw_response(&response_for(
-                &catalog, at_ms, "fetch", &requested, None,
-            ))
+        Ok((source, catalog, at_ms)) => {
+            let results = match_results(&catalog, &requested);
+            install_fetched(&source, &catalog, at_ms, "panel");
+            cache_put_results(results.clone(), at_ms);
+            to_raw_response(&ModelCatalogResponse {
+                entries: results,
+                fetched_at_ms: at_ms,
+                cache: "fetch".to_string(),
+                error: None,
+            })
         }
         Err(e) => {
             xai_grok_telemetry::unified_log::warn(
@@ -353,33 +479,31 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
                 None,
                 Some(serde_json::json!({ "error": e })),
             );
-            // 价格面宁旧勿空：取数失败回退旧目录（进程内过期值 → 磁盘任意龄期）。
+            // 价格面宁旧勿空：取数失败回退旧目录（进程内过期薄表 → 磁盘任意龄期）。
             if let Some(cached) = cache_get(None) {
-                return to_raw_response(&response_for(
-                    &cached.catalog,
-                    cached.at_ms,
-                    "stale",
-                    &requested,
-                    Some(e),
-                ));
+                return to_raw_response(&ModelCatalogResponse {
+                    entries: results_subset(&cached.results, &requested),
+                    fetched_at_ms: cached.at_ms,
+                    cache: "stale".to_string(),
+                    error: Some(e),
+                });
             }
             if let Some((catalog, at_ms)) = disk.or_else(|| disk_cache_load(&disk_path)) {
-                cache_put(catalog.clone(), at_ms);
-                return to_raw_response(&response_for(
-                    &catalog,
-                    at_ms,
-                    "stale",
-                    &requested,
-                    Some(e),
-                ));
+                let results = match_results(&catalog, &requested);
+                cache_put_results(results.clone(), at_ms);
+                return to_raw_response(&ModelCatalogResponse {
+                    entries: results,
+                    fetched_at_ms: at_ms,
+                    cache: "stale".to_string(),
+                    error: Some(e),
+                });
             }
-            to_raw_response(&response_for(
-                &ModelCatalog::default(),
-                now_unix_ms(),
-                "error",
-                &requested,
-                Some(e),
-            ))
+            to_raw_response(&ModelCatalogResponse {
+                entries: results_subset(&BTreeMap::new(), &requested),
+                fetched_at_ms: now_unix_ms(),
+                cache: "error".to_string(),
+                error: Some(e),
+            })
         }
     }
 }
@@ -395,6 +519,7 @@ mod tests {
             source,
             name: format!("name-of-{id}"),
             canonical_id: None,
+            reasoning: None,
             pricing: ModelPricing {
                 input,
                 output: input.map(|v| v * 5.0),
@@ -407,12 +532,10 @@ mod tests {
     }
 
     fn fixture_catalog() -> ModelCatalog {
-        ModelCatalog {
-            entries: vec![
-                entry("x-ai/grok-4", "openrouter", CatalogSource::OpenRouter, Some(3.0)),
-                entry("glm-5.3-flash", "zai", CatalogSource::ModelsDev, Some(0.15)),
-            ],
-        }
+        ModelCatalog::new(vec![
+            entry("x-ai/grok-4", "openrouter", CatalogSource::OpenRouter, Some(3.0)),
+            entry("glm-5.3-flash", "zai", CatalogSource::ModelsDev, Some(0.15)),
+        ])
     }
 
     #[test]
@@ -437,23 +560,31 @@ mod tests {
     }
 
     #[test]
-    fn response_for_matches_requested_ids_and_keeps_nulls() {
+    fn match_results_subsets_requested_and_keeps_nulls() {
         let cat = fixture_catalog();
         let requested: BTreeSet<String> = ["x-ai/grok-4", "totally-unknown"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        let resp = response_for(&cat, 42, "fetch", &requested, None);
-        assert_eq!(resp.entries.len(), 2);
-        let grok = resp.entries.get("x-ai/grok-4").expect("grok").as_ref().expect("matched");
+        let results = match_results(&cat, &requested);
+        assert_eq!(results.len(), 2);
+        let grok = results.get("x-ai/grok-4").expect("grok").as_ref().expect("matched");
         assert_eq!(grok.model_id, "x-ai/grok-4");
         assert_eq!(grok.source, CatalogSource::OpenRouter);
         assert_eq!(grok.match_score, 100);
         assert_eq!(grok.pricing.input, Some(3.0));
         assert_eq!(grok.context_length, Some(128_000));
-        assert!(resp.entries.get("totally-unknown").expect("unknown").is_none());
-        assert_eq!(resp.cache, "fetch");
-        assert_eq!(resp.fetched_at_ms, 42);
+        assert!(results.get("totally-unknown").expect("unknown").is_none());
+
+        // 回包子集：薄表缺的 id 落 null（已知无价），多余 id 不进回包。
+        let entries = results_subset(&results, &requested);
+        assert_eq!(entries.len(), 2);
+        assert!(entries.contains_key("totally-unknown"));
+        let mut extra = requested.clone();
+        extra.insert("not-asked".to_string());
+        let entries = results_subset(&results, &extra);
+        assert_eq!(entries.len(), 3);
+        assert!(entries.get("not-asked").expect("missing id").is_none());
     }
 
     #[test]
@@ -461,7 +592,12 @@ mod tests {
         let cat = fixture_catalog();
         let mut requested = BTreeSet::new();
         requested.insert("glm-5.3-flash".to_string());
-        let resp = response_for(&cat, 7, "hit", &requested, None);
+        let resp = ModelCatalogResponse {
+            entries: match_results(&cat, &requested),
+            fetched_at_ms: 7,
+            cache: "hit".to_string(),
+            error: None,
+        };
         let json = serde_json::to_value(&resp).expect("serialize");
         assert!(json.get("fetchedAtMs").is_some());
         assert!(json.get("cache").is_some());
@@ -476,7 +612,12 @@ mod tests {
         let cat = fixture_catalog();
         let mut requested = BTreeSet::new();
         requested.insert("x-ai/grok-4".to_string());
-        let resp = response_for(&cat, 9, "stale", &requested, Some("HTTP 503".into()));
+        let resp = ModelCatalogResponse {
+            entries: match_results(&cat, &requested),
+            fetched_at_ms: 9,
+            cache: "stale".to_string(),
+            error: Some("HTTP 503".into()),
+        };
         assert_eq!(resp.cache, "stale");
         assert_eq!(resp.error.as_deref(), Some("HTTP 503"));
         assert!(resp.entries["x-ai/grok-4"].is_some());
@@ -484,8 +625,12 @@ mod tests {
 
     #[test]
     fn blank_and_empty_requested_ids_are_absent() {
-        let cat = fixture_catalog();
-        let resp = response_for(&cat, 1, "hit", &BTreeSet::new(), None);
+        let resp = ModelCatalogResponse {
+            entries: results_subset(&BTreeMap::new(), &BTreeSet::new()),
+            fetched_at_ms: 1,
+            cache: "hit".to_string(),
+            error: None,
+        };
         assert!(resp.entries.is_empty());
     }
 

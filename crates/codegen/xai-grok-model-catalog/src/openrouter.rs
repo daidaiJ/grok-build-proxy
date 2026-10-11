@@ -49,6 +49,9 @@ struct OpenRouterModel {
     context_length: Option<u64>,
     #[serde(default)]
     pricing: serde_json::Value,
+    /// `reasoning` 是否在支持参数表里（缺席 = 源未给，`None`）。
+    #[serde(default)]
+    supported_parameters: Vec<String>,
     #[serde(default)]
     top_provider: TopProvider,
 }
@@ -88,12 +91,15 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
                 empty
             };
             let get = |key: &str| pricing.get(key).cloned().unwrap_or(serde_json::Value::Null);
+            let reasoning = (!m.supported_parameters.is_empty())
+                .then(|| m.supported_parameters.iter().any(|p| p == "reasoning"));
             CatalogEntry {
                 id: m.id,
                 provider_id: provider_id().to_string(),
                 source: CatalogSource::OpenRouter,
                 name: m.name,
                 canonical_id: m.canonical_slug.filter(|s| !s.is_empty()),
+                reasoning,
                 pricing: ModelPricing {
                     input: price_from(get("prompt")).map(per_million),
                     output: price_from(get("completion")).map(per_million),
@@ -105,7 +111,7 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
             }
         })
         .collect();
-    Ok(ModelCatalog { entries })
+    Ok(ModelCatalog::new(entries))
 }
 
 #[cfg(test)]
@@ -134,6 +140,19 @@ mod tests {
         assert_eq!(grok.context_length, Some(256_000));
         assert_eq!(grok.max_completion_tokens, Some(32_000));
         assert_eq!(grok.canonical_id.as_deref(), Some("x-ai/grok-4"));
+        assert_eq!(grok.reasoning, Some(true));
+        let chat = cat
+            .entries
+            .iter()
+            .find(|e| e.id == "deepseek/deepseek-chat-v3.1")
+            .expect("chat entry");
+        assert_eq!(chat.reasoning, Some(false), "参数表存在但无 reasoning");
+        let free = cat
+            .entries
+            .iter()
+            .find(|e| e.id == "deepseek/deepseek-chat-v3.1:free")
+            .expect("free entry");
+        assert_eq!(free.reasoning, None, "字段缺席 = 未知");
     }
 
     #[test]
