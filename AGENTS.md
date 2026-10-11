@@ -250,31 +250,40 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### /auth 面板 + /stats API 成本 + /login→/grok — T0/T1/T2/T3+特性B 全部落地并随 v1.0.50 发版；T4/T5 待做
+### /auth 面板 + /stats API 成本 + /login→/grok — 全线随 v1.0.51（含活回合三修复）；T4/T5 待做
 
 - **当前状态：** T0（`/login`→`/grok` 硬改名 + 零配置首启 BYOK 引导）随 `v1.0.48`、
-  T1+特性B（模型目录取数 + /stats 成本列）随 `v1.0.49`、**T2/T3（/auth 五步面板 +
-  目录回填 + config 写回）随 `v1.0.50`** 发版（分支 `feat/local-auth-panel`，merge
-  `54e6389`，tag 已推；release run `38126950148` / build run `38126944660` 双 job
-  success，release 页 4 资产非草稿已核）。实现记录 PATCHES.md 三十期，roadmap §6
-  当日条目。
+  T1+特性B（模型目录取数 + /stats 成本列）随 `v1.0.49`、T2/T3（/auth 五步面板 +
+  目录回填 + config 写回）随 `v1.0.50`；**v1.0.51（2026-10-11，merge `14561c0`，
+  分支 `fix/local-catalog-bare-ids-auth-panel`，PATCHES 三十一期）修复 v1.0.50
+  活回合三问题**：① 目录源换序（models.dev 主 + OpenRouter 兜底；models.dev 直连
+  稳定且裸 id/`openrouter` 镜像双形态覆盖）+ 原厂白名单过滤（21 项 provider，
+  转售条目整库不留）+ 匹配扩展（剥壳取 `xx/` 后半段 / 分隔符变体 / 部署戳容忍
+  三路 84 档 + canonical 自证平局，deepseek 自家价压过 alibaba-cn 托管价）+
+  `~/.grok/prices.cache` 磁盘缓存（TTL 内跨进程免请求，取数失败宁旧勿空回退）；
+  ② /auth 提示行固定贴面板底；③ 写回后 pager 显式发 `x.ai/internal/reload_models`
+  （embedded 模式无 config watcher，v1.0.50 热重载文案为空头支票），重载失败完成页
+  提示重启。release run `38135151264` / build run `38135151234` 双 job success、
+  4 资产非草稿；本机已部署 `grok 1.0.51 (14561c01201f)`。
+  匹配仿真（线上两源）：本机 10 个在用 model id 8 命中全原厂价，2 miss 均
+  sensenova（商汤不在 models.dev 白名单，用户豁免）。
 - **T2/T3 落地面**：`views/auth_modal` 五步向导（协议→baseUrl→SK 掩码→模型列表
   过滤勾选/手填回退→确认写回，行 id 可编辑冲突标红）+ shell 扩展
   `x.ai/providerModels` + `write_model_entries`（toml_edit 定点写回
   `[model.<id>]`，注释/未知段保留，flock 守卫，全批原子）+ welcome 门 `a` 菜单
   直进面板（第二宿主，BYOK 用户被困门后是主场景）。七轮拍板全部落地：SK 明文
   `api_key` 直写（`SecretKey` Debug 打码不进日志）、id 用户缩写唯一冲突即拒、
-  toml_edit 定点编辑；回填「与新建模型兜底不同才写」（context_window 兜底
-  200_000 同值省略、max_completion_tokens 有值即写）；写回后 ModelsChanged
-  热重载 `/model` 即选即用。
-- **验证：** pager 门控 lib auth_modal 13 / welcome 226 / slash 568 /
-  dispatch::tests 1732；shell GATE_FORCE model_entry_writes 7 / provider_models 6 /
-  slash_commands 105；双 crate check --all-targets 0 error 0 warning；i18n 0 挂。
-- **遗留：** ① 活回合验证（新客户端实跑五步 + 写回后 /model 热加载 + SK 不落
-  transcript/日志抽查）② T5 特性 C（模型能力门控，T1 增模态字段扩展）待开工
+  toml_edit 定点编辑；回填「与新建模型兜底不同才写」；~~写回后 ModelsChanged
+  热重载~~ **勘误：embedded 模式无 watcher，v1.0.51 改显式 reload_models**。
+- **验证：** model-catalog lib 38/38；shell GATE_FORCE model_catalog 7/7 +
+  ext_method_reload_models 1/1；pager GATE_FORCE auth_modal 14/14 +
+  dispatch::tests::auth 25/25；双 crate check --all-targets 0 error；i18n 基线不变。
+- **遗留：** ① 活回合验证（新客户端实跑：/stats 成本列三模型、/auth 五步写回后
+  免重启 /model、prices.cache 断网回退、SK 不落 transcript/日志抽查）
+  ② T5 特性 C（模型能力门控，T1 增模态字段扩展）待开工
   ③ T4 i18n 扫尾实质挂起（面板字符串已带 zh，扫描 0 挂）。
-- **详情指针：** [`.handoff/provider-onboarding-api-cost.md`](.handoff/provider-onboarding-api-cost.md)
-  与 [`docs-local/provider-onboarding-api-cost-todo.md`](docs-local/provider-onboarding-api-cost-todo.md)
+- **详情指针：** [`docs-local/provider-onboarding-api-cost-todo.md`](docs-local/provider-onboarding-api-cost-todo.md)
+  （拍板二轮 8–13）与 [`docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md`](docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md)
 
 ### /auth 面板 + /stats API 成本 + /login→/grok — T0 随 v1.0.48 发版；T1+特性B 已落地（分支待合），T2/T3 待施工
 

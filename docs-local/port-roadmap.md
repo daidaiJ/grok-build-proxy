@@ -506,6 +506,8 @@
   ext_method_reload_models 1/1；pager GATE_FORCE auth_modal 14/14 +
   dispatch::tests::auth 25/25；双 crate check --all-targets 0 error；i18n 基线不变；
   匹配仿真（线上真实两源）本机 10 id 8 命中全原厂价，2 miss 均 sensenova（豁免）。
-- **发版**：随 v1.0.51（合 main 后打 tag，发版 run 待回填）。
+- **发版**：随 **`v1.0.51`** 发版（merge `14561c0`，tag 已推；release run
+  `38135151264` / build run `38135151234` 双 job success，release 页 4 资产非草稿已核；
+  本机客户端已部署 `grok 1.0.51 (14561c01201f)`，旧版留 `grok2.exe.v1.0.50.bak`）。
 - **遗留**：活回合验证（/stats 成本列三模型、/auth 五步写回后免重启 /model、
   prices.cache 断网回退）；T5 特性 C（能力门控）仍待开工。
