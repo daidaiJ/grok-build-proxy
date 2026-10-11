@@ -250,6 +250,31 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### /auth 面板 + /stats API 成本 + /login→/grok — T0/T1/T2/T3+特性B 全部落地并随 v1.0.50 发版；T4/T5 待做
+
+- **当前状态：** T0（`/login`→`/grok` 硬改名 + 零配置首启 BYOK 引导）随 `v1.0.48`、
+  T1+特性B（模型目录取数 + /stats 成本列）随 `v1.0.49`、**T2/T3（/auth 五步面板 +
+  目录回填 + config 写回）随 `v1.0.50`** 发版（分支 `feat/local-auth-panel`，merge
+  `54e6389`，tag 已推；release run `38126950148` / build run `38126944660` 监视中，
+  终态待回填）。实现记录 PATCHES.md 三十期，roadmap §6 当日条目。
+- **T2/T3 落地面**：`views/auth_modal` 五步向导（协议→baseUrl→SK 掩码→模型列表
+  过滤勾选/手填回退→确认写回，行 id 可编辑冲突标红）+ shell 扩展
+  `x.ai/providerModels` + `write_model_entries`（toml_edit 定点写回
+  `[model.<id>]`，注释/未知段保留，flock 守卫，全批原子）+ welcome 门 `a` 菜单
+  直进面板（第二宿主，BYOK 用户被困门后是主场景）。七轮拍板全部落地：SK 明文
+  `api_key` 直写（`SecretKey` Debug 打码不进日志）、id 用户缩写唯一冲突即拒、
+  toml_edit 定点编辑；回填「与新建模型兜底不同才写」（context_window 兜底
+  200_000 同值省略、max_completion_tokens 有值即写）；写回后 ModelsChanged
+  热重载 `/model` 即选即用。
+- **验证：** pager 门控 lib auth_modal 13 / welcome 226 / slash 568 /
+  dispatch::tests 1732；shell GATE_FORCE model_entry_writes 7 / provider_models 6 /
+  slash_commands 105；双 crate check --all-targets 0 error 0 warning；i18n 0 挂。
+- **遗留：** ① 活回合验证（新客户端实跑五步 + 写回后 /model 热加载 + SK 不落
+  transcript/日志抽查）② T5 特性 C（模型能力门控，T1 增模态字段扩展）待开工
+  ③ T4 i18n 扫尾实质挂起（面板字符串已带 zh，扫描 0 挂）。
+- **详情指针：** [`.handoff/provider-onboarding-api-cost.md`](.handoff/provider-onboarding-api-cost.md)
+  与 [`docs-local/provider-onboarding-api-cost-todo.md`](docs-local/provider-onboarding-api-cost-todo.md)
+
 ### /auth 面板 + /stats API 成本 + /login→/grok — T0 随 v1.0.48 发版；T1+特性B 已落地（分支待合），T2/T3 待施工
 
 - **当前状态：** T0（`/login`→`/grok` 硬改名不留别名 + 零配置首启默认 BYOK 引导）已合 main
