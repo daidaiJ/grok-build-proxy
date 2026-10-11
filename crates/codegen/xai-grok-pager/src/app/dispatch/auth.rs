@@ -203,7 +203,7 @@ pub(super) fn strip_trailing_auth_error_blocks(agent: &mut AgentView) {
     }
 }
 
-/// Start an interactive login flow. Triggered by pressing 'l' on the welcome screen or by the `/login` slash command.
+/// Start an interactive login flow. Triggered by pressing 'l' on the welcome screen or by the `/grok` slash command.
 /// Only the welcome view renders the auth UI (the external auth provider's sign-in URL and status).
 /// A mid-session invocation therefore stashes the caller's view in `auth_return_view` and switches to `Welcome` so the flow is visible.
 pub(super) fn dispatch_login(app: &mut AppView) -> Vec<Effect> {
@@ -245,7 +245,7 @@ pub(super) fn dispatch_login(app: &mut AppView) -> Vec<Effect> {
     ]
 }
 
-/// Only meaningful when `auth_return_view` is set (a mid-session `/login` or 401 re-auth prompt).
+/// Only meaningful when `auth_return_view` is set (a mid-session `/grok` or 401 re-auth prompt).
 /// Aborts the in-flight auth task and tells the shell to cancel its device/loopback flow so a retry does not race a still-polling prior mint.
 /// Bump the seq so a fresh login does not collide with a late `AuthComplete`/`AuthFailed`.
 pub(super) fn dispatch_cancel_login(app: &mut AppView) -> Vec<Effect> {
@@ -314,13 +314,13 @@ pub(super) fn handle_auth_complete(
         app.welcome_prompt_focused = !app.is_access_blocked();
         app.auth_code_input.reset();
 
-        // Mid-session re-auth (`/login` or a 401 prompt): restore the view the user was on instead of running the startup load-session flow
+        // Mid-session re-auth (`/grok` or a 401 prompt): restore the view the user was on instead of running the startup load-session flow
         // The session state lives in `app.agents`, independent of `active_view`, so it is preserved across the auth detour
         if let Some(return_view) = app.auth_return_view.take() {
             restore_auth_return_view(app, return_view);
             // Mid-session re-auth returns to the existing session, not the startup flow
             // Discard any deferred startup stash rather than leaving it to fire later
-            // One example: an incidental `Ctrl+N` pressed during /login that the chokepoint deferred
+            // One example: an incidental `Ctrl+N` pressed during /grok that the chokepoint deferred
             clear_startup_actions(app);
             // Re-auth succeeded: hide the now-stale re-auth prompt (and any trailing error blocks) so the user returns to a clean session
             // Mirrors how the credit-limit upsell strips its stale blocks

@@ -163,6 +163,7 @@ pub(crate) fn test_app() -> AppView {
         consent_answered: None,
         login_label: None,
         login_method_id: None,
+            byok_recommended: false,
         auth_start_mode: AuthMode::Pending,
         auth_code_input: LineEditor::default(),
         next_auth_request_seq: 1,

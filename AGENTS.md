@@ -250,13 +250,17 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### /auth 面板 + /stats API 成本 + /login→/grok — 设计收口，待分期施工
+### /auth 面板 + /stats API 成本 + /login→/grok — T0 已落地（分支待发版），T1 起待施工
 
-- **当前状态：** 四轮拍板收口（代码未动）；分期 T0（改名硬切+零配置首启默认 BYOK 引导）
-  → T1（models.dev/OpenRouter 目录取数）→ /stats 成本列（缓存写列恒 0 替换为美元成本）
-  → T2/T3（/auth 面板+config 写回）→ T4（i18n）。
-- **关键证据：** 设计文档（唯一权威）+ 参照实现 modelq 仓库 + fork 锚点全核实；候选拍板
-  台账 ADOPTION §7。
+- **当前状态：** T0（`/login`→`/grok` 硬改名不留别名 + 零配置首启默认 BYOK 引导：grok.com
+  method 挂 `meta.byok_recommended`，welcome 首屏改 BYOK 配置指引、订阅登录降级为 `l` 菜单项）
+  已在分支 `feat/local-auth-onboarding` 施工完成（2026-10-11，三 crate check 0 error，
+  pager 六滤 3535 例全绿含 7 新用例，shell/login GATE_FORCE 过滤全绿），**待合 main 发版**；
+  T1（目录/价格取数）→ /stats 成本列 → T2/T3（/auth 面板+config 写回）→ T4（i18n）待施工。
+  **六轮拍板（T1 开工必读）**：价格目录 TTL 1 天起步可配、只留官方价格不做第三方聚合；
+  /auth 面板参照本仓既有 slash 配置面板先例，模型列表步 = 关键词过滤 + 勾选多选。
+- **关键证据：** 设计文档（唯一权威，含六轮拍板增补）+ PATCHES.md 二十八期 + roadmap §6
+  当日 T0 完成条目；win-skip 新登记族S/族T（T0 分诊副产物）。
 - **验收标准：** 见设计文档「验收标准」节（A 五步出可用条目；B 成本对账一致 + i18n 0 挂）。
 - **详情指针：** [`.handoff/provider-onboarding-api-cost.md`](.handoff/provider-onboarding-api-cost.md)
 

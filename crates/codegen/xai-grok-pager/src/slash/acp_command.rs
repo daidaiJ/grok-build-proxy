@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn provenance_distinguishes_skills_from_shell_commands() {
         let skill = AcpSlashCommand::from(&make_cmd(
-            "login",
+            "grok",
             Some(serde_json::json!({
                 "scope": "plugin",
                 "path": "/plugins/acme/skills/login/SKILL.md",

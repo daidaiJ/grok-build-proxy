@@ -648,7 +648,7 @@ fn suppression_notification_message_is_reason_specific() {
     );
     assert_eq!(
         msg(SuppressReason::Auth, detail),
-        "authentication problem — re-authenticate using /login and retry."
+        "authentication problem — re-authenticate using /grok and retry."
     );
     assert_eq!(
         msg(SuppressReason::Size, detail),
@@ -976,7 +976,7 @@ async fn e2e_auto_compact_401_suppresses_auth_and_surfaces_reauth() {
                         }
                         XaiSessionUpdate::AutoCompactFailed { error } => {
                             assert!(
-                                error.contains("/login") || error.contains("authentication"),
+                                error.contains("/grok") || error.contains("authentication"),
                                 "auto-failed={error}"
                             );
                             saw_auto_failed = true;

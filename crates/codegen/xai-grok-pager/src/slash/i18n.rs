@@ -197,8 +197,8 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ),
         ("Jump to a turn in the conversation", "跳转到对话中的某一轮"),
         (
-            "Log in or re-authenticate with your account",
-            "登录或重新验证账号",
+            "Log in or re-authenticate with your Grok account",
+            "登录或重新验证 Grok 账号",
         ),
         (
             "Log out and return to the login screen",
@@ -801,6 +801,13 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Tier: ", "级别: "),
         ("Logged in with API key", "已用 API key 登录"),
         ("Login with {}", "使用 {} 登录"),
+        // LOCAL (T0 onboarding): 零配置首启 BYOK 引导文案
+        ("No model provider configured yet.", "尚未配置任何模型供应商。"),
+        (
+            "Add a [model.<id>] entry with base_url and api_key/env_key to ~/.grok/config.toml, then restart.",
+            "在 ~/.grok/config.toml 添加 [model.<id>] 条目（含 base_url 与 api_key/env_key），重启后生效。",
+        ),
+        ("Sign in with your Grok subscription", "使用 Grok 订阅登录"),
         ("Switch account", "切换账号"),
         (
             "Grok Build is not yet available for this account.",

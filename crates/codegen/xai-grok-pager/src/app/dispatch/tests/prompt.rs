@@ -1964,7 +1964,7 @@ fn prompt_response_formatted_401_suppresses_turn_failed_and_stashes_prompt() {
             .as_ref()
             .map(|p| p.text.as_str()),
         Some("resend me"),
-        "401 must stash the prompt for auto-resubmit after /login"
+        "401 must stash the prompt for auto-resubmit after /grok"
     );
 }
 

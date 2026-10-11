@@ -93,3 +93,24 @@ session::acp_session::rewind_synthetic_turn_tests::
 session::acp_session::subagent_usage_fold_tests::
 session::acp_session::turn_completion_emit_tests::
 session::acp_session::turn_end_reporting_tests::
+
+# 族S acp_session compaction/goal 家族 —— 同族N根因（create_test_actor 夹具写死
+# /tmp，support.rs:287 AbsPathBuf NotAbsolute panic），2026-10-11 T0 分诊时
+# 首次撞到的三个族，按族R格式整族跳过，行为验证走 Linux CI。
+session::acp_session::compaction::inline_auto_compact_flow_tests::
+session::acp_session::goal_compaction_reseed_tests::
+session::acp_session::inline_auto_compact_flow_tests::
+
+# 族T xai-grok-login 铸造/锁/管道家族 —— test_counting_provider 用 POSIX shell
+# 命令当铸造命令（echo/wc -l），Windows 无 POSIX shell 铸造必败；manager::lock
+# 走 flock 语义（os error 33）；pre_tui/external_auth/flow 为命令 spawn 与
+# 管道容量用例。均环境族不修（2026-10-11 GATE_FORCE 首次全量跑发现，
+# 29 失败全部归类；remedy 文案断言已随 /grok 改名修正后单独验证绿）。
+auth_provider::tests::
+external_auth::tests::
+flow::tests::
+manager::lock::tests::
+manager::remedy::tests::turn_surface_matches_the_remedy
+manager::tests::enrichment_aborts_when_disk_user_changes_mid_flight
+manager::tests::enrichment_task_preserves_interleaved_token_rotation
+pre_tui::tests::large_inherited_stderr_does_not_deadlock

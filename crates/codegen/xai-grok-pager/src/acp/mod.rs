@@ -107,6 +107,11 @@ pub struct AcpConnection {
     pub login_method_id: Option<acp::AuthMethodId>,
     /// Initial auth mode hint (Command vs Pending) from method metadata.
     pub auth_start_mode: AuthStartMode,
+    /// LOCAL (T0 onboarding): the zero-config first-start marker from the `grok.com` method's
+    /// `meta.byok_recommended`. The welcome screen uses it to lead with BYOK configuration
+    /// guidance and demote Grok subscription login to a menu option. Meaningful only while
+    /// `needs_login` is true.
+    pub byok_recommended: bool,
     /// Auth response metadata from eager authentication (cached token or API key).
     /// Contains `team_name`, etc. `None` when interactive login is required.
     pub auth_meta: Option<serde_json::Value>,
@@ -241,7 +246,7 @@ pub(in crate::acp) async fn initialize_connection(
     };
     startup::enter(StartupPhase::AcpInitialize);
     let agent = initialize(&tx, flags).await?;
-    let (needs_login, login_label, login_method_id, auth_start_mode) =
+    let (needs_login, login_label, login_method_id, auth_start_mode, byok_recommended) =
         startup_auth_metadata(&agent.auth_methods);
     startup::enter(StartupPhase::EagerAuth);
     let (needs_login, login_label, login_method_id, auth_start_mode, auth_meta) =
@@ -268,6 +273,7 @@ pub(in crate::acp) async fn initialize_connection(
         login_label,
         login_method_id,
         auth_start_mode,
+        byok_recommended,
         auth_meta,
         leader_status_rx,
         cancel_rewind_enabled: agent.cancel_rewind_enabled,
@@ -554,7 +560,8 @@ pub fn parse_feedback_trace_offer(meta: Option<&acp::Meta>) -> bool {
         .unwrap_or(false)
 }
 /// Determine whether interactive login is needed based on the advertised auth methods. Otherwise, authenticate
-/// eagerly.
+/// eagerly. The fifth element is the zero-config BYOK marker (`meta.byok_recommended` on the first
+/// advertised method, LOCAL T0 onboarding) — only set when the first method is an interactive login.
 pub fn startup_auth_metadata(
     auth_methods: &[acp::AuthMethod],
 ) -> (
@@ -562,19 +569,20 @@ pub fn startup_auth_metadata(
     Option<String>,
     Option<acp::AuthMethodId>,
     AuthStartMode,
+    bool,
 ) {
     let first_method = auth_methods.first();
     let needs_login = first_method
         .map(|m| AuthMethodKind::from_id(m.id()).needs_interactive_login())
         .unwrap_or(false);
     if !needs_login {
-        return (false, None, None, AuthStartMode::Pending);
+        return (false, None, None, AuthStartMode::Pending, false);
     }
     let method = first_method.unwrap();
     let login_label = Some(method.name().to_string());
     let login_method_id = Some(method.id().clone());
-    let is_provider = method
-        .meta()
+    let method_meta = method.meta();
+    let is_provider = method_meta
         .as_ref()
         .and_then(|v| v.get("external_provider"))
         .and_then(|v| v.as_bool())
@@ -584,7 +592,18 @@ pub fn startup_auth_metadata(
     } else {
         AuthStartMode::Pending
     };
-    (needs_login, login_label, login_method_id, auth_start_mode)
+    let byok_recommended = method_meta
+        .as_ref()
+        .and_then(|v| v.get("byok_recommended"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    (
+        needs_login,
+        login_label,
+        login_method_id,
+        auth_start_mode,
+        byok_recommended,
+    )
 }
 /// Find an interactive login method from the auth methods list.
 /// Used when eager auth (cached_token or API key) fails and we need to fall back to the welcome screen with a working login button.
@@ -835,7 +854,7 @@ mod tests {
     }
     #[test]
     fn startup_auth_empty_methods_no_login() {
-        let (needs, label, method_id, mode) = startup_auth_metadata(&[]);
+        let (needs, label, method_id, mode, byok) = startup_auth_metadata(&[]);
         assert!(!needs);
         assert!(label.is_none());
         assert!(method_id.is_none());
@@ -844,18 +863,29 @@ mod tests {
     #[test]
     fn startup_auth_grok_com_no_provider_needs_login_pending() {
         let methods = vec![make_auth_method("grok.com", "grok.com", None)];
-        let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
+        let (needs, label, method_id, mode, byok) = startup_auth_metadata(&methods);
         assert!(needs);
+        assert!(!byok, "plain grok.com without the meta must not claim byok_recommended");
         assert_eq!(label.as_deref(), Some("grok.com"));
         assert_eq!(method_id.as_ref().unwrap().0.as_ref(), "grok.com");
+        assert_eq!(mode, AuthStartMode::Pending);
+    }
+    #[test]
+    fn startup_auth_byok_recommended_meta_is_surfaced() {
+        let meta = serde_json::json!({ "byok_recommended": true });
+        let methods = vec![make_auth_method("grok.com", "grok.com", Some(meta))];
+        let (needs, _, _, mode, byok) = startup_auth_metadata(&methods);
+        assert!(needs);
+        assert!(byok, "zero-config marker must reach the pager");
         assert_eq!(mode, AuthStartMode::Pending);
     }
     #[test]
     fn startup_auth_grok_com_with_external_provider_command() {
         let meta = serde_json::json!({ "external_provider": true });
         let methods = vec![make_auth_method("grok.com", "Acme Corp", Some(meta))];
-        let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
+        let (needs, label, method_id, mode, byok) = startup_auth_metadata(&methods);
         assert!(needs);
+        assert!(!byok, "external-provider deployments must not claim byok_recommended");
         assert_eq!(label.as_deref(), Some("Acme Corp"));
         assert_eq!(method_id.as_ref().unwrap().0.as_ref(), "grok.com");
         assert_eq!(mode, AuthStartMode::Command);
@@ -863,7 +893,7 @@ mod tests {
     #[test]
     fn startup_auth_non_grok_com_no_login() {
         let methods = vec![make_auth_method("api-key", "API Key", None)];
-        let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
+        let (needs, label, method_id, mode, _) = startup_auth_metadata(&methods);
         assert!(!needs);
         assert!(label.is_none());
         assert!(method_id.is_none());
@@ -883,8 +913,9 @@ mod tests {
             login_label: None,
             has_auth_provider_command: false,
             preferred_method: None,
+            byok_recommended: false,
         });
-        let (needs, label, method_id, mode) = startup_auth_metadata(&built.methods);
+        let (needs, label, method_id, mode, _) = startup_auth_metadata(&built.methods);
         assert!(
             !needs,
             "shell built auth_methods for a BYOK user, but the pager still \
@@ -906,7 +937,7 @@ mod tests {
             make_auth_method(GROK_COM_METHOD_ID, "Grok", None),
             make_auth_method(XAI_API_KEY_METHOD_ID, "xai.api_key", None),
         ];
-        let (needs, _, _, _) = startup_auth_metadata(&methods);
+        let (needs, _, _, _, _) = startup_auth_metadata(&methods);
         assert!(
             needs,
             "with grok.com first, the pager must require login -- pinning \
@@ -916,7 +947,7 @@ mod tests {
     #[test]
     fn startup_auth_method_id_is_copied_not_synthesized() {
         let methods = vec![make_auth_method("grok.com", "My Login", None)];
-        let (_, _, method_id, _) = startup_auth_metadata(&methods);
+        let (_, _, method_id, _, _) = startup_auth_metadata(&methods);
         let Some(first) = methods.first() else {
             panic!("expected an auth method");
         };
@@ -926,7 +957,7 @@ mod tests {
     fn startup_auth_external_provider_false_is_pending() {
         let meta = serde_json::json!({ "external_provider": false });
         let methods = vec![make_auth_method("grok.com", "grok.com", Some(meta))];
-        let (_, _, _, mode) = startup_auth_metadata(&methods);
+        let (_, _, _, mode, _) = startup_auth_metadata(&methods);
         assert_eq!(mode, AuthStartMode::Pending);
     }
     #[test]

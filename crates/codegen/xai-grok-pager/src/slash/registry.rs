@@ -88,7 +88,7 @@ impl CommandTrigger {
         }
     }
 
-    /// Sibling that fuzzy-matches the bare suffix of a qualified skill, so typing `/login` offers `/acme:login` beside the builtin.
+    /// Sibling that fuzzy-matches the bare suffix of a qualified skill, so typing `/grok` offers `/acme:grok` beside the builtin.
     /// A real trigger (not a concatenated haystack) keeps scores and highlight indices honest.
     fn bare_suffix_sibling(&self) -> Option<Self> {
         if !matches!(self.provenance, CommandProvenance::Skill { .. }) {
@@ -403,7 +403,7 @@ impl CommandRegistry {
 
     /// Replace all ACP-sourced commands with a new set. Builtin commands are preserved. ACP names that collide with a
     /// builtin trigger or blocked name are skipped. The shell advertises colliding skills already qualified
-    /// (`acme:login`). Triggers a full `rebuild_triggers()`.
+    /// (`acme:grok`). Triggers a full `rebuild_triggers()`.
     pub fn set_acp_commands(&mut self, commands: &[agent_client_protocol::AvailableCommand]) {
         self.apply_acp_commands(commands);
         self.rebuild_triggers();
@@ -990,9 +990,9 @@ mod tests {
 
     // ── Builtin/skill name collisions ───────────────────────────────
     //
-    fn login_builtin() -> Arc<dyn SlashCommand> {
+    fn grok_builtin() -> Arc<dyn SlashCommand> {
         Arc::new(DummyCommand {
-            name: "login",
+            name: "grok",
             aliases: &[],
         })
     }
@@ -1004,9 +1004,9 @@ mod tests {
 
     #[test]
     fn advertised_qualified_skill_sits_beside_builtin() {
-        let mut registry = CommandRegistry::new(vec![login_builtin()]);
+        let mut registry = CommandRegistry::new(vec![grok_builtin()]);
         registry.set_acp_commands(&[acp_skill(
-            "acme:login",
+            "acme:grok",
             serde_json::json!({
                 "scope": "plugin",
                 "path": "/x/SKILL.md",
@@ -1014,13 +1014,13 @@ mod tests {
             }),
         )]);
 
-        assert!(registry.is_builtin("login"));
+        assert!(registry.is_builtin("grok"));
         assert_eq!(
-            registry.get("login").unwrap().provenance(),
+            registry.get("grok").unwrap().provenance(),
             CommandProvenance::Builtin
         );
-        let skill = registry.get("acme:login").expect("qualified skill");
-        assert!(!registry.is_builtin("acme:login"));
+        let skill = registry.get("acme:grok").expect("qualified skill");
+        assert!(!registry.is_builtin("acme:grok"));
         assert_eq!(
             skill.provenance(),
             CommandProvenance::Skill {
@@ -1032,34 +1032,34 @@ mod tests {
         let skill_match_texts: HashSet<&str> = registry
             .triggers()
             .iter()
-            .filter(|t| t.canonical == "acme:login")
-            .inspect(|t| assert_eq!(t.display, "/acme:login"))
+            .filter(|t| t.canonical == "acme:grok")
+            .inspect(|t| assert_eq!(t.display, "/acme:grok"))
             .map(|t| t.match_text.as_str())
             .collect();
-        assert_eq!(skill_match_texts, HashSet::from(["login", "acme:login"]));
+        assert_eq!(skill_match_texts, HashSet::from(["grok", "acme:grok"]));
     }
 
     #[test]
     fn colliding_mixed_case_acp_name_is_skipped() {
-        let mut registry = CommandRegistry::new(vec![login_builtin()]);
+        let mut registry = CommandRegistry::new(vec![grok_builtin()]);
         registry.set_acp_commands(&[acp_skill(
-            "Login",
+            "Grok",
             serde_json::json!({
                 "scope": "local",
                 "path": "/x/SKILL.md",
             }),
         )]);
         assert_eq!(registry.command_count(), 1);
-        assert!(registry.is_builtin("login"));
-        assert!(registry.get("Login").is_none());
-        assert!(registry.get("local:login").is_none());
+        assert!(registry.is_builtin("grok"));
+        assert!(registry.get("Grok").is_none());
+        assert!(registry.get("local:grok").is_none());
     }
 
     #[test]
     fn colliding_bare_acp_name_is_skipped() {
-        let mut registry = CommandRegistry::new(vec![login_builtin()]);
+        let mut registry = CommandRegistry::new(vec![grok_builtin()]);
         let commands = [acp_skill(
-            "login",
+            "grok",
             serde_json::json!({
                 "scope": "plugin",
                 "path": "/x/SKILL.md",
@@ -1068,19 +1068,19 @@ mod tests {
         )];
         registry.set_acp_commands(&commands);
         assert_eq!(registry.command_count(), 1);
-        assert!(registry.is_builtin("login"));
-        assert!(registry.get("acme:login").is_none());
-        assert_eq!(registry.skipped_acp_names, ["login"]);
+        assert!(registry.is_builtin("grok"));
+        assert!(registry.get("acme:grok").is_none());
+        assert_eq!(registry.skipped_acp_names, ["grok"]);
 
         registry.set_acp_commands(&commands);
-        assert_eq!(registry.skipped_acp_names, ["login"]);
+        assert_eq!(registry.skipped_acp_names, ["grok"]);
     }
 
     #[test]
     fn first_claimant_wins_duplicate_acp_name() {
-        let mut registry = CommandRegistry::new(vec![login_builtin()]);
+        let mut registry = CommandRegistry::new(vec![grok_builtin()]);
         let first = agent_client_protocol::AvailableCommand::new(
-            "acme:login".to_string(),
+            "acme:grok".to_string(),
             "first".to_string(),
         )
         .meta(
@@ -1090,7 +1090,7 @@ mod tests {
                 .unwrap(),
         );
         let second = agent_client_protocol::AvailableCommand::new(
-            "acme:login".to_string(),
+            "acme:grok".to_string(),
             "second".to_string(),
         )
         .meta(
@@ -1100,23 +1100,23 @@ mod tests {
                 .unwrap(),
         );
         registry.set_acp_commands(&[first, second]);
-        assert_eq!(registry.command_count(), 2, "builtin + first acme:login");
-        assert_eq!(registry.get("acme:login").unwrap().description(), "first");
-        assert_eq!(registry.skipped_acp_names, ["acme:login"]);
+        assert_eq!(registry.command_count(), 2, "builtin + first acme:grok");
+        assert_eq!(registry.get("acme:grok").unwrap().description(), "first");
+        assert_eq!(registry.skipped_acp_names, ["acme:grok"]);
     }
 
     #[test]
     fn colliding_non_skill_or_malformed_command_is_dropped() {
         let non_skill = agent_client_protocol::AvailableCommand::new(
-            "login".to_string(),
-            "shell login".to_string(),
+            "grok".to_string(),
+            "shell grok".to_string(),
         );
-        let malformed = acp_skill("login", serde_json::json!({"scope": "local"}));
+        let malformed = acp_skill("grok", serde_json::json!({"scope": "local"}));
         for cmd in [non_skill, malformed] {
-            let mut registry = CommandRegistry::new(vec![login_builtin()]);
+            let mut registry = CommandRegistry::new(vec![grok_builtin()]);
             registry.set_acp_commands(&[cmd]);
             assert_eq!(registry.command_count(), 1, "only the builtin remains");
-            assert!(registry.is_builtin("login"));
+            assert!(registry.is_builtin("grok"));
             assert!(registry.skipped_acp_names.is_empty());
         }
     }
@@ -1137,7 +1137,7 @@ mod tests {
 
     #[test]
     fn skill_named_after_blocked_name_is_skipped() {
-        let mut registry = CommandRegistry::new(vec![login_builtin()]);
+        let mut registry = CommandRegistry::new(vec![grok_builtin()]);
         registry.set_acp_commands(&[acp_skill(
             "hooks-add",
             serde_json::json!({"scope": "local", "path": "/x/SKILL.md"}),

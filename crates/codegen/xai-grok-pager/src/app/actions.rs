@@ -619,7 +619,7 @@ pub enum Action {
     SwitchAccount,
     /// User pressed login on the welcome screen.
     Login,
-    /// Cancel an in-progress login that was started from inside a session (`/login` or a 401 re-auth prompt) and return to the previous view.
+    /// Cancel an in-progress login that was started from inside a session (`/grok` or a 401 re-auth prompt) and return to the previous view.
     /// Distinct from `Quit`: abandoning a mid-session re-auth must not exit the app or lose the open session.
     CancelLogin,
     /// User submitted a manually-pasted auth token (loopback mode).
@@ -2063,7 +2063,7 @@ pub enum Effect {
     /// Log out via `x.ai/auth/logout` (shell clears auth.json and in-memory state).
     Logout,
     /// Cancel an in-flight interactive auth on the shell (`x.ai/auth/cancel`).
-    /// Used when the user abandons mid-session `/login` so the device-code poll stops instead of running until the code expires.
+    /// Used when the user abandons mid-session `/grok` so the device-code poll stops instead of running until the code expires.
     /// `request_seq` scopes the cancel so a delayed RPC cannot tear down a successor login.
     CancelAuth { request_seq: u64 },
     /// Re-check subscription status via `x.ai/auth/check_subscription`.

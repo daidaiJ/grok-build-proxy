@@ -906,28 +906,28 @@ fn pager_blocked_shell_command_skill_is_advertised_qualified() {
 
 #[test]
 fn plugin_skill_colliding_with_pager_builtin_is_advertised_qualified() {
-    let mut skill = make_scoped_skill("login", SkillScope::Plugin);
+    let mut skill = make_scoped_skill("grok", SkillScope::Plugin);
     skill.plugin_name = Some("acme".into());
     let commands = available_commands(&[skill], all_gated(), &[]);
 
     assert!(
-        !commands.iter().any(|c| c.name == "login"),
-        "colliding skill must not take the bare name (pager owns /login)"
+        !commands.iter().any(|c| c.name == "grok"),
+        "colliding skill must not take the bare name (pager owns /grok)"
     );
     let cmd = commands
         .iter()
-        .find(|c| c.name == "acme:login")
-        .expect("plugin skill stays reachable as /acme:login");
+        .find(|c| c.name == "acme:grok")
+        .expect("plugin skill stays reachable as /acme:grok");
     let meta = cmd.meta.as_ref().expect("skill meta");
     assert_eq!(meta.get("scope").and_then(|v| v.as_str()), Some("plugin"));
-    assert_eq!(meta.get("bareName").and_then(|v| v.as_str()), Some("login"));
+    assert_eq!(meta.get("bareName").and_then(|v| v.as_str()), Some("grok"));
     assert_eq!(
         meta.get("pluginName").and_then(|v| v.as_str()),
         Some("acme")
     );
     assert_eq!(
         meta.get("qualifiedName").and_then(|v| v.as_str()),
-        Some("acme:login")
+        Some("acme:grok")
     );
 }
 
@@ -1211,12 +1211,12 @@ fn make_plugin_skill(name: &str, plugin: &str) -> SkillInfo {
 }
 
 #[test]
-fn plugin_login_skill_resolves_by_qualified_name_only() {
-    let skills = vec![make_plugin_skill("login", "acme")];
+fn plugin_colliding_skill_resolves_by_qualified_name_only() {
+    let skills = vec![make_plugin_skill("grok", "acme")];
 
     assert!(
         resolve(
-            vec![text_block("/login")],
+            vec![text_block("/grok")],
             &skills,
             all_gated(),
             SkillSlashRewrite::default(),
@@ -1226,7 +1226,7 @@ fn plugin_login_skill_resolves_by_qualified_name_only() {
     );
 
     let outcome = resolve(
-        vec![text_block("/acme:login now")],
+        vec![text_block("/acme:grok now")],
         &skills,
         all_gated(),
         SkillSlashRewrite::default(),
@@ -1234,15 +1234,15 @@ fn plugin_login_skill_resolves_by_qualified_name_only() {
     )
     .unwrap_err();
     let skill = first_skill(outcome);
-    assert_eq!(skill.name, "acme:login");
+    assert_eq!(skill.name, "acme:grok");
     assert_eq!(skill.args, "now");
     assert_eq!(skill.plugin_name.as_deref(), Some("acme"));
 }
 
 #[test]
 fn inspect_reserved_names_exclude_gated_shell_builtins() {
-    assert!(super::is_reserved_slash_name("login"));
-    assert!(super::is_reserved_slash_name("Login"));
+    assert!(super::is_reserved_slash_name("grok"));
+    assert!(super::is_reserved_slash_name("Grok"));
     assert!(super::is_reserved_slash_name("delete"));
     assert!(super::is_reserved_slash_name("compact"));
     assert!(super::is_reserved_slash_name("hooks-add"));
@@ -1253,22 +1253,22 @@ fn inspect_reserved_names_exclude_gated_shell_builtins() {
 
 #[test]
 fn mixed_case_pager_collision_is_advertised_qualified_lowercase() {
-    let skills = vec![make_scoped_skill("Login", SkillScope::Local)];
+    let skills = vec![make_scoped_skill("Grok", SkillScope::Local)];
     let commands = available_commands(&skills, all_gated(), &[]);
     let names: Vec<&str> = commands.iter().map(|c| c.name.as_str()).collect();
     assert!(
-        !names.contains(&"Login") && !names.contains(&"login"),
+        !names.contains(&"Grok") && !names.contains(&"grok"),
         "mixed-case colliding skill must not take the bare name, got {names:?}"
     );
     let cmd = commands
         .iter()
-        .find(|c| c.name == "local:login")
+        .find(|c| c.name == "local:grok")
         .expect("pager folds ACP names; advertised form must be lowercase qualified");
     let meta = cmd.meta.as_ref().expect("skill meta");
-    assert_eq!(meta.get("bareName").and_then(|v| v.as_str()), Some("Login"));
+    assert_eq!(meta.get("bareName").and_then(|v| v.as_str()), Some("Grok"));
     assert_eq!(
         meta.get("qualifiedName").and_then(|v| v.as_str()),
-        Some("local:login")
+        Some("local:grok")
     );
 }
 
@@ -1358,13 +1358,13 @@ fn same_qualified_name_differing_only_by_case_is_withheld() {
 
 #[test]
 fn mixed_case_workflow_does_not_take_reserved_name() {
-    let workflows = vec![listing("Login"), listing("Review")];
+    let workflows = vec![listing("Grok"), listing("Review")];
     let names: Vec<String> = available_commands(&[], all_gated(), &workflows)
         .into_iter()
         .map(|c| c.name)
         .collect();
     assert!(
-        !names.iter().any(|n| n.eq_ignore_ascii_case("login")),
+        !names.iter().any(|n| n.eq_ignore_ascii_case("grok")),
         "{names:?}"
     );
     assert!(names.iter().any(|n| n == "Review"), "{names:?}");

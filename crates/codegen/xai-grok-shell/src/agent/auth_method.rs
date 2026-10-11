@@ -69,6 +69,13 @@ pub struct AuthMethodsBuildInputs<'a> {
     /// Config pin (`[auth] preferred_method`).
     /// `None` keeps multi-method fallthrough; `Some` is fail-closed (only that method family).
     pub preferred_method: Option<PreferredAuthMethod>,
+    /// LOCAL (T0 onboarding): true when the caller determined this is a zero-config first start —
+    /// unpinned, no API-key credentials advertised, no cached token, no enterprise OIDC, no
+    /// auth-provider command, and API-key auth not disabled by policy. Sets `meta.byok_recommended`
+    /// on the `grok.com` method so the first-party pager can lead its first screen with BYOK
+    /// configuration guidance instead of Grok OAuth. Wire-compatible: other ACP clients ignore
+    /// unknown meta keys, and the advertised method ids are unchanged.
+    pub byok_recommended: bool,
 }
 
 /// Output of [`build_auth_methods`].
@@ -94,6 +101,7 @@ pub fn build_auth_methods(inputs: AuthMethodsBuildInputs<'_>) -> BuiltAuthMethod
         login_label,
         has_auth_provider_command,
         preferred_method,
+        byok_recommended,
     } = inputs;
 
     match preferred_method {
@@ -112,6 +120,7 @@ pub fn build_auth_methods(inputs: AuthMethodsBuildInputs<'_>) -> BuiltAuthMethod
             enterprise_oidc_issuer,
             login_label,
             has_auth_provider_command,
+            byok_recommended,
         ),
     }
 }
@@ -155,6 +164,8 @@ fn build_pinned_oidc(
         enterprise_oidc_issuer,
         login_label,
         has_auth_provider_command,
+        // Pinned enterprise deployments never get the BYOK recommendation.
+        false,
     );
 
     BuiltAuthMethods {
@@ -170,6 +181,7 @@ fn build_unpinned(
     enterprise_oidc_issuer: Option<&str>,
     login_label: Option<&str>,
     has_auth_provider_command: bool,
+    byok_recommended: bool,
 ) -> BuiltAuthMethods {
     let mut methods: Vec<acp::AuthMethod> = Vec::new();
     let mut default_auth_method_id: Option<acp::AuthMethodId> = None;
@@ -202,6 +214,7 @@ fn build_unpinned(
         enterprise_oidc_issuer,
         login_label,
         has_auth_provider_command,
+        byok_recommended,
     );
 
     BuiltAuthMethods {
@@ -216,6 +229,7 @@ fn push_interactive_login(
     enterprise_oidc_issuer: Option<&str>,
     login_label: Option<&str>,
     has_auth_provider_command: bool,
+    byok_recommended: bool,
 ) {
     if has_enterprise_oidc {
         // Caller invariant: `enterprise_oidc_issuer` MUST be `Some(...)` when `has_enterprise_oidc` is true
@@ -225,7 +239,11 @@ fn push_interactive_login(
             .expect("enterprise_oidc_issuer is required when has_enterprise_oidc is true");
         methods.push(oidc_auth_method(issuer, login_label));
     } else {
-        methods.push(grok_com_auth_method(login_label, has_auth_provider_command));
+        methods.push(grok_com_auth_method(
+            login_label,
+            has_auth_provider_command,
+            byok_recommended,
+        ));
     }
 }
 
@@ -354,14 +372,22 @@ pub(crate) fn cached_token_auth_method() -> acp::AuthMethod {
 pub const GROK_COM_METHOD_ID: &str = "grok.com";
 
 /// xAI OAuth2/OIDC auth. Method id `"grok.com"` kept for ACP wire compatibility.
+/// `byok_recommended` sets `meta.byok_recommended` (LOCAL T0 onboarding): the zero-config
+/// first-start marker the first-party pager reads to lead with BYOK guidance. Mutually
+/// exclusive with `has_auth_provider_command` by construction (the caller never sets both).
 pub(crate) fn grok_com_auth_method(
     label: Option<&str>,
     has_auth_provider_command: bool,
+    byok_recommended: bool,
 ) -> acp::AuthMethod {
     let name = label.unwrap_or("Grok");
     let meta = if has_auth_provider_command {
         let mut m = acp::Meta::new();
         m.insert("external_provider".to_owned(), serde_json::json!(true));
+        Some(m)
+    } else if byok_recommended {
+        let mut m = acp::Meta::new();
+        m.insert("byok_recommended".to_owned(), serde_json::json!(true));
         Some(m)
     } else {
         None
@@ -469,6 +495,7 @@ mod tests {
             login_label: None,
             has_auth_provider_command: false,
             preferred_method: None,
+            byok_recommended: false,
         }
     }
 
@@ -591,6 +618,56 @@ mod tests {
         assert_eq!(first_kind(&built.methods), Some(AuthMethodKind::GrokCom));
         assert!(built.default_auth_method_id.is_none());
         assert_eq!(built.methods.len(), 1);
+    }
+
+    // -- LOCAL T0 onboarding: zero-config first start recommends BYOK ------------
+
+    /// Zero-config first start (unpinned, no credentials, no cached token): the `grok.com`
+    /// method carries `meta.byok_recommended = true` so the first-party pager can lead its
+    /// first screen with BYOK configuration guidance. Method id and list stay ACP-compatible.
+    #[test]
+    fn zero_config_byok_recommended_sets_meta_on_grok_com() {
+        let built = build_auth_methods(AuthMethodsBuildInputs {
+            byok_recommended: true,
+            ..default_inputs()
+        });
+
+        assert_eq!(first_kind(&built.methods), Some(AuthMethodKind::GrokCom));
+        assert_eq!(built.methods.len(), 1);
+        let meta = built.methods[0].meta().expect("meta should be set");
+        assert_eq!(
+            meta.get("byok_recommended").and_then(|v| v.as_bool()),
+            Some(true),
+        );
+    }
+
+    /// The flag is off by default: no `byok_recommended` meta key appears anywhere.
+    #[test]
+    fn byok_recommended_off_leaves_no_meta() {
+        let built = build_auth_methods(default_inputs());
+        assert!(
+            built
+                .methods
+                .iter()
+                .all(|m| m.meta().is_none_or(|v| !v.contains_key("byok_recommended"))),
+        );
+    }
+
+    /// Pinned enterprise deployments never get the recommendation even if the flag is
+    /// erroneously passed: only the unpinned path forwards it to the `grok.com` method.
+    #[test]
+    fn pinned_oidc_never_marks_byok_recommended() {
+        let built = build_auth_methods(AuthMethodsBuildInputs {
+            byok_recommended: true,
+            preferred_method: Some(PreferredAuthMethod::Oidc),
+            ..default_inputs()
+        });
+        assert!(
+            built
+                .methods
+                .iter()
+                .all(|m| m.meta().is_none_or(|v| !v.contains_key("byok_recommended"))),
+        );
     }
 
     /// Enterprise OIDC replaces `grok.com` (mutually exclusive).

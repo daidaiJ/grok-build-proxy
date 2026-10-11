@@ -2601,23 +2601,23 @@ mod tests {
 
     #[test]
     fn apply_slash_collision_flags_reserved_names_and_duplicates() {
-        let mut login = skill_fixture(
-            "login",
-            "/plugins/acme/skills/login/SKILL.md",
+        let mut grok = skill_fixture(
+            "grok",
+            "/plugins/acme/skills/grok/SKILL.md",
             SkillScope::Plugin,
         );
-        login.plugin_name = Some("acme".into());
+        grok.plugin_name = Some("acme".into());
         let deploy = skill_fixture("deploy", "/tmp/deploy/SKILL.md", SkillScope::Local);
         // Gated builtins like /goal stay untagged: inspect must not invent /local:goal while the live catalog may still advertise /goal
         let goal = skill_fixture("goal", "/tmp/goal/SKILL.md", SkillScope::Local);
         let commit_local = skill_fixture("commit", "/tmp/l/commit/SKILL.md", SkillScope::Local);
         let commit_user = skill_fixture("commit", "/tmp/u/commit/SKILL.md", SkillScope::User);
-        let all = [login, deploy, goal, commit_local, commit_user];
-        let [login, deploy, goal, commit_local, commit_user] = &all;
+        let all = [grok, deploy, goal, commit_local, commit_user];
+        let [grok, deploy, goal, commit_local, commit_user] = &all;
 
-        let entry = collision_entry(login, &all);
-        assert_eq!(entry.collides_with.as_deref(), Some("login"));
-        assert_eq!(entry.invocable_as.as_deref(), Some("acme:login"));
+        let entry = collision_entry(grok, &all);
+        assert_eq!(entry.collides_with.as_deref(), Some("grok"));
+        assert_eq!(entry.invocable_as.as_deref(), Some("acme:grok"));
 
         for skill in [deploy, goal] {
             let entry = collision_entry(skill, &all);
@@ -2634,10 +2634,10 @@ mod tests {
 
     #[test]
     fn apply_slash_collision_folds_reserved_name_case() {
-        let skill = skill_fixture("Login", "/tmp/Login/SKILL.md", SkillScope::Local);
+        let skill = skill_fixture("Grok", "/tmp/Grok/SKILL.md", SkillScope::Local);
         let entry = collision_entry(&skill, std::slice::from_ref(&skill));
-        assert_eq!(entry.collides_with.as_deref(), Some("Login"));
-        assert_eq!(entry.invocable_as.as_deref(), Some("local:login"));
+        assert_eq!(entry.collides_with.as_deref(), Some("Grok"));
+        assert_eq!(entry.invocable_as.as_deref(), Some("local:grok"));
     }
 
     #[test]

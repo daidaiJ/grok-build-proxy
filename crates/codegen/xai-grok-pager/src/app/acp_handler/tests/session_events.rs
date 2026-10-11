@@ -221,7 +221,7 @@
             chip_elements: Vec::new(),
         });
         for error in [
-            "authentication problem — re-authenticate using /login and retry.",
+            "authentication problem — re-authenticate using /grok and retry.",
             "this conversation is too large to compact.",
         ] {
             let update = XaiSessionUpdate::AutoCompactFailed {
@@ -637,7 +637,7 @@
             "Unauthorized (401) ... deprecated authentication method"
         ));
         // auth_transient means the shell says the failure self-heals (refreshable credential, no sticky verdict, e.g. a post-wake network gap).
-        // Even with a 401 in the message, the `/login` banner must not fire
+        // Even with a 401 in the message, the `/grok` banner must not fire
         assert!(!is_reauthable_failure(
             Some("auth_transient"),
             "Unauthorized (401)\n\nAuthentication is temporarily unavailable"

@@ -288,7 +288,7 @@ fn auth_complete_with_deferred_load_also_fetches_status() {
     assert!(app.deferred_startup.session.is_none());
 }
 
-/// `/login` from the welcome screen (startup, logged out) must not stash a return view; the normal login-then-load flow is preserved.
+/// `/grok` from the welcome screen (startup, logged out) must not stash a return view; the normal login-then-load flow is preserved.
 #[test]
 fn login_from_welcome_does_not_stash_return_view() {
     let mut app = test_app();
@@ -351,7 +351,7 @@ fn e2e_compact_auth_failure_holds_prompt_and_resubmits_after_login() {
 
         apply_session_event_for_test(
             &XaiSessionUpdate::AutoCompactFailed {
-                error: "authentication problem — re-authenticate using /login and retry.".into(),
+                error: "authentication problem — re-authenticate using /grok and retry.".into(),
             },
             &mut agent.session,
             &mut agent.scrollback,
@@ -613,7 +613,7 @@ fn test_runtime() -> tokio::runtime::Runtime {
         .expect("test runtime")
 }
 
-/// A second `/login` while already authenticating must abort the prior auth task and bump the seq.
+/// A second `/grok` while already authenticating must abort the prior auth task and bump the seq.
 /// Single-flight: never two device-code requests running at once.
 #[test]
 fn login_while_authenticating_aborts_prior_task() {
@@ -677,7 +677,7 @@ fn stale_auth_complete_after_relogin_is_ignored() {
     }
 }
 
-/// Switch-account while authenticating goes through the same single-flight abort as `/login` (sibling entry point).
+/// Switch-account while authenticating goes through the same single-flight abort as `/grok` (sibling entry point).
 #[test]
 fn switch_account_while_authenticating_aborts_prior_task() {
     let rt = test_runtime();
