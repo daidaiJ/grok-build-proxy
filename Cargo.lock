@@ -14071,6 +14071,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "xai-grok-model-catalog"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "xai-grok-models"
 version = "0.1.0"
 dependencies = [
@@ -14187,6 +14196,7 @@ dependencies = [
  "xai-grok-login",
  "xai-grok-markdown",
  "xai-grok-mermaid",
+ "xai-grok-model-catalog",
  "xai-grok-otel",
  "xai-grok-pager-diff",
  "xai-grok-pager-render",
@@ -14665,6 +14675,7 @@ dependencies = [
  "xai-grok-login",
  "xai-grok-mcp",
  "xai-grok-memory",
+ "xai-grok-model-catalog",
  "xai-grok-models",
  "xai-grok-otel",
  "xai-grok-paths",

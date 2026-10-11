@@ -155,6 +155,16 @@ pub struct ProviderUsageConfig {
     pub cache_minutes: Option<u64>,
 }
 
+/// LOCAL: `[model_catalog]` — 模型目录取数（价格/上下文上限；`/stats` 成本列与
+/// `/auth` 目录回填共用）。OpenRouter 主、models.dev 兜底，只留官方价格。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ModelCatalogConfig {
+    /// 目录缓存分钟数；缺省 1440（1 天，拍板），读取时 clamp 5–20160。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_minutes: Option<u64>,
+}
+
 /// LOCAL: `[shell]` — Windows shell backend selection for the bash tool.
 /// Unix shells are unaffected (they follow `$SHELL`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1398,6 +1408,9 @@ pub struct Config {
     /// LOCAL: `[provider_usage]` 供应商套餐用量查询设置.
     #[serde(default, skip_serializing)]
     pub provider_usage: ProviderUsageConfig,
+    /// LOCAL: `[model_catalog]` 模型目录取数设置.
+    #[serde(default, skip_serializing)]
+    pub model_catalog: ModelCatalogConfig,
     /// LOCAL: `[shell]` Windows shell backend; resolved into the shell cascade at config load.
     #[serde(default, skip_serializing)]
     pub shell: ShellBackendConfig,
@@ -1684,6 +1697,7 @@ impl Default for Config {
             features: Features::default(),
             network: NetworkConfig::default(),
             provider_usage: ProviderUsageConfig::default(),
+            model_catalog: ModelCatalogConfig::default(),
             shell: ShellBackendConfig::default(),
             notification_settings: NotificationsConfig::default(),
             tool_output_compression: Default::default(),

@@ -194,11 +194,13 @@ pub(super) fn dispatch_show_session_info(app: &mut AppView) -> Vec<Effect> {
 
 /// LOCAL `/stats`: open the model-usage modal on the requested time-window tab.
 /// Full-TUI only; minimal mode is handled inside the command (it returns the scrollback text report).
-/// Everything is read synchronously from the local ledger, so unlike `/usage` there are no fetch effects.
+/// Ledger data is synchronous; the cost column's catalog prices ride one fetch effect
+/// (process-level store, single-flight guard) that refreshes the open modal on arrival.
 pub(super) fn dispatch_show_stats(
     app: &mut AppView,
     window: Option<xai_grok_tools::model_usage_ledger::Window>,
 ) -> Vec<Effect> {
+    use crate::app::model_catalog_store;
     use crate::views::modal::ActiveModal;
     use crate::views::stats_modal::{StatsModalState, StatsTab};
 
@@ -223,10 +225,21 @@ pub(super) fn dispatch_show_stats(
     .lines()
     .map(str::to_string)
     .collect();
+    // 成本列取数目标：账本里出现过的全部 model id（跨窗口去重）。
+    let mut ids: Vec<String> = samples.iter().map(|s| s.model_id.clone()).collect();
+    ids.sort();
+    ids.dedup();
+    let mut state = StatsModalState::new(tab, samples, compression);
+    state.pricing = model_catalog_store::snapshot();
     agent.active_modal = Some(ActiveModal::StatsInfo {
-        state: Box::new(StatsModalState::new(tab, samples, compression)),
+        state: Box::new(state),
     });
-    vec![]
+    let needed = model_catalog_store::ids_needing_fetch(ids.iter().map(String::as_str));
+    if needed.is_empty() || model_catalog_store::is_loading() {
+        return vec![];
+    }
+    model_catalog_store::begin_loading();
+    vec![Effect::FetchModelCatalog { model_ids: needed }]
 }
 
 /// State-only mutation for `coding_data_sharing`; the shell owns the setting.

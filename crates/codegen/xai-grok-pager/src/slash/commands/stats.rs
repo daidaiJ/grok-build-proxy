@@ -9,6 +9,7 @@
 //! 文本路径渲染全部窗口（与改造前的「全窗口」输出一致）。
 
 use crate::app::actions::Action;
+use crate::app::model_catalog_store::{self, CatalogPrices};
 use crate::slash::command::{
     AppCtx, ArgItem, CommandExecCtx, CommandResult, SlashCommand, slash_meta,
 };
@@ -17,8 +18,8 @@ use xai_grok_tools::implementations::output_compression::{
     format_stats_report, is_enabled, stats_for_display,
 };
 use xai_grok_tools::model_usage_ledger::{
-    self, ModelCallSample, ModelUsageAggregate, Window, fmt_hit_rate, fmt_ms_pair, fmt_tokens,
-    fmt_tps_pair,
+    self, ModelCallSample, ModelUsageAggregate, Window, fmt_cost, fmt_hit_rate, fmt_ms_pair,
+    fmt_tokens, fmt_tps_pair,
 };
 
 pub struct StatsCommand;
@@ -77,11 +78,13 @@ pub(crate) fn window_arg_items() -> Vec<ArgItem> {
 }
 
 /// 极简模式的文本报表：全部时间窗 + 压缩账本（纯函数，便于测试）。
+/// 成本列读进程级目录价 store（冷 store 显示 `–`，与模态路径同源）。
 pub(crate) fn format_stats_text() -> String {
     let home = xai_grok_config::grok_home();
     let samples = model_usage_ledger::load_samples(Some(&home));
     let now = ModelCallSample::now_unix_ms();
-    let mut report = format_usage_report(&samples, now, &Window::ALL);
+    let pricing = model_catalog_store::snapshot();
+    let mut report = format_usage_report(&samples, now, &Window::ALL, &pricing);
     report.push('\n');
     let stats = stats_for_display(Some(&home));
     report.push_str(&format_stats_report(&stats, is_enabled()));
@@ -93,6 +96,7 @@ pub(crate) fn format_usage_report(
     samples: &[ModelCallSample],
     now_unix_ms: u64,
     windows: &[Window],
+    pricing: &CatalogPrices,
 ) -> String {
     let mut lines = vec![tr("Model usage (aggregated by model)").to_string()];
     for &window in windows {
@@ -103,14 +107,17 @@ pub(crate) fn format_usage_report(
             continue;
         }
         for row in &rows {
-            lines.push(format_usage_row(row));
+            lines.push(format_usage_row(row, pricing));
         }
     }
     lines.join("\n")
 }
 
 /// 单个 model 在单个窗口内的两行摘要。
-fn format_usage_row(row: &ModelUsageAggregate) -> String {
+fn format_usage_row(row: &ModelUsageAggregate, pricing: &CatalogPrices) -> String {
+    let cost = model_catalog_store::aggregate_cost(pricing, row)
+        .map(fmt_cost)
+        .unwrap_or_else(|| model_catalog_store::UNPRICED_LABEL.to_string());
     let mut token_parts = vec![
         format!("{} {}", tr("input"), fmt_tokens(row.prompt_tokens)),
         format!("{} {}", tr("output"), fmt_tokens(row.completion_tokens)),
@@ -119,11 +126,7 @@ fn format_usage_row(row: &ModelUsageAggregate) -> String {
             tr("cache read"),
             fmt_tokens(row.cached_read_tokens)
         ),
-        format!(
-            "{} {}",
-            tr("cache write"),
-            fmt_tokens(row.cache_creation_tokens)
-        ),
+        format!("{} {}", tr("cost"), cost),
     ];
     if row.reasoning_tokens > 0 {
         token_parts.push(format!(
@@ -300,7 +303,7 @@ mod tests {
             // 周窗外
             sample(now - WINDOW_WEEK_MS - 1000, "m-d", 1, 0, 1, 1.0),
         ];
-        let report = format_usage_report(&samples, now, &Window::ALL);
+        let report = format_usage_report(&samples, now, &Window::ALL, &CatalogPrices::new());
         assert!(report.contains("Model usage (aggregated by model)"));
         assert!(report.contains("Last 5h:"));
         assert!(report.contains("Last day:"));
@@ -311,7 +314,9 @@ mod tests {
         assert!(report.contains("input 1.5k"));
         assert!(report.contains("output 1.0k"));
         assert!(report.contains("cache read 1.3k"));
-        assert!(report.contains("cache write 400"));
+        // 冷 store（未取价）→ 成本列显示 `–`
+        assert!(report.contains("cost –"), "{report}");
+        assert!(!report.contains("cache write"), "缓存写列已被成本列替换: {report}");
         assert!(report.contains("cache hit 86.7%"));
         // m-b / m-c 各只有一次调用：冷启动算不出命中率，显示 n/a 而不是 0.0%
         assert!(report.contains("cache hit n/a"), "{report}");
@@ -337,7 +342,7 @@ mod tests {
     fn single_window_report_contains_only_that_section() {
         let now = 1_000_000_000_000;
         let samples = vec![sample(now - 1000, "m-a", 1000, 800, 900, 50.0)];
-        let report = format_usage_report(&samples, now, &[Window::Day]);
+        let report = format_usage_report(&samples, now, &[Window::Day], &CatalogPrices::new());
         assert!(report.contains("Last day:"), "{report}");
         assert!(!report.contains("Last 5h:"), "{report}");
         assert!(!report.contains("Last week:"), "{report}");
@@ -346,9 +351,9 @@ mod tests {
     #[test]
     fn empty_windows_get_a_placeholder_per_window() {
         let now = 1_000_000_000_000;
-        let report = format_usage_report(&[], now, &Window::ALL);
+        let report = format_usage_report(&[], now, &Window::ALL, &CatalogPrices::new());
         assert_eq!(report.matches("no calls in this window").count(), 3);
-        let single = format_usage_report(&[], now, &[Window::Week]);
+        let single = format_usage_report(&[], now, &[Window::Week], &CatalogPrices::new());
         assert_eq!(single.matches("no calls in this window").count(), 1);
     }
 }

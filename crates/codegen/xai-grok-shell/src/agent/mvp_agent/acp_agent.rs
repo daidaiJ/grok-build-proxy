@@ -2251,6 +2251,9 @@ impl acp::Agent for MvpAgent {
             "x.ai/providerUsage" => {
                 crate::extensions::provider_usage::handle(self, &args).await
             }
+            "x.ai/modelCatalog" => {
+                crate::extensions::model_catalog::handle(self, &args).await
+            }
             "x.ai/auto-topup-rule" => {
                 crate::extensions::billing::handle(self, &args).await
             }

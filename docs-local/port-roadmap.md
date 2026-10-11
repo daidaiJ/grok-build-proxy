@@ -440,3 +440,28 @@
   新撞到的 `/log` 前缀测试用例（slash_menu_enter）改 `/gr`。
 - **后续**：合 main 后按 `vX.Y.Z` 发版；T1 开工吸收六轮拍板（价格缓存 TTL 1 天起、
   只留官方价格、/auth 面板参照既有配置面板 + 模型列表关键词过滤勾选）。
+
+### 2026-10-11 · T0 发版 + T1/特性B 施工完成登记（模型目录 + /stats 成本列，feat/local-model-catalog）
+
+- **T0 发版**：`feat/local-auth-onboarding` 已合 main（merge `8651bd2`）随 tag
+  **`v1.0.48`** 发版；release run `38115162480` 双 job success、4 资产发布。
+  main build run `38115162565` Linux 挂一例上游原生用例
+  （persistence `reset_title_to_auto_adopts_in_flight_generation_as_auto`，
+  8 秒墙钟轮询超时；T0 未触碰该文件，v1.0.47 同 run 绿）——failed job 已重跑
+  观察，判定 flake 与否见下条补记。
+- **改动**：T1（目录取数模块）+ 特性 B（/stats 成本列）一期落地，实现记录见
+  PATCHES.md 二十九期（新 crate xai-grok-model-catalog、shell 扩展
+  `x.ai/modelCatalog`、pager 进程级 store + 三渲染面换列 + 合计行）。
+  六轮拍板全部落地：TTL 缺省 1440 可配（clamp 5–20160）、只留官方价
+  （OpenRouter pricing / models.dev cost）、OpenRouter 主 models.dev 兜底。
+- **验证**：见 PATCHES.md 二十九期（catalog 29/29；shell 5/5；pager stats 36 +
+  catalog 30 + tools fmt_cost 6；三 crate check --all-targets 0 error；
+  i18n cache write 键 0 残留）。
+- **后续**：T2/T3（/auth 面板交互 + config 写回，T3 前定回写策略拍板 2）→
+  T4 i18n 扫尾；面板落地后 T0 引导位从占位提示升级进面板。
+
+- **补记（同日晚）**：① v1.0.48 build run `38115162565` 首挂的 persistence
+  `reset_title_to_auto…` 在 failed-job 重跑通过（shell lib 7096/0），判定计时
+  flake；② 重跑暴露 T0 改名漏网断言：集成测试
+  `tests/external_auth_expired_credential.rs`（`cfg(unix)`，本机跑不了）仍断言
+  `/login`，三处字面量已改 `/grok` 随本分支合入（PATCHES 二十八期补记）。

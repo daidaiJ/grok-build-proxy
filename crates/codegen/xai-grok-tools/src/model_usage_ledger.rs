@@ -218,6 +218,15 @@ pub fn fmt_ms(v: Option<u64>, na: &str) -> String {
     }
 }
 
+/// 成本显示串（USD）：`$0.0034`（< 1 美分给四位小数）/ `$1.23` / `$1234.56`。
+pub fn fmt_cost(usd: f64) -> String {
+    if usd < 0.01 {
+        format!("${usd:.4}")
+    } else {
+        format!("${usd:.2}")
+    }
+}
+
 /// 单个吞吐（tokens/s）显示串：`50.0` / `n/a`。
 pub fn fmt_tps(v: Option<f64>, na: &str) -> String {
     match v {
@@ -380,6 +389,14 @@ mod tests {
         assert_eq!(fmt_tokens(45_200), "45.2k");
         assert_eq!(fmt_tokens(999_999), "1000k");
         assert_eq!(fmt_tokens(3_050_000), "3.05m");
+    }
+
+    #[test]
+    fn fmt_cost_precision_scales_with_magnitude() {
+        assert_eq!(fmt_cost(0.0), "$0.0000");
+        assert_eq!(fmt_cost(0.0034), "$0.0034");
+        assert_eq!(fmt_cost(1.5), "$1.50");
+        assert_eq!(fmt_cost(1234.567), "$1234.57");
     }
 
     #[test]

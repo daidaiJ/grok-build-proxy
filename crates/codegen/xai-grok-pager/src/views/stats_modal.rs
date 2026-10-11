@@ -17,11 +17,13 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::slash::i18n::tr;
 use crate::theme::Theme;
+use crate::app::model_catalog_store::{self, CatalogPrices};
 use crate::views::modal_window::{
     self as mw, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
 };
 use xai_grok_tools::model_usage_ledger::{
-    self, ModelCallSample, ModelUsageAggregate, Window, fmt_hit_rate, fmt_ms, fmt_tokens, fmt_tps,
+    self, ModelCallSample, ModelUsageAggregate, Window, fmt_cost, fmt_hit_rate, fmt_ms, fmt_tokens,
+    fmt_tps,
 };
 
 /// 页脚快捷键：复制整份报表。
@@ -49,6 +51,8 @@ pub struct StatsModalState {
     pub compression: Vec<String>,
     /// 时间窗标签页是否展开全部 model 卡片。
     pub expanded: bool,
+    /// 模型目录价（进程级 store 的克隆；打开时种子化，回包后由 dispatch 刷新）。
+    pub pricing: CatalogPrices,
     /// 最近一帧的内容区几何。
     content_rect: Rect,
 }
@@ -63,6 +67,7 @@ impl StatsModalState {
             now_unix_ms: ModelCallSample::now_unix_ms(),
             compression,
             expanded: false,
+            pricing: CatalogPrices::new(),
             content_rect: Rect::default(),
         }
     }
@@ -117,7 +122,11 @@ impl StatsModalState {
                         out.push(tr("no calls in this window").to_string());
                     } else {
                         for row in &rows {
-                            out.push(model_card_text(row));
+                            out.push(model_card_text(row, &self.pricing));
+                        }
+                        let summary = cost_summary_text(&rows, &self.pricing);
+                        if !summary.is_empty() {
+                            out.push(summary);
                         }
                     }
                 }
@@ -411,7 +420,7 @@ fn tab_lines(state: &StatsModalState, theme: &Theme, width: u16) -> Vec<Line<'st
                 if i > 0 {
                     lines.push(Line::default());
                 }
-                lines.extend(model_card_lines(row, theme, width));
+                lines.extend(model_card_lines(row, theme, width, &state.pricing));
             }
             if shown < rows.len() {
                 lines.push(Line::default());
@@ -422,9 +431,48 @@ fn tab_lines(state: &StatsModalState, theme: &Theme, width: u16) -> Vec<Line<'st
                     template.replace("{n}", &(rows.len() - shown).to_string()),
                 ));
             }
+            // 合计行（拍板：无价模型从合计剔除、标注条数）
+            let summary = cost_summary_text(&rows, &state.pricing);
+            if !summary.is_empty() {
+                lines.push(Line::default());
+                lines.push(muted_line(theme, summary));
+            }
             lines
         }
     }
+}
+
+/// 合计行的纯文本（渲染与复制共用；无行数据返回空串）。
+/// 有价模型求和；全无价时合计位显示 `–`；无价条数仅在 >0 时标注。
+fn cost_summary_text(rows: &[ModelUsageAggregate], pricing: &CatalogPrices) -> String {
+    let mut total = 0.0;
+    let mut priced = 0usize;
+    let mut unpriced = 0usize;
+    for row in rows {
+        match model_catalog_store::aggregate_cost(pricing, row) {
+            Some(cost) => {
+                total += cost;
+                priced += 1;
+            }
+            None => unpriced += 1,
+        }
+    }
+    if rows.is_empty() {
+        return String::new();
+    }
+    let mut parts = vec![format!(
+        "{} {}",
+        tr("cost total"),
+        if priced == 0 {
+            model_catalog_store::UNPRICED_LABEL.to_string()
+        } else {
+            fmt_cost(total)
+        }
+    )];
+    if unpriced > 0 {
+        parts.push(format!("{} {}", tr("unpriced"), unpriced));
+    }
+    parts.join(" · ")
 }
 
 fn plain(theme: &Theme, s: impl Into<String>) -> Line<'static> {
@@ -443,7 +491,12 @@ fn header_style(theme: &Theme) -> Style {
 
 /// 一张 model 卡片：model id + 调用数一行，token 与性能各一段（指标名左、
 /// 数值右对齐到卡片共用的列宽，段间断行）。
-fn model_card_lines(row: &ModelUsageAggregate, theme: &Theme, width: u16) -> Vec<Line<'static>> {
+fn model_card_lines(
+    row: &ModelUsageAggregate,
+    theme: &Theme,
+    width: u16,
+    pricing: &CatalogPrices,
+) -> Vec<Line<'static>> {
     let mut lines = vec![Line::from(vec![
         Span::styled(row.model_id.clone(), header_style(theme)),
         Span::styled(
@@ -452,11 +505,14 @@ fn model_card_lines(row: &ModelUsageAggregate, theme: &Theme, width: u16) -> Vec
         ),
     ])];
 
+    let cost = model_catalog_store::aggregate_cost(pricing, row)
+        .map(fmt_cost)
+        .unwrap_or_else(|| model_catalog_store::UNPRICED_LABEL.to_string());
     let mut token_pairs: Vec<(&'static str, String)> = vec![
         (tr("input"), fmt_tokens(row.prompt_tokens)),
         (tr("output"), fmt_tokens(row.completion_tokens)),
         (tr("cache read"), fmt_tokens(row.cached_read_tokens)),
-        (tr("cache write"), fmt_tokens(row.cache_creation_tokens)),
+        (tr("cost"), cost),
     ];
     if row.reasoning_tokens > 0 {
         token_pairs.push((tr("reasoning"), fmt_tokens(row.reasoning_tokens)));
@@ -551,8 +607,11 @@ impl MetricGrid {
 }
 
 /// 卡片块的纯文本版（复制用）。
-fn model_card_text(row: &ModelUsageAggregate) -> String {
+fn model_card_text(row: &ModelUsageAggregate, pricing: &CatalogPrices) -> String {
     let mut parts = vec![format!("{} · {} {}", row.model_id, row.calls, tr("calls"))];
+    let cost = model_catalog_store::aggregate_cost(pricing, row)
+        .map(fmt_cost)
+        .unwrap_or_else(|| model_catalog_store::UNPRICED_LABEL.to_string());
     let mut tokens = vec![
         format!("{} {}", tr("input"), fmt_tokens(row.prompt_tokens)),
         format!("{} {}", tr("output"), fmt_tokens(row.completion_tokens)),
@@ -561,11 +620,7 @@ fn model_card_text(row: &ModelUsageAggregate) -> String {
             tr("cache read"),
             fmt_tokens(row.cached_read_tokens)
         ),
-        format!(
-            "{} {}",
-            tr("cache write"),
-            fmt_tokens(row.cache_creation_tokens)
-        ),
+        format!("{} {}", tr("cost"), cost),
     ];
     if row.reasoning_tokens > 0 {
         tokens.push(format!(
@@ -781,7 +836,7 @@ mod tests {
 
     /// 一张卡片渲染成文本行（测试用固定宽度，不依赖终端）。
     fn card_lines(row: &ModelUsageAggregate, width: u16) -> Vec<String> {
-        model_card_lines(row, &Theme::current(), width)
+        model_card_lines(row, &Theme::current(), width, &CatalogPrices::new())
             .iter()
             .map(|l| l.to_string())
             .collect()
@@ -814,14 +869,50 @@ mod tests {
         assert_eq!(lines[0], "deepseek/deepseek-v4.1-flash  459 calls");
         assert_eq!(
             lines[1],
-            "input         66.22m  output          424k  cache read    65.31m"
+            "input        66.22m  output         424k  cache read   65.31m"
         );
+        // 空目录价 → 成本列显示 `–`（无价占位），网格几何随最宽标签（cache read）收紧
         assert_eq!(
             lines[2],
-            "cache write        0  reasoning       270k  cache hit      98.6%"
+            "cost              –  reasoning      270k  cache hit     98.6%"
         );
-        assert_eq!(lines[3], "ttft p50        4536  ttft p90       12324");
-        assert_eq!(lines[4], "tps p50         98.8  tps p90        230.4");
+        assert_eq!(lines[3], "ttft p50       4536  ttft p90      12324");
+        assert_eq!(lines[4], "tps p50        98.8  tps p90       230.4");
+    }
+
+    /// 目录命中后成本列显示美元价（与手算对账：0.9m 计费输入 × $3 + 0.424m 输出 ×
+    /// $15 + 65.31m 缓存读 × $0.3 ≈ $28.66）。
+    #[test]
+    fn cost_column_shows_priced_value_when_catalog_hits() {
+        use xai_grok_shell::extensions::model_catalog::CatalogMatch;
+        use xai_grok_model_catalog::{CatalogSource, ModelPricing};
+        let row = wide_card_row();
+        let mut pricing = CatalogPrices::new();
+        pricing.insert(
+            row.model_id.clone(),
+            Some(CatalogMatch {
+                source: CatalogSource::OpenRouter,
+                model_id: row.model_id.clone(),
+                provider_id: "openrouter".into(),
+                name: "DeepSeek V3.1".into(),
+                match_score: 100,
+                pricing: ModelPricing {
+                    input: Some(3.0),
+                    output: Some(15.0),
+                    cache_read: Some(0.3),
+                    cache_write: None,
+                },
+                context_length: Some(163_840),
+                max_completion_tokens: Some(163_840),
+            }),
+        );
+        let lines = model_card_lines(&row, &Theme::current(), 80, &pricing)
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>();
+        // billed_input = 66_215_043 − 65_314_304 = 900_739；900_739/1e6×3 = 2.702217
+        // 424_085/1e6×15 = 6.361275；65_314_304/1e6×0.3 = 19.5942912 → 28.6577832
+        assert_eq!(lines[2], "cost         $28.66  reasoning      270k  cache hit     98.6%");
     }
 
     /// 数值列宽按卡片内实际最宽的数值放宽；面板再窄也不许把数值挤到边框外。
@@ -850,8 +941,8 @@ mod tests {
         row.tps_p50 = None;
         row.tps_p90 = None;
         let lines = card_lines(&row, 80);
-        assert_eq!(lines[3], "ttft p50         n/a  ttft p90         n/a");
-        assert_eq!(lines[4], "tps p50          n/a  tps p90          n/a");
+        assert_eq!(lines[3], "ttft p50        n/a  ttft p90        n/a");
+        assert_eq!(lines[4], "tps p50         n/a  tps p90         n/a");
     }
 
     /// 单次调用的 model 必然冷启动：命中率显示 `n/a` 而不是 0.0%
@@ -863,7 +954,7 @@ mod tests {
         let lines = card_lines(&row, 80);
         assert_eq!(
             lines[2],
-            "cache write        0  reasoning       270k  cache hit        n/a"
+            "cost              –  reasoning      270k  cache hit       n/a"
         );
 
         let mut state = StatsModalState::new(
