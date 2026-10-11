@@ -465,3 +465,8 @@
   flake；② 重跑暴露 T0 改名漏网断言：集成测试
   `tests/external_auth_expired_credential.rs`（`cfg(unix)`，本机跑不了）仍断言
   `/login`，三处字面量已改 `/grok` 随本分支合入（PATCHES 二十八期补记）。
+
+- **发版收口（同日晚）**：`feat/local-model-catalog` 合 main（merge `ea3c594`）随
+  **`v1.0.49`** 发版；release run `38120737264` / build run `38120737274` 双 job
+  success、4 资产非草稿。build 全绿同时收口两件：T0 断言补修（unix-only 集成测试）
+  在 Linux 验证通过；v1.0.48 首挂的 persistence 用例复判为计时 flake（连续绿）。
