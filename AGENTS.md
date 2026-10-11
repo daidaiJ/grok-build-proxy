@@ -279,8 +279,12 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   = 最坏情形）：config `[model.*]` 表键 8/8、路由 slug 8/8、账本回显 6/6
   （并集 11 id）全命中原厂价**——此前两 miss 现命中：`glm-5.3-flash` →
   `z-ai/glm-5.3-flash`（$0.15/$0.50 per 1M）、`gpt-6-luna` → `openai/gpt-6-luna`
-  （$0.10/$0.50 per 1M）。crate 测试数字见 PATCHES 三十二期；release/build run id
-  发版后回填。
+  （$0.10/$0.50 per 1M）。crate 测试数字见 PATCHES 三十二期。
+  **发版终态：v1.0.51 三次重指重发（一发主修、二发 priced 日志、三发回包快照
+  补修），终版 merge `9ef52aa`；release run `38144699713` / build run
+  `38144694968` 双 job success，4 资产非草稿；本机部署
+  `grok 1.0.51 (9ef52aa1d712)`。活回合已验（用户确认）：/stats 成本列多模型
+  显示正常，`model catalog: priced` 日志 6 模型全 100 档命中、unpriced 空。**
 - **T2/T3 落地面**：`views/auth_modal` 五步向导（协议→baseUrl→SK 掩码→模型列表
   过滤勾选/手填回退→确认写回，行 id 可编辑冲突标红）+ shell 扩展
   `x.ai/providerModels` + `write_model_entries`（toml_edit 定点写回
@@ -297,8 +301,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   三十一期基线：model-catalog 38/38；shell model_catalog 7/7 +
   ext_method_reload_models 1/1；pager auth_modal 14/14 + dispatch::tests::auth
   25/25；i18n 基线不变。
-- **遗留：** ① 活回合验证（新客户端实跑：/stats 成本列多模型、/auth 五步回填
-  ctx/max_out/think、unified.jsonl 核对 `source` 字段、旧 prices.cache 根文件清除）
+- **遗留：** ① /auth 五步回填的活回合抽查（ctx/max_out/think=on 标注与写回值）
   ② T5 特性 C（模型能力门控，T1 增模态字段扩展）待开工
   ③ T4 i18n 扫尾实质挂起（面板字符串已带 zh，扫描 0 挂）。
 - **详情指针：** [`docs-local/provider-onboarding-api-cost-todo.md`](docs-local/provider-onboarding-api-cost-todo.md)

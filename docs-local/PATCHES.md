@@ -2532,15 +2532,19 @@ auth_modal 14/14（含提示行贴底渲染断言）+ dispatch::tests::auth 25/2
    `think=on` 标注（与 ctx=/max_out= 同风格）。
 
 验证：model-catalog lib 41/41（新增裸 id↔段命中 / 双源优先级 / 戳容忍段命中 /
-reasoning 解析 / Deserialize 重建索引）；shell GATE_FORCE model_catalog 7/7
-（磁盘往返用例抓出手写 Deserialize 形状 bug，已修）+ model_entry 7/7；pager
-auth_modal 14/14（backfill 三元含思考位断言）+ dispatch::tests::auth 25/25 +
-stats_modal 17/17 + model_catalog_store 1/1；零 warning。**真实数据仿真
-（catalog-sim，读本机 v1.0.51 遗留 OpenRouter-only 458 条缓存 = 最坏情形）**：
-config `[model.*]` 表键 8/8、路由 slug 8/8、账本回显 6/6（并集 11 id）全命中
-原厂价——`glm-5.3-flash`→`z-ai/glm-5.3-flash` $0.15/$0.50、`gpt-6-luna`→
-`openai/gpt-6-luna` $0.10/$0.50、`grok-4.6`→`x-ai/grok-4.6` $2/$6 等。
-发版：v1.0.51 tag 重指本次 merge 重发（run id 发版后回填本节）。
+reasoning 解析 / Deserialize 重建索引）；shell GATE_FORCE model_catalog 8/8
+（磁盘往返用例抓出手写 Deserialize 形状 bug，已修；含回包快照回归用例）+
+model_entry 7/7；pager auth_modal 14/14（backfill 三元含思考位断言）+
+dispatch::tests::auth 25/25 + stats_modal 17/17 + model_catalog_store 1/1；零
+warning。**真实数据仿真（catalog-sim，读本机 v1.0.51 遗留 OpenRouter-only 458 条
+缓存 = 最坏情形）**：config `[model.*]` 表键 8/8、路由 slug 8/8、账本回显 6/6
+（并集 11 id）全命中原厂价。发版：**v1.0.51 tag 三次重指重发**（同一需求线，
+用户拍板不切新 tag）：一发的匹配/缓存/预热、二发的 `priced` 运行时日志、三发的
+回包快照补修，终版 merge `9ef52aa`；release run `38144699713` / build run
+`38144694968` 双 job success，4 资产非草稿，本机部署 `grok 1.0.51 (9ef52aa1d712)`。
+**活回合已验（用户确认 + unified 实证）**：/stats 成本列多模型显示正常；
+`model catalog: priced` 日志 6 模型全 100 档命中（models.dev 主源裸条目）、
+`unpriced: []`；models.dev 读体失败时 warn `source failed` 可见并回退 open_router。
 
 **补修（同 tag 重发内，用户活回合复现「成本全 `–` 连 v4.1 flash 也无」）**：
 `completed_entries` 回包用了调用方旧快照——首次 /stats 时薄表尚空（启动预热只放
