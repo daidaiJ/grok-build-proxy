@@ -23,4 +23,5 @@
 
 | 日期 | 文件 | 标题 | 状态 | 严重度 |
 |---|---|---|---|---|
+| 2026-10-11 | [2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md](2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md) | 成本列裸 id 无价 + /auth 提示行悬空 + 写回后 /model 不刷新 | fixed（随 v1.0.51 发版；活体待新客户端验证） | P2 |
 | 2026-10-11 | [2026-10-11-status-line-stale-after-429-400.md](2026-10-11-status-line-stale-after-429-400.md) | 429/400 后状态行不再更新 | fixed（P1+P2 已合 main，随 v1.0.45 发版；活体待新客户端验证） | P2 |
