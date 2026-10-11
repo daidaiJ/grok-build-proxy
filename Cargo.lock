@@ -14071,6 +14071,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "xai-grok-model-catalog"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "xai-grok-models"
 version = "0.1.0"
 dependencies = [

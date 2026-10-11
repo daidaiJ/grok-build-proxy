@@ -10,3 +10,4 @@ xai-grok-extra-ca
 xai-grok-status-line
 xai-grok-pager
 xai-grok-provider-usage
+xai-grok-model-catalog
