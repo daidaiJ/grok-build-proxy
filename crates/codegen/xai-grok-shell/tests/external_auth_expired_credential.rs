@@ -3,7 +3,7 @@
 //! The deployment under test: an operator binary mints the session credential.
 //! It cannot mint from the headless refresh because it needs the user to complete an SSO flow.
 //! Before the fix a *stale* credential was treated better than no credential.
-//! The client skipped login, the dead bearer was accepted, and the first turn 401'd under "no need to run /login".
+//! The client skipped login, the dead bearer was accepted, and the first turn 401'd under "no need to run /grok".
 //!
 //! The mirror of phase 3 (a provider that blocks until it is killed, leaving no verdict behind) is a unit test (`auth::manager::remedy`).
 //! Driving it here would buy the same assertions for two more timeout budgets of wall clock.
@@ -401,11 +401,11 @@ fn expired_external_credential_routes_to_the_provider_login_flow() {
             .expect("the turn error's message is a string")
             .to_owned();
         assert!(
-            !message.contains("no need to run /login"),
+            !message.contains("no need to run /grok"),
             "the message must not tell the user to wait it out: {message}"
         );
         assert!(
-            message.contains(PROVIDER_LABEL) && message.contains("/login"),
+            message.contains(PROVIDER_LABEL) && message.contains("/grok"),
             "the message must name the provider and the remedy: {message}"
         );
         let auth_line = message

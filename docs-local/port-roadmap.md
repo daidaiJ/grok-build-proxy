@@ -459,3 +459,9 @@
   i18n cache write 键 0 残留）。
 - **后续**：T2/T3（/auth 面板交互 + config 写回，T3 前定回写策略拍板 2）→
   T4 i18n 扫尾；面板落地后 T0 引导位从占位提示升级进面板。
+
+- **补记（同日晚）**：① v1.0.48 build run `38115162565` 首挂的 persistence
+  `reset_title_to_auto…` 在 failed-job 重跑通过（shell lib 7096/0），判定计时
+  flake；② 重跑暴露 T0 改名漏网断言：集成测试
+  `tests/external_auth_expired_credential.rs`（`cfg(unix)`，本机跑不了）仍断言
+  `/login`，三处字面量已改 `/grok` 随本分支合入（PATCHES 二十八期补记）。

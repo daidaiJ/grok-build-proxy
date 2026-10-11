@@ -2392,3 +2392,12 @@ i18n 0 挂）。win-skip 新登记族S/族T。
 stats 过滤 36 例 + catalog 过滤 30 例、tools GATE_FORCE fmt_cost 过滤 6 例全绿；
 三 crate `cargo check --all-targets` 0 error/0 warning；i18n 扫描 cache write
 键 0 残留。
+
+**补记（二十八期，2026-10-11 晚）**：T0 改名漏一处集成测试断言——
+`xai-grok-shell/tests/external_auth_expired_credential.rs`（`#![cfg(unix)]`，本机
+Windows 编译为 0 用例，当班 lib 过滤覆盖不到）仍断言 `Run /login`，v1.0.48 的
+main build run `38115162565` Linux 红灯暴露（正文实际已输出 `/grok`）。修复 =
+该文件三处字面量（doc 注释 + 正反断言）改 `/grok`，随 feat/local-model-catalog
+分支合入。另：同 run 首挂的 lib 用例
+`reset_title_to_auto_adopts_in_flight_generation_as_auto`（8 秒墙钟轮询）在
+failed-job 重跑中通过（7096/0），判定为计时 flake，非 T0 回归。
