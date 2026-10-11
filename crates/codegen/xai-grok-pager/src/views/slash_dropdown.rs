@@ -574,7 +574,7 @@ mod tests {
         let matches = vec![
             SuggestionRow {
                 display: "/login".into(),
-                description: "Log in or re-authenticate with your account".into(),
+                description: "Log in or re-authenticate with your Grok account".into(),
                 insert_text: "/login".into(),
                 indices: vec![],
                 tag: None,

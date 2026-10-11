@@ -359,7 +359,7 @@ pub async fn run_auth_flow(
     .await
 }
 /// Like [`run_auth_flow`] but with `force_interactive`: skip cached credentials without clearing them.
-/// Used by `/login` for mid-session re-auth where abandoning the flow must not disrupt the session.
+/// Used by `/grok` for mid-session re-auth where abandoning the flow must not disrupt the session.
 pub async fn run_auth_flow_interactive(
     auth_manager: &Arc<AuthManager>,
     grok_com_config: &GrokComConfig,

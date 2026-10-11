@@ -407,3 +407,36 @@
   `docs-local/provider-onboarding-api-cost-todo.md` 为施工唯一权威。
 - **接手者第一步**：读交接卡 §6 任务单，T0 两件（/grok 硬改名 + 零配置首启默认 BYOK 引导）
   开工，分支 `feat/local-grok-rename-byok-first`（或按拆分自定）。
+
+### 2026-10-11 · T0 施工完成登记（/grok 硬改名 + 零配置首启 BYOK 引导，feat/local-auth-onboarding）
+
+- **改动**：两件 T0 落地。① `/login`→`/grok` 硬改名（不保留别名）：命令 meta/注册
+  （`slash/commands/grok.rs`，LoginCommand→GrokCommand）、shell 保留名单
+  （`session/slash_commands.rs`，"login"→"grok"）、用户可见文案 6 处（`login/error.rs`
+  provider_login_message ×2、shell `compaction.rs` 抑制通知 ×2、pager `session_list.rs`
+  NoOauth toast、`session_event.rs` ReAuthRequired）、`manager/remedy.rs` advice
+  文案（分诊时发现的设计文档遗漏波及点）、i18n 描述对、全部测试夹具/断言
+  （registry/mod/acp_command/inspect/slash_commands_tests/prompt/task_result 等）。
+  ACP 侧 method id `grok.com` 与通告机制不动（编辑器客户端兼容）。
+  ② 零配置首启默认 BYOK 引导：shell `build_auth_methods` 新输入
+  `byok_recommended`（调用点 `acp_agent.rs` 按 unpinned ∧ 无 SK ∧ 无 token ∧ 无
+  企业 OIDC ∧ 无 auth_provider_command ∧ 非 disable_api_key_auth 计算），grok.com
+  method 挂 `meta.byok_recommended`（wire 兼容，id 不变）；pager
+  `startup_auth_metadata` 提取 → `AcpConnection`/`AppView.byok_recommended` →
+  welcome Pending 首屏改向：BYOK 配置指引（指向 `~/.grok/config.toml` 的
+  `[model.*]` + base_url + api_key/env_key）为默认推荐位，「使用 Grok 订阅登录」
+  降级为 `l` 菜单项；auth 错误出现时错误占回消息位。T2 面板落地后引导位升级进面板。
+  `default_auth_method_id` 语义审过：零配置仍为 None（走通告的登录 method），无需改动。
+- **验证**：`cargo check -p xai-grok-pager -p xai-grok-shell -p xai-grok-login
+  --all-targets` 0 error；pager 门控 lib：slash 568/0、welcome 226/0（含 3 个新
+  BYOK 渲染用例）、acp 905/0（含 byok_recommended 提取新用例）、session_event
+  100/0、agent_view 904/0、dispatch::tests 1732/0；shell GATE_FORCE 过滤：
+  auth_method 28/0（含 3 个新 meta 用例）、slash_commands 105/0、inspect 41/0、
+  compaction 75/0；login GATE_FORCE 过滤：error 11/0、manager::remedy 10/0。
+  i18n 扫描新键全部入表 0 挂。
+- **分诊副产物**：win-skip.txt 新登记族S（acp_session compaction/goal 三族，
+  `/tmp` 夹具 NotAbsolute，同族N根因）与族T（xai-grok-login 铸造/锁/管道 29 例，
+  counting_provider 用 POSIX shell 命令当铸造命令，Windows 无 POSIX shell）。
+  新撞到的 `/log` 前缀测试用例（slash_menu_enter）改 `/gr`。
+- **后续**：合 main 后按 `vX.Y.Z` 发版；T1 开工吸收六轮拍板（价格缓存 TTL 1 天起、
+  只留官方价格、/auth 面板参照既有配置面板 + 模型列表关键词过滤勾选）。

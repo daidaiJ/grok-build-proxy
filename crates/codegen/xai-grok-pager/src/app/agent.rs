@@ -758,7 +758,7 @@ pub struct AgentSession {
     /// Used by `do_cancel_turn` to "rewind" a prompt back to the input box if the user cancels before any response arrives.
     /// `None` for skill-injected prompts (cannot be reversed) and bash/cron.
     pub in_flight_prompt: Option<InFlightPrompt>,
-    /// Prompt held across auto-compact for reauth resubmit after `/login`.
+    /// Prompt held across auto-compact for reauth resubmit after `/grok`.
     /// `in_flight_prompt` is cleared on compact start so cancel cannot rewind.
     pub compact_held_prompt: Option<InFlightPrompt>,
     /// Stable id for the prompt currently in flight, generated client-side at `Effect::SendPrompt` time and threaded through `PromptRequest._meta`.

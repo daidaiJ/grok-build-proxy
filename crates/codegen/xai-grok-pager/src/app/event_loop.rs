@@ -1239,6 +1239,8 @@ pub(crate) async fn run(
         if connection.needs_login {
             app.login_label = connection.login_label;
             app.login_method_id = connection.login_method_id;
+            // LOCAL (T0 onboarding): zero-config first start leads with BYOK guidance.
+            app.byok_recommended = connection.byok_recommended;
             app.auth_start_mode = match connection.auth_start_mode {
                 crate::acp::AuthStartMode::Pending => super::app_view::AuthMode::Pending,
                 crate::acp::AuthStartMode::Command => super::app_view::AuthMode::Command,

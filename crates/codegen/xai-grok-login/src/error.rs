@@ -127,11 +127,11 @@ pub fn provider_login_message(label: Option<&str>) -> Cow<'static, str> {
     match label {
         Some(label) => format!(
             "Your session expired and {label} could not renew it in the background. \
-             Run /login to sign in again."
+             Run /grok to sign in again."
         )
         .into(),
         None => "Your session expired and your sign-in helper could not renew it in the \
-                 background. Run /login to sign in again."
+                 background. Run /grok to sign in again."
             .into(),
     }
 }

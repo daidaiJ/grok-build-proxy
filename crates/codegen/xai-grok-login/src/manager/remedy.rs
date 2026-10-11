@@ -43,7 +43,7 @@ impl AuthRemedy {
             Self::SelfHealing => Some(
                 "Authentication is temporarily unavailable (often a network blip right \
                  after wake). Your session is still signed in and will recover \
-                 automatically — retry in a few seconds; no need to run /login."
+                 automatically — retry in a few seconds; no need to run /grok."
                     .to_owned(),
             ),
             Self::ProviderLogin { label } => {
@@ -471,20 +471,20 @@ mod tests {
         assert!(
             AuthRemedy::SelfHealing
                 .advice()
-                .is_some_and(|a| a.contains("no need to run /login"))
+                .is_some_and(|a| a.contains("no need to run /grok"))
         );
         assert_eq!(AuthRemedy::ManualLogin.turn_error_type(), "auth");
         assert_eq!(
             AuthRemedy::ManualLogin.advice(),
             None,
-            "the client's own banner already tells the user to run /login"
+            "the client's own banner already tells the user to run /grok"
         );
         let provider = AuthRemedy::ProviderLogin {
             label: Some("Acme SSO".to_owned()),
         };
         assert_eq!(provider.turn_error_type(), "auth");
         let advice = provider.advice().expect("provider advice");
-        assert!(advice.contains("Acme SSO") && advice.contains("/login"));
-        assert!(!advice.contains("no need to run /login"));
+        assert!(advice.contains("Acme SSO") && advice.contains("/grok"));
+        assert!(!advice.contains("no need to run /grok"));
     }
 }

@@ -675,7 +675,7 @@ pub struct MvpAgent {
     /// Agent configuration. LEADER-SAFE(init-once): never mutated after construction.
     pub(crate) cfg: RefCell<AgentConfig>,
     /// Current auth method. LEADER-SAFE(shared): all clients share the same auth; last authenticate() call wins, which is correct (same user, same creds). Held as a shared live handle cloned into every running session.
-    /// So a mid-session `authenticate` (`/login`) is observed by each session's per-turn auth gate without re-spawning.
+    /// So a mid-session `authenticate` (`/grok`) is observed by each session's per-turn auth gate without re-spawning.
     pub(crate) auth_method_id: crate::agent::auth_method::SharedAuthMethodId,
     /// Global sampling config (API key and default base_url).
     /// LEADER-SAFE(shared): only api_key is written here (same for all clients).
@@ -1059,7 +1059,7 @@ struct AuthRequestMeta {
     #[serde(default)]
     use_oauth: bool,
     /// When true, skip cached tokens and force the interactive browser login flow.
-    /// Used by the `/login` slash command for mid-session re-auth.
+    /// Used by the `/grok` slash command for mid-session re-auth.
     /// Unlike `reauth`, this does NOT clear existing credentials: if the user abandons the browser flow, the current session continues.
     #[serde(default)]
     force_interactive: bool,

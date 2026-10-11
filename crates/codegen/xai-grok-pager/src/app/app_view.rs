@@ -569,7 +569,7 @@ pub struct AppView {
     pub pending_startup: Option<xai_grok_telemetry::startup::PendingStartup>,
     pub active_view: ActiveView,
     /// View to return to after a mid-session login flow completes or is cancelled.
-    /// `Some` only while a `/login` (or 401-triggered re-auth) initiated from an active session is in progress.
+    /// `Some` only while a `/grok` (or 401-triggered re-auth) initiated from an active session is in progress.
     /// `None` at startup so the normal login-then-load flow is preserved.
     pub auth_return_view: Option<ActiveView>,
     pub agents: IndexMap<AgentId, AgentView>,
@@ -1011,6 +1011,9 @@ pub struct AppView {
     pub login_label: Option<String>,
     /// The auth method ID to use for login.
     pub login_method_id: Option<acp::AuthMethodId>,
+    /// LOCAL (T0 onboarding): zero-config first start — the welcome login screen leads with
+    /// BYOK configuration guidance and demotes Grok subscription login to a menu option.
+    pub byok_recommended: bool,
     /// Initial auth mode hint from method metadata.
     pub auth_start_mode: AuthMode,
     /// Text buffer for manual auth token paste (loopback mode).
@@ -1568,6 +1571,7 @@ impl AppView {
             account_email: None,
             login_label: None,
             login_method_id: None,
+            byok_recommended: false,
             auth_start_mode: AuthMode::Pending,
             auth_code_input: LineEditor::default(),
             next_auth_request_seq: 1,
@@ -4550,6 +4554,7 @@ impl AppView {
                                 consent_state: &self.consent_state,
                                 consent_hover_link: self.welcome_consent_hover_link,
                                 login_label: self.login_label.as_deref(),
+                                byok_recommended: self.byok_recommended,
                                 auth_code_input: self.auth_code_input.text(),
                                 auth_code_cursor_byte: self.auth_code_input.cursor_byte(),
                                 clipboard_delivery: self.auth_clipboard_delivery,

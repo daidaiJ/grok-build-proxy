@@ -1884,8 +1884,8 @@ mod tests {
         let mut ctrl = SlashController::with_builtins(std::path::PathBuf::from("."));
         let meta = serde_json::json!({
             "scope": "plugin",
-            "path": "/plugins/acme/skills/login/SKILL.md",
-            "bareName": "login",
+            "path": "/plugins/acme/skills/grok/SKILL.md",
+            "bareName": "grok",
             "pluginName": "acme",
         })
         .as_object()
@@ -1893,26 +1893,26 @@ mod tests {
         .unwrap();
         ctrl.registry_mut()
             .set_acp_commands(&[agent_client_protocol::AvailableCommand::new(
-                "acme:login".to_string(),
-                "Acme account login".to_string(),
+                "acme:grok".to_string(),
+                "Acme grok sign-in".to_string(),
             )
             .meta(meta)]);
 
         let state = SlashState::default();
         let models = ModelState::default();
-        ctrl.refresh(&state, "/login", 6, &models);
+        ctrl.refresh(&state, "/grok", 6, &models);
         let snapshot = state.snapshot();
-        let login = snapshot
+        let grok = snapshot
             .matches
             .iter()
-            .find(|row| row.display == "/login")
-            .expect("builtin /login");
-        assert_eq!(login.provenance, Some(CommandProvenance::Builtin));
-        assert!(!login.description.contains("built-in"));
+            .find(|row| row.display == "/grok")
+            .expect("builtin /grok");
+        assert_eq!(grok.provenance, Some(CommandProvenance::Builtin));
+        assert!(!grok.description.contains("built-in"));
         let skill = snapshot
             .matches
             .iter()
-            .find(|row| row.display == "/acme:login")
+            .find(|row| row.display == "/acme:grok")
             .expect("qualified skill");
         assert_eq!(
             skill.provenance,
@@ -1920,19 +1920,19 @@ mod tests {
                 source: "acme".to_string()
             })
         );
-        assert_eq!(skill.description, "Acme account login");
-        assert!(ctrl.registry().get("login").is_some_and(|c| !c.is_skill()));
+        assert_eq!(skill.description, "Acme grok sign-in");
+        assert!(ctrl.registry().get("grok").is_some_and(|c| !c.is_skill()));
         assert!(
             ctrl.registry()
-                .get("acme:login")
+                .get("acme:grok")
                 .is_some_and(|c| c.is_skill())
         );
 
-        ctrl.refresh(&state, "/acme:login", 11, &models);
+        ctrl.refresh(&state, "/acme:grok", 11, &models);
         let snapshot = state.snapshot();
         assert_eq!(
             snapshot.selection().map(|row| row.display.as_str()),
-            Some("/acme:login"),
+            Some("/acme:grok"),
             "exact qualified query should select the skill"
         );
     }
@@ -2744,12 +2744,12 @@ mod tests {
     #[test]
     fn colliding_plugin_skill_appears_beside_builtin() {
         let mut ctrl = SlashController::new(
-            CommandRegistry::new(vec![Arc::new(TieCmd("login"))]),
+            CommandRegistry::new(vec![Arc::new(TieCmd("grok"))]),
             std::path::PathBuf::from("."),
         );
         let meta = serde_json::json!({
             "scope": "plugin",
-            "path": "/plugins/acme/skills/login/SKILL.md",
+            "path": "/plugins/acme/skills/grok/SKILL.md",
             "pluginName": "acme",
         })
         .as_object()
@@ -2757,28 +2757,28 @@ mod tests {
         .unwrap();
         ctrl.registry_mut()
             .set_acp_commands(&[agent_client_protocol::AvailableCommand::new(
-                "acme:login".to_string(),
+                "acme:grok".to_string(),
                 "Acme SSO helper".to_string(),
             )
             .meta(meta)]);
 
         let state = SlashState::default();
         let models = ModelState::default();
-        ctrl.refresh(&state, "/login", 6, &models);
+        ctrl.refresh(&state, "/grok", 6, &models);
         let snap = state.snapshot();
 
         let builtin = snap
             .matches
             .iter()
-            .find(|r| r.display == "/login")
-            .expect("builtin /login stays listed");
+            .find(|r| r.display == "/grok")
+            .expect("builtin /grok stays listed");
         assert_eq!(builtin.provenance, Some(CommandProvenance::Builtin));
 
         let skill = snap
             .matches
             .iter()
-            .find(|r| r.display == "/acme:login")
-            .expect("colliding plugin skill listed as /acme:login");
+            .find(|r| r.display == "/acme:grok")
+            .expect("colliding plugin skill listed as /acme:grok");
         assert_eq!(
             skill.provenance,
             Some(CommandProvenance::Skill {
@@ -2789,7 +2789,7 @@ mod tests {
 
         assert_eq!(
             snap.matches.first().map(|m| m.display.as_str()),
-            Some("/login")
+            Some("/grok")
         );
 
         assert!(
@@ -2800,16 +2800,16 @@ mod tests {
             skill
                 .indices
                 .iter()
-                .all(|i| (*i as usize) < "/acme:login".len()),
+                .all(|i| (*i as usize) < "/acme:grok".len()),
             "indices must land within the display text: {:?}",
             skill.indices
         );
 
-        ctrl.record_command_use("acme:login", "acme:login");
-        ctrl.refresh(&state, "/login", 6, &models);
+        ctrl.record_command_use("acme:grok", "acme:grok");
+        ctrl.refresh(&state, "/grok", 6, &models);
         assert_eq!(
             state.snapshot().matches.first().map(|m| m.display.as_str()),
-            Some("/login"),
+            Some("/grok"),
             "recently-used colliding skill must not hijack the typed builtin name"
         );
     }

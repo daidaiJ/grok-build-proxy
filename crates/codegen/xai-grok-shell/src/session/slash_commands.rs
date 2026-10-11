@@ -497,6 +497,8 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "full",
     "fullscreen",
     "gboom",
+    // LOCAL: /login 硬改名 /grok（xAI 账号登录命令），保留名单同步
+    "grok",
     "guides",
     "help",
     "history",
@@ -513,7 +515,6 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "import-claude",
     "jump",
     "lang", // LOCAL: pager 界面语言切换命令占位，防技能同名遮蔽
-    "login",
     "logout",
     "log",
     "loop",

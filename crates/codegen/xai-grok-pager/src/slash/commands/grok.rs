@@ -1,13 +1,13 @@
 use crate::app::actions::Action;
 use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand, slash_meta};
 
-pub struct LoginCommand;
+pub struct GrokCommand;
 
-impl SlashCommand for LoginCommand {
+impl SlashCommand for GrokCommand {
     slash_meta! {
-        name: "login",
-        description: "Log in or re-authenticate with your account",
-        usage: "/login",
+        name: "grok",
+        description: "Log in or re-authenticate with your Grok account",
+        usage: "/grok",
     }
 
     fn run(&self, _ctx: &mut CommandExecCtx, _args: &str) -> CommandResult {

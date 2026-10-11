@@ -2315,3 +2315,38 @@ i18n 扫描 0 挂。
 `grok2.exe --version` = `grok 1.0.47 (f91592d5cf5d)`；旧 v1.0.46 留
 `grok2.exe.v1.0.46.bak`（更早的 `.v1.0.40.bak` 仍在，待用户核验后自行清理）。
 面板活体核验由用户人工继续。
+
+## 二十八期：T0——/login→/grok 硬改名 + 零配置首启 BYOK 引导（2026-10-11，分支 feat/local-auth-onboarding）
+
+> /auth 供应商配置面板 + /stats API 成本立项的分期首件（设计文档
+> `docs-local/provider-onboarding-api-cost-todo.md`，交接卡
+> `.handoff/provider-onboarding-api-cost.md`）。上游同步重放时按本节整节重放。
+
+1. **改名**：`slash/commands/login.rs` → `grok.rs`（`LoginCommand`→`GrokCommand`，
+   name/usage/description 同步），注册点 `slash/commands/mod.rs`；shell 保留名单
+   `session/slash_commands.rs` "login"→"grok"；用户可见文案 6 处换 `/grok`
+   （`xai-grok-login/error.rs` provider_login_message ×2、`manager/remedy.rs`
+   SelfHealing advice、shell `session/compaction.rs` 抑制通知 ×2、pager
+   `effects/session_list.rs` NoOauth toast、`scrollback/blocks/session_event.rs`
+   ReAuthRequired）；i18n 表描述键换新（"Log in or re-authenticate with your Grok
+   account"/"登录或重新验证 Grok 账号"）；测试夹具与断言全量跟改（registry/mod/
+   acp_command/inspect/slash_commands_tests/prompt/task_result/session_events/
+   compaction_inline 等；`/log` 前缀用例改 `/gr`）。ACP 通告的 method id
+   `grok.com` 与 authenticate 流不动。
+2. **零配置首启 BYOK 引导**：shell `AuthMethodsBuildInputs` 新增
+   `byok_recommended`（`agent/auth_method.rs`），unpinned 路径把它写进 grok.com
+   method 的 `meta.byok_recommended`（pinned 路径恒 false）；调用点
+   `agent/mvp_agent/acp_agent.rs` 计算（unpinned ∧ 非 disable_api_key_auth ∧
+   无外部 SK ∧ 无 cached token ∧ 无企业 OIDC ∧ 无 auth_provider_command）。
+   pager `acp/mod.rs` `startup_auth_metadata` 扩五元组提取该 meta →
+   `AcpConnection.byok_recommended` → `AppView.byok_recommended`（event_loop
+   仅 `connection.needs_login` 分支写入，mid-session 登录/切号不受影响）→
+   `WelcomeRenderParams`。welcome Pending 首屏（`views/welcome/mod.rs`）：
+   `byok_recommended ∧ 无 auth 错误` 时消息位显示 BYOK 配置指引两行（新增 i18n
+   键 3 组：No model provider configured yet / Add a [model.<id>] entry…/
+   Sign in with your Grok subscription），菜单 `l` 项改「使用 Grok 订阅登录」；
+   `render_welcome_blocked` 消息参数扩为多行切片。T2 面板落地后引导位升级为进面板。
+
+验证：见 port-roadmap.md §6 2026-10-11 T0 完成条目（三 crate check 0 error；
+pager 六滤全绿 3 535 例含 7 个新用例；shell/login GATE_FORCE 过滤全绿；
+i18n 0 挂）。win-skip 新登记族S/族T。

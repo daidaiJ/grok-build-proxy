@@ -2031,9 +2031,9 @@ fn gated_worktree_with_none_companions_preserves_stashed_label_and_ref() {
     assert!(app.deferred_startup.session.is_none());
     assert!(!app.deferred_startup.worktree);
 }
-/// `/login` from inside a session must move to the welcome screen and stash the agent view for restoration.
+/// `/grok` from inside a session must move to the welcome screen and stash the agent view for restoration.
 /// The welcome screen is the only view that renders the auth flow / external-provider URL.
-/// Regression: "external auth provider /login does nothing mid-session".
+/// Regression: "external auth provider /grok does nothing mid-session".
 #[test]
 fn login_mid_session_switches_to_welcome_and_stashes_view() {
     let mut app = test_app_with_agent();
@@ -2049,7 +2049,7 @@ fn login_mid_session_switches_to_welcome_and_stashes_view() {
         "must still kick off the auth flow",
     );
 }
-/// A mid-session `/login` switches to the welcome view to host the auth flow.
+/// A mid-session `/grok` switches to the welcome view to host the auth flow.
 /// That transition must collapse any expanded announcement so it can't reappear stale if auth completion lands back on a welcome screen.
 #[test]
 fn login_mid_session_resets_welcome_announcement_expanded() {

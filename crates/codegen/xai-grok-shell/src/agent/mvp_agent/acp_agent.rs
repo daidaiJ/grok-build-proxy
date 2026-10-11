@@ -431,6 +431,15 @@ impl acp::Agent for MvpAgent {
                 "startup.acp_initialize.auth_methods",
             );
             let _s = region!("startup.acp_initialize.auth_methods", Parent::Inherit);
+            // LOCAL (T0 onboarding): zero-config first start — nothing authenticatable is
+            // advertised and no deployment policy forces the login method — so the first-party
+            // pager can lead with BYOK configuration guidance instead of Grok OAuth.
+            let byok_recommended = preferred_method.is_none()
+                && !disable_api_key_auth
+                && !has_external_api_key
+                && !has_cached_token
+                && !has_enterprise_oidc
+                && !has_auth_provider;
             auth_method::build_auth_methods(auth_method::AuthMethodsBuildInputs {
                 has_external_api_key,
                 has_cached_token,
@@ -439,6 +448,7 @@ impl acp::Agent for MvpAgent {
                 login_label: login_label.as_deref(),
                 has_auth_provider_command: has_auth_provider,
                 preferred_method,
+                byok_recommended,
             })
         };
         let auth_methods = built.methods;

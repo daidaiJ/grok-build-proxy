@@ -693,6 +693,9 @@ pub struct WelcomeRenderParams<'a> {
     pub consent_state: &'a crate::app::consent::ConsentState,
     pub consent_hover_link: Option<usize>,
     pub login_label: Option<&'a str>,
+    /// LOCAL (T0 onboarding): zero-config first start — the Pending screen leads with BYOK
+    /// configuration guidance and demotes Grok subscription login to the 'l' menu option.
+    pub byok_recommended: bool,
     pub auth_code_input: &'a str,
     pub auth_code_cursor_byte: usize,
     pub clipboard_delivery: Option<crate::clipboard::ClipboardDelivery>,
@@ -797,10 +800,32 @@ pub fn render_welcome(
 
     let mut result = match params.auth_state {
         AuthState::Pending { error } => {
-            let label = params.login_label.unwrap_or("grok.com");
-            let login_text = tr("Login with {}").replace("{}", label);
+            // LOCAL (T0 onboarding): zero-config first start leads with BYOK configuration
+            // guidance; Grok subscription login stays available as the 'l' menu option. An
+            // auth attempt error takes the message slot back so the failure stays visible.
+            let byok_guidance = params.byok_recommended && error.is_none();
+            let byok_lines = [
+                tr("No model provider configured yet."),
+                tr(
+                    "Add a [model.<id>] entry with base_url and api_key/env_key to ~/.grok/config.toml, then restart.",
+                ),
+            ];
+            let err_lines = [error.as_deref().unwrap_or("")];
+            let (msg, login_text) = if byok_guidance {
+                (
+                    Some((byok_lines.as_slice(), theme.gray_bright)),
+                    tr("Sign in with your Grok subscription").to_string(),
+                )
+            } else {
+                let label = params.login_label.unwrap_or("grok.com");
+                (
+                    error
+                        .as_deref()
+                        .map(|e| (err_lines.as_slice(), theme.accent_error)),
+                    tr("Login with {}").replace("{}", label),
+                )
+            };
             let menu = [("l", login_text.as_str()), ("q", tr("Quit"))];
-            let msg = error.as_deref().map(|e| (e, theme.accent_error));
             let info = PromptInfo {
                 model_name: params.model_name,
                 flags: params.flags,
@@ -847,13 +872,11 @@ pub fn render_welcome(
         }
         AuthState::Done if params.is_zdr_blocked => {
             let menu = [("l", tr("Switch account")), ("q", tr("Quit"))];
+            let zdr_lines = [tr("Grok Build is not yet available for this account.")];
             let (menu_rects, post_flush_escapes) = render_welcome_blocked(
                 content_area,
                 buf,
-                Some((
-                    tr("Grok Build is not yet available for this account."),
-                    theme.gray_bright,
-                )),
+                Some((zdr_lines.as_slice(), theme.gray_bright)),
                 &menu,
                 params.selected,
                 None,
@@ -926,7 +949,7 @@ pub fn render_welcome(
 fn render_welcome_blocked(
     content_area: Rect,
     buf: &mut Buffer,
-    message: Option<(&str, ratatui::style::Color)>,
+    message: Option<(&[&str], ratatui::style::Color)>,
     menu_items: &[(&str, &str)],
     selected: Option<usize>,
     prompt: Option<(&mut PromptWidget, &PromptInfo<'_>)>,
@@ -959,10 +982,15 @@ fn render_welcome_blocked(
 
     render_logo_tier(layout.logo, buf, &theme, layout.logo_tier);
 
-    if let Some((text, color)) = message {
-        let line =
-            Line::from(Span::styled(text, Style::default().fg(color))).alignment(Alignment::Center);
-        Paragraph::new(line).render(layout.error, buf);
+    if let Some((lines, color)) = message {
+        let lines: Vec<Line<'_>> = lines
+            .iter()
+            .map(|text| {
+                Line::from(Span::styled(*text, Style::default().fg(color)))
+                    .alignment(Alignment::Center)
+            })
+            .collect();
+        Paragraph::new(lines).render(layout.error, buf);
     }
 
     // Inset the menu the same as the input bar / post-auth menu
@@ -2889,6 +2917,7 @@ mod tests {
             consent_state: &ConsentState::Done,
             consent_hover_link: None,
             login_label: None,
+            byok_recommended: false,
             auth_code_input: "",
             auth_code_cursor_byte: 0,
             clipboard_delivery: None,
@@ -3811,6 +3840,89 @@ mod tests {
         for token in ["alpha-one", "bravo-two", "charlie-three"] {
             assert!(text.contains(token), "{token} missing:\n{text}");
         }
+    }
+
+    // -- LOCAL (T0 onboarding): zero-config first start leads with BYOK guidance --
+
+    /// With `byok_recommended` the Pending screen shows the BYOK configuration guidance and
+    /// demotes Grok subscription login to the 'l' menu option.
+    #[test]
+    fn welcome_pending_byok_recommended_leads_with_guidance() {
+        let auth = AuthState::Pending { error: None };
+        let trust = TrustState::Done;
+        let mut params = render_params(&auth, &trust, None);
+        params.byok_recommended = true;
+        let area = Rect::new(0, 0, 100, 40);
+        let mut picker = PickerState::default();
+        let mut prompt = PromptWidget::new();
+        let mut buf = Buffer::empty(area);
+        let _ = render_welcome(area, &mut buf, &params, &mut prompt, &mut picker);
+        let text = buffer_text(&buf);
+        assert!(
+            text.contains("No model provider configured yet."),
+            "BYOK guidance must be visible:
+{text}"
+        );
+        assert!(
+            text.contains("~/.grok/config.toml"),
+            "config path must be visible:
+{text}"
+        );
+        assert!(
+            text.contains("Sign in with your Grok subscription"),
+            "subscription login must stay reachable as a menu option:
+{text}"
+        );
+        assert!(
+            !text.contains("Login with"),
+            "OAuth must be demoted from the default label:
+{text}"
+        );
+    }
+
+    /// Without the marker the classic login screen is unchanged.
+    #[test]
+    fn welcome_pending_without_byok_marker_keeps_login_label() {
+        let auth = AuthState::Pending { error: None };
+        let trust = TrustState::Done;
+        let params = render_params(&auth, &trust, None);
+        let area = Rect::new(0, 0, 100, 40);
+        let mut picker = PickerState::default();
+        let mut prompt = PromptWidget::new();
+        let mut buf = Buffer::empty(area);
+        let _ = render_welcome(area, &mut buf, &params, &mut prompt, &mut picker);
+        let text = buffer_text(&buf);
+        assert!(
+            text.contains("Login with grok.com"),
+            "classic label must stay:
+{text}"
+        );
+        assert!(!text.contains("No model provider configured yet."));
+    }
+
+    /// An auth attempt error takes the message slot back from the BYOK guidance.
+    #[test]
+    fn welcome_pending_auth_error_beats_byok_guidance() {
+        let auth = AuthState::Pending {
+            error: Some("boom".into()),
+        };
+        let trust = TrustState::Done;
+        let mut params = render_params(&auth, &trust, None);
+        params.byok_recommended = true;
+        let area = Rect::new(0, 0, 100, 40);
+        let mut picker = PickerState::default();
+        let mut prompt = PromptWidget::new();
+        let mut buf = Buffer::empty(area);
+        let _ = render_welcome(area, &mut buf, &params, &mut prompt, &mut picker);
+        let text = buffer_text(&buf);
+        assert!(text.contains("boom"), "error must stay visible:
+{text}");
+        assert!(
+            text.contains("Login with"),
+            "classic label must return while an error shows:
+{text}"
+        );
+        assert!(!text.contains("No model provider configured yet."));
     }
 
     /// Rows of the painted buffer that hold braille logo art.
