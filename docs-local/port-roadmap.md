@@ -484,5 +484,9 @@
 - **验证**：见 PATCHES.md 三十期（auth_modal 13 / welcome 226 / slash 568 /
   dispatch::tests 1732；shell model_entry_writes 7 / provider_models 6 /
   slash_commands 105；双 crate check --all-targets 0 error 0 warning；i18n 0 挂）。
+- **发版收口（同日）**：`feat/local-auth-panel` 合 main（merge `54e6389`）随
+  **`v1.0.50`** 发版；release run `38126950148` / build run `38126944660` 双 job
+  success，release 页 4 资产非草稿。活回合验证待新客户端（五步实跑 + /model
+  热加载 + SK 不落 transcript/日志抽查）。
 - **后续**：T4 i18n 扫尾（面板字符串已带 zh，剩余无）——实质挂起；
   T5 特性 C（能力门控）独立小件待开工；发版待用户拍板（活回合验证后）。

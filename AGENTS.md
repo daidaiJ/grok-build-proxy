@@ -255,8 +255,9 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 - **当前状态：** T0（`/login`→`/grok` 硬改名 + 零配置首启 BYOK 引导）随 `v1.0.48`、
   T1+特性B（模型目录取数 + /stats 成本列）随 `v1.0.49`、**T2/T3（/auth 五步面板 +
   目录回填 + config 写回）随 `v1.0.50`** 发版（分支 `feat/local-auth-panel`，merge
-  `54e6389`，tag 已推；release run `38126950148` / build run `38126944660` 监视中，
-  终态待回填）。实现记录 PATCHES.md 三十期，roadmap §6 当日条目。
+  `54e6389`，tag 已推；release run `38126950148` / build run `38126944660` 双 job
+  success，release 页 4 资产非草稿已核）。实现记录 PATCHES.md 三十期，roadmap §6
+  当日条目。
 - **T2/T3 落地面**：`views/auth_modal` 五步向导（协议→baseUrl→SK 掩码→模型列表
   过滤勾选/手填回退→确认写回，行 id 可编辑冲突标红）+ shell 扩展
   `x.ai/providerModels` + `write_model_entries`（toml_edit 定点写回
