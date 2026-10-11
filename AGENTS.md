@@ -271,6 +271,10 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   （version 2，旧文件清除）+ 进程常驻改「请求 id → 参数」薄表（全量目录只在取数/
   补齐瞬间物化，冷热分离）+ 启动异步预热一次/天 + /auth 回填思考支持位
   （目录 reasoning=Some(true) → `supports_reasoning_effort = true`）。
+  **补修（同 tag 内，用户复现「成本全 `–` 连 v4.1 flash 也无」）**：薄表 lazy 路径
+  `completed_entries` 回包误用调用方旧快照（匹配白算、回包全 null，pager store
+  按「已知无价」缓存 6h）→ 回包改并回后合并视图 + 回归用例；并按用户要求补
+  运行时价格日志 `model catalog: priced`（id → entry/score/in/out + unpriced）。
 - **复发修复验证（真实数据仿真，本机 v1.0.51 遗留 OpenRouter-only 458 条缓存
   = 最坏情形）：config `[model.*]` 表键 8/8、路由 slug 8/8、账本回显 6/6
   （并集 11 id）全命中原厂价**——此前两 miss 现命中：`glm-5.3-flash` →

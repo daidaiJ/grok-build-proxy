@@ -100,3 +100,12 @@ OpenRouter 单源条数一致，models.dev 主源一条未进；`~/.grok/prices.
 `grok-4.6` → `x-ai/grok-4.6`、`gpt-5.6-luna` → `openai/gpt-5.6-luna` 同按段命中。
 crate 测试数字见 PATCHES.md 三十二期。待活回合：新客户端 /stats 三模型成本列 +
 /auth 五步回填 + unified.jsonl 里 `source` 字段核对。
+
+**补修（同 tag 重发内；用户复现「成本全 `–` 连 v4.1 flash 也无」）**：二次修复
+首发的薄表 lazy 路径翻车——`completed_entries` 把匹配并回共享薄表，但**回包用
+调用方旧快照**组包；首次 /stats 薄表尚空（启动预热只放空表）→ 回包全 null，
+pager store 按「已知无价」缓存 6h 不重问 → 全部模型 `–`。修复 = 回包基于并回后
+的合并视图（shell model_catalog 8/8，新增回归用例钉死）。按用户要求补运行时
+价格日志：每次取价回包打 unified `model catalog: priced`（id → entry/score/
+in/out + unpriced 列表 + cache 档位）。仿真（纯匹配层）当初全绿而活回合翻车，
+因为翻车点在**回包组装**而非匹配——降级/缓存链路的验证必须覆盖请求→回包全程。
