@@ -239,14 +239,14 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   P3/P4 未动。
 
 - [`docs-local/issues/`](docs-local/issues/README.md) — **使用问题台账（一 issue 一文件）**。
-  当前 open/reproduced 条：**无**。最近一条 **429/400 后状态行不再更新（P2）已修并随
-  `v1.0.45` 发版（2026-10-10，merge `350874c`）**——根因 = 显示侧按「当前模型
-  配置 id」精确取账本，而成功调用记在「上游回显 model id」、终止性失败（429/400）记在
-  「配置 id」，两拼写不同（`glm-5.3-flash` vs 回显 `glm-5-3-flash`）时行冻死在只有 ✗ 的
-  影子条目上（tokens/cache/think 段整段消失）。修复 P1（显示侧影子键守卫，逐候选判定 +
-  叠回被跳过影子的 ✗）+ P2（失败归因改用最近回显 id），验证与遗留见
-  [`issues/2026-10-11-status-line-stale-after-429-400.md`](docs-local/issues/2026-10-11-status-line-stale-after-429-400.md)
-  文末「结论（二）」与 PATCHES.md 二十五期。
+  当前 open/reproduced 条：**无**。最近一条 **成本列裸 id 无价等三问题（P2）**：
+  v1.0.50 提出、v1.0.51 首修，v1.0.51 活回合复发（models.dev 主源瞬时失败静默
+  回退 + 匹配器裸 id 只认裸条目），二次修复（裸 id↔`vendor/model` 段命中 +
+  匹配索引化 + 缓存迁 `cache/` + 启动预热 + /auth 回填思考位）随 v1.0.51 重指
+  重发（2026-10-11，merge `5941706`，PATCHES 三十二期），真实数据仿真 11/11 id
+  全命中原厂价；验证与遗留见
+  [`issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md`](docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md)
+  文末「复发与二次修复」节。
 
 ## 🔄 Handoff 摘要
 
