@@ -1,11 +1,12 @@
-# /auth 供应商配置面板 + /stats API 成本列（设计完成；T0/T1/特性B 已落地，T2–T4 未开工）
+# /auth 供应商配置面板 + /stats API 成本列（设计完成；T0/T1/特性B 已落地，T2–T5 未开工）
 
 > **施工状态（2026-10-11）**：T0（/login→/grok 硬改名 + 零配置首启 BYOK 引导）
 > 已随 **`v1.0.48`** 发版；**T1（目录取数模块）+ 特性 B（/stats 成本列）已落地**
 > （分支 `feat/local-model-catalog`，新 crate `xai-grok-model-catalog` + shell 扩展
 > `x.ai/modelCatalog` + pager 成本列，实现记录见 PATCHES.md 二十九期 + roadmap §6
-> 当日条目）；T2–T4 未开工。六轮拍板（价格 TTL / 只留官方价格 / 面板交互形态）见
-> 「拍板增补」节。
+> 当日条目）；T2–T4 未开工，**T5（特性 C 模型能力门控：纯文本模型遇图 mask/阻断，
+> 2026-10-11 用户追加）已立项待拍板**。六轮拍板（价格 TTL / 只留官方价格 /
+> 面板交互形态）见「拍板增补」节。
 >
 > 来源：用户拍板 2026-10-11（agent-cli-tracking 二轮调研衍生需求）。
 > 参照实现：用户自有 **modelq** 仓库（`D:/CODE/ai/openrouter-cli`，Go，二进制 mqx）——OpenRouter +
@@ -100,10 +101,15 @@
 
 **分期**：
 - T1 目录取数模块（新 crate 或 shell 模块：OpenRouter + models.dev 双源、TTL 缓存、置信匹配；
-  单测夹具直接搬 modelq 同款 JSON 响应）。
+  单测夹具直接搬 modelq 同款 JSON 响应）。✅ 已落地（2026-10-11，PATCHES 二十九期）
 - T2 /auth 面板（pager 弹窗交互 + 输入校验 + /models 拉取）。
 - T3 目录回填确认面 + config 写回。
 - T4 i18n + 无配置启动引导（若拍板做 onboarding，见待拍板 3）。
+- T5 模型能力门控（特性 C：纯文本模型遇图 mask/阻断；依赖 T1 增模态字段扩展）。
+
+**T1 已落地补记（2026-10-11）**：模态字段（`architecture.input_modalities` /
+`modalities.input`）尚未入 `CatalogEntry`——特性 C 开工时随 T5 的 T1 扩展一并补上
+（解析 + 夹具 + `CatalogMatch` 透传）。
 
 ## 特性 B：/stats「缓存写」→「API 成本」
 
@@ -119,6 +125,35 @@
   `stats.rs:124`、`stats_modal.rs:459/566` 与测试断言（`stats.rs:314`、`stats_modal.rs:821`）
   同步改。
 - **不在本次范围**：status line 加成本位（待拍板 6 留档）；CNY 换算（modelq fx 路线留档）。
+
+## 特性 C：模型能力门控——纯文本模型遇图 mask 替换或阻断（2026-10-11 用户追加）
+
+- **需求原话**：按 OpenRouter 拿到模态能力的模型，如果是纯文本遇到视觉的情况，
+  应触发 mask 替换机制避免请求 400 报错，或者直接阻断。
+- **动机**：目录取数（特性 A 的 T1）天然携带模态能力；BYOK 用户配了纯文本模型后
+  贴图/工具带图会直接吃上游 400（当前无任何前置判定，报错形态是裸的
+  upstream error），体验差且难自查。
+- **数据源（T1 需小扩展）**：`CatalogEntry` 增模态字段——OpenRouter 取
+  `architecture.input_modalities`（含 `"image"` 即识图；`architecture.modality`
+  形如 `text+image->text` 可作展示），models.dev 取 `modalities.input`
+  （modelq 两源结构均已有该字段，解析层各加一段）；目录未命中/字段缺失 =
+  能力未知，不门控（保持现状放行）。
+- **门控行为（拍板点 7，建议双层）**：
+  - **用户显式图**（粘贴/拖入）→ 建议**阻断**：发送前报清晰错误（指明当前模型
+    不支持视觉输入，指路 /auth 换模型或换识图模型），静默替换会让回合答非所问；
+  - **附带图**（read_file 图/PDF 渲页、MCP 工具结果 inline 图）→ 建议 **mask
+    替换**：图块替换为文本占位符（如 `[图片已省略：当前模型不支持视觉输入]`）+
+    一行披露，回合继续不 400。
+  - 与视觉桥的关系：mask/阻断是**无识图桥时的兜底**；`feat/local-vision-bridge`
+    （T1 能力位 `accepts_images` + 打开 `image_describe` 转写）落地后，同一能力位
+    优先走转写，本特性退为「未配桥 + 未配识图模型」的保底层。能力位数据源统一
+    用目录模态（本特性 T1 扩展产出），避免两套判定。
+- **落点**：`xai-grok-model-catalog`（`CatalogEntry` 增 `input_modalities`/识图
+  bool，解析 + 夹具各一小段）；能力判定查询走 shell 扩展回包（`CatalogMatch`
+  增字段透传）；门控执行点与视觉桥 plan.md 的现状锚点同位（prompt 构建层用户图
+  入口 + 工具结果剥图口），实现期先读视觉桥 plan.md 的锚点清单。
+- **分期**：**T5（独立小件，不阻塞 T2–T4）**；T1 扩展可先行（纯函数层 + 夹具，
+  半天级）。T3 面板回填时顺带在模型列表展示「支持视觉」标记（目录字段现成）。
 
 ## 验收标准
 
@@ -136,3 +171,6 @@
 4. **目录源优先级**：OpenRouter 主、models.dev 兜底（modelq 双源合并的 fork 版取舍；或仅接一源）。
 5. **成本货币**：仅 USD（已拍板口径「美元成本」）；CNY 换算后续按需。
 6. **status line 成本位**：本次不做，留档。
+7. **纯文本模型遇图门控行为**（特性 C / T5，2026-10-11 用户提出，双层建议待确认）：
+   用户显式图 = 阻断、附带图 = mask 替换 + 披露；mask 占位符文案与披露形态、
+   能力未知（目录未命中/无模态字段）时是否放行（建议放行）待拍板。
