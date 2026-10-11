@@ -3,6 +3,8 @@
 //! 移植 modelq `internal/modelsdev/match.go` 的置信档（按分排序，平分时按
 //! 「来源 → 一方原厂 → provider/id 字典序」保证确定性）。**fuzzy 前缀/子串命中
 //! 视为噪声、不富化**（modelq 同款语义，拍板沿用）：只返回 ≥84 的置信档。
+//! 候选集来自 [`ModelCatalog`] 预建的哈希倒排索引（`types::CatalogIndex`，
+//! fetch 时构建一次），匹配本身不再做全库线性扫描。
 //!
 //! | 分档 | 语义 |
 //! |------|------|
@@ -10,7 +12,7 @@
 //! | 95  | 去掉 `:variant` 后精确命中（如 `:free`） |
 //! | 86  | `vendor/model`：vendor 段对上 provider（含 `z-ai`→`zai` 别名折叠），model 段精确 |
 //! | 85  | 规范 id（canonical）归一化后命中 |
-//! | 84  | model 段归一化命中（vendor 已对上 / vendor 不识别剥壳取后半段 / 纯 id 分隔符变体），部署戳后缀容忍（尾部 `-20260826` 等 6–8 位日期） |
+//! | 84  | model 段归一化命中（vendor 已对上 / vendor 不识别剥壳取后半段 / 纯 id 分隔符变体 / 裸 id 对 `vendor/model` 条目按 model 段命中），部署戳后缀容忍（尾部 `-20260826` 等 6–8 位日期） |
 
 use crate::types::{CatalogEntry, CatalogSource, MatchResult, ModelCatalog};
 
@@ -60,11 +62,15 @@ const FIRST_PARTY_PROVIDERS: &[&str] = &[
 pub(crate) fn is_first_party(entry: &CatalogEntry) -> bool {
     match entry.source {
         CatalogSource::OpenRouter => true,
-        CatalogSource::ModelsDev => {
-            let provider = collapse(&entry.provider_id);
-            FIRST_PARTY_PROVIDERS.iter().any(|p| collapse(p) == provider)
-        }
+        CatalogSource::ModelsDev => is_first_party_provider(&entry.provider_id),
     }
+}
+
+/// provider 归一化后是否一方原厂（models.dev 解析层在 provider 循环级提前跳过
+/// 转售商，转售商模型条目不物化，压低 5.4MB 级响应的解析内存峰值）。
+pub(crate) fn is_first_party_provider(provider_id: &str) -> bool {
+    let provider = collapse(provider_id);
+    FIRST_PARTY_PROVIDERS.iter().any(|p| collapse(p) == provider)
 }
 
 /// 原厂自证：条目 canonical 的 vendor 段与自家 provider id 一致
@@ -99,7 +105,7 @@ pub fn norm_id(s: &str) -> String {
 
 /// 剥离尾部部署戳（6–8 位纯数字段，如 `-20260826`）；4 位以下的日期型型号
 ///（`step-3.5-flash-2603`、`deepseek-v3-0324`）是独立型号，不动。
-fn strip_trailing_stamp(s: &str) -> &str {
+pub(crate) fn strip_trailing_stamp(s: &str) -> &str {
     if let Some(pos) = s.rfind('-') {
         let tail = &s[pos + 1..];
         let len = tail.len();
@@ -124,25 +130,15 @@ pub fn collapse(s: &str) -> String {
     norm_id(s).replace('-', "")
 }
 
-fn source_rank(source: CatalogSource) -> u8 {
-    match source {
-        CatalogSource::OpenRouter => 0,
-        CatalogSource::ModelsDev => 1,
-    }
-}
-
 /// 在目录里找 query 的最佳置信匹配；无置信命中返回 `None`。
+/// 候选取自 [`ModelCatalog`] 预建索引（`by_id` / `by_canonical` / `by_vendor` /
+/// `by_segment`），命中比较与平局裁定语义与线性扫描版一致。
 pub fn match_model<'a>(catalog: &'a ModelCatalog, query: &str) -> Option<MatchResult<'a>> {
     let q = query.trim();
     if q.is_empty() {
         return None;
     }
-    // `:variant`（`:free` / `:batch` / `:nitro` …）不是模型本体，剥离后参与各档匹配。
-    let base = match q.split_once(':') {
-        Some((b, _)) if !b.is_empty() => b,
-        _ => q,
-    };
-    let bn = norm_id(base);
+    let index = catalog.index();
 
     let mut best: Option<(u8, &'a CatalogEntry)> = None;
     let mut consider = |score: u8, entry: &'a CatalogEntry| {
@@ -160,64 +156,56 @@ pub fn match_model<'a>(catalog: &'a ModelCatalog, query: &str) -> Option<MatchRe
         }
     };
 
-    // 100 / 95：id 精确命中（含 `:variant` 剥离）。
-    for entry in &catalog.entries {
-        if entry.id == q {
-            consider(100, entry);
-        } else if base != q && entry.id == base {
-            consider(95, entry);
+    // `:variant`（`:free` / `:batch` / `:nitro` …）不是模型本体，剥离后参与各档匹配。
+    let base = match q.split_once(':') {
+        Some((b, _)) if !b.is_empty() => b,
+        _ => q,
+    };
+    let bn = norm_id(base);
+
+    // 100 / 95：id 精确命中（原样大小写，含 `:variant` 剥离）。
+    for pos in index.by_id_candidates(q) {
+        consider(100, &catalog.entries[*pos as usize]);
+    }
+    if base != q {
+        for pos in index.by_id_candidates(base) {
+            consider(95, &catalog.entries[*pos as usize]);
         }
     }
 
     // 86 / 85 / 84：vendor/model 拆段匹配 + canonical 反查。
     if let Some((vendor, model)) = base.split_once('/') {
-        let vn = norm_id(vendor);
-        let vendor_matches = |provider_id: &str| {
-            norm_id(provider_id) == vn || collapse(provider_id) == collapse(vendor)
-        };
-        let mut vendor_known = false;
-        for entry in &catalog.entries {
-            if vendor_matches(&entry.provider_id) {
-                vendor_known = true;
-                if entry.id == model {
-                    consider(86, entry);
-                } else if stamp_tolerant_eq(&entry.id, model) {
-                    consider(84, entry);
-                }
-            }
-            if let Some(canonical) = &entry.canonical_id {
-                if norm_id(canonical) == bn {
-                    consider(85, entry);
-                }
+        // canonical 反查与 vendor 识别无关，先做（85）。
+        for pos in index.by_canonical_candidates(&bn) {
+            consider(85, &catalog.entries[*pos as usize]);
+        }
+        // vendor 段别名折叠（z-ai → zai）经 by_vendor 的 collapse 键完成。
+        for pos in index.by_vendor_candidates(vendor) {
+            let entry = &catalog.entries[*pos as usize];
+            if entry.id == model {
+                consider(86, entry);
+            } else if stamp_tolerant_eq(&entry.id, model) {
+                consider(84, entry);
             }
         }
-        if !vendor_known {
+        if !index.vendor_known(vendor) {
             // vendor 段不识别（网关自有前缀，如 `cline-pass/glm-5.3-flash`）：
             // 剥壳取 `xx/` 后半段命中原厂条目——转售 id 也按原厂价披露
             // （拍板 2026-10-11：只留原厂定价）。
-            for entry in &catalog.entries {
-                let segment = entry
-                    .id
-                    .rsplit_once('/')
-                    .map_or(entry.id.as_str(), |(_, m)| m);
-                if stamp_tolerant_eq(segment, model) {
-                    consider(84, entry);
-                }
+            for pos in index.by_segment_candidates(model) {
+                consider(84, &catalog.entries[*pos as usize]);
             }
         }
     } else {
-        // 无 vendor 段：canonical 反查仍适用，再加纯 id 分隔符变体 + 部署戳容忍。
-        for entry in &catalog.entries {
-            if let Some(canonical) = &entry.canonical_id {
-                if norm_id(canonical) == bn {
-                    consider(85, entry);
-                }
-            }
+        // 无 vendor 段：canonical 反查仍适用；model 段容忍命中覆盖两类目录形态——
+        // models.dev 裸 id（segment = 整 id）与 OpenRouter 兜底整库 `vendor/model`
+        //（裸网关 id 按段命中，v1.0.51 活回合：主源瞬时失败静默回退时裸 id 全灭）。
+        // `:variant` 条目的段键自带后缀，不会被裸查询命中（`:free` 零价不冒充牌价）。
+        for pos in index.by_canonical_candidates(&bn) {
+            consider(85, &catalog.entries[*pos as usize]);
         }
-        for entry in &catalog.entries {
-            if !entry.id.contains('/') && stamp_tolerant_eq(&entry.id, base) {
-                consider(84, entry);
-            }
+        for pos in index.by_segment_candidates(base) {
+            consider(84, &catalog.entries[*pos as usize]);
         }
     }
 
@@ -330,6 +318,27 @@ mod tests {
             source: CatalogSource::ModelsDev,
             name: format!("name-of-{id}"),
             canonical_id: None,
+            reasoning: None,
+            pricing: crate::types::ModelPricing {
+                input: Some(input),
+                output: Some(input * 3.0),
+                cache_read: None,
+                cache_write: None,
+            },
+            context_length: Some(128_000),
+            max_completion_tokens: None,
+        }
+    }
+
+    /// OpenRouter 源条目（`vendor/model` 形态 id；provider 键固定 openrouter）。
+    fn or_entry(id: &str, input: f64) -> CatalogEntry {
+        CatalogEntry {
+            id: id.to_string(),
+            provider_id: "openrouter".to_string(),
+            source: CatalogSource::OpenRouter,
+            name: format!("name-of-{id}"),
+            canonical_id: None,
+            reasoning: None,
             pricing: crate::types::ModelPricing {
                 input: Some(input),
                 output: Some(input * 3.0),
@@ -345,12 +354,10 @@ mod tests {
     fn first_party_provider_wins_reseller_tie() {
         // 裸 id 在 models.dev 挂在几十个 provider 下：一方原厂（zai 官方价）优先于
         // 字典序更靠前的转售商（302ai 半价）。
-        let cat = ModelCatalog {
-            entries: vec![
-                dev_entry("302ai", "glm-5.3-flash", 0.075),
-                dev_entry("zai", "glm-5.3-flash", 0.15),
-            ],
-        };
+        let cat = ModelCatalog::new(vec![
+            dev_entry("302ai", "glm-5.3-flash", 0.075),
+            dev_entry("zai", "glm-5.3-flash", 0.15),
+        ]);
         let m = match_model(&cat, "glm-5.3-flash").expect("match");
         assert_eq!(m.entry.provider_id, "zai");
         assert_eq!(m.entry.pricing.input, Some(0.15));
@@ -359,12 +366,10 @@ mod tests {
     #[test]
     fn openrouter_mirror_provider_counts_as_first_party() {
         // models.dev 内嵌 openrouter 镜像 = 官方牌价，优先于网关转售条目。
-        let cat = ModelCatalog {
-            entries: vec![
-                dev_entry("kilo", "deepseek/deepseek-v4.1-flash", 0.4),
-                dev_entry("openrouter", "deepseek/deepseek-v4.1-flash", 0.3),
-            ],
-        };
+        let cat = ModelCatalog::new(vec![
+            dev_entry("kilo", "deepseek/deepseek-v4.1-flash", 0.4),
+            dev_entry("openrouter", "deepseek/deepseek-v4.1-flash", 0.3),
+        ]);
         let m = match_model(&cat, "deepseek/deepseek-v4.1-flash").expect("match");
         assert_eq!(m.entry.provider_id, "openrouter");
         assert_eq!(m.entry.pricing.input, Some(0.3));
@@ -378,9 +383,7 @@ mod tests {
         official.canonical_id = Some("deepseek/deepseek-v4.1-flash".into());
         let mut hosted = dev_entry("alibaba-cn", "deepseek-v4-flash", 0.14);
         hosted.canonical_id = Some("deepseek/deepseek-v4-flash".into());
-        let cat = ModelCatalog {
-            entries: vec![hosted, official],
-        };
+        let cat = ModelCatalog::new(vec![hosted, official]);
         let m = match_model(&cat, "deepseek-v4-flash").expect("match");
         assert_eq!(m.entry.provider_id, "deepseek");
         assert_eq!(m.entry.pricing.input, Some(0.15));
@@ -389,9 +392,7 @@ mod tests {
     #[test]
     fn unknown_vendor_strips_to_official_model_segment() {
         // 网关自有前缀（cline-pass/xxx）不识别：剥壳按 model 段命中原厂条目。
-        let cat = ModelCatalog {
-            entries: vec![dev_entry("zai", "glm-5.3-flash", 0.15)],
-        };
+        let cat = ModelCatalog::new(vec![dev_entry("zai", "glm-5.3-flash", 0.15)]);
         let m = match_model(&cat, "cline-pass/glm-5.3-flash").expect("match");
         assert_eq!(m.entry.provider_id, "zai");
         assert_eq!(m.score, 84);
@@ -402,20 +403,53 @@ mod tests {
     }
 
     #[test]
+    fn bare_query_matches_vendor_prefixed_model_segment() {
+        // OpenRouter 兜底整库 `vendor/model`（v1.0.51 活回合：models.dev 主源瞬时
+        // 失败静默回退，裸网关 id 全灭）：裸 id 按 model 段命中；`:variant` 条目
+        // 段键自带后缀不参与，近似型号（flashx）不冒充。
+        let cat = ModelCatalog::new(vec![
+            or_entry("zai/glm-5.3-flash:batch", 0.15),
+            or_entry("zai/glm-5.3-flash", 0.15),
+            or_entry("zai/glm-5.3-flashx", 0.2),
+        ]);
+        let m = match_model(&cat, "glm-5.3-flash").expect("match");
+        assert_eq!(m.entry.id, "zai/glm-5.3-flash");
+        assert_eq!(m.entry.source, CatalogSource::OpenRouter);
+        assert_eq!(m.score, 84);
+    }
+
+    #[test]
+    fn bare_models_dev_entry_still_beats_vendor_segment_match() {
+        // models.dev 主源在场时裸 id 走 100 精确档，OpenRouter 段命中（84）只兜底。
+        let cat = ModelCatalog::new(vec![
+            or_entry("zai/glm-5.3-flash", 0.15),
+            dev_entry("zai", "glm-5.3-flash", 0.15),
+        ]);
+        let m = match_model(&cat, "glm-5.3-flash").expect("match");
+        assert_eq!(m.entry.source, CatalogSource::ModelsDev);
+        assert_eq!(m.score, 100);
+    }
+
+    #[test]
+    fn bare_query_stamped_vendor_entry_is_tolerated() {
+        // 条目带部署戳（`vendor/model-20260826`）：裸查询剥戳后按段命中。
+        let cat = ModelCatalog::new(vec![or_entry("zai/glm-5.3-flash-20260826", 0.15)]);
+        let m = match_model(&cat, "glm-5.3-flash").expect("match");
+        assert_eq!(m.entry.id, "zai/glm-5.3-flash-20260826");
+        assert_eq!(m.score, 84);
+    }
+
+    #[test]
     fn unknown_vendor_never_invents_a_match() {
         // 剥壳也命不中就如实返回 None，不冒充匹配。
-        let cat = ModelCatalog {
-            entries: vec![dev_entry("zai", "glm-5.3-flash", 0.15)],
-        };
+        let cat = ModelCatalog::new(vec![dev_entry("zai", "glm-5.3-flash", 0.15)]);
         assert!(match_model(&cat, "cline-pass/totally-other-model").is_none());
     }
 
     #[test]
     fn bare_normalized_variant_hits() {
         // 纯 id 的分隔符变体（`_`/`.` vs `-`）按 84 档命中。
-        let cat = ModelCatalog {
-            entries: vec![dev_entry("zai", "glm-5.3-flash", 0.15)],
-        };
+        let cat = ModelCatalog::new(vec![dev_entry("zai", "glm-5.3-flash", 0.15)]);
         let m = match_model(&cat, "glm_5.3_flash").expect("match");
         assert_eq!(m.score, 84);
         let m2 = match_model(&cat, "GLM.5.3-FLASH").expect("match");
@@ -425,9 +459,7 @@ mod tests {
     #[test]
     fn deployment_stamp_suffix_is_tolerated() {
         // 网关回显带部署戳的 id（尾部 6–8 位日期）：剥戳后同模型同价。
-        let cat = ModelCatalog {
-            entries: vec![dev_entry("zai", "glm-5.3-flash", 0.15)],
-        };
+        let cat = ModelCatalog::new(vec![dev_entry("zai", "glm-5.3-flash", 0.15)]);
         let m = match_model(&cat, "z-ai/glm-5.3-flash-20260826").expect("match");
         assert_eq!(m.score, 84);
         let m2 = match_model(&cat, "glm-5.3-flash-20260826").expect("match");
@@ -436,7 +468,7 @@ mod tests {
         // 4 位以下日期型后缀是独立型号（step-3.5-flash-2603），不剥。
         let mut step = dev_entry("stepfun", "step-3.5-flash", 0.1);
         step.canonical_id = Some("stepfun/step-3.5-flash".into());
-        let cat2 = ModelCatalog { entries: vec![step] };
+        let cat2 = ModelCatalog::new(vec![step]);
         assert!(match_model(&cat2, "step-3.5-flash-2603").is_none());
     }
 }

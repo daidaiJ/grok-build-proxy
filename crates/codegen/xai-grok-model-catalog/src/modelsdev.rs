@@ -29,6 +29,8 @@ struct ModelsDevModel {
     #[serde(default)]
     canonical_model_id: Option<String>,
     #[serde(default)]
+    reasoning: Option<bool>,
+    #[serde(default)]
     limit: DevLimit,
     #[serde(default)]
     cost: DevCost,
@@ -73,6 +75,11 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
         } else {
             provider.id
         };
+        // provider 级提前过滤：转售商整库跳过，模型条目不物化
+        //（压低全量 JSON 解析的临时内存峰值，行为与文末 retain 一致）。
+        if !crate::match_model::is_first_party_provider(&provider_id) {
+            continue;
+        }
         for (model_key, model) in provider.models {
             let input = sane(model.cost.input);
             let output = sane(model.cost.output);
@@ -88,6 +95,7 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
                 source: CatalogSource::ModelsDev,
                 name: model.name,
                 canonical_id: model.canonical_model_id.filter(|s| !s.is_empty()),
+                reasoning: model.reasoning,
                 pricing: ModelPricing {
                     input,
                     output,
@@ -99,9 +107,10 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
             });
         }
     }
-    // 只留原厂条目：第三方转售商 provider 整库不进目录（拍板 2026-10-11）。
+    // 只留原厂条目：第三方转售商 provider 整库不进目录（拍板 2026-10-11，
+    // 上方 provider 级跳过后的不变式守卫）。
     entries.retain(|e| crate::match_model::is_first_party(e));
-    Ok(ModelCatalog { entries })
+    Ok(ModelCatalog::new(entries))
 }
 
 #[cfg(test)]
@@ -128,6 +137,7 @@ mod tests {
         assert_eq!(glm.pricing.cache_write, None);
         assert_eq!(glm.context_length, Some(128_000));
         assert_eq!(glm.max_completion_tokens, Some(96_000));
+        assert_eq!(glm.reasoning, Some(true));
     }
 
     #[test]

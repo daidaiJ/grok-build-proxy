@@ -2487,3 +2487,57 @@ auth_modal 14/14（含提示行贴底渲染断言）+ dispatch::tests::auth 25/2
 → ReloadAgentModels、Err 不触发、重载 Err 落完成页）；两 crate check --all-targets
 0 error；i18n 扫描基线不变。匹配仿真（线上两源真实数据）：本机 10 个在用 model id
 8 命中全为原厂/官方价，2 miss 均 sensenova（豁免）。活回合待新客户端。
+
+## 三十二期：v1.0.51 复发二次修复——裸 id↔vendor/model 段命中 + 匹配索引化 + 缓存治理 + 启动预热（2026-10-11，分支 fix/local-catalog-bare-id-cache-dir）
+
+> v1.0.51 活回合成本列依旧只剩 v4.1 flash（issue 文末「复发与二次修复」节）。
+> 根因三件叠加：models.dev 主源瞬时失败只落 `tracing::debug!` 静默回退
+> OpenRouter（458 条 pure open_router，unified.jsonl 零失败行）；匹配器裸 id
+> 分支写死只认裸条目，`vendor/model` 目录形态下必失配；缓存误写 home 根。
+> 拍板五轮 14–18 见 design doc；**用户拍板不切新 tag，v1.0.51 重指重发**。
+> 上游同步重放按整节重放。
+
+1. **纯函数层 `xai-grok-model-catalog`**：
+   - **裸 id ↔ `vendor/model` 段命中**（`match_model.rs` 裸 id 分支）：84 档兜底从
+     `!entry.id.contains('/')` 放宽为取目录条目 model 段（最后一个 `/` 后）容忍
+     比较——OpenRouter 整库兜底时裸网关 id 也能命中；`:variant` 条目段键自带
+     后缀不参与（`:free` 零价不冒充牌价），近似型号（`flashx`）不冒充。
+   - **匹配索引化**（`types.rs` `CatalogIndex`）：`ModelCatalog::new` 构建时预建
+     by_id（原样 id）/ by_canonical / by_vendor（collapse 别名键）/ by_segment
+     （model 段 + 剥部署戳备选键）四张倒排，匹配从全库线性扫描改 O(1) 候选取回，
+     `consider` 平局裁定语义不变；`entries` 收紧 `pub(crate)`（外部直改会使索引
+     失效），serde Serialize 正常出条目、**手写 Deserialize 同形读入并重建索引**
+     （磁盘缓存往返测试钉死该形状）。
+   - **`CatalogEntry.reasoning` 位**：OpenRouter 取 `supported_parameters` 含
+     `reasoning`（缺席 = None 未知）、models.dev 取 `reasoning` 布尔。
+   - **models.dev provider 级提前过滤**：转售商整 provider 跳过、模型条目不物化
+     （压低 5.4MB 级响应的解析内存峰值；行为与文末 retain 一致）。
+2. **shell 扩展 `extensions/model_catalog.rs`**：
+   - **可见性**：`fetch_one` 单源失败 warn 进 unified.jsonl（source/url/error），
+     `fetched` 日志带 `source`（生效源）+ `trigger`（panel/startup）——回退一眼可见。
+   - **缓存治理**：磁盘缓存迁 `~/.grok/cache/prices.cache`（version 2，读路径
+     `write_atomic` 自带 create_dir_all），首次成功取数后清除 home 根旧文件。
+   - **冷热分离**：进程缓存改「请求 id → 参数」薄表（`Cached.results`），全量
+     目录只在取数/薄表补齐瞬间物化用完即弃；`completed_entries` 对缺失 id 从
+     磁盘全量库临时物化重匹配（lazy）并并回薄表；启动预热不塞结果（空薄表 +
+     磁盘热数据，首次查询 lazy 补齐），全量条目零常驻。
+   - **启动预热** `spawn_startup_prefetch`（装配点 `MvpAgent::with_models`）：
+     TTL 内磁盘新鲜直接空薄表入缓存；过期才后台取数一次/天；与面板触发共用
+     单飞锁 + 同一份磁盘缓存天然去重；无 tokio runtime（测试）静默跳过。
+   - **`CatalogMatch.reasoning`** 随匹配结果下发。
+3. **/auth 回填**：`ModelEntryDraft.supports_reasoning_effort`（目录
+   `reasoning = Some(true)` 才写 `supports_reasoning_effort = true`，接入既有
+   effort 机制；None/false 不写，网关不支持不冒充）+ toml_edit 写回该键 +
+   `ConfirmRow.supports_reasoning_effort`（catalog_backfill 三元化）+ 确认行
+   `think=on` 标注（与 ctx=/max_out= 同风格）。
+
+验证：model-catalog lib 41/41（新增裸 id↔段命中 / 双源优先级 / 戳容忍段命中 /
+reasoning 解析 / Deserialize 重建索引）；shell GATE_FORCE model_catalog 7/7
+（磁盘往返用例抓出手写 Deserialize 形状 bug，已修）+ model_entry 7/7；pager
+auth_modal 14/14（backfill 三元含思考位断言）+ dispatch::tests::auth 25/25 +
+stats_modal 17/17 + model_catalog_store 1/1；零 warning。**真实数据仿真
+（catalog-sim，读本机 v1.0.51 遗留 OpenRouter-only 458 条缓存 = 最坏情形）**：
+config `[model.*]` 表键 8/8、路由 slug 8/8、账本回显 6/6（并集 11 id）全命中
+原厂价——`glm-5.3-flash`→`z-ai/glm-5.3-flash` $0.15/$0.50、`gpt-6-luna`→
+`openai/gpt-6-luna` $0.10/$0.50、`grok-4.6`→`x-ai/grok-4.6` $2/$6 等。
+发版：v1.0.51 tag 重指本次 merge 重发（run id 发版后回填本节）。
