@@ -307,6 +307,11 @@ pub enum ActiveModal {
     StatsInfo {
         state: Box<crate::views::stats_modal::StatsModalState>,
     },
+    /// LOCAL: /auth 供应商配置面板（/auth、welcome BYOK 引导）。分步向导：
+    /// 协议 → baseUrl → SK → 模型列表（过滤 + 多选）→ 确认写回。
+    AuthPanel {
+        state: Box<crate::views::auth_modal::AuthModalState>,
+    },
     /// Reset-settings confirmation, stacked above Settings. The underlying `SettingsModalState` is
     /// moved in/out so cancel preserves the user's filter/scroll position. The setting key lives only
     /// here (single source of truth for dispatch).
@@ -674,6 +679,7 @@ impl ActiveModal {
             | ActiveModal::Settings { .. }
             | ActiveModal::UsageInfo { .. }
             | ActiveModal::StatsInfo { .. }
+            | ActiveModal::AuthPanel { .. }
             | ActiveModal::RememberNoteReview { .. } => vec![],
         }
     }
@@ -707,6 +713,7 @@ impl ActiveModal {
             ActiveModal::RememberNoteReview { .. } => tr("Memory Note"),
             ActiveModal::UsageInfo { .. } => tr("Usage"),
             ActiveModal::StatsInfo { .. } => tr("Model usage"),
+            ActiveModal::AuthPanel { .. } => tr("Provider setup"),
         }
     }
 }

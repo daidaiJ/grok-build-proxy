@@ -443,6 +443,12 @@ impl AgentView {
             return self.apply_stats_modal_outcome(outcome);
         }
 
+        // LOCAL AuthPanel: /auth 供应商配置面板（分步向导，outcome 转 Action）。
+        if let ActiveModal::AuthPanel { state } = modal {
+            let outcome = crate::views::auth_modal::route_auth_modal_key(state, key);
+            return self.apply_auth_modal_outcome(outcome);
+        }
+
         // ResetSettingsConfirm: y/n routing
         // Handled before the generic char-match so Esc/F2/Ctrl+, route to Cancel (not modal close)
         if let Some(ActiveModal::ResetSettingsConfirm { modal, .. }) = self.active_modal.as_ref() {
@@ -487,6 +493,7 @@ impl AgentView {
             } => self.handle_edit_confirm_choice(confirm, pending_target, ch),
             ActiveModal::CommandPalette { .. }
             | ActiveModal::ArgPicker { .. }
+            | ActiveModal::AuthPanel { .. }
             | ActiveModal::SessionPicker { .. }
             | ActiveModal::DocPicker { .. }
             | ActiveModal::DocViewer { .. }
@@ -532,6 +539,13 @@ impl AgentView {
         }
         if let Some(ActiveModal::MemoryBrowser { state }) = self.active_modal.as_mut() {
             return crate::views::memory_modal::handle_memory_paste(state, text);
+        }
+        // LOCAL AuthPanel: 粘贴进当前输入缓冲（baseUrl / SK / 手填 slug / id 编辑）。
+        if let Some(ActiveModal::AuthPanel { state }) = self.active_modal.as_mut() {
+            return match crate::views::auth_modal::handle_auth_paste(state, text) {
+                crate::views::auth_modal::AuthModalOutcome::Unchanged => InputOutcome::Unchanged,
+                _ => InputOutcome::Changed,
+            };
         }
         let settings_outcome = match self.active_modal.as_mut() {
             Some(ActiveModal::Settings { state }) => Some(
@@ -1675,6 +1689,31 @@ impl AgentView {
         }
     }
 
+    /// LOCAL: map the /auth panel's routing outcome onto this host (modal slot + Actions).
+    fn apply_auth_modal_outcome(
+        &mut self,
+        outcome: crate::views::auth_modal::AuthModalOutcome,
+    ) -> InputOutcome {
+        use crate::views::auth_modal::AuthModalOutcome;
+        match outcome {
+            AuthModalOutcome::Close => {
+                self.active_modal = None;
+                InputOutcome::Changed
+            }
+            AuthModalOutcome::FetchModels { base_url, api_key } => {
+                InputOutcome::Action(Action::AuthFetchModels { base_url, api_key })
+            }
+            AuthModalOutcome::FetchCatalog { model_ids } => {
+                InputOutcome::Action(Action::AuthFetchCatalogBackfill { model_ids })
+            }
+            AuthModalOutcome::Persist { entries } => {
+                InputOutcome::Action(Action::AuthPersistEntries { entries })
+            }
+            AuthModalOutcome::Changed => InputOutcome::Changed,
+            AuthModalOutcome::Unchanged => InputOutcome::Unchanged,
+        }
+    }
+
     /// Copy the usage modal's session ID and toast the delivery outcome.
     /// Map a usage-modal routing outcome onto this host: the agent's modal slot, clipboard, and toast.
     fn apply_usage_modal_outcome(
@@ -2414,6 +2453,9 @@ impl AgentView {
                 );
             } else if let modal::ActiveModal::StatsInfo { state } = active_modal {
                 crate::views::stats_modal::render_stats_modal(buf, area, state, &theme);
+            } else if let modal::ActiveModal::AuthPanel { state } = active_modal {
+                // LOCAL: /auth 供应商配置面板。
+                crate::views::auth_modal::render_auth_modal(buf, area, state);
             } else if let modal::ActiveModal::MemoryBrowser { state: mem_state } = active_modal {
                 crate::views::memory_modal::render_memory_modal(buf, area, mem_state, compact);
             } else if let modal::ActiveModal::Settings {

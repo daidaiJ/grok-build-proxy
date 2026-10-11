@@ -1,6 +1,7 @@
 //! Top-level action router: maps actions and action results to handlers.
 use super::auth::{
-    dispatch_cancel_login, dispatch_login, dispatch_logout, dispatch_submit_auth_code,
+    dispatch_cancel_login, dispatch_login, dispatch_logout, dispatch_open_auth_panel,
+    dispatch_submit_auth_code,
     dispatch_switch_account,
 };
 use super::billing::dispatch_open_supergrok_url;
@@ -1243,6 +1244,25 @@ fn dispatch_inner(action: Action, app: &mut AppView) -> Vec<Effect> {
             vec![]
         }
         Action::Login => dispatch_login(app),
+        // LOCAL: /auth 供应商配置面板（会话内 /auth 命令 + welcome 门菜单）。
+        Action::OpenAuthPanel => dispatch_open_auth_panel(app),
+        Action::AuthFetchModels { base_url, api_key } => {
+            vec![Effect::FetchProviderModels { base_url, api_key }]
+        }
+        Action::AuthPersistEntries { entries } => {
+            vec![Effect::PersistModelEntries { entries }]
+        }
+        Action::AuthFetchCatalogBackfill { model_ids } => {
+            let needed = crate::app::model_catalog_store::ids_needing_fetch(
+                model_ids.iter().map(String::as_str),
+            );
+            if needed.is_empty() {
+                vec![]
+            } else {
+                crate::app::model_catalog_store::begin_loading();
+                vec![Effect::FetchModelCatalog { model_ids: needed }]
+            }
+        }
         Action::CancelLogin => dispatch_cancel_login(app),
         Action::SubmitAuthCode(code) => dispatch_submit_auth_code(app, code),
         Action::CopyAuthUrl => {

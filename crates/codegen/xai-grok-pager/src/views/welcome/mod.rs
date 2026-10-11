@@ -800,15 +800,14 @@ pub fn render_welcome(
 
     let mut result = match params.auth_state {
         AuthState::Pending { error } => {
-            // LOCAL (T0 onboarding): zero-config first start leads with BYOK configuration
-            // guidance; Grok subscription login stays available as the 'l' menu option. An
-            // auth attempt error takes the message slot back so the failure stays visible.
+            // LOCAL (T0 onboarding, T2 升级): zero-config first start leads with BYOK
+            // configuration; Grok subscription login stays available as the 'l' menu
+            // option. T2: 'a' opens the /auth provider panel directly. An auth attempt
+            // error takes the message slot back so the failure stays visible.
             let byok_guidance = params.byok_recommended && error.is_none();
             let byok_lines = [
                 tr("No model provider configured yet."),
-                tr(
-                    "Add a [model.<id>] entry with base_url and api_key/env_key to ~/.grok/config.toml, then restart.",
-                ),
+                tr("Press a to configure a provider, or add a [model.<id>] entry to ~/.grok/config.toml."),
             ];
             let err_lines = [error.as_deref().unwrap_or("")];
             let (msg, login_text) = if byok_guidance {
@@ -825,7 +824,17 @@ pub fn render_welcome(
                     tr("Login with {}").replace("{}", label),
                 )
             };
-            let menu = [("l", login_text.as_str()), ("q", tr("Quit"))];
+            // BYOK 引导时多一个 'a'（打开 /auth 面板）；菜单序与
+            // dispatch_pending_menu_action 的索引映射必须同步。
+            let menu: Vec<(&str, &str)> = if byok_guidance {
+                vec![
+                    ("l", login_text.as_str()),
+                    ("a", tr("Configure a provider")),
+                    ("q", tr("Quit")),
+                ]
+            } else {
+                vec![("l", login_text.as_str()), ("q", tr("Quit"))]
+            };
             let info = PromptInfo {
                 model_name: params.model_name,
                 flags: params.flags,

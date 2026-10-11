@@ -103,7 +103,8 @@ xai-file-utils = { path = "../xai-file-utils" }
 xai-grok-active-sessions = { workspace = true }
 xai-grok-config = { workspace = true }
 xai-grok-feedback = { workspace = true }
-xai-grok-sampling-types = { path = "../xai-grok-sampling-types", optional = true }
+# LOCAL (T2 /auth): 面板协议步需要 ApiBackend（构造写回 draft）
+xai-grok-sampling-types = { path = "../xai-grok-sampling-types" }
 xai-tool-types = { workspace = true }
 xai-dirs = { workspace = true }
 xai-grok-dashboard-store = { workspace = true }

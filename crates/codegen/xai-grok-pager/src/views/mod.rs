@@ -2,6 +2,8 @@ pub mod agent;
 pub mod agent_status;
 pub mod agents_modal;
 pub mod announcements;
+// LOCAL: /auth 供应商配置面板
+pub mod auth_modal;
 pub mod block_viewer;
 pub mod btw_overlay;
 pub mod completion_dropdown;

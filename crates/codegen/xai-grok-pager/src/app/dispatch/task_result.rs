@@ -646,6 +646,61 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
                 {
                     state.pricing = crate::app::model_catalog_store::snapshot();
                 }
+                // LOCAL: /auth 确认步的目录回填随目录回包即时刷新。
+                if let Some(crate::views::modal::ActiveModal::AuthPanel { state }) =
+                    agent.active_modal.as_mut()
+                {
+                    state.refresh_backfill();
+                }
+            }
+            if let Some(state) = app.welcome_auth_panel.as_mut() {
+                state.refresh_backfill();
+            }
+            vec![]
+        }
+        // LOCAL: /auth 面板模型列表回包。喂给持有 AuthPanel 且 base_url 匹配的宿主
+        // （会话内 active_modal 或 welcome 门；陈旧回包——base_url 已被改——丢弃）。
+        TaskResult::ProviderModelsFetched { response } => {
+            let mut response = Some(response);
+            for agent in app.agents.values_mut() {
+                let matches = match agent.active_modal.as_mut() {
+                    Some(crate::views::modal::ActiveModal::AuthPanel { state }) => state
+                        .accepts_provider_models_response(response.as_ref().expect("present")),
+                    _ => false,
+                };
+                if matches {
+                    let state = match agent.active_modal.as_mut() {
+                        Some(crate::views::modal::ActiveModal::AuthPanel { state }) => state,
+                        _ => unreachable!("checked above"),
+                    };
+                    state.apply_provider_models_response(response.take().expect("present"));
+                    break;
+                }
+            }
+            if let Some(response) = response
+                && let Some(state) = app.welcome_auth_panel.as_mut()
+                && state.accepts_provider_models_response(&response)
+            {
+                state.apply_provider_models_response(response);
+            }
+            vec![]
+        }
+        // LOCAL: /auth 面板写回完成。成功也留给面板展示（用户确认后再关）；
+        // 找不到面板 = 面板已关，结果自然丢弃（写回本身已落盘）。
+        TaskResult::ModelEntriesPersisted { result } => {
+            for agent in app.agents.values_mut() {
+                if let Some(crate::views::modal::ActiveModal::AuthPanel { state }) =
+                    agent.active_modal.as_mut()
+                    && state.step == crate::views::auth_modal::AuthStep::Writing
+                {
+                    state.apply_persist_result(result);
+                    return vec![];
+                }
+            }
+            if let Some(state) = app.welcome_auth_panel.as_mut()
+                && state.step == crate::views::auth_modal::AuthStep::Writing
+            {
+                state.apply_persist_result(result);
             }
             vec![]
         }

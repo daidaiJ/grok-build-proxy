@@ -2254,6 +2254,10 @@ impl acp::Agent for MvpAgent {
             "x.ai/modelCatalog" => {
                 crate::extensions::model_catalog::handle(self, &args).await
             }
+            // LOCAL: /auth 面板「自动检索模型」步（对用户给的 base_url 拉 /models）
+            "x.ai/providerModels" => {
+                crate::extensions::provider_models::handle(self, &args).await
+            }
             "x.ai/auto-topup-rule" => {
                 crate::extensions::billing::handle(self, &args).await
             }

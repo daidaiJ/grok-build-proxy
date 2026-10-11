@@ -1115,6 +1115,9 @@ pub struct AppView {
     pub has_claude_import: bool,
     /// When set, the welcome screen renders an interactive import modal instead of normal content.
     pub import_claude_modal: Option<crate::views::import_claude_modal::ImportClaudeModalState>,
+    /// LOCAL: /auth 供应商配置面板（welcome 门宿主——零配置首启无会话上下文，
+    /// BYOK 用户恰被困在该门后；会话内宿主为 AgentView 的 active_modal）。
+    pub welcome_auth_panel: Option<Box<crate::views::auth_modal::AuthModalState>>,
     /// Doc viewer overlay for the welcome screen (release notes via Ctrl+L).
     pub welcome_doc_viewer: Option<crate::views::modal::ActiveModal>,
     /// Whether the pager uses fullscreen (alt-screen) or inline mode.
@@ -1620,6 +1623,7 @@ impl AppView {
             relaunch: None,
             has_claude_import: false,
             import_claude_modal: None,
+            welcome_auth_panel: None,
             welcome_doc_viewer: None,
             screen_mode: ScreenMode::Inline,
             pending_screen_mode_switch: None,
@@ -2521,6 +2525,8 @@ impl AppView {
                     sp_entries_query: &self.session_picker_entries_query,
                     has_claude_import: self.has_claude_import,
                     import_claude_modal: &mut self.import_claude_modal,
+                    auth_panel: &mut self.welcome_auth_panel,
+                    byok_recommended: self.byok_recommended,
                     welcome_doc_viewer: &mut self.welcome_doc_viewer,
                     changelog_markdown: &self.changelog_markdown,
                     show_changelog_action: self.welcome_show_changelog_action,
@@ -3182,6 +3188,10 @@ struct WelcomeInputCtx<'a> {
     sp_entries_query: &'a Option<String>,
     has_claude_import: bool,
     import_claude_modal: &'a mut Option<crate::views::import_claude_modal::ImportClaudeModalState>,
+    // LOCAL: /auth 面板 welcome 门宿主
+    auth_panel: &'a mut Option<Box<crate::views::auth_modal::AuthModalState>>,
+    /// LOCAL: 零配置 BYOK 引导（Pending 菜单含 'a' 打开 /auth 面板时为真）。
+    byok_recommended: bool,
     welcome_doc_viewer: &'a mut Option<crate::views::modal::ActiveModal>,
     changelog_markdown: &'a Option<String>,
     /// Whether the welcome menu currently includes a "Changelog" row (above Quit), so index-to-action mapping accounts for it.
@@ -3234,6 +3244,43 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
             return outcome_to_input(modal.handle_mouse(mouse.kind, mouse.column, mouse.row));
         }
         return InputOutcome::Unchanged;
+    }
+    // LOCAL: /auth 面板（welcome 门宿主）。Esc 首步关闭；outcome 转 Action 走统一 dispatch。
+    if let Some(state) = ctx.auth_panel.as_mut() {
+        use crate::views::auth_modal::AuthModalOutcome;
+        let outcome = match ev {
+            Event::Key(key) => {
+                if key.kind == crossterm::event::KeyEventKind::Release {
+                    return InputOutcome::Unchanged;
+                }
+                crate::views::auth_modal::route_auth_modal_key(state, key)
+            }
+            Event::Paste(text) => crate::views::auth_modal::handle_auth_paste(state, text),
+            Event::Mouse(mouse) => {
+                return match crate::views::auth_modal::handle_auth_mouse(state, mouse) {
+                    AuthModalOutcome::Close => InputOutcome::Changed,
+                    _ => InputOutcome::Unchanged,
+                };
+            }
+            _ => AuthModalOutcome::Unchanged,
+        };
+        return match outcome {
+            AuthModalOutcome::Close => {
+                *ctx.auth_panel = None;
+                InputOutcome::Changed
+            }
+            AuthModalOutcome::FetchModels { base_url, api_key } => {
+                InputOutcome::Action(Action::AuthFetchModels { base_url, api_key })
+            }
+            AuthModalOutcome::FetchCatalog { model_ids } => {
+                InputOutcome::Action(Action::AuthFetchCatalogBackfill { model_ids })
+            }
+            AuthModalOutcome::Persist { entries } => {
+                InputOutcome::Action(Action::AuthPersistEntries { entries })
+            }
+            AuthModalOutcome::Changed => InputOutcome::Changed,
+            AuthModalOutcome::Unchanged => InputOutcome::Unchanged,
+        };
     }
     if let Some(modal) = ctx.welcome_doc_viewer {
         if let Event::Key(key) = ev {
@@ -3817,6 +3864,10 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
                     }
                     return InputOutcome::Action(Action::QuitConfirmed);
                 }
+                // LOCAL (T2): 'a' 打开 /auth 供应商配置面板（零配置 BYOK 引导）。
+                if key!('a').matches(key) {
+                    return InputOutcome::Action(Action::OpenAuthPanel);
+                }
                 if key!('l').matches(key) || key!(Enter).matches(key) {
                     return InputOutcome::Action(Action::Login);
                 }
@@ -3916,7 +3967,10 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
                         && mouse.row < rect.y + rect.height
                     {
                         if matches!(ctx.auth_state, AuthState::Pending { .. }) {
-                            return dispatch_pending_menu_action(i);
+                            let has_auth_error =
+                                matches!(ctx.auth_state, AuthState::Pending { error: Some(_), .. });
+                            let byok_guidance = ctx.byok_recommended && !has_auth_error;
+                            return dispatch_pending_menu_action(i, byok_guidance);
                         }
                         if ctx.is_zdr_blocked {
                             return dispatch_zdr_menu_action(i);
@@ -4156,11 +4210,15 @@ fn handle_menu_nav(
     }
 }
 /// Dispatch an action for a welcome menu item when not yet authenticated.
-/// Menu layout: item 0 is Login, item 1 is Quit.
-fn dispatch_pending_menu_action(index: usize) -> InputOutcome {
-    match index {
-        0 => InputOutcome::Action(Action::Login),
-        1 => InputOutcome::Action(Action::Quit),
+/// Menu layout without BYOK guidance: item 0 is Login, item 1 is Quit.
+/// With BYOK guidance (T2): item 0 is Login, item 1 is Configure provider (/auth), item 2 is Quit.
+/// The order must match the menu built in `views/welcome/mod.rs`.
+fn dispatch_pending_menu_action(index: usize, byok_guidance: bool) -> InputOutcome {
+    match (byok_guidance, index) {
+        (_, 0) => InputOutcome::Action(Action::Login),
+        (true, 1) => InputOutcome::Action(Action::OpenAuthPanel),
+        (true, 2) => InputOutcome::Action(Action::Quit),
+        (false, 1) => InputOutcome::Action(Action::Quit),
         _ => InputOutcome::Unchanged,
     }
 }
@@ -4673,6 +4731,14 @@ impl AppView {
                                     compact,
                                 );
                             }
+                            // LOCAL: /auth 面板（welcome 门宿主）。
+                            if let Some(state) = self.welcome_auth_panel.as_mut() {
+                                crate::views::auth_modal::render_auth_modal(
+                                    f.buffer_mut(),
+                                    view_area,
+                                    state,
+                                );
+                            }
                             if let Some(dialog) = self.new_worktree_dialog.as_ref() {
                                 crate::views::new_worktree_dialog::render_new_worktree_dialog(
                                     view_area,
@@ -4864,6 +4930,14 @@ impl AppView {
                                         compact,
                                     );
                                 }
+                                // LOCAL: /auth 面板（welcome 门宿主，第二渲染路径）。
+                                if let Some(state) = self.welcome_auth_panel.as_mut() {
+                                    crate::views::auth_modal::render_auth_modal(
+                                        f.buffer_mut(),
+                                        view_area,
+                                        state,
+                                    );
+                                }
                                 if let Some(tutorial) = self.tutorial.as_mut() {
                                     crate::views::tutorial::render_tutorial(
                                         f.buffer_mut(),
@@ -4884,6 +4958,7 @@ impl AppView {
                                 if has_cloud
                                     || has_remote_modal
                                     || self.import_claude_modal.is_some()
+                                    || self.welcome_auth_panel.is_some()
                                     || self.tutorial.is_some()
                                 {
                                     link_spans.clear();
@@ -5169,6 +5244,7 @@ impl AppView {
         let cloud_modal_open = false;
         matches!(self.active_view, ActiveView::Agent(id) if self.agents.get(&id).is_some_and(|a| a.extensions_modal.is_some() || a.active_modal.is_some()))
             || self.import_claude_modal.is_some()
+            || self.welcome_auth_panel.is_some()
             || self.new_worktree_dialog.is_some()
             || self.welcome_doc_viewer.is_some()
             || self.tutorial.is_some()

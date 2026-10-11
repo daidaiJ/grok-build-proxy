@@ -254,15 +254,18 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 - **当前状态：** T0（`/login`→`/grok` 硬改名不留别名 + 零配置首启默认 BYOK 引导）已合 main
   （merge `8651bd2`）随 tag **`v1.0.48`** 发版（release run `38115162480` 双 job success、
-  4 资产；main build run `38115162565` Linux 挂一例上游原生用例 persistence
-  `reset_title_to_auto_adopts_in_flight_generation_as_auto`——8 秒墙钟轮询超时，T0 未触碰
-  该文件且 v1.0.47 同 run 绿，已踢 failed job 重跑判定 flake）。**T1（模型目录取数）+
-  特性 B（/stats 成本列）已落地**（2026-10-11，分支 `feat/local-model-catalog`，待合 main
-  发版）：新纯函数 crate `xai-grok-model-catalog`（OpenRouter 主 / models.dev 兜底双源解析 +
-  modelq 式置信匹配 + cost_usd）+ shell 扩展 `x.ai/modelCatalog`（进程级 TTL 缓存缺省 1 天
-  可配 `[model_catalog] cache_minutes` + 全局单飞 + stale 回退）+ pager 进程级 store +
-  三渲染面「缓存写」列替换为「成本」（有价 fmt_cost、无价 `–` + 合计行剔除无价并标注条数），
-  实现记录 PATCHES.md 二十九期。T2/T3（/auth 面板+config 写回）→ T4（i18n）待施工；
+  4 资产；main build run `38115162565` 首挂两例——persistence `reset_title_to_auto…`
+  为计时 flake（failed-job 重跑通过），集成测试 `external_auth_expired_credential`
+  断言漏改 `/login`，已修并随 v1.0.49 验证）。**T1（模型目录取数）+ 特性 B（/stats
+  成本列）已落地并随 tag **`v1.0.49`** 发版**（2026-10-11，merge `ea3c594`，分支
+  `feat/local-model-catalog`；release run `38120737264` / build run `38120737274`
+  双 job success、4 资产，Linux 全量含补的断言修复验证通过）：新纯函数 crate
+  `xai-grok-model-catalog`（OpenRouter 主 / models.dev 兜底双源解析 +
+  modelq 式置信匹配 + cost_usd）+ shell 扩展 `x.ai/modelCatalog`（进程级 TTL 缓存
+  缺省 1 天可配 `[model_catalog] cache_minutes` + 全局单飞 + stale 回退）+ pager
+  进程级 store + 三渲染面「缓存写」列替换为「成本」（有价 fmt_cost、无价 `–` +
+  合计行剔除无价并标注条数），实现记录 PATCHES.md 二十九期。T2/T3（/auth 面板+
+  config 写回）→ T4（i18n）待施工；
   **T5 已立项（2026-10-11 用户追加，特性 C）**：目录模态字段驱动「纯文本模型遇图」
   前置门控——用户显式图建议阻断、附带图建议 mask 替换+披露，避免上游 400（拍板点 7；
   与视觉桥共用能力位，桥落地后退为兜底）。

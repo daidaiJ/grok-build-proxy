@@ -465,3 +465,24 @@
   flake；② 重跑暴露 T0 改名漏网断言：集成测试
   `tests/external_auth_expired_credential.rs`（`cfg(unix)`，本机跑不了）仍断言
   `/login`，三处字面量已改 `/grok` 随本分支合入（PATCHES 二十八期补记）。
+
+- **发版收口（同日晚）**：`feat/local-model-catalog` 合 main（merge `ea3c594`）随
+  **`v1.0.49`** 发版；release run `38120737264` / build run `38120737274` 双 job
+  success、4 资产非草稿。build 全绿同时收口两件：T0 断言补修（unix-only 集成测试）
+  在 Linux 验证通过；v1.0.48 首挂的 persistence 用例复判为计时 flake（连续绿）。
+
+### 2026-10-11 · T2/T3 施工完成登记（/auth 面板 + 目录回填 + config 写回，feat/local-auth-panel）
+
+- **改动**：/auth 五步向导（协议→baseUrl→SK 掩码→模型列表过滤勾选/手填回退→
+  确认写回）+ shell 扩展 `x.ai/providerModels` + `write_model_entries`（toml_edit
+  定点写回 `[model.<id>]`，注释/未知段保留，flock 守卫，全批原子）+ welcome 门
+  `a` 菜单直进面板（第二宿主）。七轮拍板全部落地（SK 明文直写 / id 用户缩写
+  唯一冲突即拒 / toml_edit 定点编辑）。实现记录 PATCHES.md 三十期。
+- **回填语义**：目录值与新建模型兜底不同才写——context_window 兜底 200_000
+  同值省略；max_completion_tokens 缺省=不发送、有值即写；目录未命中不写值。
+  写回后 `[model.*]` 经既有 ModelsChanged 热重载，`/model` 即选即用。
+- **验证**：见 PATCHES.md 三十期（auth_modal 13 / welcome 226 / slash 568 /
+  dispatch::tests 1732；shell model_entry_writes 7 / provider_models 6 /
+  slash_commands 105；双 crate check --all-targets 0 error 0 warning；i18n 0 挂）。
+- **后续**：T4 i18n 扫尾（面板字符串已带 zh，剩余无）——实质挂起；
+  T5 特性 C（能力门控）独立小件待开工；发版待用户拍板（活回合验证后）。
