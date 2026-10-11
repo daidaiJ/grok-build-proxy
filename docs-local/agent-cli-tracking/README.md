@@ -1,4 +1,4 @@
-# Agent CLI 特性追踪：五个终端编码 agent 对比研究
+# Agent CLI 特性追踪：八个终端编码 agent 对比研究
 
 > 目的：为 grok-build-proxy（xAI grok CLI 本地 fork）的 agent/TUI 迭代追踪业界设计。
 > 关注面（2026-09-19 定调）：**协议接口兼容性、token 经济学、TUI 易用性/便利性、稳定性小 trick**；
@@ -13,6 +13,11 @@
 | qwen-code | [QwenLM/qwen-code](https://github.com/QwenLM/qwen-code) | `D:/CODE/ai/qwen-code` | `85631a3d` 2026-09-14 | gemini-cli 深度 fork（Qwen 官方） |
 | minimax-code | [MiniMax-AI/minimax-code](https://github.com/MiniMax-AI/minimax-code) | `D:/CODE/ai/minimax-code` | `30dd6f27` 2026-09-19 | 自研产品层 + vendored pi 生态 |
 | kimi-code | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) | `D:/CODE/ai/kimi-code` | `02d829e1` 2026-09-19 | 自研（pi TUI + agent-core-v2/kosong） |
+| crush | [charmbracelet/crush](https://github.com/charmbracelet/crush) | `D:/CODE/ai/crush` | `5e3fe4b` 2026-10-03 | Charm 官方自研（Go，fantasy/catwalk） |
+| goose | [aaif-goose/goose](https://github.com/aaif-goose/goose)（原 block/goose） | `D:/CODE/ai/goose` | `3bd8520` 2026-10-09 | Block 出品自研（Rust，AAIF 基金会治理） |
+| zcode | ZCode（Z.ai/智谱官方） | `D:/CODE/ai/zcode` | `29628c9` 2026-09-24（v3.14.3 快照） | Z.ai 官方自研（TS，Claude Code 同构概念体系） |
+
+> 口碑注记（2026-10-11，用户口径）：opencode 与 MiMo-Code 社区口碑下降，其设计仅作机制参照，不再作为对齐对象。
 
 范围约定：只覆盖 TUI 层与 agent 通用优化；桌面/Web/控制台/IDE 集成不在追踪范围。
 
@@ -57,7 +62,28 @@
 ## 文档导览
 
 - [ADOPTION.md](ADOPTION.md) — 引入评估（协议兼容性 / token 经济学 / TUI 易用性 / 稳定性 trick，含落点 crate 与优先级）
-- [notes/opencode.md](notes/opencode.md) · [notes/mimo-code.md](notes/mimo-code.md) · [notes/qwen-code.md](notes/qwen-code.md) · [notes/minimax-code.md](notes/minimax-code.md) · [notes/kimi-code.md](notes/kimi-code.md) — 分仓库机制笔记（含仓库相对路径 file:line 引用）
+- [notes/opencode.md](notes/opencode.md) · [notes/mimo-code.md](notes/mimo-code.md) · [notes/qwen-code.md](notes/qwen-code.md) · [notes/minimax-code.md](notes/minimax-code.md) · [notes/kimi-code.md](notes/kimi-code.md) · [notes/crush.md](notes/crush.md) · [notes/goose.md](notes/goose.md) · [notes/zcode.md](notes/zcode.md) — 分仓库机制笔记（含仓库相对路径 file:line 引用）
+
+## 2026-10-11 增补批次（crush / goose / zcode）
+
+三份新笔记的机制对照摘要；引入评估与优先级在 [ADOPTION.md](ADOPTION.md) §7。
+
+### 一句话画像
+
+- **crush**：Charm 出品 Go 自研（client/server + SSE）— LSP 当工具面（8 工具）+ 多客户端共享 workspace + Channels（MCP 反向推送触发回合）。
+- **goose**：Block 出品 Rust 自研（AAIF 基金会治理）— 状态机 op 管线 + 安全 inspector 三件套（注入扫描/egress 外泄检测/adversary LLM）+ ACP 三栖（server/client/P2P roaming）。
+- **zcode**：Z.ai 官方 TS 自研（Claude Code 同构概念）— dynamic-workflow（模型写 TS + 编译器静态分析 + vm 沙箱 + journal 回放）+ microcompact 工具名白名单 + rewind 四态策略。
+
+### 快速对照（与首批五家互补的维度）
+
+| 维度 | crush | goose | zcode |
+|---|---|---|---|
+| 执行模型 | coordinator + sessionAgent | 状态机 op 管线（ops_* 可重入） | turn-machine + contracts 端口化 |
+| 持久化 | SQLite（sqlc+goose） | SQLite（sqlx WAL，7 类 SessionType） | SQLite（版本化迁移） |
+| 压缩 | 双阈值（大窗剩 20k / 小窗剩 20%） | 225k 上限 + 工具对批量摘要 + 大输出落盘 | 双预算 + microcompact 工具名白名单 |
+| 权限 | 四元组 PermissionKey + persistent grant | 四档模式 + SmartApprove（LLM 判只读） | build/edit/plan/yolo + alwaysAsk 不可绕过 |
+| 扩展 | MCP 三传输 + Hooks（仅 PreToolUse）+ skills 兼容扫描 | Open Plugins hooks + skills + recipe + 恶意软件检查 | 插件商店（CDN sha256）+ hooks 七事件 + workspace hook 信任摘要 |
+| 独有 | Channels / crushrc=Bash 配置 / 多客户端 workspace | ACP 反向 provider / handoff memo / sigstore 自更新 / P2P roaming | dynamic-workflow / amend-workflow / formal-proof / 跨生态会话导入 |
 
 ## 追踪更新方法
 

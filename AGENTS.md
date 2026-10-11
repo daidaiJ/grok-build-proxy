@@ -250,6 +250,16 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### /auth 面板 + /stats API 成本 + /login→/grok — 设计收口，待分期施工
+
+- **当前状态：** 四轮拍板收口（代码未动）；分期 T0（改名硬切+零配置首启默认 BYOK 引导）
+  → T1（models.dev/OpenRouter 目录取数）→ /stats 成本列（缓存写列恒 0 替换为美元成本）
+  → T2/T3（/auth 面板+config 写回）→ T4（i18n）。
+- **关键证据：** 设计文档（唯一权威）+ 参照实现 modelq 仓库 + fork 锚点全核实；候选拍板
+  台账 ADOPTION §7。
+- **验收标准：** 见设计文档「验收标准」节（A 五步出可用条目；B 成本对账一致 + i18n 0 挂）。
+- **详情指针：** [`.handoff/provider-onboarding-api-cost.md`](.handoff/provider-onboarding-api-cost.md)
+
 ### 供应商套餐用量上 /usage 面板 — v1.0.46 落地；取数修复+单飞重构随 v1.0.47（2026-10-11）
 
 - **当前状态：** 五家供应商（OpenCode Go / Command Code / 智谱 GLM / Kimi / MiniMax）

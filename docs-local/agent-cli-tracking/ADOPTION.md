@@ -124,3 +124,124 @@ P1/P2 按 §3/§4 表内级别随迭代带入；每项引入后在本文勾选�
 **实验特性（`experimental` 配置节，默认全关，按模型开启）**：
 - `thinking_tag_scrub`（1.2）：唯一改变可见输出的特性——`<think>` 清洗采用 qwen 的 toggle-anywhere 语义，会把正文字面 `<think>` 吞进推理通道；且 onset 判定在"响应以字面 tag 开头"时误分类。收益（脏输出清洗）与风险（吞正文）都真实存在，交给用户按端点决定。
 - 配置形态：`[model.<id>.experimental] thinking_tag_scrub = true`（ModelEntryConfig → ConfigModelOverride → ModelEntry → SamplerConfig → SamplingConfig 全链路 serde 默认关，子代理/模型切换自动继承）。节内可继续加字段，新实验特性不再扩表结构。
+
+---
+
+## 7. 增补评估（2026-10-11：crush / goose / zcode + 边缘仓甄别）
+
+> 背景：父目录 `D:/CODE/ai/` 下三个首批未覆盖的 coding agent（crush / goose / zcode）本轮调研入库，
+> 四个边缘仓（DCP 插件 / rpiv-mono / deepseek-harness-codearts / openagents）甄别归档。
+> 机制笔记：[notes/crush.md](notes/crush.md) / [notes/goose.md](notes/goose.md) / [notes/zcode.md](notes/zcode.md)。
+> 口碑口径（用户拍板）：**opencode 与 MiMo-Code 社区口碑下降**，其设计仅作机制参照、不再作为对齐对象，后续刷新优先级降低。
+> 「已有」判定均为本轮 grep/读码实际核实（锚点随条目给出），防止误报。
+
+### 7.1 候选清单（按优先级）
+
+| # | 特性 | 来源 | 现状对照 | 落点 | 级别 |
+|---|---|---|---|---|---|
+| 7.1.1 | **模型自选压缩工具 + 裁剪策略族**：模型调 `compress` 自选范围；dedup（同工具+同参数只留最近一次输出）、purge-errors（出错工具超 N 轮只删大输入保错误信息）；双阈值 nudge（超上限注入 context-limit、超下限开 reminder，锚点集合防重复） | opencode-dynamic-context-pruning（`lib/strategies/deduplication.ts`、`purge-errors.ts`、`lib/messages/inject/inject.ts`） | fork 已有落点：canonical context edit journal 直记 replace_visible/hide_visible（workflow-pi-port P1 已落地）+ microcompaction P1 待做（§2.2）——DCP 策略族即 microcompaction 的策略层现成参照。注意两点：①其「请求时替换、不动历史」路线与 fork journal 直记路线的取舍（DCP 自曝缓存代价 85% vs 90% hit rate）；②嵌套摘要（新压缩与旧压缩重叠时旧摘要嵌入新摘要） | `xai-grok-compaction` history 模块 + context edit ops | 🟡 P1 |
+| 7.1.2 | **egress 外泄检测 inspector**：工具参数出口扫描敏感数据外发（如密钥随 curl/bash 外传）并进审批决策 | goose `src/security/egress_inspector.rs`（统一 ToolInspector 管线 `tool_inspection.rs:11`） | fork 出站脱敏只盖遥测/产品事件面（`xai-grok-secrets/src/sanitizer.rs`）；workspace permission 的 exec_risk 有环境配置扫描但无密钥外发模式库——工具参数出口是真空白 | `xai-grok-tools` ToolBridge 输出侧 + workspace permission 规则库复用 | 🟡 P1 |
+| 7.1.3 | **turn-context 回合预算自感知**：每回合注入 `<turn-context>`（时间/cwd/compaction 状态/剩余 turn 预算），模型见预算见底自主收敛 | goose `src/agents/moim.rs:6,37`（≥32k 上下文才启用） | fork `/goal` 有 token_budget + completion classifier，但普通回合无预算自感知；纯 prompt 组装层改动 | prompt 组装层（agent definition / system prompt sections） | 🟡 P1（小件） |
+| 7.1.4 | **amend-workflow：主 agent 中途修订运行中的工作流**（description/resolve/retune/source 四面） | zcode `core/src/tool/handlers/amend-workflow*.ts` | fork `xai-workflow` 有 journal 重放/双预算/await_user，运行中脚本无修订通道；amend 可走 await_user 同族 host call（脚本在 await 点收到修订值） | `xai-workflow/src/host.rs` await_user 旁 + 新 host call | 🟡 P1 |
+| 7.1.5 | **跨模型评审门（advisor）**：零参工具把**整个当前会话**交给更强 reviewer 模型，返回 plan/correction/stop 结构化裁决 | rpiv-mono `packages/rpiv-advisor/` | fork 子代理按 definition 建新会话收 task prompt，无「全量会话作输入 + 结构化裁决回灌」评审流；BYOK 双钥匙场景价值高（一个账号跑活、强模型把关） | `xai-grok-subagent-resolution`（评审型子代理 + 会话注入模式） | 🟢 P2 |
+| 7.1.6 | **跨生态会话历史导入**（Claude 原生会话入库） | zcode `packages/services/src/session/claude-native/` | fork 有外部 agent 会话**元数据**发现（`xai-grok-foreign-sessions`）+ /import-claude 配置面，无会话历史导入 | `xai-grok-foreign-sessions` 扩展 | 🟢 P2 |
+| 7.1.7 | **rewind 对照补**：检查点带 diff hunk、策略四态判定（active_chain/file_only/fork_required/unavailable 显式化不可回退态） | zcode `contracts/src/rewind/index.ts` | fork rewind 分支树 undo 已落地（T1/T2a/T3）；picker 面对照补 diff 预览（另见 §4.6 minimax 同款）与不可回退态提示 | `pager/app/dispatch/rewind.rs` | 🟢 P2 |
+| 7.1.8 | **权限 alwaysAsk：工具级强制审批不可被模式放行绕过** | zcode `core/src/permission/service.ts` | fork headless denial continue 已有；审批模式与工具级强制审批的优先级语义做一轮对照 | `xai-grok-tools` ToolRequirement 面 | 🟢 P2 |
+| 7.1.9 | **Channels：MCP server 反向推送触发 agent 回合** | crush `internal/backend/channels.go:25-45`（`--channels` opt-in，push 永不丢弃） | fork MCP 仅为 client 拉模式；IM/监控→agent 集成场景有价值，依赖用户需求再立项 | `xai-grok-mcp` + 会话入口 | 🟢 P2 |
+| 7.1.10 | **workspace hook 信任摘要**：hook 按「工作区身份 + 声明摘要」信任审查，摘要变化即失效 | zcode `core/src/hooks/workspace-hook-*.ts` | fork hooks 七事件 fail-open，无声明变更失效机制；安全硬化小件 | `xai-grok-hooks` | 🟢 P2 |
+| 7.1.11 | **sigstore 供应链自更新校验**（trust-root + bundle 验证后才替换二进制） | goose `goose-cli/src/commands/update.rs:19` | fork 自更新默认关（五期）；启用自更新前值得补的底座 | `xai-grok-update` | 🟢 P2/留档 |
+| 7.1.12 | **会话导出 HTML/Markdown** | goose `src/session/export_html/`、`export_markdown.rs` | **已有**：`/export`（Markdown 导出文件/剪贴板，`pager/src/slash/commands/export.rs`）+ `/transcript` + `/share`；HTML 仅为格式增量 | — | ✅ 已有 |
+| 7.1.13 | **LSP 工具对照补**：call_hierarchy / rename / replace_symbol | crush `internal/agent/tools/lsp_*.go`（8 工具） | fork LSP 模块已全（`xai-grok-tools/src/implementations/lsp/`，hover/symbols/diagnostics/format/restart 等，`features.lsp_tools` 默认关）——只差个别工具；随 LSP 特性开箱评估一并定 | `xai-grok-tools/src/implementations/lsp/` | 🟢 P2 |
+| 7.1.14 | **checks / REVIEW.md 约定审查**：`.agents/REVIEW.md` 派生审查项、每项 check 子代理执行 | goose `src/checks/mod.rs` | fork skills + subagents 组合可低成本仿制（一个读 REVIEW.md 派任务的 slash/skill） | skills/slash 层 | 🟢 P2 |
+| 7.1.15 | **formal-proof 状态空间枚举**（对 compact/fork/队列行为组合做枚举验证） | zcode `packages/formal-proof/` | 测试基建思想留档；rewind/压缩回归夹具设计可借鉴 | 测试侧 | 🟢 留档 |
+
+### 7.2 不移植（负面清单增补）
+
+- **crushrc = Bash 配置语言**（crush）：TOML 体系已深耕，表达力收益不值得第二配置语言。
+- **声明式 provider 一 JSON 一网关编译进二进制**（goose）：§5「内置模型目录/preset」同判，维护不起。
+- **SmartApprove LLM 判只读免批**（goose）：fork 已有 tree-sitter 命令静态分析全套（确定性三态 fail-closed），LLM 判定只添不确定性。
+- **ACP 反向 provider（把 Claude Code/Codex 当模型用）/ Telegram 网关 / P2P roaming / 桌面语音**（goose）：产品边界外。
+- **dynamic-workflow 模型写 TS 工作流**（zcode）：codemode 同判（§5 D1：双运行时破坏 journal 确定性）；其「编译器静态分析（污染不动点+时序走查）」思想留档，Rhai 侧若做工作流校验可参照。
+- **model-option-map DSL**（zcode）：TOML per-model 覆盖（`[model.<id>]`）已覆盖同域。
+- **闲时任务票据（off-peak）**（zcode）：依赖服务端取号/排队/核销。
+- **状态机 op 管线架构重写**（goose）：fork actor 模型已深耕，推倒不值。
+- **prompt-trajectory 录制器**（zcode）：unified.jsonl + limit-probe 已覆盖同域取证面。
+
+### 7.3 本轮核实的「fork 已有」防误报清单（外部同款特性已在 fork 落地）
+
+| 外部特性 | fork 现状锚点 |
+|---|---|
+| 流空闲超时（zcode stream-idle-timeout） | `conversation_collect_with_idle_timeout`（sampler `client.rs:2382-2415`，主链 300s、side call 可短） |
+| 空补全重试（zcode compat 层） | `SamplingError::EmptyResponse` 分类 + retry 判定（sampler `retry.rs:267`、`actor/request_task.rs:840`） |
+| 工具循环检测（goose tool_monitor / crush loop_detection） | `doom_loop.rs` / `stream_classify.rs` |
+| 大工具输出落盘（goose large_response_handler） | 六期工具输出压缩 + §2.3 spill-to-disk 已落地 |
+| bash 静态分析族（crush safe.go 白名单 / zcode bash-*.ts） | `xai-grok-workspace/src/permission/` 全套（2026-10-03 勘误后确认） |
+| skills 兼容扫描 `~/.claude/skills`（crush） | `/import-claude` + skills watcher（`claude_import.rs:389`、`extensions/skills.rs:236`） |
+| 插件市场（zcode 插件商店） | `xai-grok-plugin-marketplace` |
+| 会话自动命名（crush/goose LLM 起名） | 未逐项核实，随 TUI 轮对照 |
+
+### 7.4 边缘仓甄别结论
+
+- **opencode-dynamic-context-pruning**：DCP 插件——「模型自选范围压缩 + 双阈值 nudge + 请求时占位符」，7.1.1 主参照；⚠️ 开发已放缓（作者转向 Sleev），机制仍有效。
+- **rpiv-mono**：pi 扩展集——值得深挖限两包：advisor（7.1.5）与 rpiv-workflow（每阶段独立会话 + 谓词路由 + failure-memos，workflow-pi-port「编排上下文膨胀」缺口的补充参照）；其余包浅尝即可。
+- **deepseek-harness-codearts**：deepseek-harness 的登录/provider 运营插件（11 家国服网关路由 + 积分/账号池/打码链），与 /usage 供应商主题同域，但打法是逆向客户端协议吃套餐额度，无可搬机制——浅尝即可。
+- **openagents**：多 agent 网络协作平台（Agent Network / Mods），非单机 coding agent——与本项目无关。
+- **only-cc-lite**：Headroom 抽取的上下文压缩库（用户口径：非 coding agent，不立项）。
+
+### 7.5 落地顺序建议（本批）
+
+1. 7.1.1（microcompaction 策略层）与 §2.2 既有 P1 合并推进——DCP 策略族直接充当设计输入。
+2. 7.1.2 egress 检测为随手小件（tools 出口 inspector）；~~7.1.3 预算注入~~（已撤回，见 §7.6.2）。
+3. 7.1.4 amend-workflow 随 workflow-pi-port P2 后续切片评估。
+4. P2 项随各自主题轮（TUI 轮 / rewind 轮 / 更新轮）顺带对照，不单独立项。
+
+### 7.6 逐项终评：移植必要性与收益（2026-10-11 二轮，应用户要求挨个过）
+
+> 判定口径：「必要性」= fork 真实缺口 × 本机使用场景出现频率；「收益」= 受益面与频率；「成本」含
+> 编译级联与测试面。结论三档：**做**（排期）/ **缓**（挂条件，等触发信号）/ **不做**（留档或不做）。
+> 另登记本轮衍生的 LOCAL 提案 `/lsp`（7.6.1）。
+
+#### 7.6.1 衍生 LOCAL 提案：`/lsp` 斜杠命令（workspace 级 LSP 工具启停）
+
+- **行为**：`/lsp on|off|status` — 启停当前 workspace 的 LSP 工具族注册；仅允许在**新会话或 /clear 后**的会话执行，带历史回合时拒绝并提示。用户 2026-10-11 发起。
+- **为什么限会话边界**：工具清单在 agent definition 构建时定格（`agent_ops.rs:4535` 按 `Feature::LspTools` 决定注册）；会话中途改清单 = 后续请求 tool 声明面变化 → 前缀缓存从工具段起失效 + 模型对工具集的假设漂移。与 ④T2 延迟工具发现（search_tools 渐进披露 + 公告流）是两个方向：那里保留声明连续性，这里是整族启停——按拍板走「会话边界切换」，最简单且零声明态包袱。
+- **现状缺口**：LSP 工具族已全但由 `[features] lsp_tools` 全局控制（默认关，env `GROK_LSP_TOOLS`，remote settings 可覆盖）——粒度是用户级，没有按 workspace 的开关，也没有运行时交互入口。
+- **设计草案**：
+  - 持久化推荐 **A：grok-home 按 workspace 记忆的 feature 覆盖**——复用 `xai-grok-config/src/paths.rs` 的 `encode_cwd_dirname`（cwd 编码键）做 `~/.grok/feature-overrides/` JSON（同 active-sessions/limit-probe 家族的锁保护文件模式），agent definition 构建时叠加读取；workspace 粒度天然成立。
+  - 备选 B：直写用户级 `[features] lsp_tools`——config 回写面现无先例（`/lang` 等均为会话态），且作用域全局，与「当前工作空间」诉求不符。
+  - 优先级注记：workspace 覆盖与 remote/managed settings 的优先级要定（建议 remote > workspace 覆盖 > 用户 config 默认，保持 managed 层优先惯例）。
+  - 门控实现：命令执行时检查当前会话回合数（或 /clear 标记），非全新会话拒绝。
+  - 落点：pager `slash/commands/lsp.rs`（新）+ shell feature 叠加点（`is_feature_enabled` 旁）+ grok-home 存储；编译级联 = pager + shell。
+- **状态**：提案成立，待排期；建议并入 TUI 便利件轮，与 7.1.13（LSP 工具补齐）联动——先有开关和用户，再谈加工具。
+
+#### 7.6.2 逐项终评表
+
+| # | 候选 | 必要性 | 收益 | 成本 | 结论 |
+|---|---|---|---|---|---|
+| 7.1.1 | DCP 策略族（dedup/purge-errors/nudge）→ 并入 microcompaction | **高**——长会话上下文压力是日常主痛点，replace_visible/hide_visible 落点已备 | **大**——所有长会话受益；纯策略层风险低 | 中（compaction crate + 测试；改写点之后的缓存失效需与 byte-equal 不变量测试协调） | **做**（并入 microcompaction 设计，第一顺位） |
+| 7.1.2 | egress 外泄检测 | 中——BYOK/多网关场景密钥多，风险真实但触发低频 | 中——低频高价值的安全兜底 | 小中（tools 出口 inspector + 正则模式库，可复用 `xai-grok-secrets`） | **做**（小件随手轮） |
+| 7.1.3 | turn-context 预算注入 | 低中——`/goal` token_budget 已覆盖目标场景，普通回合预算自感知是锦上添花 | 小中——长会话收敛改善，但每回合固定 token 开销 | 小（prompt 组装） | **不做**（2026-10-11 用户先准后撤，最终拍板去掉） |
+| 7.1.4 | amend-workflow | 中——运行中修订是真实痛点，但 workflow 使用尚在早期、频率未知 | 中——编排体验跃升 | 中高（host call + await 语义 + journal 事件 + 测试） | **缓**——workflow-pi-port P2 T2 之后再排 |
+| 7.1.5 | advisor 跨模型评审门 | 中低——BYOK 双钥匙用户是子集；子代理 model override 可近似一半 | 中——强模型把关正确率 | 中（全量会话注入 + 结构化裁决回灌，耦合 spawn 链路） | **缓**——看 ④T2 落地后 subagent 面再定 |
+| 7.1.6 | 跨生态会话历史导入 | 低——迁移期一次性需求，元数据发现 + /import-claude 已覆盖主场景 | 小 | 中（Claude 会话格式解析 + 入库映射） | **不做**（真需要时一次性脚本） |
+| 7.1.7 | rewind diff 预览 + 不可回退态显式化 | 中——rewind 分支树刚落地，预览是 UX 完善面（§4.6 minimax 同款） | 小中——回退前可预视，减少误操作 | 小（`xai-grok-pager-diff` 可复用，picker 面已有） | **做**（rewind 轮收尾件） |
+| 7.1.8 | alwaysAsk 不可被模式绕过 | 低中——已有参数级 ToolRequirement + hooks deny，语义增强属硬化 | 小——防误配置兜底 | 小 | **缓**——先对照语义差距，可能已有等价物 |
+| 7.1.9 | Channels MCP 反向推送 | 低——IM/监控触发场景本机未出现 | 小——场景特化 | 中（反向通道 + 会话入口 + 安全面） | **不做**（留档，有真实集成需求再立项） |
+| 7.1.10 | workspace hook 信任摘要 | 低中——hooks fail-open 信任模型弱，但威胁模型是本机项目；folder_trust 已有项目信任机制 | 小 | 小中 | **缓**——核对 folder_trust 覆盖面后可能部分等价 |
+| 7.1.11 | sigstore 自更新校验 | 低——自更新默认关（五期） | 小 | 中（sigstore Rust 依赖引入成本不小） | **不做**（真启用自更新时 SHA256 先行） |
+| 7.1.12 | 会话导出 HTML/MD | — | — | — | ✅ **已有**（`/export` Markdown + `/transcript` + `/share`；HTML 出现需求再说） |
+| 7.1.13 | LSP 工具补齐（call_hierarchy/rename/replace_symbol） | 取决于 LSP 工具启用后的使用反馈（features.lsp_tools 默认关、尚无反馈） | 小中——重构场景有用 | 小（lsp 模块已全，三个薄封装） | **缓**——随 `/lsp` 提案落地后看使用反馈 |
+| 7.1.14 | checks / REVIEW.md 约定审查 | 低中——skills + subagent 可手工组合 | 小——约定化便利 | 小（一个内置 skill 读 REVIEW.md 派子代理） | **缓**——按 skill 而非机制做，随手可做 |
+| 7.1.15 | formal-proof 状态空间枚举 | — | — | — | 🗂 **留档**（测试基建思想，rewind/压缩夹具设计可借鉴） |
+
+#### 7.6.3 二轮结论汇总（2026-10-11 用户逐项拍板后更新）
+
+- **做（3 + 3 提案）**：7.1.1 并入 microcompaction（第一顺位）、7.1.2 egress 检测（小件）、
+  7.1.7 rewind 预览（收尾件）；提案 = `/lsp`（7.6.1）+ **`/auth` 供应商配置面板与 `/stats`
+  API 成本列（同日新立项，设计文档
+  [`../provider-onboarding-api-cost-todo.md`](../provider-onboarding-api-cost-todo.md)，
+  参照实现 = 用户 modelq 仓库）**。
+- **缓（6）**：7.1.4 / 7.1.5 / 7.1.8 / 7.1.10 / 7.1.13 / 7.1.14（各挂触发信号，见 §7.6.2 表）；
+  其余用户表态「不太有感知」，维持缓档不主动推进。
+- **不做 / 已有 / 留档（6）**：7.1.3（用户撤回）、7.1.6、7.1.9、7.1.11（不做）；7.1.12（已有）；
+  7.1.15（留档）。

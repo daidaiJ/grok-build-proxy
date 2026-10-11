@@ -333,3 +333,77 @@
   流恢复提示活回合抽查（等客户端更新 1.0.42）。
 - **接手者第一步**：按 roadmap §6 ④T2 开工条目切片 1 动工；或先做 ①T2b
   夹具重做（WSL 验证）。
+
+### 2026-10-11 · 兄弟 agent 二批调研收口（crush / goose / zcode 入库 + 边缘仓甄别）
+
+- **结果**：父目录 coding agent 全量盘点收口。首批五家（opencode/MiMo/qwen/minimax/kimi）已有
+  agent-cli-tracking 笔记；本轮新增 crush / goose / zcode 三份机制笔记
+  （notes/crush.md、notes/goose.md、notes/zcode.md），README 扩为八家对比（对象表 + 增补批次
+  对照节），引入评估新增 ADOPTION.md §7（候选 15 条：P1 四条 = DCP 策略族并入 microcompaction、
+  egress 外泄检测、turn-context 预算注入、amend-workflow；P2/留档 11 条；负面清单增补 9 条；
+  「fork 已有」防误报 8 条均 grep/读码核实）。
+- **用户口径**：only-cc-lite 非 coding agent 剔除；opencode 与 MiMo-Code 社区口碑下降，仅作
+  机制参照不再对齐（README 口碑注记 + ADOPTION §7 口径）。
+- **甄别归档**：DCP 插件（7.1.1 主参照，作者转向 Sleev 开发放缓）、rpiv-mono（advisor +
+  rpiv-workflow 两包值得深挖）、deepseek-harness-codearts（逆向协议运营插件，浅尝）、
+  openagents（多 agent 网络平台，无关）、only-cc-lite（压缩库，不立项）。
+- **接手者第一步**：推进 ADOPTION §7.5——优先把 DCP dedup/purge-errors 策略族并入既有
+  microcompaction P1 设计；P2 项随各自主题轮顺带对照，不单独立项。
+
+### 2026-10-11 · 二轮逐项终评 + /lsp 提案登记（接同日调研收口条目）
+
+- **结果**：应拍板要求对 ADOPTION §7.1 全部候选逐项评估必要性与收益（§7.6），并登记衍生
+  LOCAL 提案 `/lsp`（workspace 级 LSP 工具启停，仅新会话//clear 后可用；设计草案在
+  §7.6.1，持久化推荐 grok-home 按 cwd 编码键的 feature 覆盖文件，复用 encode_cwd_dirname）。
+- **核查修正**：/export Markdown 导出 + /transcript + /share 已存在 → 7.1.12 转「已有」；
+  /clear 已注册；config 无项目作用域回写先例（/lang 均会话态）→ /lsp 走 grok-home 存储路线。
+- **二轮结论**：做 = 7.1.1（DCP 策略族并入 microcompaction，第一顺位）+ 7.1.2（egress
+  检测小件）+ 7.1.7（rewind 预览收尾件）+ /lsp 提案；缓 ×7（各挂触发信号，见 §7.6.2 表）；
+  不做/已有/留档 ×5。
+- **接手者第一步**：/lsp 提案待排期（建议 TUI 便利件轮，与 7.1.13 联动）；7.1.1 随既有
+  microcompaction P1 设计推进。
+
+### 2026-10-11 · 三轮拍板：/auth 面板 + /stats API 成本立项；7.1.3 撤回
+
+- **拍板**：① 7.1.3 turn-context 预算注入先准后撤，最终**去掉**（ADOPTION §7.6.2 已改判不做）；
+  ② 其余缓档候选用户「不太有感知」，维持挂触发信号不主动推进；③ **新立项两件**（设计文档
+  docs-local/provider-onboarding-api-cost-todo.md，设计完成未开工）：
+  /auth 供应商配置面板（协议→baseUrl→SK→自动检索模型→models.dev/OpenRouter 目录回填参数，
+  仅与默认值不同才写）+ /stats「缓存写」列（OpenAI 兼容网关恒 0）替换为 API 美元成本
+  （per-model prompt/output/cache_read × OpenRouter pricing，合计行 + 三窗联动）。
+- **参照实现**：用户 modelq 仓库（D:/CODE/ai/openrouter-cli）——OpenRouter /api/v1/models 免鉴权
+  pricing（client.go:128-152）、models.dev api.json TTL 缓存（modelsdev.go:207,263-291）、
+  置信匹配序 exact→canonical→vendor（helpers.go:32-35）；fork 侧镜像 managed prefetch 合并
+  先例（shell config.rs:3420-3455）。
+- **关键现状锚点**：ApiBackend 三值（sampling-types types.rs:1094）；stats 缓存写列喂
+  cache_creation_tokens（stats_modal.rs:455-465，chat-state usage.rs:80）；账本已有 per-model
+  input/output/cached_read 拆分——成本渲染层可算，账本零改动；config 回写面无先例（T3 需新增）。
+- **待拍板**：SK 存储默认（建议 env_key）、config 回写策略（重序列化 vs 定点插入）、首启
+  onboarding、目录源优先级、status line 成本位——见文档「待拍板决策」节。
+- **接手者第一步**：按文档分期 T1（目录取数模块 + modelq 同款 JSON 夹具）开工，T1 完成后
+  特性 B（/stats 成本列）可先行落地（依赖 T1），特性 A（/auth 面板）随后。
+
+### 2026-10-11 · 四轮拍板：首启默认 BYOK 引导 + /login 改名 /grok（接三轮条目）
+
+- **拍板**：① 零配置（无订阅/无任何模型配置）首启默认提供 BYOK `/auth` 交互继续使用，
+  推 Grok 认证的现状废止；② 原 `/login`（Grok 订阅登录）改名 `/grok`。
+- **根因与落点（已探明）**：零配置时 `build_auth_methods` unpinned 分支仅通告 `grok.com`
+  （shell `agent/auth_method.rs:85-87`），pager 以 `auth_methods.first()` 取启动元数据 ⇒ 首启必落
+  Grok OAuth。改法 = 零配置默认推荐位给 BYOK 面板、OAuth 降级为面板内选项；ACP method 通告
+  保持不变（编辑器客户端依赖），只动自家人默认首屏。改名波及 5 引用点 + i18n（清单见
+  provider-onboarding-api-cost-todo.md「拍板增补」节），建议保留 `login` 隐藏别名一个周期。
+- **分期更新**：新增 T0 小件（改名 + 首启默认路径改向）可先行独立发版；T2 /auth 面板落地后
+  引导位从占位提示升级为直进面板。
+- **接手者第一步**：T0 两件（改名 + 零配置分支）按文档落点施工；或按三轮条目先做 T1 目录模块。
+
+### 2026-10-11 · 五轮拍板：不保留别名 + 交接下会话分期施工（接四轮条目）
+
+- **拍板**：`/login`→`/grok` **不保留别名**（硬切换，引用点一次性改净，含 ACP 命令列表与
+  全部测试断言）；四轮条目中「保留隐藏别名一个周期」的建议作废。
+- **交接**：本会话（兄弟 agent 二批调研 → 逐项终评 → /auth + /stats 成本立项 + 首启 BYOK
+  拍板）已交接，下会话从 T0 开始分期施工。
+- **指针**：交接卡 `.handoff/provider-onboarding-api-cost.md`（任务单/约束/拍板原文/文档地图）；
+  AGENTS.md Handoff 摘要已置顶对应块；设计文档
+  `docs-local/provider-onboarding-api-cost-todo.md` 为施工唯一权威。
+- **接手者第一步**：读交接卡 §6 任务单，T0 两件（/grok 硬改名 + 零配置首启默认 BYOK 引导）
+  开工，分支 `feat/local-grok-rename-byok-first`（或按拆分自定）。
