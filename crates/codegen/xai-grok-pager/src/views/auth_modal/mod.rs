@@ -133,6 +133,8 @@ pub struct AuthModalState {
     pub persist_error: Option<String>,
     /// 步 6：成功写入条数。
     pub written_count: Option<usize>,
+    /// 步 6：写回后的模型列表热重载失败原因（`None` = 已重载或未触发）。
+    pub reload_error: Option<String>,
 }
 
 impl AuthModalState {
@@ -159,6 +161,7 @@ impl AuthModalState {
             existing_ids,
             persist_error: None,
             written_count: None,
+            reload_error: None,
         }
     }
 
@@ -224,6 +227,13 @@ impl AuthModalState {
                 self.persist_error = Some(error);
                 self.step = AuthStep::Confirm;
             }
+        }
+    }
+
+    /// 写回成功后的模型列表热重载回包（`Err` 在完成页给出重启提示）。
+    pub fn apply_reload_result(&mut self, result: Result<usize, String>) {
+        if self.step == AuthStep::Done {
+            self.reload_error = result.err();
         }
     }
 
@@ -717,11 +727,42 @@ pub fn render_auth_modal(buf: &mut ratatui::buffer::Buffer, area: Rect, state: &
         AuthStep::Confirm | AuthStep::Writing => render_confirm(state, &theme),
         AuthStep::Done => render_done(state, &theme),
     };
+    // 提示行与其他面板同款贴底：内容顶对齐补空行，倒数第二行固定渲染当前步
+    // 按键提示，最底行保留 Step x/5。
     let footer = footer_line(state);
-    let content_height = inner.height.saturating_sub(1) as usize;
+    let hint = hint_line(&step_hints(state));
+    let content_height = inner.height.saturating_sub(2) as usize;
     let mut shown: Vec<Line> = lines.into_iter().take(content_height).collect();
+    while shown.len() < content_height {
+        shown.push(Line::from(""));
+    }
+    shown.push(hint);
     shown.push(footer);
     Paragraph::new(shown).render(inner, buf);
+}
+
+/// 当前步的按键提示（固定渲染在面板底部；文案与 [`route_auth_modal_key`]
+/// 的真实行为一一对应）。
+fn step_hints(state: &AuthModalState) -> Vec<(&'static str, &'static str)> {
+    match state.step {
+        AuthStep::Protocol => vec![("↑/↓", "move"), ("Enter", "next"), ("Esc", "cancel")],
+        AuthStep::BaseUrl | AuthStep::ApiKey => vec![("Enter", "next"), ("Esc", "back")],
+        AuthStep::Models if state.manual_mode => {
+            vec![("Enter", "add model"), ("Esc", "cancel")]
+        }
+        AuthStep::Models if state.fetch_in_flight => vec![("Esc", "back")],
+        AuthStep::Models => vec![
+            ("space", "toggle"),
+            ("a", "add manually"),
+            ("r", "retry"),
+            ("Enter", "confirm"),
+            ("Esc", "back"),
+        ],
+        AuthStep::Confirm if state.editing_id => vec![("Enter/Esc", "save id")],
+        AuthStep::Confirm => vec![("e", "edit id"), ("Enter", "write"), ("Esc", "back")],
+        AuthStep::Writing => vec![],
+        AuthStep::Done => vec![("Enter", "close")],
+    }
 }
 
 fn step_index(step: AuthStep) -> usize {
@@ -763,12 +804,6 @@ fn render_protocol(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<L
             style,
         )));
     }
-    lines.push(Line::from(""));
-    lines.push(hint_line(&[
-        ("↑/↓", "move"),
-        ("Enter", "next"),
-        ("Esc", "cancel"),
-    ]));
     lines
 }
 
@@ -787,8 +822,6 @@ fn render_base_url(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<L
             tr("Must start with http:// or https://"),
             Style::new().fg(theme.gray_bright),
         )),
-        Line::from(""),
-        hint_line(&[("Enter", "next"), ("Esc", "back")]),
     ]
 }
 
@@ -805,8 +838,6 @@ fn render_api_key(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<Li
             tr("Leave empty for gateways that need no auth. Ctrl+U clears."),
             Style::new().fg(theme.gray_bright),
         )),
-        Line::from(""),
-        hint_line(&[("Enter", "next"), ("Esc", "back")]),
     ]
 }
 
@@ -823,7 +854,6 @@ fn render_models(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<Lin
     if state.fetch_in_flight {
         lines.push(Line::from(tr("Fetching model list…")));
         lines.push(Line::from(""));
-        lines.push(hint_line(&[("Esc", "back")]));
         return lines;
     }
     if let Some(error) = &state.fetch_error {
@@ -869,14 +899,6 @@ fn render_models(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<Lin
             style,
         )));
     }
-    lines.push(Line::from(""));
-    lines.push(hint_line(&[
-        ("space", "toggle"),
-        ("a", "add manually"),
-        ("r", "retry"),
-        ("Enter", "confirm"),
-        ("Esc", "back"),
-    ]));
     lines
 }
 
@@ -927,18 +949,11 @@ fn render_confirm(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<Li
             Style::new().fg(theme.accent_error),
         )));
     }
-    lines.push(Line::from(""));
-    lines.push(hint_line(&[
-        ("e", "edit id"),
-        ("Enter", "write"),
-        ("Esc", "back"),
-    ]));
     lines
 }
 
 fn render_done(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<Line<'static>> {
-    let count = state.written_count.unwrap_or(0);
-    vec![
+    let mut lines = vec![
         Line::from(Span::styled(
             tr("Config written."),
             Style::new().fg(theme.text_primary),
@@ -947,9 +962,23 @@ fn render_done(state: &AuthModalState, theme: &crate::theme::Theme) -> Vec<Line<
         Line::from(tr(
             "The new models are available via /model (hot reload).",
         )),
-        Line::from(""),
-        hint_line(&[("Enter", "close")]),
-    ]
+    ];
+    if let Some(error) = &state.reload_error {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            tr("Model reload failed"),
+            Style::new().fg(theme.accent_error),
+        )));
+        lines.push(Line::from(Span::styled(
+            format!("{error}"),
+            Style::new().fg(theme.gray_bright),
+        )));
+        lines.push(Line::from(Span::styled(
+            tr("Restart to pick up the new models in /model."),
+            Style::new().fg(theme.gray_bright),
+        )));
+    }
+    lines
 }
 
 fn footer_line(state: &AuthModalState) -> Line<'static> {
@@ -977,6 +1006,39 @@ mod tests {
 
     fn modal() -> AuthModalState {
         AuthModalState::new(BTreeSet::new())
+    }
+
+    /// 渲染到指定尺寸的缓冲并取出某一行的文本。
+    fn row_text(area: Rect, state: &mut AuthModalState, y: u16) -> String {
+        let mut buf = ratatui::buffer::Buffer::empty(area);
+        render_auth_modal(&mut buf, area, state);
+        (0..area.width)
+            .map(|x| buf.cell((x, y)).map_or(" ", |c| c.symbol()).to_string())
+            .collect()
+    }
+
+    #[test]
+    fn hint_row_is_pinned_above_footer() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: 66,
+            height: 18,
+        };
+        // 面板在 area 内居中（与 render_auth_modal 同公式），行号按此推导：
+        // 内区最底行 = Step x/5 页脚，其上一行 = 当前步按键提示。
+        let height = PANEL_HEIGHT.min(area.height.saturating_sub(4));
+        let y = (area.height.saturating_sub(height)) / 2;
+        let footer_row = y + height - 2;
+        let hint_row = footer_row - 1;
+        let mut state = modal();
+        assert!(row_text(area, &mut state, footer_row).contains("Step"));
+        let hint = row_text(area, &mut state, hint_row);
+        assert!(hint.contains("Esc"), "hint must be bottom-pinned: {hint:?}");
+        assert!(hint.contains("Enter"), "hint lists keys: {hint:?}");
+        // 提示行不在内容流中间（首内容行是标题文案）。
+        let first = row_text(area, &mut state, y + 1);
+        assert!(!first.contains("Esc"), "hint must not leak into content: {first:?}");
     }
 
     fn walk_to_models(state: &mut AuthModalState) -> AuthModalOutcome {

@@ -796,3 +796,93 @@ fn auth_complete_preserves_show_resolved_model_when_absent() {
 
     assert!(!app.show_resolved_model);
 }
+
+fn open_auth_panel_in(app: &mut AppView, step: crate::views::auth_modal::AuthStep) {
+    dispatch(Action::OpenAuthPanel, app);
+    let agent = app.agents.get_mut(&AgentId(0)).unwrap();
+    let Some(crate::views::modal::ActiveModal::AuthPanel { state }) = agent.active_modal.as_mut()
+    else {
+        panic!("auth panel expected after OpenAuthPanel");
+    };
+    state.step = step;
+}
+
+fn auth_panel_state(app: &mut AppView) -> &mut crate::views::auth_modal::AuthModalState {
+    let agent = app.agents.get_mut(&AgentId(0)).unwrap();
+    let Some(crate::views::modal::ActiveModal::AuthPanel { state }) = agent.active_modal.as_mut()
+    else {
+        panic!("auth panel expected");
+    };
+    state.as_mut()
+}
+
+#[test]
+fn auth_persist_ok_triggers_model_reload() {
+    let mut app = test_app_with_agent();
+    open_auth_panel_in(&mut app, crate::views::auth_modal::AuthStep::Writing);
+
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::ModelEntriesPersisted { result: Ok(()) }),
+        &mut app,
+    );
+
+    assert!(
+        effects
+            .iter()
+            .any(|e| matches!(e, Effect::ReloadAgentModels)),
+        "写回成功必须触发热重载: {effects:?}"
+    );
+    assert_eq!(
+        auth_panel_state(&mut app).step,
+        crate::views::auth_modal::AuthStep::Done
+    );
+}
+
+#[test]
+fn auth_persist_err_skips_reload_and_keeps_confirm() {
+    let mut app = test_app_with_agent();
+    open_auth_panel_in(&mut app, crate::views::auth_modal::AuthStep::Writing);
+
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::ModelEntriesPersisted {
+            result: Err("id conflict".into()),
+        }),
+        &mut app,
+    );
+
+    assert!(!effects.iter().any(|e| matches!(e, Effect::ReloadAgentModels)));
+    let state = auth_panel_state(&mut app);
+    assert_eq!(state.step, crate::views::auth_modal::AuthStep::Confirm);
+    assert_eq!(state.persist_error.as_deref(), Some("id conflict"));
+}
+
+#[test]
+fn auth_reload_error_surfaces_on_done_step() {
+    let mut app = test_app_with_agent();
+    open_auth_panel_in(&mut app, crate::views::auth_modal::AuthStep::Done);
+
+    dispatch(
+        Action::TaskComplete(TaskResult::AgentModelsReloaded {
+            result: Err("rpc timeout".into()),
+        }),
+        &mut app,
+    );
+
+    assert_eq!(
+        auth_panel_state(&mut app).reload_error.as_deref(),
+        Some("rpc timeout")
+    );
+}
+
+#[test]
+fn auth_reload_ok_clears_error_on_done_step() {
+    let mut app = test_app_with_agent();
+    open_auth_panel_in(&mut app, crate::views::auth_modal::AuthStep::Done);
+
+    dispatch(
+        Action::TaskComplete(TaskResult::AgentModelsReloaded { result: Ok(7) }),
+        &mut app,
+    );
+
+    assert!(auth_panel_state(&mut app).reload_error.is_none());
+}

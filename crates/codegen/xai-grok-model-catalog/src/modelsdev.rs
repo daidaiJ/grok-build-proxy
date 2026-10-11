@@ -3,6 +3,11 @@
 //! 顶层为 `provider_id → provider`，provider 内 `models` 为 `model_id → model`；
 //! `cost` 为 vendor 官方参考价（**per-1M USD** 浮点，字段可缺）；`limit` 持 token
 //! 上限（注意 models.dev 语义：`input` 可低于 `context`）。
+//!
+//! 拍板 2026-10-11：**只留原厂条目**——解析层按一方 provider 白名单过滤
+//! （match_model 的 `FIRST_PARTY_PROVIDERS` 判定），第三方转售商
+//! （302ai / kilo / nano-gpt 等两百余个网关 provider）整库不进目录；OpenRouter
+//! 官方 API 为兜底源，不经此过滤。
 
 use std::collections::BTreeMap;
 
@@ -69,6 +74,14 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
             provider.id
         };
         for (model_key, model) in provider.models {
+            let input = sane(model.cost.input);
+            let output = sane(model.cost.output);
+            // 订阅 plan 类条目（coding-plan / token-plan）input/output 恒 0：
+            // 订阅制无边际价，对 BYOK 成本统计是假 $0——整条归为无价（渲染层显示 –）。
+            let (input, output, cache_read, cache_write) = match (input, output) {
+                (Some(0.0), Some(0.0)) => (None, None, None, None),
+                (i, o) => (i, o, sane(model.cost.cache_read), sane(model.cost.cache_write)),
+            };
             entries.push(CatalogEntry {
                 id: model_key,
                 provider_id: provider_id.clone(),
@@ -76,16 +89,18 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
                 name: model.name,
                 canonical_id: model.canonical_model_id.filter(|s| !s.is_empty()),
                 pricing: ModelPricing {
-                    input: sane(model.cost.input),
-                    output: sane(model.cost.output),
-                    cache_read: sane(model.cost.cache_read),
-                    cache_write: sane(model.cost.cache_write),
+                    input,
+                    output,
+                    cache_read,
+                    cache_write,
                 },
                 context_length: model.limit.context,
                 max_completion_tokens: model.limit.output,
             });
         }
     }
+    // 只留原厂条目：第三方转售商 provider 整库不进目录（拍板 2026-10-11）。
+    entries.retain(|e| crate::match_model::is_first_party(e));
     Ok(ModelCatalog { entries })
 }
 
@@ -130,12 +145,53 @@ mod tests {
     }
 
     #[test]
+    fn all_zero_plan_pricing_becomes_unpriced() {
+        // 原厂 provider 内显式 0/0（免费档等）：无边际价，整条归为无价，
+        // 避免 $0.00 假价参与成本统计与合计。
+        let body = r#"{
+          "deepseek": {
+            "id": "deepseek",
+            "models": {
+              "glm-5.3-flash": {
+                "name": "GLM-5.3-Flash (free)",
+                "limit": { "context": 128000 },
+                "cost": { "input": 0, "output": 0, "cache_read": 0, "cache_write": 0 }
+              }
+            }
+          }
+        }"#;
+        let cat = parse(body).expect("parse");
+        assert_eq!(cat.len(), 1);
+        let entry = &cat.entries[0];
+        assert!(entry.pricing.is_unpriced(), "全零价应归为无价");
+        assert_eq!(entry.pricing.input, None);
+        assert_eq!(entry.pricing.cache_read, None);
+        // limit 与条目本身照常保留。
+        assert_eq!(entry.context_length, Some(128_000));
+    }
+
+    #[test]
+    fn non_first_party_providers_are_dropped() {
+        // 拍板 2026-10-11：第三方转售商（302ai）与订阅 plan 条目整库不留，
+        // 目录里只剩白名单内原厂。
+        let body = r#"{
+          "zai": { "id": "zai", "models": { "glm-5.3-flash": { "name": "GLM", "cost": { "input": 0.15, "output": 0.5 } } } },
+          "302ai": { "id": "302ai", "models": { "glm-5.3-flash": { "name": "GLM (reseller)", "cost": { "input": 0.075, "output": 0.25 } } } },
+          "zai-coding-plan": { "id": "zai-coding-plan", "models": { "glm-5.3-flash": { "name": "GLM (plan)", "cost": { "input": 0, "output": 0 } } } }
+        }"#;
+        let cat = parse(body).expect("parse");
+        assert_eq!(cat.len(), 1, "只保留原厂条目");
+        assert_eq!(cat.entries[0].provider_id, "zai");
+        assert_eq!(cat.entries[0].pricing.input, Some(0.15));
+    }
+
+    #[test]
     fn missing_cost_fields_are_unknown() {
         let cat = parse(models_dev_fixture()).expect("fixture parses");
         let bare = cat
             .entries
             .iter()
-            .find(|e| e.provider_id == "bare-provider")
+            .find(|e| e.provider_id == "deepseek")
             .expect("bare entry");
         assert!(bare.pricing.is_unpriced());
         assert_eq!(bare.context_length, None);

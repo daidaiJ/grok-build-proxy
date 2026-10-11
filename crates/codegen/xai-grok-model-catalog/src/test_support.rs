@@ -96,9 +96,9 @@ pub fn models_dev_fixture() -> &'static str {
       }
     }
   },
-  "bare-provider": {
-    "id": "bare-provider",
-    "name": "Bare",
+  "deepseek": {
+    "id": "deepseek",
+    "name": "DeepSeek",
     "models": {
       "bare-model": { "name": "Bare Model" }
     }

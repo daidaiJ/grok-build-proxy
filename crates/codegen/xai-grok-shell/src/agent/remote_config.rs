@@ -1,7 +1,9 @@
 //! Remote settings and model-catalog fetching, caching, and startup wiring.
 
 mod cache;
-mod cache_file;
+/// 缓存文件原语（tmp+rename 原子替换、封顶读取）——models_cache 之外，
+/// `x.ai/modelCatalog` 的 `prices.cache` 也复用（LOCAL）。
+pub(crate) mod cache_file;
 mod endpoint;
 mod fetch;
 mod manager;

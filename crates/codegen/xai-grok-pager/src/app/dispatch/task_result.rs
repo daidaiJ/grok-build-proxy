@@ -687,20 +687,54 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         }
         // LOCAL: /auth 面板写回完成。成功也留给面板展示（用户确认后再关）；
         // 找不到面板 = 面板已关，结果自然丢弃（写回本身已落盘）。
+        // 成功后触发模型列表热重载：embedded/headless 模式没有 config 文件
+        // watcher（仅 leader 装配），靠它让 /model 即选即用。
         TaskResult::ModelEntriesPersisted { result } => {
+            let mut delivered = false;
             for agent in app.agents.values_mut() {
                 if let Some(crate::views::modal::ActiveModal::AuthPanel { state }) =
                     agent.active_modal.as_mut()
                     && state.step == crate::views::auth_modal::AuthStep::Writing
                 {
-                    state.apply_persist_result(result);
-                    return vec![];
+                    state.apply_persist_result(result.clone());
+                    delivered = true;
+                    break;
                 }
             }
-            if let Some(state) = app.welcome_auth_panel.as_mut()
-                && state.step == crate::views::auth_modal::AuthStep::Writing
-            {
-                state.apply_persist_result(result);
+            if !delivered {
+                if let Some(state) = app.welcome_auth_panel.as_mut()
+                    && state.step == crate::views::auth_modal::AuthStep::Writing
+                {
+                    state.apply_persist_result(result.clone());
+                    delivered = true;
+                }
+            }
+            if delivered && result.is_ok() {
+                vec![Effect::ReloadAgentModels]
+            } else {
+                vec![]
+            }
+        }
+        // LOCAL: 热重载回包。`Ok` 时 agent 已广播 `x.ai/models/update`（/model
+        // 数据源随之刷新）；`Err` 落到完成页提示重启。
+        TaskResult::AgentModelsReloaded { result } => {
+            let mut delivered = false;
+            for agent in app.agents.values_mut() {
+                if let Some(crate::views::modal::ActiveModal::AuthPanel { state }) =
+                    agent.active_modal.as_mut()
+                    && state.step == crate::views::auth_modal::AuthStep::Done
+                {
+                    state.apply_reload_result(result.clone());
+                    delivered = true;
+                    break;
+                }
+            }
+            if !delivered {
+                if let Some(state) = app.welcome_auth_panel.as_mut()
+                    && state.step == crate::views::auth_modal::AuthStep::Done
+                {
+                    state.apply_reload_result(result.clone());
+                }
             }
             vec![]
         }

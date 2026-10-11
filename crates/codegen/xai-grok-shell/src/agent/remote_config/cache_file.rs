@@ -45,7 +45,7 @@ pub(in crate::agent::remote_config) fn is_fresh(
     age >= ChronoDuration::zero() && age < ttl
 }
 
-pub(in crate::agent::remote_config) fn read_capped(
+pub(crate) fn read_capped(
     path: &std::path::Path,
     max: u64,
 ) -> Option<Vec<u8>> {
@@ -100,7 +100,7 @@ fn sweep_stale_tmp(path: &std::path::Path, ttl: std::time::Duration) {
 
 /// Atomic replace via a unique temp file and rename. `private` sets 0600 for the
 /// sensitive settings cache; the models cache uses the default mode.
-pub(in crate::agent::remote_config) fn write_atomic(
+pub(crate) fn write_atomic(
     path: &std::path::Path,
     ttl: std::time::Duration,
     bytes: &[u8],

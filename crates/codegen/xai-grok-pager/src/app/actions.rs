@@ -2231,6 +2231,10 @@ pub enum Effect {
     PersistModelEntries {
         entries: Vec<xai_grok_shell::util::config::ModelEntryDraft>,
     },
+    /// LOCAL: /auth 写回成功后触发的模型列表热重载（`x.ai/internal/reload_models`）。
+    /// embedded/headless 模式没有 config 文件 watcher（仅 leader 装配），写回后必须
+    /// 显式触发；agent 侧重读 config 后广播 `x.ai/models/update`。
+    ReloadAgentModels,
     /// Fetch billing data at the app level (no agent required).
     /// Used on startup to populate the welcome-screen credit warning, and by the dashboard's `/usage` modal.
     FetchAppBilling {
@@ -3221,6 +3225,11 @@ pub enum TaskResult {
     /// LOCAL: /auth 面板条目写回完成；`Err` = id 冲突 / IO / 不可解析拒绝（文件未动）。
     ModelEntriesPersisted {
         result: Result<(), String>,
+    },
+    /// LOCAL: /auth 写回后的模型列表热重载回包；`Ok` = 重载后的模型数，
+    /// `Err` = 触发失败（面板完成页给出重启提示）。
+    AgentModelsReloaded {
+        result: Result<usize, String>,
     },
     /// App-level billing fetch failed (transport or parse); the cached balance is kept.
     AppBillingError {
