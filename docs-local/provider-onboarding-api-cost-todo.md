@@ -1,8 +1,11 @@
-# /auth 供应商配置面板 + /stats API 成本列（设计完成；T0 已落地，T1–T4 未开工）
+# /auth 供应商配置面板 + /stats API 成本列（设计完成；T0/T1/特性B 已落地，T2–T4 未开工）
 
-> **施工状态（2026-10-11）**：T0（/login→/grok 硬改名 + 零配置首启 BYOK 引导）已在
-> `feat/local-auth-onboarding` 落地，见 PATCHES.md 二十八期 + roadmap §6 当日条目；
-> T1–T4 未开工。六轮拍板（价格 TTL / 只留官方价格 / 面板交互形态）见「拍板增补」节。
+> **施工状态（2026-10-11）**：T0（/login→/grok 硬改名 + 零配置首启 BYOK 引导）
+> 已随 **`v1.0.48`** 发版；**T1（目录取数模块）+ 特性 B（/stats 成本列）已落地**
+> （分支 `feat/local-model-catalog`，新 crate `xai-grok-model-catalog` + shell 扩展
+> `x.ai/modelCatalog` + pager 成本列，实现记录见 PATCHES.md 二十九期 + roadmap §6
+> 当日条目）；T2–T4 未开工。六轮拍板（价格 TTL / 只留官方价格 / 面板交互形态）见
+> 「拍板增补」节。
 >
 > 来源：用户拍板 2026-10-11（agent-cli-tracking 二轮调研衍生需求）。
 > 参照实现：用户自有 **modelq** 仓库（`D:/CODE/ai/openrouter-cli`，Go，二进制 mqx）——OpenRouter +

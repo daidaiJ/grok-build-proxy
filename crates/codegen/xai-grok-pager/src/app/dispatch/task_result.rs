@@ -635,6 +635,20 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        // LOCAL: 模型目录回包。进程级 store 增量并入（错误/未命中条目也落库，
+        // 保证不重发）；已打开的 /stats 面板即时刷新成本列（跨 agent 全查，
+        // store 与账号无关、模态可能在任一会话）。
+        TaskResult::ModelCatalogFetched { response } => {
+            crate::app::model_catalog_store::install(&response);
+            for agent in app.agents.values_mut() {
+                if let Some(crate::views::modal::ActiveModal::StatsInfo { state }) =
+                    agent.active_modal.as_mut()
+                {
+                    state.pricing = crate::app::model_catalog_store::snapshot();
+                }
+            }
+            vec![]
+        }
         TaskResult::AppBillingFetched {
             balance,
             autotopup,

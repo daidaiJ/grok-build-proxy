@@ -26,6 +26,7 @@ pub use openrouter::parse as parse_openrouter;
 pub use requests::prepare_requests;
 pub use types::{
     CatalogEntry, CatalogError, CatalogSource, MatchResult, ModelCatalog, ModelPricing,
+    PreparedRequest,
 };
 
 /// 解析一个目录来源的响应体。来源与请求配对（[`prepare_requests`] 的序号）。

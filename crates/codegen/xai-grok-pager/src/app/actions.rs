@@ -2198,6 +2198,12 @@ pub enum Effect {
         /// 当前模型 id（目录键），shell 据此取 entry 的 base_url / 凭据。
         model_id: String,
     },
+    /// LOCAL: 模型目录（OpenRouter / models.dev 价格与上限，`x.ai/modelCatalog` 扩展）。
+    /// shell 侧 TTL 缓存（缺省 1 天）+ 双源回退 + 单飞；回包条目按请求 id 绑定。
+    FetchModelCatalog {
+        /// 需要匹配的模型 id（聚合行去重后的集合）。
+        model_ids: Vec<String>,
+    },
     /// Fetch billing data at the app level (no agent required).
     /// Used on startup to populate the welcome-screen credit warning, and by the dashboard's `/usage` modal.
     FetchAppBilling {
@@ -3175,6 +3181,11 @@ pub enum TaskResult {
         /// 发起取数时的模型 id，缓存按它绑定。
         model_id: String,
         response: xai_grok_shell::extensions::provider_usage::ProviderUsageResponse,
+    },
+    /// LOCAL: 模型目录查询完成（含未命中条目的 `null`）。进程级 store 增量并入；
+    /// 取数失败也回包（条目全 null），保证在途标志总能清除。
+    ModelCatalogFetched {
+        response: xai_grok_shell::extensions::model_catalog::ModelCatalogResponse,
     },
     /// App-level billing fetch failed (transport or parse); the cached balance is kept.
     AppBillingError {

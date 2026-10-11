@@ -2350,3 +2350,45 @@ i18n 扫描 0 挂。
 验证：见 port-roadmap.md §6 2026-10-11 T0 完成条目（三 crate check 0 error；
 pager 六滤全绿 3 535 例含 7 个新用例；shell/login GATE_FORCE 过滤全绿；
 i18n 0 挂）。win-skip 新登记族S/族T。
+
+## 二十九期：模型目录取数 + /stats「缓存写」→ API 成本列（2026-10-11，分支 feat/local-model-catalog）
+
+> provider-onboarding-api-cost 分期 T1 + 特性 B（设计文档
+> `docs-local/provider-onboarding-api-cost-todo.md`，拍板六轮：TTL 1 天起步可配、
+> 只留官方价格、OpenRouter 主 / models.dev 兜底）。上游同步重放时按本节整节重放。
+
+1. **新纯函数 crate `xai-grok-model-catalog`**（`crates/codegen/`，与
+   xai-grok-provider-usage 同分层：端点组装 + 解析 + 匹配纯函数，HTTP 归调用方）：
+   - `requests.rs`：OpenRouter `/api/v1/models` 主 + models.dev `/api.json` 兜底，
+     免鉴权带 UA（modelq 先例）。
+   - `openrouter.rs` / `modelsdev.rs`：响应解析归一为 per-1M USD
+     （OpenRouter 字符串价 ×1e6，`"0"`=免费 `Some(0.0)`、空/负/非数=未列价）；
+     models.dev `limit`（context/output）+ `cost` 直取。
+   - `match_model.rs`：置信匹配移植 modelq `match.go`（100 exact / 95 `:variant`
+     剥离 / 86 vendor 别名折叠 / 85 canonical / 84 归一化，平分主源优先）；
+     fuzzy 子串=噪声不富化（拍板沿用）。
+   - `cost.rs`：`cost_usd`——OpenAI 兼容口径 `cached_read ⊆ prompt`（计费输入
+     =prompt−cached）；`cache_creation>0` 仅 Anthropic 风格上报（prompt 已排除
+     缓存读，不减）；任一「量>0 成分」缺价 → `None`（整条无价，宁 – 不低估）。
+2. **shell 扩展 `extensions/model_catalog.rs`（`x.ai/modelCatalog`）**：请求
+   `{models:[...]}` → 按序双源取数（首个成功者生效）→ 进程级单条目 TTL 缓存 +
+   全局单飞锁（目录与账号无关）→ 匹配请求 id 回 `{entries: {id: entry|null}}`。
+   取数失败回退过期目录（stale，价格面宁旧勿空），全部失败条目全 null。
+   配置 `[model_catalog] cache_minutes` 缺省 1440，clamp 5–20160。路由点
+   `acp_agent.rs`。目录请求走 `build_reqwest_client`（用户 proxy_hosts 显式
+   收录的目录 host 可走隧道，缺省 allowlist 外恒直连）。
+3. **pager 成本列**：进程级 store `app/model_catalog_store.rs`（增量并入 + 在途
+   标志 + 6h 重取窗 + `aggregate_cost`/`UNPRICED_LABEL`）。`Effect::
+   FetchModelCatalog`（`dispatch_show_stats` 触发，账本内 model id 去重为取数
+   目标；回包 `TaskResult::ModelCatalogFetched` 落 store 并即时刷新已打开面板）。
+   渲染面三处「缓存写」列替换为「成本」：模态卡片 `model_card_lines`、复制文本
+   `model_card_text`、极简文本 `format_usage_row`——有价 `fmt_cost`（<1 美分
+   4 位小数，否则 2 位），无价/未取到显示 `–`；模态卡片列表尾新增合计行
+   （`cost total` 求和 + `unpriced` 条数标注，无价剔除出合计）。i18n：
+   `("cache write","缓存写")` 键删除，新增 cost / cost total / unpriced 三键；
+   `xai-grok-tools::model_usage_ledger` 增 `fmt_cost`。
+
+验证：catalog 29/29；shell GATE_FORCE extensions::model_catalog 5/5；pager 门控
+stats 过滤 36 例 + catalog 过滤 30 例、tools GATE_FORCE fmt_cost 过滤 6 例全绿；
+三 crate `cargo check --all-targets` 0 error/0 warning；i18n 扫描 cache write
+键 0 残留。

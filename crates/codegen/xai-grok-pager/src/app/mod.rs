@@ -14,6 +14,7 @@ pub mod agent;
 pub mod agent_view;
 pub mod app_view;
 pub mod bundle;
+pub(crate) mod model_catalog_store;
 pub(crate) mod cancel_latency;
 pub mod cli;
 pub(crate) mod command_catalog;

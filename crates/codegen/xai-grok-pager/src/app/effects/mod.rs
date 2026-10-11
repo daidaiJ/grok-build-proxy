@@ -5081,6 +5081,42 @@ pub(crate) fn execute(
                 }
             });
         }
+        // LOCAL: 模型目录（`x.ai/modelCatalog`）。免鉴权公开端点，shell 侧 TTL 缓存 +
+        // 双源回退；错误也在回包体内（不进 Err 通道），保证在途标志总能清除。
+        Effect::FetchModelCatalog { model_ids } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let req = acp::ExtRequest::new(
+                    "x.ai/modelCatalog",
+                    serde_json::value::to_raw_value(&serde_json::json!({
+                        "models": model_ids,
+                    }))
+                    .expect("serialize model catalog params")
+                    .into(),
+                );
+                let response = match acp_send(req, &tx).await {
+                    Ok(resp) => {
+                        let wrapper: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        let result = wrapper.get("result").unwrap_or(&wrapper);
+                        serde_json::from_value::<
+                            xai_grok_shell::extensions::model_catalog::ModelCatalogResponse,
+                        >(result.clone())
+                        .unwrap_or_else(|e| {
+                            xai_grok_shell::extensions::model_catalog::ModelCatalogResponse {
+                                error: Some(format!("Parse error: {e}")),
+                                ..Default::default()
+                            }
+                        })
+                    }
+                    Err(e) => xai_grok_shell::extensions::model_catalog::ModelCatalogResponse {
+                        error: Some(sanitize_user_error(&format!("{e}"))),
+                        ..Default::default()
+                    },
+                };
+                TaskResult::ModelCatalogFetched { response }
+            });
+        }
         Effect::RefreshGate => {
             tasks
                 .spawn(async move {
