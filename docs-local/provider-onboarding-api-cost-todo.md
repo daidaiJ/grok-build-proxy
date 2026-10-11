@@ -1,12 +1,15 @@
-# /auth 供应商配置面板 + /stats API 成本列（设计完成；T0/T1/特性B 已落地，T2–T5 未开工）
+# /auth 供应商配置面板 + /stats API 成本列（设计完成；T0/T1/特性B/T2/T3 已落地，T4/T5 未开工）
 
-> **施工状态（2026-10-11）**：T0（/login→/grok 硬改名 + 零配置首启 BYOK 引导）
+> **施工状态（2026-10-11 T2 当班）**：T0（/login→/grok 硬改名 + 零配置首启 BYOK 引导）
 > 已随 **`v1.0.48`** 发版；**T1（目录取数模块）+ 特性 B（/stats 成本列）已落地**
 > （分支 `feat/local-model-catalog`，新 crate `xai-grok-model-catalog` + shell 扩展
 > `x.ai/modelCatalog` + pager 成本列，实现记录见 PATCHES.md 二十九期 + roadmap §6
-> 当日条目）；T2–T4 未开工，**T5（特性 C 模型能力门控：纯文本模型遇图 mask/阻断，
-> 2026-10-11 用户追加）已立项待拍板**。六轮拍板（价格 TTL / 只留官方价格 /
-> 面板交互形态）见「拍板增补」节。
+> 当日条目）；**T2（/auth 面板）+ T3（目录回填 + config 写回）已落地**
+> （分支 `feat/local-auth-panel`：`views/auth_modal` 分步向导 + `/auth` 命令 +
+> `x.ai/providerModels` 扩展 + `write_model_entries` toml_edit 写回 + welcome 门
+> `a` 菜单直进面板，实现记录见 PATCHES.md 三十期）；T4（i18n 扫尾——面板字符串
+> 随 T2 已带 zh 翻译，扫描 0 挂）与 T5（特性 C 能力门控）未开工。七轮拍板见
+> 「拍板增补」节。
 >
 > 来源：用户拍板 2026-10-11（agent-cli-tracking 二轮调研衍生需求）。
 > 参照实现：用户自有 **modelq** 仓库（`D:/CODE/ai/openrouter-cli`，Go，二进制 mqx）——OpenRouter +
@@ -113,10 +116,32 @@
 **分期**：
 - T1 目录取数模块（新 crate 或 shell 模块：OpenRouter + models.dev 双源、TTL 缓存、置信匹配；
   单测夹具直接搬 modelq 同款 JSON 响应）。✅ 已落地（2026-10-11，PATCHES 二十九期）
-- T2 /auth 面板（pager 弹窗交互 + 输入校验 + /models 拉取）。
-- T3 目录回填确认面 + config 写回。
+- T2 /auth 面板（pager 弹窗交互 + 输入校验 + /models 拉取）。✅ 已落地（2026-10-11，PATCHES 三十期）
+- T3 目录回填确认面 + config 写回。✅ 已落地（2026-10-11，随 T2 同批；toml_edit 定点写回）
 - T4 i18n + 无配置启动引导（若拍板做 onboarding，见待拍板 3）。
+  面板与 welcome 引导字符串已带 zh 翻译（随 T2），扫描 0 挂；剩余 i18n 扫尾待做。
 - T5 模型能力门控（特性 C：纯文本模型遇图 mask/阻断；依赖 T1 增模态字段扩展）。
+
+**T2/T3 已落地补记（2026-10-11，分支 `feat/local-auth-panel`）**：
+
+- **落地面**：`views/auth_modal`（分步向导：协议→baseUrl→SK 掩码输入→模型列表
+  过滤+空格多选+手填回退→确认（id 可编辑+冲突标红）→写入→完成）；`/auth` 命令；
+  shell 扩展 `x.ai/providerModels`（GET {base_url}/models，OpenAI/Anthropic/裸数组
+  三形态解析，15s 超时）；`write_model_entries`（toml_edit 定点编辑 `[model.<id>]` +
+  `lock_config_writes` flock 守卫，注释/未知段保留，全批原子、id 冲突整批拒绝）；
+  welcome 门 `a` 菜单项直进面板（AppView 级第二宿主 `welcome_auth_panel`，BYOK
+  用户被困门后是主场景）；写回后 `[model.*]` 走既有 `ConfigUpdate::ModelsChanged`
+  热重载，`/model` 即选即用。
+- **回填语义**：目录值与新建模型兜底不同才写——`context_window` 兜底 200_000
+  （`agent/config.rs:3704`，相同值省略）；`max_completion_tokens` 缺省 = 不发送，
+  目录有值即写；目录未命中 = 不写值（能力未知不门控）。
+- **SK 纪律**：`SecretKey` newtype 手写 Debug 打码（Effect/draft 均携带明文，
+  任何 `{:?}` 落盘不出现密钥）；扩展层只进 Authorization 头，不进日志/错误消息。
+- **验证**：pager 门控 lib auth_modal 13 / welcome 226 / slash 568（含 /auth 注册 +
+  shell 保留字同步用例）/ dispatch::tests 1732 全绿；shell GATE_FORCE 过滤
+  model_entry_writes 7 / provider_models 6 / slash_commands 105 全绿；
+  两 crate `cargo check --all-targets` 0 error 0 warning；i18n 扫描 0 挂。
+  活回合验证待新客户端实跑（发版后）。
 
 **T1 已落地补记（2026-10-11）**：模态字段（`architecture.input_modalities` /
 `modalities.input`）尚未入 `CatalogEntry`——特性 C 开工时随 T5 的 T1 扩展一并补上

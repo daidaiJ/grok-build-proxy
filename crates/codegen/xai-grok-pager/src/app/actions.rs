@@ -619,6 +619,20 @@ pub enum Action {
     SwitchAccount,
     /// User pressed login on the welcome screen.
     Login,
+    /// LOCAL: 打开 /auth 供应商配置面板（slash 命令、welcome BYOK 引导菜单）。
+    /// 会话内挂 AgentView 的 active_modal；welcome 门挂 AppView::welcome_auth_panel。
+    OpenAuthPanel,
+    /// LOCAL /auth: 面板「自动检索模型」步对用户给的 base_url 拉 /models。
+    AuthFetchModels {
+        base_url: String,
+        api_key: crate::views::auth_modal::SecretKey,
+    },
+    /// LOCAL /auth: 确认步把一批 `[model.<id>]` 条目写回 config.toml。
+    AuthPersistEntries {
+        entries: Vec<xai_grok_shell::util::config::ModelEntryDraft>,
+    },
+    /// LOCAL /auth: 确认步请求目录回填（只带本进程缺条目的 id；store 端去重 + 单飞）。
+    AuthFetchCatalogBackfill { model_ids: Vec<String> },
     /// Cancel an in-progress login that was started from inside a session (`/grok` or a 401 re-auth prompt) and return to the previous view.
     /// Distinct from `Quit`: abandoning a mid-session re-auth must not exit the app or lose the open session.
     CancelLogin,
@@ -2204,6 +2218,19 @@ pub enum Effect {
         /// 需要匹配的模型 id（聚合行去重后的集合）。
         model_ids: Vec<String>,
     },
+    /// LOCAL: /auth 面板「自动检索模型」——对用户给的 base_url 拉 `GET {base}/models`
+    /// （`x.ai/providerModels` 扩展）。SK 仅进 Authorization 头，不落日志 / Debug。
+    FetchProviderModels {
+        /// 面板当前输入的 base URL（回包原样带回，供陈旧回包比对）。
+        base_url: String,
+        /// 面板已输入的 SK（可空：免鉴权网关跳过 Authorization 头）。
+        api_key: crate::views::auth_modal::SecretKey,
+    },
+    /// LOCAL: /auth 面板确认写回 —— 一批 `[model.<id>]` 条目（toml_edit 定点编辑 +
+    /// flock 守卫，注释/未知段保留；全批原子，任一 id 冲突整批拒绝）。
+    PersistModelEntries {
+        entries: Vec<xai_grok_shell::util::config::ModelEntryDraft>,
+    },
     /// Fetch billing data at the app level (no agent required).
     /// Used on startup to populate the welcome-screen credit warning, and by the dashboard's `/usage` modal.
     FetchAppBilling {
@@ -3186,6 +3213,14 @@ pub enum TaskResult {
     /// 取数失败也回包（条目全 null），保证在途标志总能清除。
     ModelCatalogFetched {
         response: xai_grok_shell::extensions::model_catalog::ModelCatalogResponse,
+    },
+    /// LOCAL: /auth 面板模型列表取数完成（错误也在回包体内，在途标志总能清除）。
+    ProviderModelsFetched {
+        response: xai_grok_shell::extensions::provider_models::ProviderModelsResponse,
+    },
+    /// LOCAL: /auth 面板条目写回完成；`Err` = id 冲突 / IO / 不可解析拒绝（文件未动）。
+    ModelEntriesPersisted {
+        result: Result<(), String>,
     },
     /// App-level billing fetch failed (transport or parse); the cached balance is kept.
     AppBillingError {

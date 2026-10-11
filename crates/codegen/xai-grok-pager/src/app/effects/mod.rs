@@ -5117,6 +5117,53 @@ pub(crate) fn execute(
                 TaskResult::ModelCatalogFetched { response }
             });
         }
+        // LOCAL: /auth 面板「自动检索模型」。SK 仅进请求头；错误也在回包体内
+        // （不进 Err 通道），保证在途标志总能清除。
+        Effect::FetchProviderModels { base_url, api_key } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let req = acp::ExtRequest::new(
+                    "x.ai/providerModels",
+                    serde_json::value::to_raw_value(&serde_json::json!({
+                        "base_url": base_url,
+                        "api_key": api_key.expose(),
+                    }))
+                    .expect("serialize provider models params")
+                    .into(),
+                );
+                let response = match acp_send(req, &tx).await {
+                    Ok(resp) => {
+                        let wrapper: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        let result = wrapper.get("result").unwrap_or(&wrapper);
+                        serde_json::from_value::<
+                            xai_grok_shell::extensions::provider_models::ProviderModelsResponse,
+                        >(result.clone())
+                        .unwrap_or_else(|e| {
+                            xai_grok_shell::extensions::provider_models::ProviderModelsResponse {
+                                error: Some(format!("Parse error: {e}")),
+                                ..Default::default()
+                            }
+                        })
+                    }
+                    Err(e) => xai_grok_shell::extensions::provider_models::ProviderModelsResponse {
+                        error: Some(sanitize_user_error(&format!("{e}"))),
+                        ..Default::default()
+                    },
+                };
+                TaskResult::ProviderModelsFetched { response }
+            });
+        }
+        // LOCAL: /auth 面板条目写回。同进程直调 shell 写函数（persist_setting 先例）；
+        // SK 只在 draft 内存里，不进任何日志。
+        Effect::PersistModelEntries { entries } => {
+            tasks.spawn(async move {
+                let result = xai_grok_shell::util::config::write_model_entries(&entries)
+                    .await
+                    .map_err(|e| e.to_string());
+                TaskResult::ModelEntriesPersisted { result }
+            });
+        }
         Effect::RefreshGate => {
             tasks
                 .spawn(async move {

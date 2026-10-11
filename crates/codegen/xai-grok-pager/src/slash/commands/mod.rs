@@ -35,6 +35,8 @@ pub mod jump;
 pub mod lang;
 // LOCAL: /login 硬改名 /grok（xAI 账号登录与 /auth 供应商配置划清语义）
 pub mod grok;
+// LOCAL: /auth 供应商配置面板（BYOK 五步向导）
+pub mod auth;
 pub mod logout;
 pub mod loop_cmd;
 pub mod mcps;
@@ -159,6 +161,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(doctor::DoctorCommand),
         Arc::new(import_claude::ImportClaudeCommand),
         Arc::new(grok::GrokCommand),
+        Arc::new(auth::AuthCommand),
         Arc::new(logout::LogoutCommand),
         Arc::new(home::HomeCommand),
         Arc::new(delete::DeleteCommand),

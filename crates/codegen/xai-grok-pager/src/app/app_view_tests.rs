@@ -277,6 +277,7 @@ pub(crate) fn test_app() -> AppView {
         trust_quit_error: None,
         relaunch: None,
         has_claude_import: false,
+        welcome_auth_panel: None,
         import_claude_modal: None,
         welcome_doc_viewer: None,
         screen_mode: ScreenMode::Inline,

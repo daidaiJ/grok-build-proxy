@@ -203,6 +203,26 @@ pub(super) fn strip_trailing_auth_error_blocks(agent: &mut AgentView) {
     }
 }
 
+/// LOCAL: 打开 /auth 供应商配置面板。
+/// 会话内挂该会话的 `active_modal`；welcome 门（无会话上下文，BYOK 用户被困在该门后）
+/// 挂 AppView 级 `welcome_auth_panel`。既有模型 id 取自当前会话目录（id 冲突预检）。
+pub(super) fn dispatch_open_auth_panel(app: &mut AppView) -> Vec<Effect> {
+    let existing_ids: std::collections::BTreeSet<String> = app
+        .agents
+        .values()
+        .flat_map(|agent| agent.session.models.available.keys().map(|id| id.to_string()))
+        .collect();
+    let state = Box::new(crate::views::auth_modal::AuthModalState::new(existing_ids));
+    if let ActiveView::Agent(id) = &app.active_view
+        && let Some(agent) = app.agents.get_mut(id)
+    {
+        agent.active_modal = Some(crate::views::modal::ActiveModal::AuthPanel { state });
+    } else {
+        app.welcome_auth_panel = Some(state);
+    }
+    vec![]
+}
+
 /// Start an interactive login flow. Triggered by pressing 'l' on the welcome screen or by the `/grok` slash command.
 /// Only the welcome view renders the auth UI (the external auth provider's sign-in URL and status).
 /// A mid-session invocation therefore stashes the caller's view in `auth_return_view` and switches to `Welcome` so the flow is visible.

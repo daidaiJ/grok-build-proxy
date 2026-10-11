@@ -290,6 +290,7 @@ fn test_app() -> AppView {
         trust_quit_error: None,
         relaunch: None,
         import_claude_modal: None,
+        welcome_auth_panel: None,
         welcome_doc_viewer: None,
         screen_mode: crate::app::ScreenMode::Inline,
         pending_screen_mode_switch: None,

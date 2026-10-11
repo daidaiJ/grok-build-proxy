@@ -28,6 +28,7 @@ pub mod pr;
 pub mod privacy;
 pub mod prompt_history;
 pub mod prompt_meta;
+pub mod provider_models;
 pub mod provider_usage;
 pub mod model_catalog;
 pub mod recap;

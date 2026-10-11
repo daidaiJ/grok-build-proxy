@@ -2401,3 +2401,50 @@ main build run `38115162565` Linux 红灯暴露（正文实际已输出 `/grok`�
 分支合入。另：同 run 首挂的 lib 用例
 `reset_title_to_auto_adopts_in_flight_generation_as_auto`（8 秒墙钟轮询）在
 failed-job 重跑中通过（7096/0），判定为计时 flake，非 T0 回归。
+
+## 三十期：T2/T3——/auth 供应商配置面板 + 目录回填 + config 写回（2026-10-11，分支 feat/local-auth-panel）
+
+> provider-onboarding-api-cost 分期 T2 + T3（设计文档
+> `docs-local/provider-onboarding-api-cost-todo.md`，拍板七轮：SK 明文 api_key
+> 直写、条目 id 用户缩写唯一、toml_edit 定点写回）。上游同步重放时按本节整节重放。
+
+1. **shell 写回 `util/config/model_entry_writes.rs`**：`ModelEntryDraft`（id/model/
+   base_url/api_key/api_backend/context_window/max_completion_tokens；手写 Debug
+   打码）+ `write_model_entries`——`lock_config_writes`（SAVE_LOCK ⊃ init flock）
+   守卫下 toml_edit DocumentMut 定点编辑 `[model.<id>]`：注释/未知段/格式全保留；
+   全批原子（任一 id 冲突整批拒绝、文件不动），已有同 id 一律拒绝不覆盖；
+   非空白不可解析文件拒绝写回。`ChatCompletions` 为 serde 缺省省略不写；
+   `context_window`/`max_completion_tokens` 由调用方按「与兜底不同才写」预筛
+   （回填语义见设计文档）。空 api_key 省略字段。
+2. **shell 扩展 `extensions/provider_models.rs`（`x.ai/providerModels`）**：参数
+   `{base_url, api_key?}` → `GET {base}/models`（15s 超时；Bearer 仅当有 key；
+   `build_reqwest_client` 同款客户端纪律）→ OpenAI/Anthropic `data[]` 与裸数组
+   三形态解析为 `{id, owned_by?}` 清单；body 读错真实上报（不吞成空串）；
+   错误进回包体不进 ACP Err。SK 只进 Authorization 头，不进日志/错误/Debug。
+   路由点 `acp_agent.rs` + `extensions/mod.rs`。
+3. **pager 面板 `views/auth_modal`**：分步向导 Protocol→BaseUrl→ApiKey（掩码
+   回显，Ctrl+U 清空）→Models（`GET /models` 拉取 + 关键词过滤 + 空格多选 +
+   `a` 手填 slug 回退 + `r` 重试；手填项重取不丢）→Confirm（每行 id 可编辑 `e`、
+   冲突标红阻断、回填值展示）→Writing（Esc 吞掉）→Done。目录回填走 T1 store
+   （`AuthFetchCatalogBackfill` → `ids_needing_fetch` 去重 + `begin_loading`
+   单发 → 复用 `Effect::FetchModelCatalog`；回包刷新确认行）。`SecretKey`
+   newtype 手写 Debug 打码 + PartialEq。
+4. **Effect/TaskResult**：`Effect::FetchProviderModels`（ACP ext 通道，陈旧回包按
+   requested base_url 丢弃）+ `Effect::PersistModelEntries`（pager 同进程直调
+   `write_model_entries`，persist_setting 先例）；`TaskResult::ProviderModelsFetched`
+   / `ModelEntriesPersisted` 路由到 AuthPanel 两宿主。
+5. **双宿主接线**：会话内 `ActiveModal::AuthPanel`（AgentView active_modal，
+   `/auth` 命令触发）；welcome 门 `AppView::welcome_auth_panel`（零配置 BYOK
+   用户被困门后是主场景）：Pending 菜单增 `a` 项（byok_guidance 时 3 项，索引
+   映射 `dispatch_pending_menu_action` 同步）+ 键 `a` 直开面板；welcome 两渲染
+   路径 + 输入路由 + 粘贴 + scroll-blocking 门控 + link_spans 清除均接线。
+6. **注册与保留字**：`slash/commands/auth.rs`（`/auth` = OpenAuthPanel）注册；
+   shell `PAGER_COMMAND_KEYS` 增 `auth`（防 skill 影子化）；welcome BYOK 引导
+   文案改指 `a`/`/auth`（T0 占位文案升级）；pager 依赖补
+   `xai-grok-sampling-types`（原 optional 死条目转正常依赖，ApiBackend 需要）。
+   i18n：新增 auth_modal + welcome 引导键（zh 翻译齐），扫描 0 挂 0 重复。
+
+验证：pager 门控 lib auth_modal 13 / welcome 226 / slash 568 / dispatch::tests
+1732 全绿；shell GATE_FORCE 过滤 model_entry_writes 7 / provider_models 6 /
+slash_commands 105 全绿；两 crate `cargo check --all-targets` 0 error/0 warning；
+i18n 扫描 0 挂。活回合验证（真实 TUI 走五步 + 写回后 /model 热加载）待新客户端。

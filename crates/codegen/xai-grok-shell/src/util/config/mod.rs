@@ -5,6 +5,8 @@ mod campaigns;
 mod consent;
 mod hints;
 mod load;
+// LOCAL: /auth 面板的 [model.<id>] 写回（toml_edit 定点编辑 + config 写守卫）
+mod model_entry_writes;
 mod mcp;
 mod mcp_reenable;
 mod permissions;
@@ -26,6 +28,7 @@ pub use hints::*;
 pub use load::*;
 pub use mcp::*;
 pub(crate) use mcp_reenable::{McpDefinitionIndex, needs_definition_scan};
+pub use model_entry_writes::{ModelEntryDraft, write_model_entries};
 pub use permissions::*;
 pub use persist::*;
 // These types live in `xai-grok-config-types`; the re-export keeps `crate::util::config::{RemoteSettings, GoalRoleModel}` working

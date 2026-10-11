@@ -465,6 +465,8 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "agents-dashboard",
     "always-approve",
     "announcements",
+    // LOCAL (T2 /auth): pager 供应商配置面板命令，防止同名 skill 影子化
+    "auth",
     "auto",
     "btw",
     "cd",
