@@ -5164,6 +5164,33 @@ pub(crate) fn execute(
                 TaskResult::ModelEntriesPersisted { result }
             });
         }
+        // LOCAL: /auth 写回成功后的模型列表热重载。embedded/headless 无 config
+        // watcher（仅 leader 装配），必须显式触发；agent 侧重读 config.toml 并
+        // 广播 `x.ai/models/update`（pager 的 /model 数据源随之刷新）。
+        Effect::ReloadAgentModels => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let req = acp::ExtRequest::new(
+                    "x.ai/internal/reload_models",
+                    serde_json::value::to_raw_value(&serde_json::json!({}))
+                        .expect("serialize reload params")
+                        .into(),
+                );
+                let result = match acp_send(req, &tx).await {
+                    Ok(resp) => {
+                        let wrapper: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        let body = wrapper.get("result").unwrap_or(&wrapper);
+                        body.get("models")
+                            .and_then(|m| m.as_u64())
+                            .map(|n| n as usize)
+                            .ok_or_else(|| "unexpected reload_models response".to_string())
+                    }
+                    Err(e) => Err(e.to_string()),
+                };
+                TaskResult::AgentModelsReloaded { result }
+            });
+        }
         Effect::RefreshGate => {
             tasks
                 .spawn(async move {

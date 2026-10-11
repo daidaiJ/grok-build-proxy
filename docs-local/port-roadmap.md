@@ -490,3 +490,22 @@
   热加载 + SK 不落 transcript/日志抽查）。
 - **后续**：T4 i18n 扫尾（面板字符串已带 zh，剩余无）——实质挂起；
   T5 特性 C（能力门控）独立小件待开工；发版待用户拍板（活回合验证后）。
+
+### 2026-10-11 · 活回合三修复登记（目录裸 id 匹配 + /auth 提示行贴底 + 写回后 /model 不刷新，fix/local-catalog-bare-ids-auth-panel）
+
+- **改动**：① 目录源换序（models.dev 主、OpenRouter 兜底）+ 原厂白名单过滤
+  （21 项，转售 provider 整库不留）+ 匹配策略扩展（剥壳/分隔符变体/部署戳容忍
+  三路 84 档 + canonical 自证平局）+ `~/.grok/prices.cache` 磁盘缓存与宁旧勿空
+  回退；② /auth 提示行固定贴面板底（对齐全局面板惯例）；③ 写回成功后 pager 显式
+  发 `x.ai/internal/reload_models`（embedded 无 config watcher，v1.0.50 的热重载
+  文案为空头支票）。**勘误上条**：「写回后经既有 ModelsChanged 热重载」在
+  embedded 模式不成立（watcher 仅 run_leader 装配），本次以显式触发修复。
+  实现记录 PATCHES.md 三十一期，issue 与拍板二轮 8–13 见
+  issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md 与 design doc。
+- **验证**：model-catalog lib 38/38；shell GATE_FORCE model_catalog 7/7 +
+  ext_method_reload_models 1/1；pager GATE_FORCE auth_modal 14/14 +
+  dispatch::tests::auth 25/25；双 crate check --all-targets 0 error；i18n 基线不变；
+  匹配仿真（线上真实两源）本机 10 id 8 命中全原厂价，2 miss 均 sensenova（豁免）。
+- **发版**：随 v1.0.51（合 main 后打 tag，发版 run 待回填）。
+- **遗留**：活回合验证（/stats 成本列三模型、/auth 五步写回后免重启 /model、
+  prices.cache 断网回退）；T5 特性 C（能力门控）仍待开工。

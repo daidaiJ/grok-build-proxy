@@ -191,6 +191,43 @@
 - **分期**：**T5（独立小件，不阻塞 T2–T4）**；T1 扩展可先行（纯函数层 + 夹具，
   半天级）。T3 面板回填时顺带在模型列表展示「支持视觉」标记（目录字段现成）。
 
+## 拍板增补（2026-10-11 二轮）：裸 id 命中 + 只留原厂 + prices.cache + /auth 面板修复
+
+v1.0.50 活回合用后反馈三问题，逐条拍板并随 `v1.0.51` 修复：
+
+8. **目录源换序（修订拍板 4）**：models.dev 主、OpenRouter API 兜底。依据：models.dev
+   直连稳定（实测 3/3 200，TTFB ≈0.9–1.1s），且以裸 model id 挂在原厂 provider 下，
+   同时内嵌 `openrouter` 官方牌价镜像（379 条）覆盖 `vendor/model` 形态——单源即双
+   形态全命中；OpenRouter API 直连不稳（间歇 reset），退居兜底。
+9. **只留原厂定价**：models.dev 解析层按一方 provider 白名单过滤
+   （`match_model::FIRST_PARTY_PROVIDERS`，21 个：openai / anthropic / google /
+   google-vertex / xai / meta / zai / zhipuai / deepseek / moonshotai / moonshotai-cn /
+   alibaba / alibaba-cn / xiaomi / volcengine / stepfun / stepfun-ai / tencent-coding-plan /
+   tencent-token-plan / tencent-tokenhub / openrouter 镜像），302ai / kilo / nano-gpt 等
+   200+ 转售 provider 整库不留；coding-plan / token-plan 订阅条目价格恒 0，白名单不收 +
+   解析层「input/output 双 0 → 归无价」防护兜底。品牌归属平局序：原厂自家（canonical
+   自证）> 同厂多入口 > openrouter 镜像（deepseek 自家 0.15/0.6 压过 alibaba-cn 托管
+   0.14/0.28，output 差 2×）。
+10. **匹配策略（覆盖率 + 准确性定稿）**：输入 = 出站请求体 `model` 字段（账本回显 id /
+    /auth 确认行 model 名）；整串精确(100/95) → vendor 对上原厂 provider 的拆段(86/84)
+    + canonical(85) → vendor 不识别剥壳取 `xx/` 后半段(84) → 纯 id 分隔符变体(84) →
+    部署戳尾巴（6–8 位日期）容忍(84) → 全落空 OpenRouter 兜底 → `–`。品牌正则不作
+    独立档（家族名钉不死型号，会伤准确），由平局归属序承载「deepseek.* 找 deepseek、
+    找不到找 openrouter」语义。本机 10 个在用 id（按 model 字段去重）8 命中，2 miss
+    全为 sensenova（商汤不在 models.dev 白名单 provider 内，豁免）。
+11. **prices.cache 磁盘缓存**：`~/.grok/prices.cache`（JSON：version + fetched_at_ms +
+    catalog），原子写（tmp+rename，models_cache.json 同原语）。TTL 内跨进程复用免请求；
+    TTL 过期且取数失败回退旧值（进程内 → 磁盘任意龄期，宁旧勿空，同 provider usage
+    v1.0.47 语义）。价格数据少变动，5.4MB 级取数一天至多一次。
+12. **/auth 写回后显式触发热重载**：embedded/headless 模式没有 config 文件 watcher
+    （`ConfigFileWatcher` 仅 run_leader 装配），写回后 pager 发
+    `x.ai/internal/reload_models`（裸方法名）→ agent 重读 config → 广播
+    `x.ai/models/update` → /model 即选即用；失败在完成页提示重启。v1.0.50 完成页的
+    「hot reload」文案实为空头支票（本次修复）。
+13. **/auth 面板提示行贴底**：按键提示从内容流改为固定渲染在面板倒数第二行
+    （Step x/5 页脚之上），对齐全局面板惯例；editing 态提示 Enter/Esc 保存 id；
+    顺带补 `next`/`retry`/`add manually` 等漏登记的 i18n 键。
+
 ## 验收标准
 
 - A：全新配置（无 `[model.*]`）走 /auth 五步产出一条可用条目，采样请求成功；目录值与默认
@@ -204,7 +241,8 @@
 2. **config 回写策略**：整文件重序列化 vs 定点插入（注释/未知段保留）。
 3. **首启 onboarding**：~~是否自动引导~~ **已拍板（四轮）**——零配置首启默认 BYOK `/auth` 交互，
    Grok 认证降级为面板内选项；原 `/login` 改名 `/grok`。
-4. **目录源优先级**：OpenRouter 主、models.dev 兜底（modelq 双源合并的 fork 版取舍；或仅接一源）。
+4. **目录源优先级**：~~OpenRouter 主、models.dev 兜底~~ **已修订（二轮拍板 8）**——
+   models.dev 主、OpenRouter API 兜底。
 5. **成本货币**：仅 USD（已拍板口径「美元成本」）；CNY 换算后续按需。
 6. **status line 成本位**：本次不做，留档。
 7. **纯文本模型遇图门控行为**（特性 C / T5，2026-10-11 用户提出，双层建议待确认）：

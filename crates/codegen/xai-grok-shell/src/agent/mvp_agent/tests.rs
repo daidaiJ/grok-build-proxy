@@ -1939,9 +1939,40 @@ async fn test_per_session_code_nav_isolation() {
         "original web handle must be unaffected"
     );
 }
+/// LOCAL: /auth 写回后的热重载走 pager → `x.ai/internal/reload_models`（裸方法名，
+/// embedded 无 config watcher）。钉死线上契约：裸名可路由 + 回包 `{"models": n}`。
 #[tokio::test(flavor = "current_thread")]
-async fn ext_method_routes_auth_cleared_and_refreshes_resident_sessions() {
+async fn ext_method_reload_models_returns_model_count() {
     let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let agent = build_agent_with_auth(xai_grok_login::GrokAuth {
+                key: "eligible".into(),
+                auth_mode: xai_grok_login::AuthMode::WebLogin,
+                ..xai_grok_login::GrokAuth::test_default()
+            });
+            use acp::Agent as _;
+            let params = serde_json::json!({});
+            let resp = agent
+                .ext_method(acp::ExtRequest::new(
+                    "x.ai/internal/reload_models",
+                    std::sync::Arc::from(serde_json::value::to_raw_value(&params).unwrap()),
+                ))
+                .await
+                .expect("reload_models must route through session-admin");
+            let wrapper: serde_json::Value =
+                serde_json::from_str(resp.0.get()).expect("reload_models response must be JSON");
+            let body = wrapper.get("result").unwrap_or(&wrapper);
+            assert!(
+                body.get("models").and_then(|m| m.as_u64()).is_some(),
+                "wire contract: {{\"models\": n}}, got {wrapper}"
+            );
+        })
+        .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn ext_method_routes_auth_cleared_and_refreshes_resident_sessions() {    let local = tokio::task::LocalSet::new();
     local
         .run_until(async {
             let agent = build_agent_with_auth(xai_grok_login::GrokAuth {

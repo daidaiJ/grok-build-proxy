@@ -2448,3 +2448,42 @@ failed-job 重跑中通过（7096/0），判定为计时 flake，非 T0 回归�
 1732 全绿；shell GATE_FORCE 过滤 model_entry_writes 7 / provider_models 6 /
 slash_commands 105 全绿；两 crate `cargo check --all-targets` 0 error/0 warning；
 i18n 扫描 0 挂。活回合验证（真实 TUI 走五步 + 写回后 /model 热加载）待新客户端。
+
+## 三十一期：目录裸 id 匹配 + 只留原厂 + prices.cache + /auth 面板两修复（2026-10-11，分支 fix/local-catalog-bare-ids-auth-panel）
+
+> v1.0.50 活回合反馈三问题（issue
+> `docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md`，拍板二轮
+> 8–13 见 design doc）：成本列半数模型无价（裸 id 撞上 OpenRouter 单源）、/auth
+> 提示行悬空、写回后 /model 不刷新。上游同步重放按整节重放。
+
+1. **纯函数层 `xai-grok-model-catalog`**：
+   - **源换序**（`requests.rs`）：models.dev 主、OpenRouter API 兜底（修订拍板 4）。
+   - **原厂过滤**（`modelsdev.rs` + `match_model::FIRST_PARTY_PROVIDERS` 21 项白名单，
+     2026-10-11 线上数据逐项核对存在性与模型数、collapse 归一化零撞车）：models.dev
+     解析只留白名单 provider（含 `openrouter` 官方牌价镜像），302ai 等 200+ 转售
+     provider 整库不留；订阅 plan 条目价格恒 0 →「input/output 双 0 归无价」防护。
+   - **匹配策略**（`match_model.rs`）：新增 84 档三路——vendor 不识别剥壳取 `xx/`
+     后半段、纯 id 分隔符变体（`_`/`.` vs `-`）、部署戳尾巴容忍（6–8 位日期，
+     4 位日期型型号如 `step-3.5-flash-2603` 不剥）；平局键升三元的
+     (source, first_party, canonical 自证)——deepseek 自家 0.15/0.6 压过 alibaba-cn
+     托管同 id 0.14/0.28。
+2. **shell 扩展 `extensions/model_catalog.rs`**：`~/.grok/prices.cache` 磁盘缓存
+   （`DiskCache{version, fetched_at_ms, catalog}` 原子写 tmp+rename，读 32MB 封顶；
+   TTL 内跨进程复用回 `cache="disk"`；取数失败 stale 回退改进程内 → 磁盘任意龄期
+   两级，宁旧勿空）。`remote_config::cache_file` 的 `read_capped`/`write_atomic`
+   提为 `pub(crate)` 供复用。
+3. **pager 写回热重载**：`Effect::ReloadAgentModels`（写回 Ok 后发
+   `x.ai/internal/reload_models` 裸方法名，解析 `{models: n}` 回包）+
+   `TaskResult::AgentModelsReloaded`（Err 落 AuthPanel 完成页 `reload_error`，
+   灰字提示重启）。根因：embedded/headless 模式无 config 文件 watcher（仅
+   `run_leader` 装配），v1.0.50 的 hot reload 文案实为空头支票。
+4. **pager 面板布局**：按键提示从内容流改为固定渲染面板倒数第二内容行（Step x/5
+   页脚之上），对齐全局面板贴底惯例；`step_hints` 按真实按键路由给文案（editing
+   态 Enter/Esc 保存 id）；顺带补 `next`/`retry`/`add manually` 等漏登记 i18n 键。
+
+验证：model-catalog lib 38/38；shell GATE_FORCE model_catalog 7/7 +
+ext_method_reload_models 1/1（钉死裸名路由 + 回包形状）；pager GATE_FORCE
+auth_modal 14/14（含提示行贴底渲染断言）+ dispatch::tests::auth 25/25（写回 Ok
+→ ReloadAgentModels、Err 不触发、重载 Err 落完成页）；两 crate check --all-targets
+0 error；i18n 扫描基线不变。匹配仿真（线上两源真实数据）：本机 10 个在用 model id
+8 命中全为原厂/官方价，2 miss 均 sensenova（豁免）。活回合待新客户端。
