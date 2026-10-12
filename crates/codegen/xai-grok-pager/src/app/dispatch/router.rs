@@ -50,6 +50,7 @@ use super::prompt::{
 };
 use super::queue;
 use super::queue::dispatch_drain_queue;
+use super::queue::push_and_page_flip;
 use super::rewind::{
     dispatch_rewind, dispatch_rewind_cancel_offer, dispatch_rewind_confirm,
     dispatch_rewind_confirm_never_ask, dispatch_rewind_dismiss, dispatch_rewind_dismiss_error,
@@ -152,6 +153,135 @@ pub(in crate::app::dispatch) fn confirmed_quit(app: &mut AppView) -> Vec<Effect>
     effects.push(Effect::Quit);
     effects
 }
+
+/// LOCAL(/lsp): `/lsp on|off|status|clear` 的执行体。cwd 取活动会话的会话 cwd
+/// （agent 视图）或 app cwd（dashboard/welcome）；写入 grok-home workspace 覆盖
+/// （shell `workspace_overrides`），生效点在下一个会话 spawn 的 definition 构建。
+/// 写入仅在「零用户回合」的会话放行：工具清单在会话创建时定格，中途改清单
+/// 会话内不生效且声明面漂移，因此带历史的会话拒绝并指向 /clear。
+fn dispatch_lsp_configure(
+    app: &mut AppView,
+    request: crate::app::actions::LspConfigureRequest,
+) -> Vec<Effect> {
+    use crate::app::actions::LspConfigureRequest;
+    use crate::app::agent::AgentState;
+    use xai_grok_shell::util::workspace_overrides;
+
+    let overrides_key = workspace_overrides::LSP_TOOLS_OVERRIDE_KEY;
+    // 会话态快照：agent 视图取会话 cwd 与门控信号；其余视图用 app cwd、无门控。
+    let (cwd, session_state) = match app.active_view {
+        ActiveView::Agent(id) => match app.agents.get(&id) {
+            Some(agent) => {
+                let s = &agent.session;
+                // 无 session_id = 会话尚未建立（definition 还没构建），写入无冲突；
+                // 已建立的会话要求「零用户回合」（/clear 即 /new，天然归一到新会话）。
+                let fresh = match s.session_id {
+                    None => true,
+                    Some(_) => {
+                        matches!(s.state, AgentState::Idle)
+                            && s.pending_prompts.is_empty()
+                            && s.in_flight_prompt.is_none()
+                            && s.current_prompt_id.is_none()
+                            && s.compact_held_prompt.is_none()
+                            && !s.prompt_history_loading
+                            && s.prompt_history.is_empty()
+                    }
+                };
+                (
+                    s.cwd.clone(),
+                    Some((fresh, s.available_tools.as_ref().map(|t| t.contains("lsp")))),
+                )
+            }
+            None => (app.cwd.clone().into(), None),
+        },
+        ActiveView::Welcome | ActiveView::AgentDashboard => (app.cwd.clone().into(), None),
+    };
+
+    match request {
+        LspConfigureRequest::Status => {
+            let workspace_line =
+                match workspace_overrides::read_workspace_override(&cwd, overrides_key) {
+                    Some(true) => "本工作区覆盖：on（下次会话启用 LSP 工具）".to_string(),
+                    Some(false) => "本工作区覆盖：off（下次会话禁用 LSP 工具）".to_string(),
+                    None => "本工作区覆盖：未设置（跟随全局 [features] lsp_tools，默认关）"
+                        .to_string(),
+                };
+            let session_line = match session_state {
+                Some((_, Some(true))) => "本会话：LSP 工具已注册。".to_string(),
+                Some((_, Some(false))) => "本会话：未注册 LSP 工具。".to_string(),
+                Some((_, None)) => "本会话：工具清单尚未同步，无法确认。".to_string(),
+                None => "当前无活动会话；设置将作用于以该目录启动的下一个会话。".to_string(),
+            };
+            lsp_report(
+                app,
+                &format!(
+                    "{session_line}\n{workspace_line}\n生效点为新会话：工具清单在会话创建时定格，/lsp 的改动对本会话不生效。"
+                ),
+            );
+            vec![]
+        }
+        LspConfigureRequest::Set(value) => {
+            if let Some((fresh, _)) = session_state {
+                if !fresh {
+                    lsp_report(
+                        app,
+                        "拒绝：当前会话已有历史回合，/lsp 只在新会话（或 /clear 后）设置。\n工具清单在会话创建时定格；先 /clear 再执行 /lsp on|off。",
+                    );
+                    return vec![];
+                }
+            }
+            let result =
+                workspace_overrides::write_workspace_override(&cwd, overrides_key, Some(value));
+            let msg = match result {
+                Ok(()) => format!(
+                    "已设置：本工作区（{}）的下一个会话将{} LSP 工具。\n当前会话不受影响；/clear 后新会话生效。",
+                    cwd.display(),
+                    if value { "启用" } else { "禁用" }
+                ),
+                Err(e) => format!("写入 LSP 工作区覆盖失败：{e}"),
+            };
+            lsp_report(app, &msg);
+            vec![]
+        }
+        LspConfigureRequest::Clear => {
+            if let Some((fresh, _)) = session_state {
+                if !fresh {
+                    lsp_report(
+                        app,
+                        "拒绝：当前会话已有历史回合，/lsp 只在新会话（或 /clear 后）设置。\n工具清单在会话创建时定格；先 /clear 再执行 /lsp clear。",
+                    );
+                    return vec![];
+                }
+            }
+            let result = workspace_overrides::write_workspace_override(&cwd, overrides_key, None);
+            let msg = match result {
+                Ok(()) => {
+                    "已清除本工作区的 LSP 覆盖，恢复跟随全局配置（[features] lsp_tools）。"
+                        .to_string()
+                }
+                Err(e) => format!("清除 LSP 工作区覆盖失败：{e}"),
+            };
+            lsp_report(app, &msg);
+            vec![]
+        }
+    }
+}
+
+/// LOCAL(/lsp): 结果回显。agent 视图写 scrollback 系统块（与 /lang 的回复一致），
+/// dashboard/welcome 走 toast。
+fn lsp_report(app: &mut AppView, msg: &str) {
+    if let ActiveView::Agent(id) = app.active_view {
+        if let Some(agent) = app.agents.get_mut(&id) {
+            push_and_page_flip(
+                &mut agent.scrollback,
+                crate::scrollback::block::RenderBlock::system(msg.to_string()),
+            );
+            return;
+        }
+    }
+    app.show_toast(msg);
+}
+
 /// Every action enters here, including the nested dispatches a slash command or task result issues.
 /// Only the outermost call shows the image notices the whole tree queued, so a nested action's own
 /// toast cannot bury them and one submission yields one message.
@@ -212,6 +342,8 @@ fn dispatch_inner(action: Action, app: &mut AppView) -> Vec<Effect> {
             effects
         }
         Action::NewSession => dispatch_new_session(app),
+        // LOCAL(/lsp): workspace 级 LSP 工具启停/状态查询
+        Action::LspConfigure { request } => dispatch_lsp_configure(app, request),
         Action::LeaveHome => leave_welcome_for_session(app),
         #[cfg(feature = "local-workspace")]
         Action::ConfirmWelcomeLocalWorkspaceAck => {

@@ -33,6 +33,8 @@ pub mod import_claude;
 pub mod jump;
 // LOCAL: TUI 界面语言切换
 pub mod lang;
+// LOCAL(/lsp): workspace 级 LSP 工具启停
+pub mod lsp;
 // LOCAL: /login 硬改名 /grok（xAI 账号登录与 /auth 供应商配置划清语义）
 pub mod grok;
 // LOCAL: /auth 供应商配置面板（BYOK 五步向导）
@@ -152,6 +154,8 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(imagine_video::ImagineVideoCommand),
         // LOCAL: TUI 界面语言切换，默认中文
         Arc::new(lang::LangCommand),
+        // LOCAL(/lsp): workspace 级 LSP 工具启停
+        Arc::new(lsp::LspCommand),
         // Docs, account and one-off maintenance.
         Arc::new(docs::DocsCommand),
         Arc::new(release_notes::ReleaseNotesCommand),
