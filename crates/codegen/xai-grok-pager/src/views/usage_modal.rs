@@ -785,19 +785,12 @@ fn usage_limit_lines(
 
     if state.ctx.chat_kind {
         // Gateway chat sessions have no Build coding credits to show.
-    } else if !state.ctx.usage_visible {
-        lines.push(muted_line(
-            theme,
-            tr("Usage limits are managed by your team."),
-        ));
-    } else if let Some(url) = &state.ctx.billing_redirect_url {
-        lines.push(plain(
-            theme,
-            tr("Please check your usage on {url}").replace("{url}", url),
-        ));
     } else if let Some(entry) = provider_usage.filter(|c| c.response.provider.is_some()) {
         // LOCAL: 当前模型有缓存 → 套餐块 + 查询时间点（stale-while-revalidate：刷新中 /
         // 刷新失败都保留旧快照，时间戳标注数据新鲜度）。
+        // 先于 xAI 账单门（usage_visible / billing_redirect_url）：套餐块是模型 base_url
+        // 命中的供应商自有数据，取数已按模型触发；API-key/BYOK 账号 `usage_visible` 为
+        // false，若排在门后则取数成功也被「团队管理」行吞掉。
         match (&entry.response.snapshot, &entry.response.error) {
             (Some(snapshot), _) => {
                 lines.extend(provider_usage_lines(snapshot, theme));
@@ -824,6 +817,16 @@ fn usage_limit_lines(
                 lines.push(muted_line(theme, tr("Loading plan usage\u{2026}")));
             }
         }
+    } else if !state.ctx.usage_visible {
+        lines.push(muted_line(
+            theme,
+            tr("Usage limits are managed by your team."),
+        ));
+    } else if let Some(url) = &state.ctx.billing_redirect_url {
+        lines.push(plain(
+            theme,
+            tr("Please check your usage on {url}").replace("{url}", url),
+        ));
     } else if let Some(bal) = balance {
         if provider_usage_loading {
             lines.push(muted_line(theme, tr("Loading plan usage\u{2026}")));
@@ -1464,6 +1467,32 @@ mod tests {
         // 查询时间点行（非在途：无刷新标记）。
         assert!(text.iter().any(|l| l.contains("Queried at")), "{text:?}");
         assert!(!text.iter().any(|l| l.contains("Refreshing")), "{text:?}");
+    }
+
+    #[test]
+    fn provider_block_shows_when_billing_surface_hidden() {
+        // API-key / BYOK 账号 `usage_visible=false`（无 grok.com 账单面）同样要出套餐块：
+        // 取数已按模型 base_url 触发，排在账单门之后会被「团队管理」行吞掉（活体复现：
+        // shell 侧 `provider usage: fetched` 成功，面板只显示 team 行）。
+        let mut state = state_with_session();
+        state.ctx.usage_visible = false;
+        let entry = provider_cache_entry(provider_response(Some(provider_snapshot()), None));
+        let theme = Theme::current();
+        let lines = usage_limit_lines(&state, Some(&entry), false, None, None, &theme);
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        assert!(
+            text[0].contains("Plan usage") && text[0].contains("Command Code"),
+            "{text:?}"
+        );
+        assert!(
+            !text.iter().any(|l| l.contains("managed by your team")),
+            "{text:?}"
+        );
+
+        // 模型未命中供应商（无套餐缓存）：账单门文案与改前一致。
+        let lines = usage_limit_lines(&state, None, false, None, None, &theme);
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        assert!(text[0].contains("managed by your team"), "{text:?}");
     }
 
     fn sample_balance() -> CreditBalance {
