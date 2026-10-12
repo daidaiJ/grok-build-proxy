@@ -136,6 +136,10 @@
 ## 6. 施工记录
 
 - 分支 `feat/local-lsp-workspace-toggle`；PATCHES.md 三十三期。
-- 验证：shell `config::tests`（resolve_lsp_tools_for_cwd 四层优先级）+ `workspace_overrides`
-  往返单测；pager `lsp` 命令解析 + dispatch 门控用例；ctest.sh 门控跑。
-- 待办：活体 TUI 验证（`/lsp on` → /clear → 看工具清单出现 `lsp`；`/lsp status`；带历史回合拒绝）。
+- 验证：shell GATE_FORCE `workspace_overrides` 4/4（往返/键控/非法 JSON 幂等写）+
+  `lsp_tools` 3/3（覆盖压 config / 默认关上开 / pin 压覆盖）；pager `lsp` 6/6
+  （命令解析 2 + dispatch 门控 4：带历史拒绝 / 回合中拒绝 / 写清往返 / status
+  三态）+ `translations_table` 1/1；双 crate check --all-targets 0 error
+  0 warning；i18n 扫描 exit 0。
+- 待办：活体 TUI 验证（`/lsp on` → /clear → 看工具清单出现 `lsp`；`/lsp status`
+  三态显示；带历史回合拒绝）。

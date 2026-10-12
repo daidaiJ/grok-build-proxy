@@ -2555,3 +2555,41 @@ warning。**真实数据仿真（catalog-sim，读本机 v1.0.51 遗留 OpenRout
 价格日志**（用户要求）：每次取价回包打 unified `model catalog: priced`——
 `priced: {id: {entry, score, in, out}}` + `unpriced: [...]` + `cache` 档位，
 覆盖 hit/disk/fetch/stale/error 全部回包路径。
+
+## 三十三期：`/lsp` workspace 级 LSP 工具启停（2026-10-12，分支 feat/local-lsp-workspace-toggle）
+
+> ADOPTION §7.6.1 提案落地（2026-10-11 登记）。同类调研（crush / opencode /
+> qwen-code 三家真实现深读；goose / kimi-code / zcode / Step-Code / minimax-code
+> 两轮扫描 0 命中）与设计正文见
+> [`docs-local/lsp-port/README.md`](lsp-port/README.md)。qwen-code 热重载设计
+> 文档明说「启用旗标不做运行时切换」，与提案的会话边界拍板互为印证。
+
+1. **shell 存储 `util/workspace_overrides.rs`（新）**：grok-home
+   `feature-overrides/<encode_cwd_dirname(cwd)>.json` 平面键值（`{"lsp_tools":
+   bool}`，键可扩展）；owner-only 写（`write_secure_file`）、clear 后无键删文件、
+   未知键 fail-loud、非法 JSON 读作 None 回落全局；`_in` 变体注入 home 供测试
+   （`grok_home()` OnceLock 进程缓存，测试内不可换 home）。
+2. **shell 门控 `Config::resolve_lsp_tools_for_cwd` /
+   `resolve_lsp_tools_with_override`（agent/config.rs）**：优先级
+   **pin > env(GROK_LSP_TOOLS) > workspace 覆盖 > config > remote > default**
+   （用户工作区显式选择压过环境默认；进程 env 与 MDM pin 保持最高）；决策核拆
+   纯函数（覆盖值注入）供测试。消费点 agent_ops.rs LSP 注册块换走新门控，
+   `tracing::debug` 记 tier+值；生效点 = session spawn 的 definition 构建，
+   会话中途改覆盖不重塑在跑会话的工具清单。
+3. **pager `/lsp`（slash/commands/lsp.rs 新）**：`on|off|status|clear`（中文别名
+   开启/关闭）→ `Action::LspConfigure`；`LspConfigureRequest` 三态
+   （Status/Set/Clear）。执行体 `dispatch_lsp_configure`（router.rs）：cwd 取
+   会话 cwd（agent 视图）或 app cwd（dashboard/welcome，无门控）；写入过
+   「零用户回合」新会话门（prompt_history 空 + Idle + 无在途/排队/持有 prompt
+   + 历史加载完成；无 session_id 视为未建立放行），带历史拒绝并指向 /clear
+   （/clear 即 /new 别名）；status 显示本会话注册态（`meta.tools` 广播的
+   `available_tools` 含 `"lsp"`）+ 工作区覆盖 + 生效点说明；agent 视图回显走
+   scrollback 系统块（同 /lang），dashboard/welcome 走 toast。
+4. **i18n**：描述/usage 入翻译表（"Toggle LSP tools for this workspace" /
+   "/lsp [on|off|status|clear]"）；运行时消息按 /lang 先例硬编码中文。
+   不扩 `CommandExecCtx`（50 个字面构造点，cwd/门控信号在 dispatch 层取）。
+
+验证：shell GATE_FORCE workspace_overrides 4/4 + lsp_tools 3/3；pager lsp 6/6
+（命令解析 2 + dispatch 门控 4）+ translations_table 1/1；双 crate check
+--all-targets 0 error 0 warning；i18n 扫描 exit 0。**待办**：活体 TUI 验证
+（新客户端 `/lsp on` → /clear → 工具清单现 `lsp`；status 三态；带历史回合拒绝）。
