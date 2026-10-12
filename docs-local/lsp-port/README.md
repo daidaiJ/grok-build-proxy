@@ -146,6 +146,9 @@
 
 ## 7. 改进评估（2026-10-12，随 v1.0.52 发版产出）
 
+> 施工规划已立项：[`lsp-improvements-todo.md`](lsp-improvements-todo.md)
+> （T1 诊断按需 op → T2 call hierarchy → T3 rename，含锚点/验收/待定决策）。
+
 ### 7.1 fork LSP 能力面盘点（施工前实测锚点）
 
 - **工具面**：统一 `lsp` 单工具 6 只读 op（goToDefinition / findReferences / hover /

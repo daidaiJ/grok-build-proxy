@@ -529,3 +529,14 @@
   带历史回合拒绝）；② 后续思想吸收判定表在 lsp-port/README §5（热重载增量
   reconcile / call_hierarchy HMAC / per-root 多实例均挂触发信号缓）；
   ③ 7.1.13 LSP 工具补齐（call_hierarchy/rename/replace_symbol）随使用反馈再排。
+
+### 2026-10-12 · LSP 改进规划立项登记（lsp-port 专题续期）
+
+- **产出**：[`docs-local/lsp-port/lsp-improvements-todo.md`](lsp-port/lsp-improvements-todo.md)
+  ——/lsp 落地当日对三家（crush/opencode/qwen-code）缺口矩阵评估后拍板顺位：
+  T1 诊断按需 op（backend `read_diagnostics` 现成，小件）→ T2 call hierarchy
+  （三步协议 + 陈旧防护）→ T3 rename（写路径独立切片）；code actions/热重载/多根
+  等 4–8 号候选挂触发信号缓。文档含现状锚点、各期改动点/验收标准、待定决策
+  D1–D4（D3/D4 带默认倾向可默认执行）。
+- **接手者第一步**：T1 开工（分支拟 `feat/local-lsp-diagnostics-op`）；开工首日
+  核实 async-lsp 的 CallHierarchy 类型可用性（T2 前置）。
