@@ -524,7 +524,7 @@
   「零用户回合」新会话门，生效点 = session spawn 的 definition 构建。
 - **验证**：shell GATE_FORCE workspace_overrides 4/4 + lsp_tools 3/3；pager lsp 6/6
   + translations_table 1/1；双 crate check --all-targets 0 error 0 warning；
-  i18n 扫描 exit 0。实现记录 PATCHES.md 三十三期。
+  i18n 扫描 exit 0。实现记录 PATCHES.md 三十四期。
 - **遗留**：① 活体 TUI 验证（/lsp on → /clear → 工具清单现 lsp；status 三态；
   带历史回合拒绝）；② 后续思想吸收判定表在 lsp-port/README §5（热重载增量
   reconcile / call_hierarchy HMAC / per-root 多实例均挂触发信号缓）；

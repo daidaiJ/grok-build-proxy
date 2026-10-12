@@ -135,7 +135,7 @@
 
 ## 6. 施工记录
 
-- 分支 `feat/local-lsp-workspace-toggle`；PATCHES.md 三十三期。
+- 分支 `feat/local-lsp-workspace-toggle`；PATCHES.md 三十四期。
 - 验证：shell GATE_FORCE `workspace_overrides` 4/4（往返/键控/非法 JSON 幂等写）+
   `lsp_tools` 3/3（覆盖压 config / 默认关上开 / pin 压覆盖）；pager `lsp` 6/6
   （命令解析 2 + dispatch 门控 4：带历史拒绝 / 回合中拒绝 / 写清往返 / status

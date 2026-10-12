@@ -2556,7 +2556,58 @@ warning。**真实数据仿真（catalog-sim，读本机 v1.0.51 遗留 OpenRout
 `priced: {id: {entry, score, in, out}}` + `unpriced: [...]` + `cache` 档位，
 覆盖 hit/disk/fetch/stale/error 全部回包路径。
 
-## 三十三期：`/lsp` workspace 级 LSP 工具启停（2026-10-12，分支 feat/local-lsp-workspace-toggle）
+## 三十三期：套餐块被 xAI 账单门吞掉（API-key/BYOK 下 /usage 不显套餐用量）（2026-10-12，分支 fix/local-provider-usage-gate）
+
+用户报告「/usage 不显示 Command Code 套餐余量」。排查用真客户端活体（ptyctl 驱动
+`D:\tool\cli\grok2.exe` 1.0.51 + unified.jsonl 双向对照）定位：**取数成功、显示被门吞**。
+
+证据链（同一时刻两条并存）：
+
+1. shell 侧取数成功：`~/.grok/logs/unified.jsonl`
+   `provider usage: fetched`（`provider=commandcode`、`modelId=cc-deepseek-v4.1-flash`、
+   `windows=2`），当天 00:40 / 01:03 / 01:07 / 01:24 四次（末次即复现打开面板当刻）。
+2. 面板同刻渲染「用量限制由你的团队管理」——ptyctl 驱动真 TUI 敲 `/usage` 抓屏得证。
+
+根因：`xai-grok-pager/src/views/usage_modal.rs` 的 `usage_limit_lines` 分支顺序把
+供应商套餐块排在 `!state.ctx.usage_visible` 之后。本机为纯 BYOK（无 `~/.grok/auth.json`，
+状态行「已用 API key 登录」）→ `is_api_key_auth = true` → `consumer_account()` 假
+→ `usage_visible = false` → 命中「团队管理」行即返回，套餐块永不可达。而取数触发
+（`app/dispatch/status.rs:122`）不看 `usage_visible`，故出现「请求发了、数据回了、
+面板不显示」的割裂。
+
+改动：套餐块分支提到 `!usage_visible` / `billing_redirect_url` 两道 xAI 账单门之前
+（`chat_kind` 网关会话仍整块跳过，拍板不变）。理由：套餐块数据由模型 `base_url`
+命中决定、与 xAI 账单面无关，取数本就按模型触发；xAI 账单门继续管 SuperGrok 额度块、
+重定向文案与额度告警，语义未动。
+
+验证：`cargo check -p xai-grok-pager --all-targets` 0 error；
+`ctest.sh -p xai-grok-pager --lib usage_modal::` 31/31（新增回归用例
+`provider_block_shows_when_billing_surface_hidden`，钉死「`usage_visible=false` 有快照
+必出套餐块 / 无快照仍走账单门文案」）。
+
+活体复验（2026-10-12，本机 debug 构建 + ptyctl 驱动、同 BYOK 条件）：
+
+- 修后（分支构建，状态行显示分支名）：`/usage` 首屏即出「套餐用量 — Command Code」
+  + 5 小时窗口 `$0.35 / $14 · limited` 2% + 每周限额 `$7.12 / $35 · limited` 20%
+  + 「查询于 10-12 10:29」，「团队管理」行消失。
+- 同条件回归（切 `ark-glm-5.3-flash`，无供应商匹配）：面板仍是原「用量限制由你的
+  团队管理」，与改前一致——非供应商模型零变化。
+- 环境备注：debug 构建的 main 线程 1MB 栈会 `has overflowed its stack`（release 无
+  此问题），临时用 PE 头 `SizeOfStackReserve` 1MB→64MB 补丁跑通，补丁只在
+  `target/debug/xai-grok-pager.exe` 该产物上，重新构建即失效。
+
+发版：合 main merge `1cada7bd`，tag **`v1.0.52`**（轻量 tag，与 v1.0.4x/5x 同制）。
+release run `38196276842`（Linux + Windows 双 job success，约 30 分钟）与 build run
+`38196272306`（双 job success）全绿；release 页 4 资产非草稿：
+`grok2-v1.0.52-x86_64-linux.tar.gz(.sha256)`、`grok2-v1.0.52-x86_64-windows.zip(.sha256)`。
+
+**发行产物活体复验（不是自制 debug 版）**：下载 Windows zip（sha256
+`7d0f7766…` 与资产一致）解出的 `grok2.exe`（`--version` = `grok 1.0.52 (1cada7bd693f)`，
+sha256 `5d585604…`）经 ptyctl 驱动同 BYOK 条件敲 `/usage`：面板出「套餐用量 —
+Command Code」+ 5 小时窗口 `$0.45 / $14 · limited` 3% + 每周限额 `$7.21 / $35 ·
+limited` 20% + 「查询于 10-12 11:09」。本机部署 `D:\tool\cli\grok2.exe` = v1.0.52
+（客户端自更新已先一步装好，与本资产字节一致），回滚点 `grok2.exe.1.0.51`。
+## 三十四期：`/lsp` workspace 级 LSP 工具启停（2026-10-12，分支 feat/local-lsp-workspace-toggle）
 
 > ADOPTION §7.6.1 提案落地（2026-10-11 登记）。同类调研（crush / opencode /
 > qwen-code 三家真实现深读；goose / kimi-code / zcode / Step-Code / minimax-code
