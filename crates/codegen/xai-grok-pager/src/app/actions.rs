@@ -27,6 +27,14 @@ pub enum SwitchModelError {
     /// Any other failure (network, auth, server error, etc.).
     Other(String),
 }
+/// LOCAL(/lsp): `/lsp` 的子命令语义（Set/Clear 写 workspace 覆盖，Status 只读）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LspConfigureRequest {
+    Status,
+    Set(bool),
+    Clear,
+}
+
 /// Synchronous, side-effect-free user intent.
 /// Produced by [`super::input`] from key/mouse events.
 /// Consumed by [`super::dispatch::dispatch`] to mutate state and return effects.
@@ -48,6 +56,11 @@ pub enum Action {
     QuitConfirmed,
     /// Create a new session from the welcome screen.
     NewSession,
+    /// LOCAL(/lsp): workspace 级 LSP 工具启停（`/lsp`）。Set/Clear 在 dispatch 层
+    /// 过「新会话」门后写 grok-home 覆盖文件；Status 只读。
+    LspConfigure {
+        request: LspConfigureRequest,
+    },
     /// Leave the welcome screen for the optimistic home session, or create one if none exists.
     LeaveHome,
     /// Ask whether the new session should use a git worktree.

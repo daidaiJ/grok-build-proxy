@@ -212,7 +212,12 @@ P1/P2 按 §3/§4 表内级别随迭代带入；每项引入后在本文勾选�
   - 优先级注记：workspace 覆盖与 remote/managed settings 的优先级要定（建议 remote > workspace 覆盖 > 用户 config 默认，保持 managed 层优先惯例）。
   - 门控实现：命令执行时检查当前会话回合数（或 /clear 标记），非全新会话拒绝。
   - 落点：pager `slash/commands/lsp.rs`（新）+ shell feature 叠加点（`is_feature_enabled` 旁）+ grok-home 存储；编译级联 = pager + shell。
-- **状态**：提案成立，待排期；建议并入 TUI 便利件轮，与 7.1.13（LSP 工具补齐）联动——先有开关和用户，再谈加工具。
+- **状态**：**已施工（2026-10-12，分支 `feat/local-lsp-workspace-toggle`，PATCHES 三十三期；
+  调研+设计+施工正文见 [`../lsp-port/README.md`](../lsp-port/README.md)）**；活体 TUI 验证待做。
+  同类调研补齐（2026-10-12）：真有 LSP 的同类只有 crush / opencode / qwen-code 三家
+  （goose / kimi-code / zcode / Step-Code / minimax-code 两轮扫描 0 命中）；qwen-code
+  已有只读 `/lsp` 状态面板先例，且其热重载设计文档明确「启用旗标不做运行时切换」，
+  印证本提案的会话边界拍板。
 
 #### 7.6.2 逐项终评表
 

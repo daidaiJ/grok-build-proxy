@@ -4,6 +4,8 @@ mod billing;
 mod cta_e2e;
 mod dashboard;
 mod jump;
+// LOCAL(/lsp): /lsp dispatch 门控测试
+mod lsp;
 mod mid_text_btw;
 mod mid_text_goal;
 mod modes;

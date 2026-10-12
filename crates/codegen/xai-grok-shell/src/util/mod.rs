@@ -5,6 +5,8 @@ pub mod hooks;
 pub mod limits;
 pub(crate) mod text_sanitize;
 pub(crate) mod user_identity;
+// LOCAL(/lsp): per-workspace feature overrides (grok-home feature-overrides/*.json)
+pub mod workspace_overrides;
 
 // The foundation utilities live in `xai-grok-shell-base` (upstream of this crate so they build in parallel)
 // Re-exported at the original paths so existing `crate::util::…` and `xai_grok_shell::util::…` users compile unchanged

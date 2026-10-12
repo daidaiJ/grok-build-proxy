@@ -511,3 +511,21 @@
   本机客户端已部署 `grok 1.0.51 (14561c01201f)`，旧版留 `grok2.exe.v1.0.50.bak`）。
 - **遗留**：活回合验证（/stats 成本列三模型、/auth 五步写回后免重启 /model、
   prices.cache 断网回退）；T5 特性 C（能力门控）仍待开工。
+
+### 2026-10-12 · /lsp 施工完成登记（workspace 级 LSP 工具启停，feat/local-lsp-workspace-toggle）
+
+- **落地**：接 2026-10-11 二轮条目登记的 /lsp 提案（§7.6.1）。调研先行——同类真有
+  LSP 的只有 crush / opencode / qwen-code 三家（其余五仓两轮扫描 0 命中；only-cc-lite
+  非 coding agent、MiMo-Code 按用户口径不取参照），深读结论与思想吸收判定见
+  [`docs-local/lsp-port/README.md`](lsp-port/README.md)；qwen-code 只读 `/lsp`
+  状态面板先例 + 其热重载设计「启用旗标不做运行时切换」印证会话边界拍板。
+  语义：`/lsp on|off|status|clear`，grok-home `feature-overrides/<encoded-cwd>.json`
+  存储，优先级 pin > env > workspace 覆盖 > config > remote > default，写入过
+  「零用户回合」新会话门，生效点 = session spawn 的 definition 构建。
+- **验证**：shell GATE_FORCE workspace_overrides 4/4 + lsp_tools 3/3；pager lsp 6/6
+  + translations_table 1/1；双 crate check --all-targets 0 error 0 warning；
+  i18n 扫描 exit 0。实现记录 PATCHES.md 三十三期。
+- **遗留**：① 活体 TUI 验证（/lsp on → /clear → 工具清单现 lsp；status 三态；
+  带历史回合拒绝）；② 后续思想吸收判定表在 lsp-port/README §5（热重载增量
+  reconcile / call_hierarchy HMAC / per-root 多实例均挂触发信号缓）；
+  ③ 7.1.13 LSP 工具补齐（call_hierarchy/rename/replace_symbol）随使用反馈再排。
