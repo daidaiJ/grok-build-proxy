@@ -109,7 +109,8 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   补 user-guide / 文案时复用。
 - [`docs-local/usage/`](docs-local/usage/README.md) — **供应商套餐用量专题（已落地，
   随 `v1.0.46` 发版 2026-10-10；取数修复 + 单飞/缓存/显示分离重构随 `v1.0.47`
-  2026-10-11，PATCHES 二十七期；活体核验待用户回填）**：用户已拍板——当前模型
+  2026-10-11，PATCHES 二十七期；**BYOK 账单门吞套餐块修复随 `v1.0.52`
+  2026-10-12，PATCHES 三十三期**）**：用户已拍板——当前模型
   属于「推理同一把 SK 可查套餐用量」的供应商时 `/usage` 面板改显该供应商套餐量
   替代 SuperGrok 并标注来源、窗口粒度 5h>周>月、控制台账户/Cookie/AK-SK 类凭据
   一律不支持（火山 Ark / 百炼据此剔除）、缓存默认 5 分钟可配（`[provider_usage]
@@ -334,7 +335,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 - **验收标准：** 见设计文档「验收标准」节（A 五步出可用条目；B 成本对账一致 + i18n 0 挂）。
 - **详情指针：** [`.handoff/provider-onboarding-api-cost.md`](.handoff/provider-onboarding-api-cost.md)
 
-### 供应商套餐用量上 /usage 面板 — v1.0.46 落地；取数修复+单飞重构随 v1.0.47（2026-10-11）
+### 供应商套餐用量上 /usage 面板 — v1.0.46 落地；v1.0.47 取数修复；v1.0.52 账单门修复（2026-10-12）
 
 - **当前状态：** 五家供应商（OpenCode Go / Command Code / 智谱 GLM / Kimi / MiniMax）
   的套餐用量在 Usage limit 标签页替代 SuperGrok 块并标注来源；判定 = 模型 base_url
@@ -359,15 +360,25 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   用例）、GATE_FORCE shell provider_usage 5/5（新增单飞锁键共享 + 指纹确定性）、
   pager check --all-targets 0 error、i18n 扫描 0 挂。百炼单 key 查询 2026-10-10 复核
   官方 CLI 源码确认不支持（三域分离），不立项。
-- **遗留：** ① 面板活体核验**已做首轮（2026-10-12）**：真客户端（1.0.51 + ptyctl）
-  开 /usage 复现「取数成功、面板不显」——根因是 `usage_limit_lines` 把套餐块排在
-  `!usage_visible` xAI 账单门之后，纯 BYOK（`is_api_key_auth`）下 `usage_visible=false`
-  直接命中「团队管理」行；已开分支 `fix/local-provider-usage-gate` 把套餐块提前到
-  两道账单门之前（PATCHES 三十三期），回归用例
-  `provider_block_shows_when_billing_surface_hidden` 钉死。余下待人工核项：对账探针
+- **v1.0.52（2026-10-12，merge `1cada7bd`，分支 fix/local-provider-usage-gate，
+  PATCHES 三十三期）账单门修复**：纯 BYOK 账号（无 grok.com 登录 → `is_api_key_auth`
+  → `consumer_account()` 假 → `usage_visible=false`）下，套餐块排在 `!usage_visible`
+  门后，被「用量限制由你的团队管理」行吞掉——现象是 shell `provider usage: fetched`
+  成功而面板不显示。修：套餐块分支提到 `usage_visible` / `billing_redirect_url`
+  两道 xAI 账单门之前（`chat_kind` 仍跳过）。验证：pager check 0 error、
+  `ctest.sh -p xai-grok-pager --lib usage_modal::` 31/31（新增回归用例）+ ptyctl
+  真客户端活体（修后出套餐块；切 Ark 模型回归为零变化）。
+  发版：release run `38196276842` / build run `38196272306` 双 job success、
+  4 资产非草稿；**发行产物活体复验**（下载 Windows 资产解出的 `grok 1.0.52
+  (1cada7bd693f)`，sha256 `5d585604…`）面板正常出「套餐用量 — Command Code」；
+  本机 `D:\tool\cli\grok2.exe` = v1.0.52，回滚点 `grok2.exe.1.0.51`。
+- **遗留：** ① 面板活体核验**已做两轮**（2026-10-12：先复现账单门吞套餐块并修复发版；
+  修后同条件回归 Ark 模型零变化）。余下待人工核项：对账探针
   `scripts-local/commandcode_usage.py`（当前工作区不存在）、刷新中旧数据显示、
   OpenCode Go 403 回退、缓存 debug 日志 `provider usage: cache hit`。
   ② 解析形态偏差 → 修适配器走 patch 发版，纯函数层改起来最快。
+  ③ 未动的小项：`usage_visible=false` 且模型无供应商匹配时仍显示「用量限制由你的
+  团队管理」，该文案对纯 BYOK 不准确（既有行为，本次范围外）。
 - **详情指针：** [`docs-local/usage/provider-quota-display-todo.md`](docs-local/usage/provider-quota-display-todo.md)
   （拍板 9–11 + 分期实况）；PATCHES.md 二十六 / 二十七期。
 

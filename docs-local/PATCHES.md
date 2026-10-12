@@ -2595,3 +2595,15 @@ warning。**真实数据仿真（catalog-sim，读本机 v1.0.51 遗留 OpenRout
 - 环境备注：debug 构建的 main 线程 1MB 栈会 `has overflowed its stack`（release 无
   此问题），临时用 PE 头 `SizeOfStackReserve` 1MB→64MB 补丁跑通，补丁只在
   `target/debug/xai-grok-pager.exe` 该产物上，重新构建即失效。
+
+发版：合 main merge `1cada7bd`，tag **`v1.0.52`**（轻量 tag，与 v1.0.4x/5x 同制）。
+release run `38196276842`（Linux + Windows 双 job success，约 30 分钟）与 build run
+`38196272306`（双 job success）全绿；release 页 4 资产非草稿：
+`grok2-v1.0.52-x86_64-linux.tar.gz(.sha256)`、`grok2-v1.0.52-x86_64-windows.zip(.sha256)`。
+
+**发行产物活体复验（不是自制 debug 版）**：下载 Windows zip（sha256
+`7d0f7766…` 与资产一致）解出的 `grok2.exe`（`--version` = `grok 1.0.52 (1cada7bd693f)`，
+sha256 `5d585604…`）经 ptyctl 驱动同 BYOK 条件敲 `/usage`：面板出「套餐用量 —
+Command Code」+ 5 小时窗口 `$0.45 / $14 · limited` 3% + 每周限额 `$7.21 / $35 ·
+limited` 20% + 「查询于 10-12 11:09」。本机部署 `D:\tool\cli\grok2.exe` = v1.0.52
+（客户端自更新已先一步装好，与本资产字节一致），回滚点 `grok2.exe.1.0.51`。
