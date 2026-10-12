@@ -2555,3 +2555,43 @@ warning。**真实数据仿真（catalog-sim，读本机 v1.0.51 遗留 OpenRout
 价格日志**（用户要求）：每次取价回包打 unified `model catalog: priced`——
 `priced: {id: {entry, score, in, out}}` + `unpriced: [...]` + `cache` 档位，
 覆盖 hit/disk/fetch/stale/error 全部回包路径。
+
+## 三十三期：套餐块被 xAI 账单门吞掉（API-key/BYOK 下 /usage 不显套餐用量）（2026-10-12，分支 fix/local-provider-usage-gate）
+
+用户报告「/usage 不显示 Command Code 套餐余量」。排查用真客户端活体（ptyctl 驱动
+`D:\tool\cli\grok2.exe` 1.0.51 + unified.jsonl 双向对照）定位：**取数成功、显示被门吞**。
+
+证据链（同一时刻两条并存）：
+
+1. shell 侧取数成功：`~/.grok/logs/unified.jsonl`
+   `provider usage: fetched`（`provider=commandcode`、`modelId=cc-deepseek-v4.1-flash`、
+   `windows=2`），当天 00:40 / 01:03 / 01:07 / 01:24 四次（末次即复现打开面板当刻）。
+2. 面板同刻渲染「用量限制由你的团队管理」——ptyctl 驱动真 TUI 敲 `/usage` 抓屏得证。
+
+根因：`xai-grok-pager/src/views/usage_modal.rs` 的 `usage_limit_lines` 分支顺序把
+供应商套餐块排在 `!state.ctx.usage_visible` 之后。本机为纯 BYOK（无 `~/.grok/auth.json`，
+状态行「已用 API key 登录」）→ `is_api_key_auth = true` → `consumer_account()` 假
+→ `usage_visible = false` → 命中「团队管理」行即返回，套餐块永不可达。而取数触发
+（`app/dispatch/status.rs:122`）不看 `usage_visible`，故出现「请求发了、数据回了、
+面板不显示」的割裂。
+
+改动：套餐块分支提到 `!usage_visible` / `billing_redirect_url` 两道 xAI 账单门之前
+（`chat_kind` 网关会话仍整块跳过，拍板不变）。理由：套餐块数据由模型 `base_url`
+命中决定、与 xAI 账单面无关，取数本就按模型触发；xAI 账单门继续管 SuperGrok 额度块、
+重定向文案与额度告警，语义未动。
+
+验证：`cargo check -p xai-grok-pager --all-targets` 0 error；
+`ctest.sh -p xai-grok-pager --lib usage_modal::` 31/31（新增回归用例
+`provider_block_shows_when_billing_surface_hidden`，钉死「`usage_visible=false` 有快照
+必出套餐块 / 无快照仍走账单门文案」）。
+
+活体复验（2026-10-12，本机 debug 构建 + ptyctl 驱动、同 BYOK 条件）：
+
+- 修后（分支构建，状态行显示分支名）：`/usage` 首屏即出「套餐用量 — Command Code」
+  + 5 小时窗口 `$0.35 / $14 · limited` 2% + 每周限额 `$7.12 / $35 · limited` 20%
+  + 「查询于 10-12 10:29」，「团队管理」行消失。
+- 同条件回归（切 `ark-glm-5.3-flash`，无供应商匹配）：面板仍是原「用量限制由你的
+  团队管理」，与改前一致——非供应商模型零变化。
+- 环境备注：debug 构建的 main 线程 1MB 栈会 `has overflowed its stack`（release 无
+  此问题），临时用 PE 头 `SizeOfStackReserve` 1MB→64MB 补丁跑通，补丁只在
+  `target/debug/xai-grok-pager.exe` 该产物上，重新构建即失效。

@@ -359,10 +359,15 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   用例）、GATE_FORCE shell provider_usage 5/5（新增单飞锁键共享 + 指纹确定性）、
   pager check --all-targets 0 error、i18n 扫描 0 挂。百炼单 key 查询 2026-10-10 复核
   官方 CLI 源码确认不支持（三域分离），不立项。
-- **遗留：** ① 面板活体核验（用户人工继续：Command Code 模型开 /usage 对账探针
-  `scripts-local/commandcode_usage.py`、刷新中旧数据显示、OpenCode Go 403 回退、
-  缓存 debug 日志 `provider usage: cache hit`）② 解析形态偏差 → 修适配器走
-  patch 发版，纯函数层改起来最快。
+- **遗留：** ① 面板活体核验**已做首轮（2026-10-12）**：真客户端（1.0.51 + ptyctl）
+  开 /usage 复现「取数成功、面板不显」——根因是 `usage_limit_lines` 把套餐块排在
+  `!usage_visible` xAI 账单门之后，纯 BYOK（`is_api_key_auth`）下 `usage_visible=false`
+  直接命中「团队管理」行；已开分支 `fix/local-provider-usage-gate` 把套餐块提前到
+  两道账单门之前（PATCHES 三十三期），回归用例
+  `provider_block_shows_when_billing_surface_hidden` 钉死。余下待人工核项：对账探针
+  `scripts-local/commandcode_usage.py`（当前工作区不存在）、刷新中旧数据显示、
+  OpenCode Go 403 回退、缓存 debug 日志 `provider usage: cache hit`。
+  ② 解析形态偏差 → 修适配器走 patch 发版，纯函数层改起来最快。
 - **详情指针：** [`docs-local/usage/provider-quota-display-todo.md`](docs-local/usage/provider-quota-display-todo.md)
   （拍板 9–11 + 分期实况）；PATCHES.md 二十六 / 二十七期。
 
