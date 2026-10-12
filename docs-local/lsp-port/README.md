@@ -143,3 +143,52 @@
   0 warning；i18n 扫描 exit 0。
 - 待办：活体 TUI 验证（`/lsp on` → /clear → 看工具清单出现 `lsp`；`/lsp status`
   三态显示；带历史回合拒绝）。
+
+## 7. 改进评估（2026-10-12，随 v1.0.52 发版产出）
+
+### 7.1 fork LSP 能力面盘点（施工前实测锚点）
+
+- **工具面**：统一 `lsp` 单工具 6 只读 op（goToDefinition / findReferences / hover /
+  goToImplementation / documentSymbol / workspaceSymbol），`is_read_only + ToolScope::Read`。
+- **诊断回路**：被动注入已全——编辑/patch 后 drain + 150ms 去抖 reminder（answer 版本
+  跟踪、`confirm_unchanged`），**模型无法主动拉取**（无 diagnostics op）。
+- **生命周期**：崩溃自动重启（`restart_on_crash` + attempts/max_restarts/backoff +
+  lifecycle_id 竞态防护 + 重启后文档 replay）+ 五态通知（Starting/Ready/Retrying/
+  Failed/Crashed）；client-side `didChangeWatchedFiles`（防 OS watcher 风暴）。
+- **配置/安全**：`~/.grok/lsp.json` + 项目 `.grok/lsp.json` + 插件贡献；folder_trust
+  过滤；`/lsp` workspace 启停（本分支）。
+
+### 7.2 与三家对照后的缺口矩阵
+
+| 能力 | fork | crush | opencode | qwen |
+|---|---|---|---|---|
+| 导航六 op | ✅ | ✅（独立 8 工具） | ✅ | ✅ |
+| 诊断被动回喂 | ✅ 去抖 reminder | ✅ 稳定期等待 | ✅ 编辑结果内附块 | ✅ |
+| **诊断按需拉取** | ❌ | ✅ | ❌（仅回喂） | ✅ diagnostics + workspaceDiagnostics |
+| **call hierarchy**（incoming/outgoing） | ❌ | ✅ | ✅ | ✅（带 HMAC 出处签） |
+| **rename**（写） | ❌ | ✅ | ❌ | ❌ |
+| code actions（quickfix） | ❌ | ❌ | ❌ | ✅ |
+| 崩溃重启上限+退避 | ✅ | 未核实 | broken 集合 | ✅ maxRestarts |
+| 热重载配置 | ❌（会话边界拍板） | ❌ | ❌ | ✅ |
+| 多根 monorepo | ❌ 单 root | 单 root | ✅ per-(root,server) | 单 session |
+| per-server disabled | ❌（删条目等效） | ✅ | ✅ | trustRequired 字段 |
+| 统一单工具 vs 多工具 | 统一 ✅ | 多工具 | 内嵌编辑流 | 统一 ✅ |
+
+### 7.3 评估结论（按本机使用价值 × 成本排序）
+
+| # | 候选 | 价值 | 成本 | 结论 |
+|---|---|---|---|---|
+| 1 | **diagnostics 按需 op**（`lsp` 加 `diagnostics`/`workspaceDiagnostics`） | **高**——模型重构/改接口后能主动确认「现在还有什么错」，闭环从「等下回合 reminder」变「当回合验证」；本机 Rust+Go 日常高频 | **小**——backend `read_diagnostics(paths)` 已实现，只差暴露为 tool op + workspace 聚合限流；纯增量不动既有回喂 | **做，第一顺位** |
+| 2 | **call hierarchy**（prepareCallHierarchy/incomingCalls/outgoingCalls） | **高**——重构前摸清调用面是 grep+read 最大的低效点；rust-analyzer/gopls 都是一等公民 | **中**——三步协议 + 结果格式化；陈旧偏移风险照抄 qwen 的教训（出处校验或「prepare 后立即用」短时限），防「陈旧结果冒充无调用」 | **做，第二顺位** |
+| 3 | **rename**（`textDocument/rename`） | **中高**——rust-analyzer rename 精准批量，模型手改易漏注释/字符串/宏内标识符 | **中偏大**——写操作：破 `is_read_only` 声明，需接参数级 ToolRequirement 审批面 + WorkspaceEdit 多文件落盘 + 失败回滚语义；建议放独立切片 | **做，第三顺位**（写路径单独立项） |
+| 4 | code actions（quickfix 列表） | **中**——配合 1 的诊断可「看错→取 fix→apply」；单独价值有限（apply 仍要走编辑工具） | **中**——CodeAction/CodeActionParams 解析 + kind 过滤 + 与编辑工具衔接 | **缓**——1 落地后看「诊断→修复」闭环是否还需要它 |
+| 5 | 编辑结果内附诊断块（opencode 式） | 低——fork reminder 回喂已等效（去抖还更稳），差异只在同回合/下回合时机 | 小 | **不做**（已有等效物；回喂滞后实测明显再议） |
+| 6 | 热重载（qwen 增量 reconcile） | 低——`/lsp` 会话边界已消解主诉求 | 中高（watcher + reconcile + didOpen replay） | **不做**（挂触发：真实出现「改 lsp.json 不想重开会话」的频率） |
+| 7 | 多根 monorepo（opencode per-(root,server)） | 低——本机工作区单根为主 | 中 | **不做**（真实多根需求出现再立项） |
+| 8 | per-server disabled 键 | 低——lsp.json 删条目等效 | 小 | **不做**（留档） |
+
+- **顺位理由**：1 是「补全回路」成本最小的件（backend 已有 `read_diagnostics`，
+  纯暴露层）；2 是本机日常收益最大的增量；3 价值真实但写路径牵审批与回滚，
+  值得独立切片而不是顺手塞。4–8 均挂明确触发信号。
+- qwen 的两条工程教训直接进 1/2 的验收清单：**先准入后 spawn**（我们已有
+  folder_trust）与**陈旧结果不得冒充「无调用」**（call hierarchy 出处校验）。
