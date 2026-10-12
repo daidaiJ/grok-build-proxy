@@ -4451,3 +4451,51 @@ fn plugin_config_writes_keep_the_caller_local_set_live() {
     );
     holder.join().unwrap();
 }
+
+// ---- LOCAL(/lsp): workspace 级 LSP 工具门控（决策核走注入面，不碰进程 grok home）----
+
+#[test]
+fn lsp_tools_workspace_override_beats_config() {
+    use crate::agent::config::Feature;
+    // config 开、无覆盖 → 跟随 config（true）。
+    let raw: toml::Value = toml::from_str("[features]\nlsp_tools = true\n").unwrap();
+    let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+    assert!(cfg.resolve_lsp_tools_with_override(None));
+
+    // workspace 覆盖 false → 压过 config 的 true。
+    assert!(
+        !cfg.resolve_lsp_tools_with_override(Some(false)),
+        "workspace /lsp off must beat [features] lsp_tools = true"
+    );
+    // 覆盖 true → 保持开。
+    assert!(cfg.resolve_lsp_tools_with_override(Some(true)));
+}
+
+#[test]
+fn lsp_tools_workspace_override_enables_default_off() {
+    use crate::agent::config::Feature;
+    // 默认关（registry default false）、无覆盖 → false。
+    let raw: toml::Value = toml::from_str("[ui]\nyolo = true\n").unwrap();
+    let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+    assert!(!cfg.is_feature_enabled(Feature::LspTools));
+    // /lsp on → 仅该覆盖生效为 true。
+    assert!(cfg.resolve_lsp_tools_with_override(Some(true)));
+    // 覆盖不得泄漏进全局判定。
+    assert!(!cfg.is_feature_enabled(Feature::LspTools));
+}
+
+#[test]
+fn lsp_tools_pin_beats_workspace_override() {
+    use crate::agent::config::Feature;
+    let raw: toml::Value = toml::from_str("[features]\nlsp_tools = true\n").unwrap();
+    let mut cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+    // requirements pin false → 盖过 config true 与 workspace true。
+    let source = crate::config::RequirementSource::Requirements {
+        path: std::path::PathBuf::from("/test/requirements.toml"),
+    };
+    cfg.requirements.pin_feature(Feature::LspTools, false, source);
+    assert!(
+        !cfg.resolve_lsp_tools_for_cwd(std::path::Path::new("/any/workspace")),
+        "requirements pin must win over the workspace /lsp override"
+    );
+}

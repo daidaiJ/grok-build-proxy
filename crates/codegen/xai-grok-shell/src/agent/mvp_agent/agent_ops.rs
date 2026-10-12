@@ -4535,10 +4535,12 @@ impl MvpAgent {
                 agent_definition.override_file_tools(file_tools);
             }
         }
+        // LOCAL(/lsp): workspace 级覆盖在此并入门控（pin/env 之上优先级不变，
+        // 覆盖只在本层生效；决策发生在 session spawn 的 definition 构建期）。
         let lsp_tools_enabled = self
             .cfg
             .borrow()
-            .is_feature_enabled(crate::agent::config::Feature::LspTools);
+            .resolve_lsp_tools_for_cwd(tool_ctx.cwd.as_path());
         if lsp_tools_enabled && tool_ctx.lsp.is_none() {
             let snapshot = self.plugin_registry_handle.snapshot();
             let active: Vec<_> = snapshot

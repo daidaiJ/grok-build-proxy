@@ -2654,6 +2654,40 @@ impl Config {
     pub fn is_feature_enabled(&self, feature: Feature) -> bool {
         self.feature(feature).value
     }
+    /// LSP tools gate for the session cwd (LOCAL `/lsp`).
+    /// Precedence: requirements pin / `GROK_LSP_TOOLS` env keep their registry
+    /// precedence; a `/lsp` workspace override (grok-home
+    /// `feature-overrides/<encoded-cwd>.json`) sits above config/remote/default so
+    /// the per-workspace choice written by the pager beats ambient defaults. The
+    /// decision is only consulted at session spawn (agent definition build), so a
+    /// mid-session `/lsp` never reshapes a live session's tool list.
+    pub(crate) fn resolve_lsp_tools_for_cwd(&self, cwd: &std::path::Path) -> bool {
+        use crate::util::workspace_overrides;
+        let sources = self.feature_sources(Feature::LspTools);
+        if let Some(pinned) = sources.pin.or(sources.env) {
+            tracing::debug!(
+                value = pinned,
+                tier = if sources.pin.is_some() { "pin" } else { "env" },
+                "lsp tools gate: pin/env tier wins over workspace override"
+            );
+            return pinned;
+        }
+        let workspace_override =
+            workspace_overrides::read_workspace_override(cwd, workspace_overrides::LSP_TOOLS_OVERRIDE_KEY);
+        self.resolve_lsp_tools_with_override(workspace_override)
+    }
+    /// Decision core of [`Self::resolve_lsp_tools_for_cwd`] with the workspace
+    /// override injected, so tests drive it without touching the process grok home
+    /// (`grok_home()` is OnceLock-cached and ignores a mid-process `GROK_HOME`).
+    pub(crate) fn resolve_lsp_tools_with_override(&self, workspace_override: Option<bool>) -> bool {
+        match workspace_override {
+            Some(value) => {
+                tracing::debug!(value, "lsp tools gate: workspace /lsp override");
+                value
+            }
+            None => self.is_feature_enabled(Feature::LspTools),
+        }
+    }
     pub(crate) fn is_title_refresh_enabled(&self) -> bool {
         self.resolve_title_refresh().value
     }
