@@ -563,6 +563,17 @@
   workspace_overrides 4/4；i18n 扫描 exit 0。GATE_FORCE tools lsp 过滤实锤既有
   Windows 环境族：mock e2e 40 挂（mock server 是 Python 脚本 spawn 不兼容，
   非本次回归）。实现记录 PATCHES.md 三十五期；设计正文 lsp-port/README §8。
+  **v1.0.54 同 tag 两轮补修**（详录 PATCHES 三十五期补修节）：① CI 暴露
+  `ensure_started_background` 无 runtime panic（默认开 × 同步测试夹具 × runner
+  clangd）→ try_current fail-safe；② **ptyctl 真客户端活体验出 v1 遗留 bug**：
+  pager fresh 门拿输入召回历史当回合判据，生产恒拒（/session-info 轮次=0 仍
+  报「已有历史回合」）→ 移除 pager 门，零回合权威判定收敛 shell turn_count。
+  活体验证（v1.0.54 资产 1c12a2e 本机部署）：status 数据面（默认开来源 +
+  rust-analyzer/clangd 双 builtin 检测 + 后端就绪态）、lsp 工具注册 +
+  clangd documentSymbol 真实应答、带历史拒绝——全部通过；热加载回路因 ①②
+  两修打断，随终版资产补验。本机 rust-analyzer 是 rustup 垫片（组件未装，
+  `rustup component add rust-analyzer` 可修），检测→spawn→init 失败摘除→
+  status 如实显示「未运行」整链行为正确。
 - **遗留**：① 活体 TUI 验证（rust 仓起会话 `lsp` 工具自动注册 + rust-analyzer
   拉起；/lsp on 零回合热加载；带历史拒绝；status 面板）；② 默认开 + eager
   bootstrap 的内存尾部（rust-analyzer）——懒启动为后续切片，挂真实抱怨触发；
