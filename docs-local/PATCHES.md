@@ -2715,3 +2715,14 @@ runtime 跳过 eager start，首次 runtime 内使用经 `ensure_ready` 启动�
 Drop 的 try_current 先例），workspace handle / reminders 两个调用点随 trait 方法
 一并覆盖。本机验证：tools check 0 error + 原 13 例同根的
 `subagent_worktree_snapshot_gate` 4/4 绿（带 clangd PATH 重编复跑）。
+
+**补修二（活体验证暴露的 v1 遗留 bug，同 tag 内）**：ptyctl 真客户端活体发现
+`/lsp on|off` 在全新零回合会话上**恒被拒绝**（"已有历史回合"而 /session-info
+轮次=0）——根因：v1 的 pager fresh 门把 `session.prompt_history.is_empty()`
+当「零用户回合」判据，但该镜像是**跨会话持久的输入召回历史**（上箭头召回，
+slash 命令也记录、/clear 不清空），生产环境永非空；单测全绿只因夹具是空历史。
+修复 = 移除 pager 侧 fresh 门（覆盖文件写入无害恒放行），零回合权威判定收敛到
+shell `x.ai/lspApply` 的 `turn_count`（signals 快照，与 model-switch 零回合重建
+同源）；带回合的会话写完覆盖后 apply 回 `ok:false`「热加载跳过；改动对新会话
+生效」，pager 照实渲染。两个拒绝测试改写为新城语义（带历史写入 + 发 apply /
+运行中回合 Clear 照写）。

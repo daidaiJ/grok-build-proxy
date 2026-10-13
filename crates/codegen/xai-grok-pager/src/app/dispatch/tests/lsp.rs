@@ -12,7 +12,7 @@ fn format_status(response: &LspStatusResponse) -> String {
 }
 
 #[test]
-fn lsp_set_rejected_on_session_with_history() {
+fn lsp_set_on_session_with_history_writes_and_applies() {
     let mut app = test_app_with_agent();
     let id = AgentId(0);
     test_agent_mut(&mut app, id)
@@ -20,20 +20,35 @@ fn lsp_set_rejected_on_session_with_history() {
         .prompt_history
         .push("earlier turn".to_string());
 
-    dispatch(
+    let effects = dispatch(
         Action::LspConfigure {
             request: LspConfigureRequest::Set(true),
         },
         &mut app,
     );
 
+    // prompt_history 是跨会话召回历史，不是回合数——写入恒放行，热加载由
+    // shell 侧 turn_count 权威裁决。
     let text = last_system_text(&app, id);
-    assert!(text.contains("拒绝"), "expected the fresh-session refusal, got: {text}");
-    assert!(text.contains("/clear"), "refusal must point at /clear, got: {text}");
+    assert!(text.contains("已设置"), "expected the set confirmation, got: {text}");
+    assert!(
+        effects.iter().any(
+            |e| matches!(e, Effect::ApplyLspTools { session_id: sid, .. } if sid == "test-session")
+        ),
+        "expected ApplyLspTools for the live session, got: {effects:?}"
+    );
+
+    // 写后自回收（覆盖文件删除，grok home 不留状态）。
+    dispatch(
+        Action::LspConfigure {
+            request: LspConfigureRequest::Clear,
+        },
+        &mut app,
+    );
 }
 
 #[test]
-fn lsp_clear_rejected_on_running_turn() {
+fn lsp_clear_on_running_turn_still_writes() {
     let mut app = test_app_with_agent();
     let id = AgentId(0);
     test_agent_mut(&mut app, id).session.state = AgentState::TurnRunning;
@@ -46,7 +61,7 @@ fn lsp_clear_rejected_on_running_turn() {
     );
 
     let text = last_system_text(&app, id);
-    assert!(text.contains("拒绝"), "expected the fresh-session refusal, got: {text}");
+    assert!(text.contains("已清除"), "expected the clear confirmation, got: {text}");
 }
 
 #[test]

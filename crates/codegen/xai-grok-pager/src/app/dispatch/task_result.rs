@@ -612,7 +612,7 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         // LOCAL: /lsp 零回合热加载回包。同步写回显之后追加一行权威结果。
         TaskResult::LspToolsApplied { response } => {
             let msg = if let Some(error) = &response.error {
-                format!("LSP 热加载失败：{error}")
+                format!("LSP 热加载：{error}")
             } else if !response.changed {
                 match &response.note {
                     Some(note) => format!("LSP 热加载无变化：{note}"),
