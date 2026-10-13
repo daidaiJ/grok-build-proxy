@@ -6,7 +6,7 @@ Grok Build draws all TUI colors from a central theme. You can switch themes whil
 
 ## Available Themes
 
-Grok includes six built-in themes, plus an `auto` option that follows your system appearance:
+Grok includes six built-in themes plus eleven LOCAL-ported community palettes (sourced from opencode's theme library), and an `auto` option that follows your system appearance:
 
 | Theme | Config Names | Description | Truecolor Required |
 |-------|-------------|-------------|--------------------|
@@ -15,6 +15,17 @@ Grok includes six built-in themes, plus an `auto` option that follows your syste
 | **TokyoNight** | `tokyonight`, `tokyo-night`, `tokyo` | Dark, blue-tinted backgrounds from the Tokyo Night palette. Loses its character when quantized. | Yes |
 | **RosePineMoon** | `rosepine`, `rose-pine`, `rosepine-moon`, `rose-pine-moon` | Muted dark palette with mauve accents, from the Rosé Pine family. | Yes |
 | **OscuraMidnight** | `oscura`, `oscura-midnight` | Deep dark base with purple accents. | Yes |
+| **Catppuccin Mocha** | `catppuccin-mocha`, `catppuccin`, `mocha` | Pastel dark from the Catppuccin family. | Yes |
+| **Catppuccin Latte** | `catppuccin-latte`, `latte` | Pastel light from the Catppuccin family — a second light theme. | Yes |
+| **Dracula** | `dracula` | Classic dark purple palette. | Yes |
+| **Gruvbox Dark** | `gruvbox-dark`, `gruvbox` | Retro warm dark with muted groove colors. | Yes |
+| **Nord** | `nord` | Cool blue-gray arctic palette. | Yes |
+| **One Dark** | `one-dark`, `onedark` | Atom One Dark-inspired balanced dark. | Yes |
+| **Everforest** | `everforest` | Low-saturation green forest dark. | Yes |
+| **Kanagawa** | `kanagawa` | Ink-wash dark inspired by Katsushika Hokusai. | Yes |
+| **Vesper** | `vesper` | Minimal black with amber highlights. | Yes |
+| **Night Owl** | `nightowl`, `night-owl` | Sarah Drasner's blue-hour dark. | Yes |
+| **Solarized Dark** | `solarized-dark`, `solarized` | Ethan Schoonover's 16-color classic. | Yes |
 | **Terminal** | `terminal`, `terminal-default`, `transparent`, `native` | Your terminal's own colors: no background of its own, so the terminal canvas (translucency, background images) shows through. | No |
 
 Theme names are case-insensitive. The `auto` option (alias `system`) is documented under [Auto Theme (System Appearance)](#auto-theme-system-appearance).
@@ -128,7 +139,9 @@ Every theme is defined using full RGB values. At startup, Grok quantizes all col
 - On **256-color** terminals, each RGB value is mapped to the nearest indexed palette entry.
 - On **16-color** terminals, colors map to ANSI names.
 
-GrokNight and GrokDay use neutral grays that quantize cleanly. TokyoNight, RosePineMoon, and OscuraMidnight use distinctive tinted backgrounds that lose their character when quantized, which is why the theme picker hides them on non-truecolor terminals.
+GrokNight and GrokDay use neutral grays that quantize cleanly. TokyoNight, RosePineMoon, OscuraMidnight, and the eleven LOCAL-ported community palettes use distinctive tinted backgrounds that lose their character when quantized, which is why the theme picker hides them on non-truecolor terminals.
+
+> LOCAL note: the eleven community palettes (Catppuccin Mocha/Latte, Dracula, Gruvbox Dark, Nord, One Dark, Everforest, Kanagawa, Vesper, Night Owl, Solarized Dark) are ported from opencode's theme library with their signature backgrounds kept intact; every grok2 color slot is filled from each palette's own tones, with hand-tuned derivatives only where the donor defines nothing (hover/visual bands, border ladders, the plan-gold and skill-teal accents, the six-level markdown heading ladder).
 
 ### Runtime-Generated Colors
 

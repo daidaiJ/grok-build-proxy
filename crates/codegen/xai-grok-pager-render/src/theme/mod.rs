@@ -8,17 +8,27 @@
 //! Runtime-generated colors (syntax highlighting, blending) are also quantized via [`color_support::quantize`].
 
 pub mod cache;
+pub mod catppuccin;
 pub mod color_support;
+pub mod dracula;
 pub mod env_appearance;
+mod everforest;
 mod grokday;
 mod groknight;
+mod gruvbox;
+mod kanagawa;
 pub mod md_style;
+mod nightowl;
+mod nord;
+mod onedark;
 pub mod osc11;
 mod oscura;
 mod rosepine;
+mod solarized;
 pub mod system_appearance;
 mod terminal_default;
 pub mod tokyonight;
+mod vesper;
 
 pub use color_support::quantize;
 pub use tokyonight::{Theme, pulse_brightness, wave_brightness};
@@ -32,6 +42,18 @@ pub enum ThemeKind {
     TokyoNight = 2,
     RosePineMoon = 3,
     OscuraMidnight = 5,
+    // LOCAL 主题移植（opencode 主题库，2026-10-13）：全部需要 truecolor。
+    CatppuccinMocha = 7,
+    CatppuccinLatte = 8,
+    Dracula = 9,
+    GruvboxDark = 10,
+    Nord = 11,
+    OneDark = 12,
+    Everforest = 13,
+    Kanagawa = 14,
+    Vesper = 15,
+    NightOwl = 16,
+    SolarizedDark = 17,
     /// Every bg is `Reset` so the terminal canvas shows through; legible on both polarities without appearance detection.
     /// Hidden and unparseable while `cache::terminal_theme_enabled()` is off.
     Terminal = 6,
@@ -47,6 +69,17 @@ impl ThemeKind {
         ThemeKind::TokyoNight,
         ThemeKind::RosePineMoon,
         ThemeKind::OscuraMidnight,
+        ThemeKind::CatppuccinMocha,
+        ThemeKind::CatppuccinLatte,
+        ThemeKind::Dracula,
+        ThemeKind::GruvboxDark,
+        ThemeKind::Nord,
+        ThemeKind::OneDark,
+        ThemeKind::Everforest,
+        ThemeKind::Kanagawa,
+        ThemeKind::Vesper,
+        ThemeKind::NightOwl,
+        ThemeKind::SolarizedDark,
         ThemeKind::Terminal,
     ];
 
@@ -101,6 +134,17 @@ impl ThemeKind {
             Self::GrokDay => "grokday",
             Self::RosePineMoon => "rosepine-moon",
             Self::OscuraMidnight => "oscura-midnight",
+            Self::CatppuccinMocha => "catppuccin-mocha",
+            Self::CatppuccinLatte => "catppuccin-latte",
+            Self::Dracula => "dracula",
+            Self::GruvboxDark => "gruvbox-dark",
+            Self::Nord => "nord",
+            Self::OneDark => "one-dark",
+            Self::Everforest => "everforest",
+            Self::Kanagawa => "kanagawa",
+            Self::Vesper => "vesper",
+            Self::NightOwl => "nightowl",
+            Self::SolarizedDark => "solarized-dark",
             Self::Terminal => "terminal",
             Self::Auto => "auto",
         }
@@ -114,6 +158,18 @@ impl ThemeKind {
             Self::GrokDay => false,
             Self::RosePineMoon => true,
             Self::OscuraMidnight => true,
+            // LOCAL 移植主题：各社区色板的特色底色在量化后会丢失风格，同 TokyoNight。
+            Self::CatppuccinMocha
+            | Self::CatppuccinLatte
+            | Self::Dracula
+            | Self::GruvboxDark
+            | Self::Nord
+            | Self::OneDark
+            | Self::Everforest
+            | Self::Kanagawa
+            | Self::Vesper
+            | Self::NightOwl
+            | Self::SolarizedDark => true,
             // Reset plus named ANSI-16 entries only — nothing to quantize.
             Self::Terminal => false,
             // Auto is resolved to a concrete theme before rendering.
@@ -135,6 +191,17 @@ impl ThemeKind {
             Self::GrokDay => &["grok-day", "light", "day"],
             Self::RosePineMoon => &["rosepine", "rose-pine", "rose-pine-moon"],
             Self::OscuraMidnight => &["oscura"],
+            Self::CatppuccinMocha => &["catppuccin", "mocha"],
+            Self::CatppuccinLatte => &["latte"],
+            Self::Dracula => &[],
+            Self::GruvboxDark => &["gruvbox"],
+            Self::Nord => &[],
+            Self::OneDark => &["onedark"],
+            Self::Everforest => &[],
+            Self::Kanagawa => &[],
+            Self::Vesper => &[],
+            Self::NightOwl => &["night-owl"],
+            Self::SolarizedDark => &["solarized"],
             Self::Terminal => &["terminal-default", "transparent", "native"],
             Self::Auto => &["system"],
         }
@@ -189,6 +256,18 @@ pub fn display_name_for_canonical(value: &str) -> &str {
         "grokday" => "Grok Day",
         "tokyonight" => "Tokyo Night",
         "rosepine-moon" => "Rose Pine Moon",
+        "oscura-midnight" => "Oscura Midnight",
+        "catppuccin-mocha" => "Catppuccin Mocha",
+        "catppuccin-latte" => "Catppuccin Latte",
+        "dracula" => "Dracula",
+        "gruvbox-dark" => "Gruvbox Dark",
+        "nord" => "Nord",
+        "one-dark" => "One Dark",
+        "everforest" => "Everforest",
+        "kanagawa" => "Kanagawa",
+        "vesper" => "Vesper",
+        "nightowl" => "Night Owl",
+        "solarized-dark" => "Solarized Dark",
         "terminal" => "Terminal",
         other => other,
     }
@@ -306,6 +385,17 @@ impl Theme {
             ThemeKind::GrokDay => Self::grokday(),
             ThemeKind::RosePineMoon => Self::rosepine_moon(),
             ThemeKind::OscuraMidnight => Self::oscura_midnight(),
+            ThemeKind::CatppuccinMocha => Self::catppuccin_mocha(),
+            ThemeKind::CatppuccinLatte => Self::catppuccin_latte(),
+            ThemeKind::Dracula => Self::dracula(),
+            ThemeKind::GruvboxDark => Self::gruvbox_dark(),
+            ThemeKind::Nord => Self::nord(),
+            ThemeKind::OneDark => Self::one_dark(),
+            ThemeKind::Everforest => Self::everforest(),
+            ThemeKind::Kanagawa => Self::kanagawa(),
+            ThemeKind::Vesper => Self::vesper(),
+            ThemeKind::NightOwl => Self::night_owl(),
+            ThemeKind::SolarizedDark => Self::solarized_dark(),
             // Handled by the early return above.
             ThemeKind::Terminal => Self::terminal(),
             // Auto is resolved to a concrete theme before being stored; if reached, fall back to GrokNight
@@ -1034,6 +1124,17 @@ mod tests {
                 ThemeKind::TokyoNight => Theme::tokyonight(),
                 ThemeKind::RosePineMoon => Theme::rosepine_moon(),
                 ThemeKind::OscuraMidnight => Theme::oscura_midnight(),
+                ThemeKind::CatppuccinMocha => Theme::catppuccin_mocha(),
+                ThemeKind::CatppuccinLatte => Theme::catppuccin_latte(),
+                ThemeKind::Dracula => Theme::dracula(),
+                ThemeKind::GruvboxDark => Theme::gruvbox_dark(),
+                ThemeKind::Nord => Theme::nord(),
+                ThemeKind::OneDark => Theme::one_dark(),
+                ThemeKind::Everforest => Theme::everforest(),
+                ThemeKind::Kanagawa => Theme::kanagawa(),
+                ThemeKind::Vesper => Theme::vesper(),
+                ThemeKind::NightOwl => Theme::night_owl(),
+                ThemeKind::SolarizedDark => Theme::solarized_dark(),
                 // Reset plus named ANSI entries: the scrollbar rides the
                 // terminal's own fg/bg contrast, so there is no RGB delta.
                 ThemeKind::Terminal => continue,

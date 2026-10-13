@@ -216,3 +216,20 @@ lsp_tools = false   # or GROK_LSP_TOOLS=0, or /lsp off for this workspace only
 ```
 
 **When to configure it:** you normally do not have to. Reach for `lsp.json` when a server needs custom args, a non-PATH command, or a language the builtins do not cover; reach for the gate when you want the tool list lean or do not want server processes spawned for the workspace.
+
+---
+
+## Theme catalog expansion (community palettes)
+
+**What it does.** Adds eleven community-acclaimed color themes alongside the six upstream themes, sourced from opencode's theme library: **Catppuccin Mocha** (aliases `catppuccin`, `mocha`), **Catppuccin Latte** (`latte` — the second light theme), **Dracula**, **Gruvbox Dark** (`gruvbox`), **Nord**, **One Dark** (`onedark`), **Everforest**, **Kanagawa**, **Vesper**, **Night Owl** (`night-owl`), and **Solarized Dark** (`solarized`).
+
+Every one of the ~60 grok2 color slots (backgrounds, accents, grays, semantic, borders, paste, diff, markdown headings/code/links) is mapped from each palette's own tones; where the donor defines nothing — hover/visual selection bands, border ladders, the plan-gold and skill-teal accents, the six-level markdown heading ladder — derivatives are hand-tuned inside that palette's color family (same precedent the upstream TokyoNight theme sets). Donor quirks are ported faithfully and noted in each theme file's header (e.g. Nord/Solarized use one shared diff background for add and remove, Vesper's minimal two-hue design reuses its amber/mint accents across many slots).
+
+All eleven require truecolor (same policy as TokyoNight/RosePineMoon/OscuraMidnight): the theme picker hides them on 256-color terminals where quantization would flatten their signature backgrounds. Dark themes share the night syntect base, Latte uses the day base; token colors are remapped per active theme afterward. `/theme`, `/settings` (including the `auto_dark_theme` / `auto_light_theme` sub-pickers), and config parsing pick the new names up automatically; Chinese descriptions ship in the i18n table.
+
+```toml
+[ui]
+theme = "catppuccin-mocha"   # or any of: catppuccin-latte, dracula, gruvbox-dark,
+                             # nord, one-dark, everforest, kanagawa, vesper,
+                             # nightowl, solarized-dark
+```

@@ -2735,3 +2735,55 @@ shell `x.ai/lspApply` 的 `turn_count`（signals 快照，与 model-switch 零�
 结束时统一回收。已知边界（记录不修）：status 的「本会话后端」段同样读该快照，
 摘除态下显示旧后端就绪——以「LSP 工具：禁用」主行为准；handle 快照回写需
 ToolContext 字段换共享槽（ArcSwap），结构侵入不值当。
+
+## 三十六期：主题目录扩容——11 套社区色板移植（2026-10-13，分支 feat/local-theme-catalog-port）
+
+> 需求：从父目录同类 coding agent 吸收差异化的社区好评主题配色，移植不缺失。
+> 捐献者选定 **opencode 主题库**（`D:\CODE\ai\opencode\packages\tui\src\theme\assets\*.json`，
+> 32 个 JSON 主题资产，社区经典最全）；qwen-code（dracula/atom-one-dark/ayu 等 TS 定义）、
+> crush（Go styles 分散）、goose 等作对照未采用。
+
+1. **移植清单（11 套，与既有 6 主题零重叠）**：Catppuccin Mocha（别名
+   `catppuccin`/`mocha`）、Catppuccin Latte（`latte`，第二个浅色主题）、Dracula、
+   Gruvbox Dark（`gruvbox`）、Nord、One Dark（`onedark`）、Everforest、Kanagawa、
+   Vesper、Night Owl（`night-owl`）、Solarized Dark（`solarized`）。全部标
+   `requires_truecolor = true`（256 色 picker 隐藏，同 TokyoNight/RosePineMoon 策略）。
+2. **新文件 ×9**（`xai-grok-pager-render/src/theme/`）：catppuccin.rs（mocha+latte
+   双极性同文件）、dracula.rs、gruvbox.rs、nord.rs、onedark.rs、everforest.rs、
+   kanagawa.rs、vesper.rs、nightowl.rs、solarized.rs——每文件自带 palette 常量
+   （十六进制注释）+ `impl Theme` const fn + 签名测试。**不缺失口径**：~60 个
+   颜色槽位逐一映射（struct 完整性由编译器强制）；donor 有定义的槽位（背景/边框/
+   diff 底色/fg、markdown 语义、diffLineNumber/textMuted）原值直采，donor 未定义的
+   （bg_hover/bg_visual、边框细档、plan 金、skill 青绿、md 六级标题梯、灰阶三档）
+   按 TokyoNight 先例在主题自身色系内手调派生，文件头注明推导；donor 设计原貌
+   （Nord/Solarized 双 diff 同底、Vesper 双高亮复用、Solarized base0 正文）保真并注释。
+3. **注册接线 ×8 处**：`theme/mod.rs`（ThemeKind 变体 7..17、ALL 目录序、
+   display_name、aliases、requires_truecolor、display_name_for_canonical 补
+   oscura 缺项、`current()` 分发、滚动条对比度测试分发）；`theme/cache.rs`
+   （`theme_kind_from_u8` 解码臂——漏加会静默回落 GrokNight）；`syntax.rs`
+   `get_syntect`（深色系并 grok-night.tmTheme 臂、Latte 并 grok-day 臂）；pager
+   `settings/defs.rs` 两 catalog（THEME_CHOICES + CONCRETE_THEME_CHOICES 各
+   +11）；`slash/i18n.rs`（11 条中文描述）；`views/settings_modal/tests.rs`
+   raw-theme 分发臂；`scrollback/blocks/mermaid_content.rs` `theme_is_dark`
+   纳入 CatppuccinLatte（浅色）+ 测试双列表扩容；README / user-guide
+   06-theming（表 6→17 行）/ 29-local-enhancements 新节。
+4. **语法高亮基底**：11 套不新增 .tmTheme——深色 10 套并 `grok-night.tmTheme`
+   臂（RosePineMoon/Oscura 同 precedent），Latte 并 `grok-day.tmTheme`；token
+   色随后由 `syntect_rgb_to_fg` 按活动主题重映射，基底只须槽位完整。
+5. **测试**：每文件签名测试（bg_base/accent_user 原值、is_dark 极性、别名/显示名、
+   Latte 滚动条浅底 ΔΣ 方向）；既有泛化测试自动收编全部新主题（mod.rs 滚动条
+   对比度遍历 ALL、主题 picker e2e 遍历 catalog）。
+
+   **补修一轮（同分支，2026-10-13 测试轮暴露两件）**：
+   - **doctor JSON 夹具漏改**：`totalThemes` 两处夹具（empty/contract）仍写 6，
+     代码已正确报 17（= `selectable().len()`）→ 夹具改 17；顺带实证 256 色环境
+     下 11 套新主题正确隐藏（availableThemes 仅 groknight/grokday/terminal）。
+   - **测试隔离缺陷（预存类，本次实锤）**：`theme` 过滤多线程下
+     `info_line_chrome_is_muted_on_terminal_theme` 拿到 Oscura 样式——机制 =
+     `reset_for_test()` 置 `LOADED=false` 后，任何未预置主题状态的无守卫测试
+     首次 `current_kind()` 走 `load_from_disk()` 读入**开发者真实
+     `~/.grok/config.toml`**（本机 = `theme = "oscura-midnight"`）写进全局
+     cache，打断并发持锁测试的断言窗口。修复 = `load_from_disk` 双门控
+     `#[cfg(any(test, feature = "test-support"))]` 返回 None（测试构建永不读
+     开发者 config；生产启动路径不变），单线程/多线程双验证。副产物：win-skip
+     登记**族U**（color_support 探测断言依赖宿主 TTY，GATE_FORCE 首跑暴露）。

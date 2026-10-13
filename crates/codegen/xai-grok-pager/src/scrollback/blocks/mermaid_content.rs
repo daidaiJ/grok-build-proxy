@@ -124,7 +124,7 @@ pub fn mermaid_block_ranges(view: &MarkdownRenderView) -> Vec<Range<usize>> {
 /// baked background, so it takes the dark treatment that minimal mode already gets. It lives here (not in the
 /// engine crate) so the always-compiled detection module stays independent of the optional `mermaid` feature.
 pub fn theme_is_dark(theme: ThemeKind) -> bool {
-    !matches!(theme, ThemeKind::GrokDay)
+    !matches!(theme, ThemeKind::GrokDay | ThemeKind::CatppuccinLatte)
 }
 
 /// Cache key for a rendered diagram: content hash, theme, quality tier, and (for the terminal tier) bucketed width.
@@ -755,11 +755,25 @@ mod tests {
             !theme_is_dark(ThemeKind::GrokDay),
             "GrokDay is the light theme"
         );
+        assert!(
+            !theme_is_dark(ThemeKind::CatppuccinLatte),
+            "CatppuccinLatte is the second light theme"
+        );
         for dark in [
             ThemeKind::GrokNight,
             ThemeKind::TokyoNight,
             ThemeKind::RosePineMoon,
             ThemeKind::OscuraMidnight,
+            ThemeKind::CatppuccinMocha,
+            ThemeKind::Dracula,
+            ThemeKind::GruvboxDark,
+            ThemeKind::Nord,
+            ThemeKind::OneDark,
+            ThemeKind::Everforest,
+            ThemeKind::Kanagawa,
+            ThemeKind::Vesper,
+            ThemeKind::NightOwl,
+            ThemeKind::SolarizedDark,
         ] {
             assert!(theme_is_dark(dark), "{dark:?} should be dark");
         }
