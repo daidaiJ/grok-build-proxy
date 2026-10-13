@@ -2726,3 +2726,12 @@ shell `x.ai/lspApply` 的 `turn_count`（signals 快照，与 model-switch 零�
 同源）；带回合的会话写完覆盖后 apply 回 `ok:false`「热加载跳过；改动对新会话
 生效」，pager 照实渲染。两个拒绝测试改写为新城语义（带历史写入 + 发 apply /
 运行中回合 Clear 照写）。
+
+**补修三（热加载链路活体第二处，同 tag 内）**：摘除态下 `/lsp on` 被误判
+「无变化」不重建——`x.ai/lspApply` 的现状比对读 `handle.tool_context.lsp`，
+而该字段是 spawn 时的**快照**，`ReloadLspHarness` 重建后不回写（摘除态下快照
+仍为 Some），「摘除→再启用」被吞。修复 = apply 移除现状比对、恒重建（零回合
+重建廉价，保证 harness 与门禁一致）；旧 manager 进程组由 process_scope 会话
+结束时统一回收。已知边界（记录不修）：status 的「本会话后端」段同样读该快照，
+摘除态下显示旧后端就绪——以「LSP 工具：禁用」主行为准；handle 快照回写需
+ToolContext 字段换共享槽（ArcSwap），结构侵入不值当。
