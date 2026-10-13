@@ -271,6 +271,28 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### 主题目录扩容（11 套社区色板移植）— 已随 v1.0.55 发版（2026-10-14）
+
+- **当前状态：** 从父目录 opencode 主题库移植 11 套社区好评主题（Catppuccin
+  Mocha/Latte、Dracula、Gruvbox Dark、Nord、One Dark、Everforest、Kanagawa、
+  Vesper、Night Owl、Solarized Dark；Latte 为第二浅色）已合 main（merge
+  `4788f51`）随 tag **`v1.0.55`** 发版：release run `38471804721` /
+  build run `38467569752` 双 job success、4 资产非草稿；本机部署
+  `grok 1.0.55 (4788f51c58c9)`，回滚点 `grok2.exe.v1.0.54.bak`。实现记录
+  PATCHES.md 三十六期（含补修：doctor totalThemes 夹具 6→17；
+  `load_from_disk` 双门控禁测试构建读开发者真实 config——修并发 disk-seed
+  竞态；win-skip 族U 登记）。
+- **验证：** cargo check render/pager --all-targets 0 error 0 warning；
+  render theme 171/0、pager theme 76/0（多线程）、settings 380/0、doctor
+  42/0、mermaid 65/0、i18n 扫描 0 挂；ptyctl 活体（本机 release 构建 +
+  发行资产双轮）：11 主题逐一切换 toast 正确、config 持久化正常、256 色
+  PTY 下 truecolor 新主题正确隐藏、/doctor themes 2/16 分母正确、全程无 panic。
+- **遗留：** ① 其余 21 套 opencode 主题同模式可增量移植；② 上游同步时
+  theme/* 接线八处按 PATCHES 三十六期重放；③ Latte 浅色下 mermaid 渲染
+  （theme_is_dark 已纳入）活体抽查待补。
+- **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
+  台账主题条目；README「交互与界面」节；user-guide 06-theming 表 6→17 行。
+
 ### /auth 面板 + /stats API 成本 + /login→/grok — 全线随 v1.0.51（含活回合三修复 + 复发二次修复，tag 重指重发）；T4/T5 待做
 
 - **当前状态：** T0（`/login`→`/grok` 硬改名 + 零配置首启 BYOK 引导）随 `v1.0.48`、
