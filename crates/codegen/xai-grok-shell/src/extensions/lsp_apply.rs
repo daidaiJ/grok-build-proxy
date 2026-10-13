@@ -70,7 +70,10 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     }
 
     let (enabled, _source, _override) = super::lsp_status::resolve_gate(agent, &cwd);
-    let current = handle.tool_context.lsp.is_some();
+    // 恒重建：handle.tool_context.lsp 是 spawn 时的快照，重建后不回写（摘除态
+    // 下快照仍为 Some），用它做现状比对会把「摘除后再启用」误判成无变化。
+    // 零回合重建廉价且保证 harness 与门禁一致；旧 manager 的进程组由
+    // process_scope 会话结束时统一回收。
     let backend = if enabled {
         match agent
             .build_lsp_backend(&cwd, handle.tool_context.process_scope.clone())
@@ -93,15 +96,6 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     } else {
         None
     };
-
-    if backend.is_some() == current {
-        return to_raw_response(&LspApplyResponse {
-            ok: true,
-            changed: false,
-            enabled,
-            ..Default::default()
-        });
-    }
 
     let system_prompt_label = {
         let cfg = agent.cfg.borrow();
