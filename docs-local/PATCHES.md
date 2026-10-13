@@ -2704,3 +2704,14 @@ Python 脚本直接当 server spawn，Windows `std::process::Command` 拉不起 
 crate 从未进 win-whitelist 即因于此，懒治理：e2e 覆盖靠 Linux CI 或后续把
 mock 换 .bat 包装）。**待办**：活体 TUI 验证（rust 仓起会话看 `lsp` 工具自动
 注册 + rust-analyzer 拉起；/lsp on 热加载零回合会话；带历史拒绝；status 面板）。
+
+**补修（CI 一轮暴露，同 tag 内重指重发）**：v1.0.54 首发时 Linux build job 挂
+13 例（全在 shell subagent 测试族）——根因：默认开后 `WorkspaceOps::for_test()`
+等**同步测试夹具**构造 WorkspaceHandle → `WorkspaceHandle::build` 检测到 runner
+PATH 上的 clangd → `ensure_started_background()` 裸 `tokio::spawn` 在无 runtime
+上下文 panic（"there is no reactor running"）。生产路径全在 runtime 内不受影响；
+修复 = `ensure_started_background` 改 `Handle::try_current()` fail-safe（无
+runtime 跳过 eager start，首次 runtime 内使用经 `ensure_ready` 启动——同文件
+Drop 的 try_current 先例），workspace handle / reminders 两个调用点随 trait 方法
+一并覆盖。本机验证：tools check 0 error + 原 13 例同根的
+`subagent_worktree_snapshot_gate` 4/4 绿（带 clangd PATH 重编复跑）。
