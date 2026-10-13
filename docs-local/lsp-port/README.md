@@ -226,7 +226,10 @@
   现状比对）→ `SessionCommand::ReloadLspHarness` → actor 复用 model-switch
   零回合重建簿记（`AgentRebuildSpec::build_agent_with_lsp` 只换 LSP 注入面，
   definition/system prompt 不变；`HarnessRebuild` 重广播工具清单，pager
-  `available_tools` 镜像自动跟进）。带历史回合仍拒绝（语义同 v1）。
+  `available_tools` 镜像自动跟进）。**补修二更正**：v1 的 pager fresh 门
+  （`prompt_history.is_empty()` 当零回合判据）是误判——该镜像是跨会话持久的
+  输入召回历史，生产恒非空，门在生产永拒；已移除 pager 门，零回合判定收敛
+  shell turn_count，写覆盖恒放行。
 - **已知边界**：① 默认开 + eager bootstrap = 检测到 server 的会话启动即后台
   拉起（rust-analyzer 内存尾部大头）；懒启动是后续切片（挂触发：真实出现
   内存抱怨）。② 重建后 ToolContext.lsp_server_names 不回填（telemetry 字段，

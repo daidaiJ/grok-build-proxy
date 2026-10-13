@@ -157,49 +157,29 @@ pub(in crate::app::dispatch) fn confirmed_quit(app: &mut AppView) -> Vec<Effect>
 /// LOCAL(/lsp): `/lsp on|off|status|clear` 的执行体。cwd 取活动会话的会话 cwd
 /// （agent 视图）或 app cwd（dashboard/welcome）；写入 grok-home workspace 覆盖
 /// （shell `workspace_overrides`），生效点在下一个会话 spawn 的 definition 构建。
-/// 写入仅在「零用户回合」的会话放行。零回合会话写完覆盖后立即经
-/// `x.ai/lspApply` 热加载（重建 harness 换 LSP 后端，`HarnessRebuild` 重广播
-/// 工具清单）；带历史的会话拒绝（热加载会污染已定格的对话契约），指向 /clear。
+/// 写入恒放行（覆盖文件本身无害）；零回合会话写完立即经 `x.ai/lspApply` 热加载
+/// （重建 harness 换 LSP 后端，`HarnessRebuild` 重广播工具清单），带回合的会话由
+/// shell 侧 turn_count 权威拒绝（改动对新会话生效）——pager 镜像的
+/// `prompt_history` 是跨会话持久的输入召回历史，不能当「零回合」判据。
 fn dispatch_lsp_configure(
     app: &mut AppView,
     request: crate::app::actions::LspConfigureRequest,
 ) -> Vec<Effect> {
     use crate::app::actions::LspConfigureRequest;
-    use crate::app::agent::AgentState;
     use xai_grok_shell::util::workspace_overrides;
 
     let overrides_key = workspace_overrides::LSP_TOOLS_OVERRIDE_KEY;
-    // 会话态快照：agent 视图取会话 cwd 与门控信号；其余视图用 app cwd、无门控。
-    let (cwd, session_state) = match app.active_view {
+    // 会话态快照：agent 视图取会话 cwd 与 session id；其余视图用 app cwd。
+    let (cwd, session_id) = match app.active_view {
         ActiveView::Agent(id) => match app.agents.get(&id) {
-            Some(agent) => {
-                let s = &agent.session;
-                // 无 session_id = 会话尚未建立（definition 还没构建），写入无冲突；
-                // 已建立的会话要求「零用户回合」（/clear 即 /new，天然归一到新会话）。
-                let fresh = match s.session_id {
-                    None => true,
-                    Some(_) => {
-                        matches!(s.state, AgentState::Idle)
-                            && s.pending_prompts.is_empty()
-                            && s.in_flight_prompt.is_none()
-                            && s.current_prompt_id.is_none()
-                            && s.compact_held_prompt.is_none()
-                            && !s.prompt_history_loading
-                            && s.prompt_history.is_empty()
-                    }
-                };
-                (
-                    s.cwd.clone(),
-                    Some((fresh, s.session_id.clone().map(|sid| sid.to_string()))),
-                )
-            }
+            Some(agent) => (
+                agent.session.cwd.clone(),
+                agent.session.session_id.clone().map(|sid| sid.to_string()),
+            ),
             None => (app.cwd.clone().into(), None),
         },
         ActiveView::Welcome | ActiveView::AgentDashboard => (app.cwd.clone().into(), None),
     };
-    let session_id = session_state
-        .as_ref()
-        .and_then(|(_, session_id)| session_id.clone());
 
     match request {
         LspConfigureRequest::Status => {
@@ -208,15 +188,6 @@ fn dispatch_lsp_configure(
             vec![Effect::FetchLspStatus { cwd, session_id }]
         }
         LspConfigureRequest::Set(value) => {
-            if let Some((fresh, _)) = &session_state {
-                if !fresh {
-                    lsp_report(
-                        app,
-                        "拒绝：当前会话已有历史回合，热加载会污染已定格的对话契约。\n先 /clear 再执行 /lsp on|off，或改动对新会话生效。",
-                    );
-                    return vec![];
-                }
-            }
             match
                 workspace_overrides::write_workspace_override(&cwd, overrides_key, Some(value))
             {
@@ -233,10 +204,7 @@ fn dispatch_lsp_configure(
                                 cwd: cwd.clone(),
                                 session_id: sid.clone(),
                             });
-                            format!(
-                                "已设置：本工作区（{}）{action} LSP 工具。当前会话为零回合，正在热加载…",
-                                cwd.display()
-                            )
+                            format!("已设置：本工作区（{}）{action} LSP 工具。", cwd.display())
                         }
                         None => format!(
                             "已设置：本工作区（{}）{action} LSP 工具。会话尚未建立，definition 构建时生效。",
@@ -249,15 +217,6 @@ fn dispatch_lsp_configure(
             }
         }
         LspConfigureRequest::Clear => {
-            if let Some((fresh, _)) = &session_state {
-                if !fresh {
-                    lsp_report(
-                        app,
-                        "拒绝：当前会话已有历史回合，热加载会污染已定格的对话契约。\n先 /clear 再执行 /lsp clear，或改动对新会话生效。",
-                    );
-                    return vec![];
-                }
-            }
             match workspace_overrides::write_workspace_override(&cwd, overrides_key, None) {
                 Err(e) => {
                     lsp_report(app, &format!("清除 LSP 工作区覆盖失败：{e}"));
@@ -271,8 +230,7 @@ fn dispatch_lsp_configure(
                                 cwd: cwd.clone(),
                                 session_id: sid.clone(),
                             });
-                            "已清除本工作区的 LSP 覆盖，恢复跟随全局配置。当前会话为零回合，正在热加载…"
-                                .to_string()
+                            "已清除本工作区的 LSP 覆盖，恢复跟随全局配置。".to_string()
                         }
                         None => "已清除本工作区的 LSP 覆盖，恢复跟随全局配置（[features] lsp_tools）。"
                             .to_string(),

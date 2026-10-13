@@ -63,7 +63,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         return to_raw_response(&LspApplyResponse {
             ok: false,
             error: Some(format!(
-                "会话已有 {turn_count} 个回合，热加载拒绝；改动对新会话生效"
+                "会话已有 {turn_count} 个回合，热加载跳过；改动对新会话生效"
             )),
             ..Default::default()
         });
