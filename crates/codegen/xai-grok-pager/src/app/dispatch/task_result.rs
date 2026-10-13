@@ -601,6 +601,31 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
+        // LOCAL: /lsp status 回包。状态块落 scrollback（agent 视图）或 toast。
+        TaskResult::LspStatusFetched { response } => {
+            crate::app::dispatch::router::lsp_report(
+                app,
+                &crate::slash::commands::lsp::format_status(&response),
+            );
+            vec![]
+        }
+        // LOCAL: /lsp 零回合热加载回包。同步写回显之后追加一行权威结果。
+        TaskResult::LspToolsApplied { response } => {
+            let msg = if let Some(error) = &response.error {
+                format!("LSP 热加载失败：{error}")
+            } else if !response.changed {
+                match &response.note {
+                    Some(note) => format!("LSP 热加载无变化：{note}"),
+                    None => "LSP 热加载无变化（目标状态与当前一致）。".to_string(),
+                }
+            } else if response.enabled {
+                "LSP 热加载完成：LSP 工具已在本会话启用。".to_string()
+            } else {
+                "LSP 热加载完成：LSP 工具已从本会话摘除。".to_string()
+            };
+            crate::app::dispatch::router::lsp_report(app, &msg);
+            vec![]
+        }
         // LOCAL: 供应商套餐用量。单飞 + 模态无关：回包无条件落 agent 级缓存（按
         // model_id 绑定，显示层过滤当前模型）；失败回包不覆盖已有成功快照 —— TTL
         // 到期刷新失败时面板继续显示旧数据 + 查询时间点。`provider: null` 也落库。

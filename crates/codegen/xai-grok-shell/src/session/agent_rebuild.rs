@@ -174,7 +174,22 @@ impl AgentRebuildSpec {
         system_prompt_label: impl Into<String>,
     ) -> Result<Agent, AgentBuildError> {
         let (agent, _build_elapsed) = self
-            .build_agent_inner(definition, system_prompt_label.into(), None, None)
+            .build_agent_inner(definition, system_prompt_label.into(), None, None, None)
+            .await?;
+        Ok(agent)
+    }
+
+    /// LOCAL(/lsp): build with the LSP backend forced to `lsp`, ignoring the
+    /// spawn-time snapshot in the spec (`None` drops the tool). Zero-turn hot
+    /// reload of `/lsp on|off` reuses this instead of a full definition swap.
+    pub(crate) async fn build_agent_with_lsp(
+        self: &Arc<Self>,
+        definition: AgentDefinition,
+        system_prompt_label: impl Into<String>,
+        lsp: Option<Arc<dyn LspBackend>>,
+    ) -> Result<Agent, AgentBuildError> {
+        let (agent, _build_elapsed) = self
+            .build_agent_inner(definition, system_prompt_label.into(), None, None, Some(lsp))
             .await?;
         Ok(agent)
     }
@@ -193,6 +208,7 @@ impl AgentRebuildSpec {
             system_prompt_label.into(),
             persisted_skill_names,
             preloaded_skills,
+            None,
         )
         .await
     }
@@ -203,6 +219,7 @@ impl AgentRebuildSpec {
         system_prompt_label: String,
         persisted_skill_names: Option<std::collections::HashSet<String>>,
         preloaded_skills: Option<Vec<xai_grok_tools::implementations::skills::types::SkillInfo>>,
+        lsp_override: Option<Option<Arc<dyn LspBackend>>>,
     ) -> Result<(Agent, std::time::Duration), AgentBuildError> {
         let build_phase_start = std::time::Instant::now();
         let Self {
@@ -354,7 +371,7 @@ impl AgentRebuildSpec {
         if let Some(memory_backend) = memory_backend.clone() {
             builder = builder.with_memory_backend(memory_backend);
         }
-        if let Some(lsp) = lsp.clone() {
+        if let Some(lsp) = lsp_override.unwrap_or_else(|| lsp.clone()) {
             builder = builder.with_lsp(lsp);
         }
         if let Some(plugin_registry) = plugin_registry.clone() {

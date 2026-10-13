@@ -92,7 +92,8 @@ screen_mode = "fullscreen"             # default render mode: "fullscreen" | "mi
 [features]
 telemetry = false                      # anonymous usage telemetry
 feedback = true                        # feedback system (default: true)
-lsp_tools = false                      # expose the lsp tool
+lsp_tools = true                       # expose the lsp tool (default: true; builtin
+                                       # servers auto-detected on PATH — see LSP servers)
 codebase_indexing = true               # code graph indexing (default: true)
 two_pass_compaction = true             # prefire two-pass compaction (default: true)
 remote_fetch = true                    # allow optional online model-catalog fetches (default: true;
@@ -883,10 +884,11 @@ Project-scoped MCP servers override global ones with the same name (full replace
 
 ## LSP servers
 
-Language servers power passive diagnostics and the optional `lsp` tool (see the [`lsp_tools`](#general-settings) feature flag). Definitions come from three sources and merge by server name:
+Language servers power passive diagnostics and the `lsp` tool (gated by the [`lsp_tools`](#general-settings) feature flag, on by default). Definitions come from four sources; well-known builtins are detected automatically and merge beneath explicit config:
 
 | Source | Location | Scope |
 |--------|----------|-------|
+| Builtin | `rust-analyzer`, `gopls`, `pyright`/`basedpyright`/`pylsp`, `jdtls`, `clangd` — detected on `PATH`, no config needed | All projects |
 | User | `~/.grok/lsp.json` | All projects |
 | Project | `.grok/lsp.json` | Current repository |
 | Plugin | A trusted plugin's `.lsp.json` file, or an inline `lspServers` block in its `plugin.json` | Wherever the plugin is enabled |
@@ -896,5 +898,6 @@ When the same server name comes from more than one source, it resolves highest-p
 1. **Project** — `.grok/lsp.json`
 2. **User** — `~/.grok/lsp.json`
 3. **Plugins** — file-based `.lsp.json`, then inline `lspServers`, in plugin load order
+4. **Builtin** — detected on `PATH`, only for names and file extensions no configured server claims
 
-Project and user entries replace lower-priority ones of the same name. Plugin entries only add servers whose names aren't already defined by a local file, so a local `lsp.json` always wins over a plugin. Plugin LSP servers load only after the plugin is trusted (see [Plugins](09-plugins.md)).
+Project and user entries replace lower-priority ones of the same name. Plugin entries only add servers whose names aren't already defined by a local file, so a local `lsp.json` always wins over a plugin. A builtin is skipped entirely for a language once any configured server claims one of its file extensions. Plugin LSP servers load only after the plugin is trusted (see [Plugins](09-plugins.md)).

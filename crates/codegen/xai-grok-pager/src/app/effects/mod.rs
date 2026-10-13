@@ -5117,6 +5117,79 @@ pub(crate) fn execute(
                 TaskResult::ModelCatalogFetched { response }
             });
         }
+        // LOCAL: /lsp status（`x.ai/lspStatus`）。错误也在回包体内（不进 Err 通道），
+        // 状态块总能落盘。
+        Effect::FetchLspStatus { cwd, session_id } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let req = acp::ExtRequest::new(
+                    "x.ai/lspStatus",
+                    serde_json::value::to_raw_value(&serde_json::json!({
+                        "cwd": cwd.to_string_lossy(),
+                        "session_id": session_id,
+                    }))
+                    .expect("serialize lsp status params")
+                    .into(),
+                );
+                let response = match acp_send(req, &tx).await {
+                    Ok(resp) => {
+                        let wrapper: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        let result = wrapper.get("result").unwrap_or(&wrapper);
+                        serde_json::from_value::<
+                            xai_grok_shell::extensions::lsp_status::LspStatusResponse,
+                        >(result.clone())
+                        .unwrap_or_else(|e| {
+                            xai_grok_shell::extensions::lsp_status::LspStatusResponse {
+                                error: Some(format!("Parse error: {e}")),
+                                ..Default::default()
+                            }
+                        })
+                    }
+                    Err(e) => xai_grok_shell::extensions::lsp_status::LspStatusResponse {
+                        error: Some(sanitize_user_error(&format!("{e}"))),
+                        ..Default::default()
+                    },
+                };
+                TaskResult::LspStatusFetched { response }
+            });
+        }
+        // LOCAL: /lsp 零回合热加载（`x.ai/lspApply`）。错误也在回包体内。
+        Effect::ApplyLspTools { cwd, session_id } => {
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let req = acp::ExtRequest::new(
+                    "x.ai/lspApply",
+                    serde_json::value::to_raw_value(&serde_json::json!({
+                        "cwd": cwd.to_string_lossy(),
+                        "session_id": session_id,
+                    }))
+                    .expect("serialize lsp apply params")
+                    .into(),
+                );
+                let response = match acp_send(req, &tx).await {
+                    Ok(resp) => {
+                        let wrapper: serde_json::Value =
+                            serde_json::from_str(resp.0.get()).unwrap_or_default();
+                        let result = wrapper.get("result").unwrap_or(&wrapper);
+                        serde_json::from_value::<
+                            xai_grok_shell::extensions::lsp_apply::LspApplyResponse,
+                        >(result.clone())
+                        .unwrap_or_else(|e| {
+                            xai_grok_shell::extensions::lsp_apply::LspApplyResponse {
+                                error: Some(format!("Parse error: {e}")),
+                                ..Default::default()
+                            }
+                        })
+                    }
+                    Err(e) => xai_grok_shell::extensions::lsp_apply::LspApplyResponse {
+                        error: Some(sanitize_user_error(&format!("{e}"))),
+                        ..Default::default()
+                    },
+                };
+                TaskResult::LspToolsApplied { response }
+            });
+        }
         // LOCAL: /auth 面板「自动检索模型」。SK 仅进请求头；错误也在回包体内
         // （不进 Err 通道），保证在途标志总能清除。
         Effect::FetchProviderModels { base_url, api_key } => {

@@ -74,6 +74,12 @@ pub trait LspBackend: Send + Sync + 'static {
     /// already open, waits briefly for diagnostics to settle, then returns all ERROR/WARNING
     /// diagnostics grouped by file.
     async fn read_diagnostics(&self, paths: &[std::path::PathBuf]) -> Vec<FileDiagnosticEntry>;
+
+    /// Lifecycle snapshot for status surfaces. The default returns `None` —
+    /// test doubles without a real manager have nothing to report.
+    async fn status_snapshot(&self) -> Option<LspBackendStatus> {
+        None
+    }
 }
 
 /// A single diagnostic entry returned by `LspBackend::read_diagnostics`.
@@ -101,6 +107,24 @@ pub enum DiagnosticSeverityLevel {
 pub struct FileDiagnosticEntry {
     pub path: String,
     pub diagnostics: Vec<DiagnosticEntry>,
+}
+
+/// Startup phase of the LSP backend, for status surfaces (`/lsp status`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LspStartupState {
+    NotStarted,
+    Starting,
+    Ready,
+    Failed(String),
+}
+
+/// Point-in-time snapshot of a backend for `/lsp status`: the bootstrap phase
+/// and which configured servers currently have a live client.
+#[derive(Debug, Clone, Default)]
+pub struct LspBackendStatus {
+    /// `None` when the adapter has no bootstrap state to report.
+    pub startup: Option<LspStartupState>,
+    pub running_servers: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]

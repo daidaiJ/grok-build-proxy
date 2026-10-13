@@ -19,6 +19,8 @@ pub mod hooks;
 pub mod hunk_tracker;
 pub mod interject;
 pub mod jj;
+pub mod lsp_apply;
+pub mod lsp_status;
 pub mod marketplace;
 pub mod mcp;
 pub mod memory;

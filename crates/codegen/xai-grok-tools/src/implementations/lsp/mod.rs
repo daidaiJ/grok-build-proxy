@@ -1,4 +1,5 @@
 pub mod capabilities;
+pub mod builtin;
 pub mod client;
 pub mod config;
 pub mod diagnostics;
@@ -22,7 +23,7 @@ pub use manager::{DiagnosticsSummary, LspManager, drain_lsp_diagnostics};
 pub use restart::restart_monitor;
 pub use types::{
     DiagnosticEntry, DiagnosticSeverityLevel, DiskChangeKind, FileDiagnosticEntry, LspBackend,
-    LspConfig, LspOperation, LspToolInput, LspToolResult,
+    LspBackendStatus, LspConfig, LspOperation, LspStartupState, LspToolInput, LspToolResult,
 };
 
 // ── Shared types used across submodules ─────────────────────────────────

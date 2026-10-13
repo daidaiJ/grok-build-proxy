@@ -4472,16 +4472,18 @@ fn lsp_tools_workspace_override_beats_config() {
 }
 
 #[test]
-fn lsp_tools_workspace_override_enables_default_off() {
+fn lsp_tools_workspace_override_disables_default_on() {
     use crate::agent::config::Feature;
-    // 默认关（registry default false）、无覆盖 → false。
+    // 默认开（registry default true）、无覆盖 → true。
     let raw: toml::Value = toml::from_str("[ui]\nyolo = true\n").unwrap();
     let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
-    assert!(!cfg.is_feature_enabled(Feature::LspTools));
-    // /lsp on → 仅该覆盖生效为 true。
-    assert!(cfg.resolve_lsp_tools_with_override(Some(true)));
+    assert!(cfg.is_feature_enabled(Feature::LspTools));
+    // /lsp off → 仅该覆盖生效为 false。
+    assert!(!cfg.resolve_lsp_tools_with_override(Some(false)));
     // 覆盖不得泄漏进全局判定。
-    assert!(!cfg.is_feature_enabled(Feature::LspTools));
+    assert!(cfg.is_feature_enabled(Feature::LspTools));
+    // /lsp on 覆盖 → 保持开。
+    assert!(cfg.resolve_lsp_tools_with_override(Some(true)));
 }
 
 #[test]

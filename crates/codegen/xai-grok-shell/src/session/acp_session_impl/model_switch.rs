@@ -258,6 +258,33 @@ impl SessionActor {
         definition: xai_grok_agent::AgentDefinition,
         system_prompt_label: String,
     ) -> Result<(), acp::Error> {
+        self.rebuild_agent_harness(definition, system_prompt_label, None)
+            .await
+    }
+
+    /// LOCAL(/lsp): handle [`SessionCommand::ReloadLspHarness`] — zero-turn hot
+    /// reload of the LSP tools. Definition and system prompt are unchanged; only
+    /// the builder's LSP injection is swapped (`Some(backend)` attaches, `None`
+    /// drops). Reuses the model-switch rebuild bookkeeping (bridge rebind, MCP
+    /// rematerialize, prompt rewrite, catalog re-advertise) verbatim.
+    pub(super) async fn handle_reload_lsp_harness(
+        &self,
+        lsp: Option<std::sync::Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>>,
+        system_prompt_label: String,
+    ) -> Result<(), acp::Error> {
+        let definition = self.agent.borrow().definition().clone();
+        self.rebuild_agent_harness(definition, system_prompt_label, Some(lsp))
+            .await
+    }
+
+    async fn rebuild_agent_harness(
+        &self,
+        definition: xai_grok_agent::AgentDefinition,
+        system_prompt_label: String,
+        lsp_override: Option<
+            Option<std::sync::Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>>,
+        >,
+    ) -> Result<(), acp::Error> {
         {
             let state = self.state.lock().await;
             if state.running_task.is_some() {
@@ -277,21 +304,37 @@ impl SessionActor {
             new_agent_type = %new_agent_name,
             "handle_rebuild_agent_for_definition: rebuilding harness"
         );
-        let new_agent = self
-            .rebuild_spec
-            .build_agent(definition, system_prompt_label)
-            .await
-            .map_err(|e| {
-                tracing::error!(
-                    session_id = %self.session_info.id.0,
-                    new_agent_type = %new_agent_name,
-                    error = %e,
-                    "handle_rebuild_agent_for_definition: AgentBuilder::build failed"
-                );
-                acp::Error::internal_error().data(format!(
-                    "rebuild_agent: build failed for agent_type={new_agent_name}: {e}"
-                ))
-            })?;
+        let new_agent = if let Some(lsp) = lsp_override {
+            self.rebuild_spec
+                .build_agent_with_lsp(definition, system_prompt_label, lsp)
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        session_id = %self.session_info.id.0,
+                        new_agent_type = %new_agent_name,
+                        error = %e,
+                        "rebuild_agent_harness: AgentBuilder::build (lsp override) failed"
+                    );
+                    acp::Error::internal_error().data(format!(
+                        "rebuild_agent: build failed for agent_type={new_agent_name}: {e}"
+                    ))
+                })?
+        } else {
+            self.rebuild_spec
+                .build_agent(definition, system_prompt_label)
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        session_id = %self.session_info.id.0,
+                        new_agent_type = %new_agent_name,
+                        error = %e,
+                        "rebuild_agent_harness: AgentBuilder::build failed"
+                    );
+                    acp::Error::internal_error().data(format!(
+                        "rebuild_agent: build failed for agent_type={new_agent_name}: {e}"
+                    ))
+                })?
+        };
         // LOCAL(minimal-style): carry the session's live style onto the rebuilt
         // agent's prompt (idempotent strip+append).
         let new_system_prompt = xai_grok_agent::prompt::template::apply_minimal_style(

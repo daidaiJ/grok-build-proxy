@@ -2231,6 +2231,22 @@ pub enum Effect {
         /// 需要匹配的模型 id（聚合行去重后的集合）。
         model_ids: Vec<String>,
     },
+    /// LOCAL: /lsp status 数据面（`x.ai/lspStatus` 扩展）。门禁判定 + server 清单
+    /// （config + builtin 检测）+ 活动会话后端快照一次回包；解析/发送失败也折进
+    /// 回包体 `error` 字段，不进 Err 通道，保证状态块总能落盘。
+    FetchLspStatus {
+        /// 目标工作区（会话 cwd；无会话时 app cwd）。
+        cwd: std::path::PathBuf,
+        /// 活动会话 id；shell 据此取该会话 LSP 后端快照。
+        session_id: Option<String>,
+    },
+    /// LOCAL: /lsp 零回合热加载执行面（`x.ai/lspApply` 扩展）。Set/Clear 写完
+    /// 工作区覆盖后对活动零回合会话发出；shell 重建 harness 换 LSP 后端并重广播
+    /// 工具清单。结果经 `TaskResult::LspToolsApplied` 回显。
+    ApplyLspTools {
+        cwd: std::path::PathBuf,
+        session_id: String,
+    },
     /// LOCAL: /auth 面板「自动检索模型」——对用户给的 base_url 拉 `GET {base}/models`
     /// （`x.ai/providerModels` 扩展）。SK 仅进 Authorization 头，不落日志 / Debug。
     FetchProviderModels {
@@ -3335,6 +3351,15 @@ pub enum TaskResult {
     DoctorFixApplied {
         target: DoctorFixTarget,
         result: Result<crate::diagnostics::FixOutcome, String>,
+    },
+    /// LOCAL: /lsp status 回包（`x.ai/lspStatus`）。解析/发送失败折进回包体
+    /// `error` 字段，状态块总能落盘。
+    LspStatusFetched {
+        response: xai_grok_shell::extensions::lsp_status::LspStatusResponse,
+    },
+    /// LOCAL: /lsp 零回合热加载回包（`x.ai/lspApply`）。
+    LspToolsApplied {
+        response: xai_grok_shell::extensions::lsp_apply::LspApplyResponse,
     },
 }
 #[cfg(test)]

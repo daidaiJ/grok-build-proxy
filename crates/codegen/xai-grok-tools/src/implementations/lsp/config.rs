@@ -100,6 +100,29 @@ pub fn load_servers_with_plugins_sourced(
     servers
 }
 
+/// [`load_servers_with_plugins_sourced`] plus builtin servers detected on PATH
+/// (see [`super::builtin`]). Builtins fill gaps only: a config-defined server
+/// of the same name, or any server claiming the same file extension, suppresses
+/// the builtin for that language. This is the function production surfaces
+/// (session spawn, `grok inspect`, `/lsp status`) should call.
+pub fn load_servers_with_builtins_sourced(
+    cwd: &Path,
+    plugin_lsp_paths: &[PathBuf],
+    plugin_inline_lsp: &[&serde_json::Value],
+    plugin_names: &[&str],
+    inline_plugin_names: &[&str],
+) -> BTreeMap<String, (LspServerConfig, crate::types::config_source::ConfigSource)> {
+    let mut sourced = load_servers_with_plugins_sourced(
+        cwd,
+        plugin_lsp_paths,
+        plugin_inline_lsp,
+        plugin_names,
+        inline_plugin_names,
+    );
+    super::builtin::merge_builtin_servers(&mut sourced, super::builtin::detect_builtin_servers());
+    sourced
+}
+
 /// Drop repo-local (project-scoped) LSP servers from a sourced map when the workspace is untrusted; keep user/plugin. Warns per drop. The trust
 /// verdict is passed in (the folder-trust engine lives in the shell, out of this crate). Single source of truth for the folder-trust LSP load
 /// gate, shared by the workspace build path and the shell's per-session gate.

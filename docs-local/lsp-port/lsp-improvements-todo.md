@@ -122,8 +122,9 @@
 
 ## 5. 随手件（随任一期搭车，不单独立项）
 
-- `/lsp status` 增强：显示 per-server 就绪态（backend 五态已在 manager）——需 pager↔shell
-  通路（ext method 或 meta 扩展），成本小中；等 T1 开工时顺手评估。
+- ~~`/lsp status` 增强：显示 per-server 就绪态~~ **已完成（2026-10-13，
+  三十五期）**：`x.ai/lspStatus` 扩展 + `LspBackend::status_snapshot()`，
+  status 面板出 server 清单（来源/命令探测/运行态）+ 会话后端启动阶段。
 - 工具 description 的 i18n 与 op 清单同步（每期必做项，防描述与实现漂移）。
 
 ## 6. 待定决策汇总
