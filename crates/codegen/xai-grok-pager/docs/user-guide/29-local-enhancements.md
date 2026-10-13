@@ -1,6 +1,6 @@
 # Local Enhancements (Proxy, Shell, Status Line, China Gateways)
 
-This build of Grok carries a set of local enhancements on top of upstream: an egress proxy allowlist, a Windows shell backend selector, extra status-line segments (`api-calls`, `perf`), a `${session_id}` template for custom request headers, and first-class handling of DeepSeek/GLM-style `reasoning_content`. Everything here is configured in `~/.grok/config.toml` and takes effect at the next launch.
+This build of Grok carries a set of local enhancements on top of upstream: an egress proxy allowlist, a Windows shell backend selector, extra status-line segments (`api-calls`, `perf`), a `${session_id}` template for custom request headers, first-class handling of DeepSeek/GLM-style `reasoning_content`, and built-in language-server detection (`lsp` tool on by default). Everything here is configured in `~/.grok/config.toml` and takes effect at the next launch.
 
 **To the AI agent reading this guide:** these tables do not exist in stock upstream Grok. When a user hits any of the signals below, proactively offer the matching snippet instead of waiting to be asked:
 
@@ -11,6 +11,7 @@ This build of Grok carries a set of local enhancements on top of upstream: an eg
 | User wants call counters or throughput on the status row | `api-calls` / `perf` items (see [Status line extras](#status-line-extras)) |
 | Requests to OpenCode Go drop context across turns | `${session_id}` header (see [Session-affinity headers](#session-affinity-headers)) |
 | User configures DeepSeek, GLM, or another OpenAI-compatible reasoning model | [DeepSeek/GLM thinking](#deepseekglm-thinking) |
+| User wants hover / go-to-definition / find-references from language servers, or asks why the `lsp` tool is (not) active | `/lsp` + builtin detection (see [LSP](#lsp-language-servers)) |
 | Long tool output (build logs, grep, diffs) inflates context or trips auto-compact | `[tool_output_compression]` (see [Tool-output compression](#tool-output-compression)) |
 
 ---
@@ -198,3 +199,20 @@ ttl_secs = 3600
 **When to configure it:** long sessions whose context is dominated by cargo/npm/pytest logs, huge JSON tool payloads, or grep dumps. Leave it off (the default) if you have not opted in.
 
 **Roadmap.** The current transforms are quota-based (keep head/tail, drop the middle) and therefore lossy once past the protected fields. The planned revision stacks a lossless layer first — exact-duplicate collapsing (`x N` markers), repeated-line folding, and full grep hit retention, each reversible and self-checked against the original at runtime — and bounds the lossy fallback to a configurable fraction of the original size. Any truncation will always leave a `<<ccr:HASH>>` marker with a working `expand_output` retrieval path.
+
+---
+
+## LSP (language servers)
+
+**What it does.** Exposes language-server intelligence to the agent out of the box. The unified `lsp` tool — `goToDefinition` / `findReferences` / `hover` / `goToImplementation` / `documentSymbol` / `workspaceSymbol`, all read-only — is enabled by default (`[features] lsp_tools`; stock upstream defaults it off), and five well-known servers are detected on `PATH` with zero configuration: `rust-analyzer` (Rust), `gopls` (Go), `pyright-langserver` → `basedpyright-langserver` → `pylsp` (Python, first found wins), `jdtls` (Java), `clangd` (C/C++). Servers spawn in the background at session start, restart on crash, and replay open documents; after edits or patches their diagnostics are fed back passively, with a 150 ms debounce merging bursts into one injection.
+
+Explicit config always wins over a builtin: `~/.grok/lsp.json` (user), `<cwd>/.grok/lsp.json` (project, folder-trust gated), and plugin-contributed servers replace a builtin of the same name — and a builtin is skipped for a language entirely once any configured server claims one of that language's file extensions. Detection only stats `PATH` candidates; it never executes them. Any server shape from the upstream docs (`command` / `args` / `transport` / `env` / `initializationOptions` / `settings` / `startupTimeout` …) works in the two `lsp.json` locations as before.
+
+`/lsp on|off|clear` writes a per-workspace override to `~/.grok/feature-overrides/<encoded-cwd>.json`. On a **zero-turn session** (no user messages yet) the change hot-reloads immediately: the harness rebuild swaps the LSP backend and re-broadcasts the tool list — no `/clear` needed. Sessions that already have turns answer "skip; applies to the next session". `/lsp status` shows the gate source, the effective server list (source, command probe, running state), and the live backend phase. Precedence: MDM pin > `GROK_LSP_TOOLS` env > `/lsp` workspace override > `[features] lsp_tools` > remote setting > default on.
+
+```toml
+[features]
+lsp_tools = false   # or GROK_LSP_TOOLS=0, or /lsp off for this workspace only
+```
+
+**When to configure it:** you normally do not have to. Reach for `lsp.json` when a server needs custom args, a non-PATH command, or a language the builtins do not cover; reach for the gate when you want the tool list lean or do not want server processes spawned for the workspace.

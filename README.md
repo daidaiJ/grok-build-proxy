@@ -148,7 +148,6 @@ backend = "bash"   # pwsh | powershell | bash(Git Bash) | cmd；缺省自动级�
 
 - **`/stats` API 成本列**：用量卡片按模型显示本次窗口的美元成本，数据取官方目录价——models.dev 主源、OpenRouter API 兜底，只留一方原厂价（转售商整库不留）；配置里的裸网关 id、`vendor/model` 全串、`-20260826` 部署戳、`_`/`.` 分隔符变体都能按置信档对上同款原厂条目。价格目录落 `~/.grok/cache/prices.cache`（TTL 一天，`[model_catalog] cache_minutes` 可调），进程启动后台预热一次/天；取数失败宁用旧价，单源失败打 warn 日志（带生效源）。合计行剔除无价模型并标注条数。
 - **工具输出压缩（实验，默认关）**：`[tool_output_compression] enabled = true` 后，对 bash / MCP 的**结果**做 headroom 风格压缩（JSON / 日志 / grep / diff），`exit_code` / `stderr` 无损保留；原输出存为 `<<ccr:HASH>>`，可用 `expand_output` 取回。开关在会话启动时快照。
-- **LSP 诊断合并去抖**：多批诊断在 150ms 静默窗内合并成一次注入，连续编辑的 750ms 窗口内不再重复 drain，减少重复注入与阻塞。
 - **状态行原生指标**：内置 `model` / `api-calls` / `tokens` / `cache` / `think` / `perf`，默认出行为 builtin（`in 47k out 3.2k`、`cache 95.7%`、`think 28.1%`、`✓ 12 ✗ 3`、`380ms ttft · 42.3 tok/s`）。也可写 `type = "command"` 脚本消费同一份 JSON payload。
 
 ```toml
@@ -156,6 +155,12 @@ backend = "bash"   # pwsh | powershell | bash(Git Bash) | cmd；缺省自动级�
 type = "builtin"
 items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 ```
+
+### LSP 语言服务器
+
+- **开箱即用**：`lsp` 工具默认开启（上游 `[features] lsp_tools` 默认关），零配置可用。内置五个知名语言服务器的 PATH 自动检测——Rust `rust-analyzer`、Go `gopls`、Python `pyright` → `basedpyright` → `pylsp`（按序三选一）、Java `jdtls`、C/C++ `clangd`——装了哪个用哪个。显式配置恒压 builtin：`~/.grok/lsp.json`（用户）、`<cwd>/.grok/lsp.json`（项目，受目录信任门控）、插件贡献均可按名覆盖，且任一配置 server 认领了某语言的文件扩展后该语言的 builtin 自动让位。检测只查 PATH 候选不执行二进制；服务器在会话启动时后台拉起，崩溃自动重启并回放已打开文档。
+- **统一 `lsp` 工具**：`goToDefinition` / `findReferences` / `hover` / `goToImplementation` / `documentSymbol` / `workspaceSymbol` 六个只读操作，按文件扩展路由到对应服务器。编辑 / patch 后的诊断被动回喂：多批诊断在 150ms 静默窗内合并成一次注入，连续编辑不重复 drain。
+- **`/lsp` 命令**：`on` / `off` / `clear` 写工作区覆盖（`~/.grok/feature-overrides/<编码后 cwd>.json`），`status` 显示门禁来源、生效 server 清单（来源 / 命令探测 / 运行态）与会话后端状态。**零回合会话写完立即热加载**——重建 harness 换 LSP 后端并重广播工具清单，无需 `/clear`；已有回合的会话报「热加载跳过」，改动对新会话生效。优先级：策略 pin > `GROK_LSP_TOOLS` > `/lsp` 工作区覆盖 > `[features] lsp_tools` > 服务端设置 > 默认开。
 
 ### 交互与界面
 
@@ -174,7 +179,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 - **workflow 可见面编辑**：spawn prompt 可经 `replace_visible(seq, digest)` / `hide_visible(seq)` 对早前子代理的可见输出做原位替换 / 隐藏（journal 直记、重放确定），迭代式 workflow 不再把历史全文反复塞进 prompt。
 - **workflow 子代理工具面白名单**：`AgentOpts.tools` 按子代理角色显式裁剪声明面（canonical tool id，支持裸名），与 capability 过滤叠加只减不增；fan-out 场景省掉"每 agent × 全量工具面"的重复 token。deferred 延迟发现（`defer_tools` / `search_tools`）为后续切片。
 - **headless 审批降级续跑**：无人值守回合遇权限审批阻塞默认终止；`--non-interactive-denial continue` 把阻塞审批转成 PolicyDeny 失败工具结果，agent 带着拒绝原因换路续跑。
-- **本地命令**：`/auth`（供应商配置面板）、`/usage`（供应商套餐用量）、`/stats`（用量、成本与压缩收益）、`/lang`（中英切换）、`/style`（极简风格）、`/grok`（Grok 账号登录，原 `/login`）、以及 `grok2 stats` 独立子命令。
+- **本地命令**：`/auth`（供应商配置面板）、`/usage`（供应商套餐用量）、`/stats`（用量、成本与压缩收益）、`/lang`（中英切换）、`/style`（极简风格）、`/lsp`（LSP 工具启停与状态）、`/grok`（Grok 账号登录，原 `/login`）、以及 `grok2 stats` 独立子命令。
 
 ## 配置速查
 
@@ -185,6 +190,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 | `[model.<id>] use_proxy` | 单模型显式走进程出口代理（默认 false 恒直连） |
 | `[model_catalog] cache_minutes` | 模型目录价格缓存时长（缺省 1440 = 一天；缓存文件 `~/.grok/cache/prices.cache`） |
 | `[provider_usage] cache_minutes` | `/usage` 供应商套餐用量缓存（缺省 5 分钟） |
+| `[features] lsp_tools` | `lsp` 工具总开关（默认开；`GROK_LSP_TOOLS` 等价，`/lsp` 可按工作区覆盖） |
 | `[network] proxy` / `proxy_hosts` | 出口代理与 host 白名单（默认 `x.ai`、`grok.com`） |
 | `[shell] backend` | `pwsh` \| `powershell` \| `bash`(Git Bash) \| `cmd`（仅 Windows；优先于 `GROK_SHELL`，改完需重启） |
 | `[ui.status_line] type` / `items` | 状态行开关与段集合 |
@@ -195,12 +201,13 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 
 ## 默认行为差异
 
-相对上游，本 fork 的开箱默认值有四处不同，全部可改回：
+相对上游，本 fork 的开箱默认值有五处不同，全部可改回：
 
 | 项 | 本 fork 默认 | 恢复上游行为 |
 | --- | --- | --- |
 | 界面语言 | 中文 | `GROK_LANG=en`，或 `/lang` 切换 |
 | 状态行 | 开启（builtin 行，6 个段） | `[ui.status_line] type = "disabled"` |
+| LSP 工具 | 默认开启（builtin 自动检测，无需配置） | `[features] lsp_tools = false`，或 `GROK_LSP_TOOLS=0`，或 `/lsp off` |
 | 自动更新 | 关闭 | `[cli] auto_update = true` |
 | 工具输出压缩 | 关闭 | `[tool_output_compression] enabled = true`（这是本地新增特性） |
 
