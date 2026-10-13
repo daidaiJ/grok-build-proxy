@@ -139,7 +139,15 @@ impl super::LspBackend for LspBackendAdapter {
     fn ensure_started_background(&self) {
         let lsp_manager = self.lsp_manager.clone();
         let startup = self.startup.clone();
-        tokio::spawn(async move {
+        // Best-effort: constructed outside a runtime (sync test fixtures like
+        // `WorkspaceOps::for_test`), skip the eager start — the first in-runtime
+        // use starts the servers via `ensure_ready`, and a stray spawn must not
+        // panic the caller.
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            tracing::debug!("lsp: no tokio runtime; deferring server startup to first use");
+            return;
+        };
+        handle.spawn(async move {
             LspBackendAdapter::ensure_started_with_state(lsp_manager, startup).await;
         });
     }
