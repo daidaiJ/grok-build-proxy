@@ -153,7 +153,9 @@ pub const FEATURES: &[FeatureSpec] = &[
         key: "lsp_tools",
         path: "features.lsp_tools",
         env: "GROK_LSP_TOOLS",
-        default_enabled: false,
+        // LOCAL: 默认开（2026-10-13 拍板）——LSP 靠 builtin 检测开箱即用；关闭走
+        // `[features] lsp_tools = false` / `GROK_LSP_TOOLS=0` / `/lsp off`。
+        default_enabled: true,
         remote: Some(|settings| settings.lsp_tools_enabled),
     },
     FeatureSpec {

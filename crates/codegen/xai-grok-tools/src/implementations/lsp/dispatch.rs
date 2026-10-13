@@ -15,7 +15,7 @@ use async_lsp::lsp_types::{
     SymbolInformation, TextDocumentIdentifier, TextDocumentPositionParams, WorkspaceSymbolParams,
 };
 
-use super::{LspToolInput, LspToolResult};
+use super::{LspToolInput, LspToolResult, LspBackendStatus, LspStartupState};
 
 use super::config::REQUEST_TIMEOUT;
 use super::format::{
@@ -166,6 +166,26 @@ impl super::LspBackend for LspBackendAdapter {
             .try_lock()
             .map(|state| matches!(&*state, StartupState::Ready))
             .unwrap_or(false)
+    }
+
+    async fn status_snapshot(&self) -> Option<LspBackendStatus> {
+        let startup = {
+            let state = self.startup.state.lock().await;
+            match &*state {
+                StartupState::NotStarted => LspStartupState::NotStarted,
+                StartupState::Starting => LspStartupState::Starting,
+                StartupState::Ready => LspStartupState::Ready,
+                StartupState::Failed(error) => LspStartupState::Failed(error.clone()),
+            }
+        };
+        let running_servers = {
+            let mgr = self.lsp_manager.lock().await;
+            mgr.clients.keys().cloned().collect()
+        };
+        Some(LspBackendStatus {
+            startup: Some(startup),
+            running_servers,
+        })
     }
 
     async fn dispatch(&self, input: &LspToolInput) -> LspToolResult {

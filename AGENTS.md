@@ -239,6 +239,18 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   PATCHES 十八期）；P2 分支树随 kimicode P1 落地（branch summarization 未做）；
   P3/P4 未动。
 
+- [`docs-local/lsp-port/`](docs-local/lsp-port/README.md) — **LSP 专题（v1
+  workspace 启停 + v2 开箱即用均已落地）**：v1 `/lsp on|off|status|clear`（PATCHES
+  三十四期）；v2（2026-10-13，`feat/local-lsp-builtin-servers`，三十五期）
+  `lsp_tools` 默认开 + builtin 五语言 PATH 检测（rust-analyzer / gopls /
+  pyright→basedpyright→pylsp / jdtls / clangd，同名+扩展双重 gap 合并、config 恒压
+  builtin）+ `/lsp status` 数据面（`x.ai/lspStatus`，门禁来源+server 清单+会话
+  后端快照）+ **零回合会话热加载**（`x.ai/lspApply` → `ReloadLspHarness` 复用
+  model-switch 零回合重建簿记，推翻 v1「会话边界切换」）。遗留：活体 TUI 验证、
+  eager bootstrap 内存尾部（懒启动挂真实抱怨触发）、T1 诊断按需 op /
+  T2 call hierarchy / T3 rename（[improvements-todo](docs-local/lsp-port/lsp-improvements-todo.md)
+  顺位）。
+
 - [`docs-local/issues/`](docs-local/issues/README.md) — **使用问题台账（一 issue 一文件）**。
   当前 open/reproduced 条：**无**。最近一条 **成本列裸 id 无价等三问题（P2）**：
   v1.0.50 提出、v1.0.51 首修，v1.0.51 活回合复发（models.dev 主源瞬时失败静默

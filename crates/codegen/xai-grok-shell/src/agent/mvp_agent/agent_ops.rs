@@ -364,6 +364,74 @@ impl MvpAgent {
     ) -> std::sync::Arc<tokio::sync::Mutex<crate::session::mcp_servers::McpState>> {
         self.agent_mcp_state.clone()
     }
+    /// LOCAL(/lsp): resolve LSP servers for `cwd` (user/project/plugin config +
+    /// builtin PATH detection, folder-trust filtered) and build the backend.
+    /// Returns the backend plus the configured server names (telemetry mirror);
+    /// `None` when nothing qualifies. Shared by session spawn and the
+    /// `x.ai/lspApply` zero-turn hot reload.
+    pub(crate) async fn build_lsp_backend(
+        &self,
+        cwd: &std::path::Path,
+        process_scope: Option<xai_tty_utils::ProcessScope>,
+    ) -> Option<(
+        std::sync::Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>,
+        Vec<String>,
+    )> {
+        let registry = self.plugin_registry_for_cwd(None).await;
+        let active: Vec<_> = registry
+            .as_ref()
+            .map(|r| r.active_plugins())
+            .unwrap_or_default();
+        let (plugin_lsp_paths, plugin_names): (Vec<std::path::PathBuf>, Vec<&str>) = active
+            .iter()
+            .filter_map(|p| p.lsp_config_path.clone().map(|path| (path, p.name.as_str())))
+            .unzip();
+        let (plugin_inline_lsp, inline_names): (Vec<&serde_json::Value>, Vec<&str>) = active
+            .iter()
+            .filter_map(|p| p.inline_lsp_servers.as_ref().map(|v| (v, p.name.as_str())))
+            .unzip();
+        let sourced =
+            xai_grok_tools::implementations::lsp::config::load_servers_with_builtins_sourced(
+                cwd,
+                &plugin_lsp_paths,
+                &plugin_inline_lsp,
+                &plugin_names,
+                &inline_names,
+            );
+        let servers = crate::agent::folder_trust::filter_untrusted_project_lsp(cwd, sourced);
+        if servers.is_empty() {
+            let user_path = xai_grok_tools::util::grok_home::grok_home().join("lsp.json");
+            let project_path = cwd.join(".grok").join("lsp.json");
+            tracing::debug!(
+                cwd = %cwd.display(),
+                user_lsp_path = %user_path.display(),
+                project_lsp_path = %project_path.display(),
+                "LSP tools enabled, but no language servers are configured or detected"
+            );
+            return None;
+        }
+        let server_names = servers.keys().cloned().collect();
+        let mgr = std::sync::Arc::new(
+            tokio::sync::Mutex::new(
+                xai_grok_tools::implementations::lsp::LspManager::new(
+                    servers,
+                    cwd.to_path_buf(),
+                    true,
+                    xai_grok_tools::notification::ToolNotificationHandle::noop(),
+                )
+                .with_process_scope(process_scope),
+            ),
+        );
+        let adapter = std::sync::Arc::new(
+            xai_grok_tools::implementations::lsp::LspBackendAdapter::new(mgr),
+        );
+        use xai_grok_tools::implementations::lsp::LspBackend as _;
+        adapter.ensure_started_background();
+        Some((
+            adapter as std::sync::Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>,
+            server_names,
+        ))
+    }
     /// Build the launch-dir plugin registry snapshot on first use. Boot-time discovery was deferred past ACP `initialize`, leaving `plugin_registry_handle` empty.
     /// The cwd-to-git-root and user/marketplace walks stalled grok-desktop's first `initialize`. That shared snapshot still backs the launch-dir plugin MCP/LSP merges read in `resolve_mcp_servers` and the session LSP build.
     /// So populate it lazily, off the `initialize` critical path, on the first session-creating call. Runs the discovery walk once; per-session `build_for_cwd` still re-resolves project-scoped plugins for each session's own cwd.
@@ -4542,66 +4610,12 @@ impl MvpAgent {
             .borrow()
             .resolve_lsp_tools_for_cwd(tool_ctx.cwd.as_path());
         if lsp_tools_enabled && tool_ctx.lsp.is_none() {
-            let snapshot = self.plugin_registry_handle.snapshot();
-            let active: Vec<_> = snapshot
-                .iter()
-                .flat_map(|reg| reg.active_plugins())
-                .collect();
-            let (plugin_lsp_paths, plugin_names): (Vec<std::path::PathBuf>, Vec<&str>) = active
-                .iter()
-                .filter_map(|p| {
-                    p.lsp_config_path.clone().map(|path| (path, p.name.as_str()))
-                })
-                .unzip();
-            let (
-                plugin_inline_lsp,
-                inline_names,
-            ): (Vec<&serde_json::Value>, Vec<&str>) = active
-                .iter()
-                .filter_map(|p| {
-                    p.inline_lsp_servers.as_ref().map(|v| (v, p.name.as_str()))
-                })
-                .unzip();
-            let sourced = xai_grok_tools::implementations::lsp::config::load_servers_with_plugins_sourced(
-                tool_ctx.cwd.as_path(),
-                &plugin_lsp_paths,
-                &plugin_inline_lsp,
-                &plugin_names,
-                &inline_names,
-            );
-            let servers = folder_trust::filter_untrusted_project_lsp(
-                tool_ctx.cwd.as_path(),
-                sourced,
-            );
-            tool_ctx.lsp_server_names = servers.keys().cloned().collect();
-            if servers.is_empty() {
-                let user_path = xai_grok_tools::util::grok_home::grok_home()
-                    .join("lsp.json");
-                let project_path = tool_ctx.cwd.as_path().join(".grok").join("lsp.json");
-                tracing::debug!(
-                    cwd = %tool_ctx.cwd,
-                    user_lsp_path = %user_path.display(),
-                    project_lsp_path = %project_path.display(),
-                    "LSP tools enabled, but no language servers are configured"
-                );
-            } else {
-                use xai_grok_tools::implementations::lsp::{
-                    LspBackend, LspBackendAdapter, LspManager,
-                };
-                let mgr = std::sync::Arc::new(
-                    tokio::sync::Mutex::new(
-                        LspManager::new(
-                                servers,
-                                tool_ctx.cwd.as_path().to_path_buf(),
-                                true,
-                                xai_grok_tools::notification::ToolNotificationHandle::noop(),
-                            )
-                            .with_process_scope(tool_ctx.process_scope.clone()),
-                    ),
-                );
-                let adapter = std::sync::Arc::new(LspBackendAdapter::new(mgr));
-                adapter.ensure_started_background();
-                tool_ctx.lsp = Some(adapter as std::sync::Arc<dyn LspBackend>);
+            if let Some((backend, server_names)) = self
+                .build_lsp_backend(tool_ctx.cwd.as_path(), tool_ctx.process_scope.clone())
+                .await
+            {
+                tool_ctx.lsp_server_names = server_names;
+                tool_ctx.lsp = Some(backend);
             }
         }
         let inference_idle_timeout_secs = {

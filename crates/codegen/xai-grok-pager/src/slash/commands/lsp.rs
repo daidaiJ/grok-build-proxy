@@ -4,9 +4,11 @@
 //! 覆盖文件的写入都在 dispatch 层（`dispatch/router.rs` 的 `dispatch_lsp_configure`），
 //! 因为 `CommandExecCtx` 不携带会话 cwd 与回合状态。生效点在 session spawn 的
 //! agent definition 构建（shell `resolve_lsp_tools_for_cwd`），对本会话不生效。
+//! status 的数据面走 `x.ai/lspStatus` 扩展（异步），渲染在 [`format_status`]。
 
 use crate::app::actions::{Action, LspConfigureRequest};
 use crate::slash::command::{CommandExecCtx, CommandResult, SlashCommand, slash_meta};
+use xai_grok_shell::extensions::lsp_status::LspStatusResponse;
 
 pub struct LspCommand;
 
@@ -33,6 +35,75 @@ impl SlashCommand for LspCommand {
         };
         CommandResult::Action(Action::LspConfigure { request })
     }
+}
+
+/// `/lsp status` 回包 → 展示文本。门禁一行、覆盖一行、server 清单（含来源与
+/// 运行态）、会话后端状态。空清单给出可执行的下一步（装 server 或写 lsp.json）。
+pub(crate) fn format_status(response: &LspStatusResponse) -> String {
+    if let Some(error) = &response.error {
+        return format!("LSP 状态查询失败：{error}");
+    }
+    let mut lines = Vec::new();
+
+    let source_label = match response.enabled_source.as_str() {
+        "pin" => "策略 pin",
+        "env" => "环境变量 GROK_LSP_TOOLS",
+        "workspace_override" => "/lsp 工作区覆盖",
+        "config" => "[features] lsp_tools",
+        "remote" => "服务端设置",
+        _ => "默认开",
+    };
+    lines.push(format!(
+        "LSP 工具：{}（来源：{source_label}）",
+        if response.enabled { "启用" } else { "禁用" }
+    ));
+    match response.workspace_override {
+        Some(true) => lines.push("本工作区覆盖：on（下次会话启用 LSP 工具）".to_string()),
+        Some(false) => lines.push("本工作区覆盖：off（下次会话禁用 LSP 工具）".to_string()),
+        None => lines.push("本工作区覆盖：未设置（跟随全局）".to_string()),
+    }
+
+    if response.servers.is_empty() {
+        lines.push("语言服务器：无".to_string());
+        lines.push(
+            "  安装 rust-analyzer / gopls / pyright / jdtls / clangd 会自动接入；也可在 ~/.grok/lsp.json 配置。"
+                .to_string(),
+        );
+    } else {
+        lines.push(format!("语言服务器（{}）：", response.servers.len()));
+        for s in &response.servers {
+            let mut line = format!("  {} — {} — {}", s.name, s.source, s.command);
+            if s.command_found == Some(false) {
+                line.push_str("（命令未找到）");
+            }
+            if let Some(running) = s.running {
+                line.push_str(if running { " — 运行中" } else { " — 未运行" });
+            }
+            lines.push(line);
+        }
+    }
+
+    match &response.session {
+        Some(session) => {
+            let startup_label = match session.startup.as_str() {
+                "not_started" => "未启动",
+                "starting" => "启动中",
+                "ready" => "就绪",
+                "failed" => "失败",
+                _ => "未知",
+            };
+            let mut line = format!("本会话后端：{startup_label}");
+            if let Some(error) = &session.startup_error {
+                line.push_str(&format!("（{error}）"));
+            }
+            lines.push(line);
+        }
+        None => lines.push("当前无活动会话或本会话未装配 LSP 后端。".to_string()),
+    }
+    lines.push(
+        "/lsp 的改动立即热加载到零回合会话；已有回合的会话对新会话生效。".to_string(),
+    );
+    lines.join("\n")
 }
 
 #[cfg(test)]

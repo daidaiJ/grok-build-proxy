@@ -561,7 +561,7 @@ impl WorkspaceHandle {
         };
         let lsp: Option<Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>> = {
             let sourced =
-                xai_grok_tools::implementations::lsp::config::load_servers_with_plugins_sourced(
+                xai_grok_tools::implementations::lsp::config::load_servers_with_builtins_sourced(
                     &config.root_cwd,
                     &[],
                     &[],

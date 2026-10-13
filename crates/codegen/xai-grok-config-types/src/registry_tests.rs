@@ -46,7 +46,7 @@ fn registered_settings() {
         rows,
         BTreeMap::from([
             ("session_search", ("GROK_SESSION_SEARCH", true)),
-            ("lsp_tools", ("GROK_LSP_TOOLS", false)),
+            ("lsp_tools", ("GROK_LSP_TOOLS", true)),
             ("web_fetch", ("GROK_WEB_FETCH", false)),
             ("session_recap", ("GROK_SESSION_RECAP", true)),
             ("ask_user_question", ("GROK_ASK_USER_QUESTION", true)),
@@ -220,13 +220,15 @@ fn off_reason_names_the_setting_that_turned_it_off() {
         );
     }
 
-    // `lsp_tools` is the default-off row, so nothing has to set it.
+    // `web_fetch` is the default-off row, so nothing has to set it.
     assert_eq!(
-        Feature::LspTools
+        Feature::WebFetch
             .off_reason(FeatureSources::default())
             .as_deref(),
         Some("the default"),
     );
+    // `lsp_tools` defaults on: with no source set it is enabled and has no off reason.
+    assert_eq!(Feature::LspTools.off_reason(FeatureSources::default()), None);
 }
 
 /// The config tier splits around the user file: a managed layer applies only without a user key, the overlay and an

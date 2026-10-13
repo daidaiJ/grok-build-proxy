@@ -2644,3 +2644,63 @@ limited` 20% + 「查询于 10-12 11:09」。本机部署 `D:\tool\cli\grok2.exe
 （命令解析 2 + dispatch 门控 4）+ translations_table 1/1；双 crate check
 --all-targets 0 error 0 warning；i18n 扫描 exit 0。**待办**：活体 TUI 验证
 （新客户端 `/lsp on` → /clear → 工具清单现 `lsp`；status 三态；带历史回合拒绝）。
+
+## 三十五期：LSP 开箱即用——默认开 + builtin 检测（五语言）+ `/lsp status` 数据面 + 零回合热加载（2026-10-13，分支 feat/local-lsp-builtin-servers）
+
+> 用户对 v1.0.52 的 /lsp 三条不满：① 必须显式开 `[features] lsp_tools`（且当时
+> 默认关）② 没有 rust/go/python 的自动检测，必须手写 lsp.json ③ `/lsp status`
+> 只报「工具注册态」，看不到 server 面。施工中追加两条拍板：④ 补 Java/C 覆盖
+> 主流语言 ⑤ 零回合会话直接热加载，不逼用户 /clear（推翻三十四期的「会话边界
+> 切换」语义——本会话还没发过消息就没有契约可污染，重建无代价）。
+
+1. **默认开（config-types registry）**：`Feature::LspTools` `default_enabled:
+   false → true`；registry 测试表 + off_reason 断言改挂 WebFetch 兜底；
+   shell config 测试 `lsp_tools_workspace_override_enables_default_off` 重写为
+   `…_disables_default_on`（off 覆盖生效且不泄漏全局）。关闭仍走
+   `[features] lsp_tools = false` / `GROK_LSP_TOOLS=0` / `/lsp off`。
+2. **builtin 检测（tools `implementations/lsp/builtin.rs` 新）**：静态槽位表
+   rust-analyzer / gopls / pyright→basedpyright→pylsp（优先序三选一）/ jdtls /
+   clangd（.c/.h/.cpp 一族，.h 映射 cpp 语言 id）；`probe_command` 只 stat PATH
+   候选（Windows 走 PATHEXT 语义，绝不 spawn 二进制——qwen 教训：探针不执行
+   命令）；`merge_builtin_servers` 双重 gap 语义：同名让位 config + 扩展已被
+   任何 config server 认领则整语言让位。canonical 合并入口
+   `load_servers_with_builtins_sourced`（config.rs），spawn / inspect /
+   workspace handle / status 四处统一换用；`load_servers*` 纯 config 版保持
+   原样（测试确定性，不被探测机的 PATH 污染）。
+3. **`/lsp status` 数据面（shell `extensions/lsp_status.rs` 新 +
+   `x.ai/lspStatus`）**：一次回包 = 门禁判定（pin/env/override/config/remote/
+   default 六层来源标签）+ 工作区覆盖 + server 清单（名称/命令/args/来源
+   display_label/裸命令 PATH 探测命中）+ 会话后端快照（启动阶段 + 运行中
+   server）。后端快照走 `LspBackend::status_snapshot()`（trait 新方法，
+   adapter 从 StartupState + mgr.clients 直读；test double 默认 None）。
+   pager 渲染 `format_status`（zh，`/lang` 先例硬编码）；Status 臂改发
+   `Effect::FetchLspStatus` 异步取数，回包 `TaskResult::LspStatusFetched` 落
+   scrollback；解析/发送失败折进回包体 `error`（状态块总能落盘）。
+4. **零回合热加载（shell + pager 全链）**：`SessionCommand::ReloadLspHarness`
+   （新，commands.rs）→ run_loop 臂 → actor `handle_reload_lsp_harness`：
+   definition 与 system prompt 不变，只换 builder 的 LSP 注入面，复用
+   model-switch 零回合重建的全部簿记（bridge 重绑 / MCP rematerialize /
+   零回合前缀改写 / `HarnessRebuild` 工具清单重广播——pager 镜像自动跟进）。
+   `AgentRebuildSpec::build_agent_with_lsp`（agent_rebuild.rs，lsp_override
+   参数穿透 build_agent_inner）。后端组装抽 `MvpAgent::build_lsp_backend`
+   （spawn 块同步收敛到这一个入口）。执行面 `x.ai/lspApply`（extensions/
+   lsp_apply.rs 新）：门禁重解 + turn_count>0 拒绝（signals 快照，与
+   model-switch 同源）+ 现状比对（无变化不重建）+ 重建 oneshot 等待回包。
+   pager Set/Clear 成功写覆盖后，零回合有 session_id 时追加发
+   `Effect::ApplyLspTools`；`TaskResult::LspToolsApplied` 追加权威结果行。
+   带历史回合的 Set/Clear 拒绝文案同步改口径（热加载会污染已定格的对话契约）。
+5. **i18n / 文档**：user-guide 05-configuration（features 表默认值 + LSP servers
+   节四源合并语义）+ 26-config-reference 默认值行；`/lsp` 运行时文案保持
+   zh 硬编码（/lang 先例）。
+
+验证：cargo check shell/pager(--all-targets)/tools/workspace 0 error；
+tools lib builtin 4/4（probe 跨目录/路径形态/优先序、merge 同名/扩展 gap/补位）；
+pager lsp 8/8（status effect 参数 + format_status 三态 + 门控四例）；
+shell GATE_FORCE config lsp 3/3（默认开 off 覆盖 / pin 压覆盖 / 覆盖压 config）
++ workspace_overrides 4/4。**GATE_FORCE tools 全量 lsp 过滤附带实锤一个既有
+Windows 环境族**：`implementations::lsp::tests` mock e2e 40 挂（mock server 是
+Python 脚本直接当 server spawn，Windows `std::process::Command` 拉不起 .py →
+`InitFailed("service stopped")`；70 过 40 挂 2 ignored，非本次回归——tools
+crate 从未进 win-whitelist 即因于此，懒治理：e2e 覆盖靠 Linux CI 或后续把
+mock 换 .bat 包装）。**待办**：活体 TUI 验证（rust 仓起会话看 `lsp` 工具自动
+注册 + rust-analyzer 拉起；/lsp on 热加载零回合会话；带历史拒绝；status 面板）。

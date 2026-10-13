@@ -157,8 +157,9 @@ pub(in crate::app::dispatch) fn confirmed_quit(app: &mut AppView) -> Vec<Effect>
 /// LOCAL(/lsp): `/lsp on|off|status|clear` 的执行体。cwd 取活动会话的会话 cwd
 /// （agent 视图）或 app cwd（dashboard/welcome）；写入 grok-home workspace 覆盖
 /// （shell `workspace_overrides`），生效点在下一个会话 spawn 的 definition 构建。
-/// 写入仅在「零用户回合」的会话放行：工具清单在会话创建时定格，中途改清单
-/// 会话内不生效且声明面漂移，因此带历史的会话拒绝并指向 /clear。
+/// 写入仅在「零用户回合」的会话放行。零回合会话写完覆盖后立即经
+/// `x.ai/lspApply` 热加载（重建 harness 换 LSP 后端，`HarnessRebuild` 重广播
+/// 工具清单）；带历史的会话拒绝（热加载会污染已定格的对话契约），指向 /clear。
 fn dispatch_lsp_configure(
     app: &mut AppView,
     request: crate::app::actions::LspConfigureRequest,
@@ -189,87 +190,104 @@ fn dispatch_lsp_configure(
                 };
                 (
                     s.cwd.clone(),
-                    Some((fresh, s.available_tools.as_ref().map(|t| t.contains("lsp")))),
+                    Some((fresh, s.session_id.clone().map(|sid| sid.to_string()))),
                 )
             }
             None => (app.cwd.clone().into(), None),
         },
         ActiveView::Welcome | ActiveView::AgentDashboard => (app.cwd.clone().into(), None),
     };
+    let session_id = session_state
+        .as_ref()
+        .and_then(|(_, session_id)| session_id.clone());
 
     match request {
         LspConfigureRequest::Status => {
-            let workspace_line =
-                match workspace_overrides::read_workspace_override(&cwd, overrides_key) {
-                    Some(true) => "本工作区覆盖：on（下次会话启用 LSP 工具）".to_string(),
-                    Some(false) => "本工作区覆盖：off（下次会话禁用 LSP 工具）".to_string(),
-                    None => "本工作区覆盖：未设置（跟随全局 [features] lsp_tools，默认关）"
-                        .to_string(),
-                };
-            let session_line = match session_state {
-                Some((_, Some(true))) => "本会话：LSP 工具已注册。".to_string(),
-                Some((_, Some(false))) => "本会话：未注册 LSP 工具。".to_string(),
-                Some((_, None)) => "本会话：工具清单尚未同步，无法确认。".to_string(),
-                None => "当前无活动会话；设置将作用于以该目录启动的下一个会话。".to_string(),
-            };
-            lsp_report(
-                app,
-                &format!(
-                    "{session_line}\n{workspace_line}\n生效点为新会话：工具清单在会话创建时定格，/lsp 的改动对本会话不生效。"
-                ),
-            );
-            vec![]
+            // 数据面走 `x.ai/lspStatus` 扩展（门禁 + server 清单 + 会话后端快照），
+            // 回包经 TaskResult::LspStatusFetched 渲染；本函数只负责取数参数。
+            vec![Effect::FetchLspStatus { cwd, session_id }]
         }
         LspConfigureRequest::Set(value) => {
-            if let Some((fresh, _)) = session_state {
+            if let Some((fresh, _)) = &session_state {
                 if !fresh {
                     lsp_report(
                         app,
-                        "拒绝：当前会话已有历史回合，/lsp 只在新会话（或 /clear 后）设置。\n工具清单在会话创建时定格；先 /clear 再执行 /lsp on|off。",
+                        "拒绝：当前会话已有历史回合，热加载会污染已定格的对话契约。\n先 /clear 再执行 /lsp on|off，或改动对新会话生效。",
                     );
                     return vec![];
                 }
             }
-            let result =
-                workspace_overrides::write_workspace_override(&cwd, overrides_key, Some(value));
-            let msg = match result {
-                Ok(()) => format!(
-                    "已设置：本工作区（{}）的下一个会话将{} LSP 工具。\n当前会话不受影响；/clear 后新会话生效。",
-                    cwd.display(),
-                    if value { "启用" } else { "禁用" }
-                ),
-                Err(e) => format!("写入 LSP 工作区覆盖失败：{e}"),
-            };
-            lsp_report(app, &msg);
-            vec![]
+            match
+                workspace_overrides::write_workspace_override(&cwd, overrides_key, Some(value))
+            {
+                Err(e) => {
+                    lsp_report(app, &format!("写入 LSP 工作区覆盖失败：{e}"));
+                    vec![]
+                }
+                Ok(()) => {
+                    let action = if value { "启用" } else { "禁用" };
+                    let mut effects = Vec::new();
+                    let msg = match &session_id {
+                        Some(sid) => {
+                            effects.push(Effect::ApplyLspTools {
+                                cwd: cwd.clone(),
+                                session_id: sid.clone(),
+                            });
+                            format!(
+                                "已设置：本工作区（{}）{action} LSP 工具。当前会话为零回合，正在热加载…",
+                                cwd.display()
+                            )
+                        }
+                        None => format!(
+                            "已设置：本工作区（{}）{action} LSP 工具。会话尚未建立，definition 构建时生效。",
+                            cwd.display()
+                        ),
+                    };
+                    lsp_report(app, &msg);
+                    effects
+                }
+            }
         }
         LspConfigureRequest::Clear => {
-            if let Some((fresh, _)) = session_state {
+            if let Some((fresh, _)) = &session_state {
                 if !fresh {
                     lsp_report(
                         app,
-                        "拒绝：当前会话已有历史回合，/lsp 只在新会话（或 /clear 后）设置。\n工具清单在会话创建时定格；先 /clear 再执行 /lsp clear。",
+                        "拒绝：当前会话已有历史回合，热加载会污染已定格的对话契约。\n先 /clear 再执行 /lsp clear，或改动对新会话生效。",
                     );
                     return vec![];
                 }
             }
-            let result = workspace_overrides::write_workspace_override(&cwd, overrides_key, None);
-            let msg = match result {
-                Ok(()) => {
-                    "已清除本工作区的 LSP 覆盖，恢复跟随全局配置（[features] lsp_tools）。"
-                        .to_string()
+            match workspace_overrides::write_workspace_override(&cwd, overrides_key, None) {
+                Err(e) => {
+                    lsp_report(app, &format!("清除 LSP 工作区覆盖失败：{e}"));
+                    vec![]
                 }
-                Err(e) => format!("清除 LSP 工作区覆盖失败：{e}"),
-            };
-            lsp_report(app, &msg);
-            vec![]
+                Ok(()) => {
+                    let mut effects = Vec::new();
+                    let msg = match &session_id {
+                        Some(sid) => {
+                            effects.push(Effect::ApplyLspTools {
+                                cwd: cwd.clone(),
+                                session_id: sid.clone(),
+                            });
+                            "已清除本工作区的 LSP 覆盖，恢复跟随全局配置。当前会话为零回合，正在热加载…"
+                                .to_string()
+                        }
+                        None => "已清除本工作区的 LSP 覆盖，恢复跟随全局配置（[features] lsp_tools）。"
+                            .to_string(),
+                    };
+                    lsp_report(app, &msg);
+                    effects
+                }
+            }
         }
     }
 }
 
 /// LOCAL(/lsp): 结果回显。agent 视图写 scrollback 系统块（与 /lang 的回复一致），
-/// dashboard/welcome 走 toast。
-fn lsp_report(app: &mut AppView, msg: &str) {
+/// dashboard/welcome 走 toast。status 异步回包（TaskResult::LspStatusFetched）也走这里。
+pub(crate) fn lsp_report(app: &mut AppView, msg: &str) {
     if let ActiveView::Agent(id) = app.active_view {
         if let Some(agent) = app.agents.get_mut(&id) {
             push_and_page_flip(

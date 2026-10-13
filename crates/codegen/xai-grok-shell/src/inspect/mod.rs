@@ -1149,7 +1149,7 @@ fn list_lsp_servers(
         plugin_inline_lsp.iter().map(|(v, _)| *v).collect();
     let inline_names: Vec<&str> = plugin_inline_lsp.iter().map(|(_, n)| *n).collect();
 
-    let servers = xai_grok_tools::implementations::lsp::config::load_servers_with_plugins_sourced(
+    let servers = xai_grok_tools::implementations::lsp::config::load_servers_with_builtins_sourced(
         cwd,
         &plugin_lsp_paths,
         &inline_values,

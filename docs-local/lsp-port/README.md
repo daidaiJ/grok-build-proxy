@@ -5,6 +5,8 @@
 > 本文档是它的调研+落地正文）。
 > 用户口径：调研范围只取真有 LSP 的同类；only-cc-lite（上下文压缩库，非 coding agent）与
 > MiMo-Code（设计不佳）不取参照。
+> **v2（2026-10-13，`feat/local-lsp-builtin-servers`，PATCHES 三十五期）**：默认开 +
+> builtin 五语言检测 + `/lsp status` 数据面 + 零回合热加载，见文末 §8。
 
 ## 1. 调研范围与结论速览
 
@@ -195,3 +197,38 @@
   值得独立切片而不是顺手塞。4–8 均挂明确触发信号。
 - qwen 的两条工程教训直接进 1/2 的验收清单：**先准入后 spawn**（我们已有
   folder_trust）与**陈旧结果不得冒充「无调用」**（call hierarchy 出处校验）。
+
+## 8. v2 开箱即用 + 热加载（2026-10-13，feat/local-lsp-builtin-servers，PATCHES 三十五期）
+
+用户对 v1 的三条不满（必须显式开启 / 必须手写 lsp.json / status 只报工具注册态）
++ 施工中两条追加（补 Java/C 覆盖主流语言；零回合会话直接热加载不逼 /clear）：
+
+- **默认开**：`Feature::LspTools` `default_enabled: true`。关闭仍走
+  `[features] lsp_tools = false` / `GROK_LSP_TOOLS=0` / `/lsp off`（优先级链不变）。
+- **builtin 检测**（tools `implementations/lsp/builtin.rs`）：rust-analyzer /
+  gopls / pyright→basedpyright→pylsp（优先序三选一）/ jdtls / clangd。探测只
+  stat PATH（Windows PATHEXT 语义），**绝不 spawn 二进制**（qwen 探针教训）；
+  合并 = 同名让位 config + 扩展已被认领则整语言让位（config 填意图，builtin
+  填空位）。canonical 入口 `load_servers_with_builtins_sourced`，spawn /
+  `grok inspect` / workspace handle / status 四处统一；`load_servers*` 纯
+  config 版保留给测试确定性。对照 opencode 的 builtin+config 合并：它是纯
+  name 键合并，我们多了扩展 gap 维度（防 config 自带 python server 时 pyright
+  抢 .py）。
+- **`/lsp status` 数据面**：`x.ai/lspStatus` 扩展一次回包（门禁六层来源 +
+  覆盖 + server 清单含来源/命令探测/运行态 + 会话后端快照）。后端快照 =
+  `LspBackend::status_snapshot()`（StartupState + clients 直读，通知通道的
+  五态事件继续走 noop——状态查询走拉不走推）。渲染在 pager
+  `format_status`（zh）。这把 §5 随手件「per-server 就绪态需 pager↔shell 通路」
+  兑现了。
+- **零回合热加载**：**推翻本文 §4「对本会话不生效」的会话边界拍板**——零回合
+  会话没有已定格的对话契约，重建无代价。链路：`/lsp on|off` 写覆盖 →
+  `Effect::ApplyLspTools` → `x.ai/lspApply`（门禁重解 + turn_count 拒绝 +
+  现状比对）→ `SessionCommand::ReloadLspHarness` → actor 复用 model-switch
+  零回合重建簿记（`AgentRebuildSpec::build_agent_with_lsp` 只换 LSP 注入面，
+  definition/system prompt 不变；`HarnessRebuild` 重广播工具清单，pager
+  `available_tools` 镜像自动跟进）。带历史回合仍拒绝（语义同 v1）。
+- **已知边界**：① 默认开 + eager bootstrap = 检测到 server 的会话启动即后台
+  拉起（rust-analyzer 内存尾部大头）；懒启动是后续切片（挂触发：真实出现
+  内存抱怨）。② 重建后 ToolContext.lsp_server_names 不回填（telemetry 字段，
+  空表无害）。③ 热加载等待 harness 重建（oneshot），秒级内完成，UI 先回显
+  「正在热加载…」再落权威结果行。

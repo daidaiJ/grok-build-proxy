@@ -540,3 +540,30 @@
   D1–D4（D3/D4 带默认倾向可默认执行）。
 - **接手者第一步**：T1 开工（分支拟 `feat/local-lsp-diagnostics-op`）；开工首日
   核实 async-lsp 的 CallHierarchy 类型可用性（T2 前置）。
+
+### 2026-10-13 · /lsp v2 开箱即用施工完成登记（默认开 + builtin 检测 + status 数据面 + 零回合热加载，feat/local-lsp-builtin-servers）
+
+- **落地**：接上两条 /lsp 条目，回应用户三条不满 + 两条追加拍板。①
+  `Feature::LspTools` 默认翻 true（registry 层，关闭路径不变）；② builtin
+  五语言检测（tools `implementations/lsp/builtin.rs`：rust-analyzer / gopls /
+  pyright→basedpyright→pylsp 优先序 / jdtls / clangd；PATH 探测不 spawn 二进制；
+  同名 + 扩展双重 gap 合并，config 恒压 builtin），canonical 入口
+  `load_servers_with_builtins_sourced` 四处统一（spawn / inspect / workspace
+  handle / status）；③ `/lsp status` 换数据面：`x.ai/lspStatus` 扩展（门禁
+  六层来源 + server 清单 + 会话后端快照走 `LspBackend::status_snapshot()` 新
+  trait 方法），pager `format_status` 渲染、异步回包落 scrollback——improvements
+  todo §5 随手件核销；④ **推翻 v1「会话边界切换」语义**：零回合会话
+  `/lsp on|off` 写完覆盖立即 `x.ai/lspApply` 热加载（`SessionCommand::
+  ReloadLspHarness` → `AgentRebuildSpec::build_agent_with_lsp` 只换 LSP 注入
+  面，复用 model-switch 零回合重建簿记 + `HarnessRebuild` 工具清单重广播；
+  turn_count>0 拒绝）。后端组装收敛 `MvpAgent::build_lsp_backend` 单入口。
+- **验证**：cargo check shell / pager --all-targets / tools / workspace
+  0 error；tools lib builtin 4/4；pager lsp 8/8（status effect 参数 +
+  format_status 三态 + 门控四例）；shell GATE_FORCE config lsp 3/3 +
+  workspace_overrides 4/4；i18n 扫描 exit 0。GATE_FORCE tools lsp 过滤实锤既有
+  Windows 环境族：mock e2e 40 挂（mock server 是 Python 脚本 spawn 不兼容，
+  非本次回归）。实现记录 PATCHES.md 三十五期；设计正文 lsp-port/README §8。
+- **遗留**：① 活体 TUI 验证（rust 仓起会话 `lsp` 工具自动注册 + rust-analyzer
+  拉起；/lsp on 零回合热加载；带历史拒绝；status 面板）；② 默认开 + eager
+  bootstrap 的内存尾部（rust-analyzer）——懒启动为后续切片，挂真实抱怨触发；
+  ③ T1 诊断按需 op 仍是 improvements todo 第一顺位。
