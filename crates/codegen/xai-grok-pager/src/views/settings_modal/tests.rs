@@ -6760,6 +6760,18 @@ fn max_thoughts_width_preview_title_styling_distinguishes_from_content() {
         crate::theme::ThemeKind::RosePineMoon => crate::theme::Theme::rosepine_moon(),
         // Resolved via `Theme::current()` rather than a constructor because `theme::oscura` is a private module
         crate::theme::ThemeKind::OscuraMidnight => crate::theme::Theme::current(),
+        // LOCAL 移植主题：构造器是 `impl Theme` 的 pub 方法，跨模块可用
+        crate::theme::ThemeKind::CatppuccinMocha => crate::theme::Theme::catppuccin_mocha(),
+        crate::theme::ThemeKind::CatppuccinLatte => crate::theme::Theme::catppuccin_latte(),
+        crate::theme::ThemeKind::Dracula => crate::theme::Theme::dracula(),
+        crate::theme::ThemeKind::GruvboxDark => crate::theme::Theme::gruvbox_dark(),
+        crate::theme::ThemeKind::Nord => crate::theme::Theme::nord(),
+        crate::theme::ThemeKind::OneDark => crate::theme::Theme::one_dark(),
+        crate::theme::ThemeKind::Everforest => crate::theme::Theme::everforest(),
+        crate::theme::ThemeKind::Kanagawa => crate::theme::Theme::kanagawa(),
+        crate::theme::ThemeKind::Vesper => crate::theme::Theme::vesper(),
+        crate::theme::ThemeKind::NightOwl => crate::theme::Theme::night_owl(),
+        crate::theme::ThemeKind::SolarizedDark => crate::theme::Theme::solarized_dark(),
         // Both bg tokens are Reset (bandless palette), so the two-tone
         // assertion below does not apply — the preview reads via the
         // underline cue instead.

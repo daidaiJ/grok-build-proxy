@@ -59,6 +59,62 @@ const THEME_CHOICES: &[EnumChoice] = &[
         display: "Oscura Midnight",
         description: "Deep dark with warm accents; needs truecolor.",
     },
+    // LOCAL 主题移植（opencode 主题库，2026-10-13）：全部需要 truecolor。
+    EnumChoice {
+        canonical: "catppuccin-mocha",
+        display: "Catppuccin Mocha",
+        description: "Pastel dark from the Catppuccin family; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "catppuccin-latte",
+        display: "Catppuccin Latte",
+        description: "Pastel light from the Catppuccin family; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "dracula",
+        display: "Dracula",
+        description: "Classic dark purple palette; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "gruvbox-dark",
+        display: "Gruvbox Dark",
+        description: "Retro warm dark with muted groove colors; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "nord",
+        display: "Nord",
+        description: "Cool blue-gray arctic palette; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "one-dark",
+        display: "One Dark",
+        description: "Atom One Dark-inspired balanced dark; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "everforest",
+        display: "Everforest",
+        description: "Low-saturation green forest dark; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "kanagawa",
+        display: "Kanagawa",
+        description: "Ink-wash dark inspired by Katsushika Hokusai; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "vesper",
+        display: "Vesper",
+        description: "Minimal black with amber highlights; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "nightowl",
+        display: "Night Owl",
+        description: "Sarah Drasner's blue-hour dark; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "solarized-dark",
+        display: "Solarized Dark",
+        description: "Ethan Schoonover's 16-color classic; needs truecolor.",
+    },
     EnumChoice {
         canonical: "terminal",
         display: "Terminal",
@@ -445,6 +501,62 @@ const CONCRETE_THEME_CHOICES: &[EnumChoice] = &[
         canonical: "oscura-midnight",
         display: "Oscura Midnight",
         description: "Deep dark with warm accents; needs truecolor.",
+    },
+    // LOCAL 主题移植（opencode 主题库，2026-10-13）：全部需要 truecolor。
+    EnumChoice {
+        canonical: "catppuccin-mocha",
+        display: "Catppuccin Mocha",
+        description: "Pastel dark from the Catppuccin family; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "catppuccin-latte",
+        display: "Catppuccin Latte",
+        description: "Pastel light from the Catppuccin family; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "dracula",
+        display: "Dracula",
+        description: "Classic dark purple palette; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "gruvbox-dark",
+        display: "Gruvbox Dark",
+        description: "Retro warm dark with muted groove colors; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "nord",
+        display: "Nord",
+        description: "Cool blue-gray arctic palette; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "one-dark",
+        display: "One Dark",
+        description: "Atom One Dark-inspired balanced dark; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "everforest",
+        display: "Everforest",
+        description: "Low-saturation green forest dark; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "kanagawa",
+        display: "Kanagawa",
+        description: "Ink-wash dark inspired by Katsushika Hokusai; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "vesper",
+        display: "Vesper",
+        description: "Minimal black with amber highlights; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "nightowl",
+        display: "Night Owl",
+        description: "Sarah Drasner's blue-hour dark; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "solarized-dark",
+        display: "Solarized Dark",
+        description: "Ethan Schoonover's 16-color classic; needs truecolor.",
     },
     EnumChoice {
         canonical: "terminal",

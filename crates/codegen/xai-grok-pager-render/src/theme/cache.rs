@@ -40,6 +40,17 @@ fn theme_kind_from_u8(byte: u8) -> ThemeKind {
         x if x == ThemeKind::TokyoNight as u8 => ThemeKind::TokyoNight,
         x if x == ThemeKind::RosePineMoon as u8 => ThemeKind::RosePineMoon,
         x if x == ThemeKind::OscuraMidnight as u8 => ThemeKind::OscuraMidnight,
+        x if x == ThemeKind::CatppuccinMocha as u8 => ThemeKind::CatppuccinMocha,
+        x if x == ThemeKind::CatppuccinLatte as u8 => ThemeKind::CatppuccinLatte,
+        x if x == ThemeKind::Dracula as u8 => ThemeKind::Dracula,
+        x if x == ThemeKind::GruvboxDark as u8 => ThemeKind::GruvboxDark,
+        x if x == ThemeKind::Nord as u8 => ThemeKind::Nord,
+        x if x == ThemeKind::OneDark as u8 => ThemeKind::OneDark,
+        x if x == ThemeKind::Everforest as u8 => ThemeKind::Everforest,
+        x if x == ThemeKind::Kanagawa as u8 => ThemeKind::Kanagawa,
+        x if x == ThemeKind::Vesper as u8 => ThemeKind::Vesper,
+        x if x == ThemeKind::NightOwl as u8 => ThemeKind::NightOwl,
+        x if x == ThemeKind::SolarizedDark as u8 => ThemeKind::SolarizedDark,
         x if x == ThemeKind::Terminal as u8 => ThemeKind::Terminal,
         x if x == ThemeKind::Auto as u8 => ThemeKind::Auto,
         _ => ThemeKind::GrokNight,
@@ -251,6 +262,17 @@ pub fn resolve_auto() -> ThemeKind {
 
 /// Read the theme from the effective config (managed_config.toml merged under config.toml; user wins).
 /// Checks `[ui].theme` first (the canonical location), then falls back to a top-level `theme` key for backwards compatibility.
+/// LOCAL（2026-10-13）：test-support / test 构建下禁用磁盘播种。
+/// `load_from_disk` 读的是开发者的真实 `~/.grok/config.toml`——测试二进制里任何
+/// 未预置主题状态的首次 `current_kind()` 都会把它（如 `theme = "oscura-midnight"`）
+/// 写进全局 cache，与并发持锁测试的断言竞态。测试助手都显式预置主题（见
+/// `with_test_env` / `pin_theme`），磁盘路径只属于生产启动。
+#[cfg(any(test, feature = "test-support"))]
+fn load_from_disk() -> Option<ThemeKind> {
+    None
+}
+
+#[cfg(not(any(test, feature = "test-support")))]
 fn load_from_disk() -> Option<ThemeKind> {
     let root = xai_grok_config::load_effective_config_disk_only().ok()?;
     let table = root.as_table()?;

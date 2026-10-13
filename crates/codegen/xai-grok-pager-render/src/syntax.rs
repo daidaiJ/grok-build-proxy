@@ -121,6 +121,18 @@ pub fn get_syntect() -> &'static Syntect {
         ThemeKind::GrokNight
         | ThemeKind::RosePineMoon
         | ThemeKind::OscuraMidnight
+        // LOCAL 移植主题：深色系全部复用 night 基底（Latte 走 day），token
+        // 色随后由 `syntect_rgb_to_fg` 按主题重映射，基底只提供完整槽位。
+        | ThemeKind::CatppuccinMocha
+        | ThemeKind::Dracula
+        | ThemeKind::GruvboxDark
+        | ThemeKind::Nord
+        | ThemeKind::OneDark
+        | ThemeKind::Everforest
+        | ThemeKind::Kanagawa
+        | ThemeKind::Vesper
+        | ThemeKind::NightOwl
+        | ThemeKind::SolarizedDark
         // Terminal remaps every token in `syntect_rgb_to_fg`, so the
         // source palette only has to be a full one — polarity is irrelevant.
         | ThemeKind::Terminal
@@ -128,6 +140,8 @@ pub fn get_syntect() -> &'static Syntect {
             .get_or_init(|| Syntect::new(include_bytes!("../assets/grok-night.tmTheme"))),
         ThemeKind::TokyoNight => SYNTECT_TOKYONIGHT
             .get_or_init(|| Syntect::new(include_bytes!("../assets/tokyo-night.tmTheme"))),
+        ThemeKind::CatppuccinLatte => SYNTECT_GROKDAY
+            .get_or_init(|| Syntect::new(include_bytes!("../assets/grok-day.tmTheme"))),
         ThemeKind::GrokDay => SYNTECT_GROKDAY
             .get_or_init(|| Syntect::new(include_bytes!("../assets/grok-day.tmTheme"))),
     }

@@ -1348,6 +1348,51 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Deep dark with warm accents; needs truecolor.",
             "深黑底暖色点缀；需要真彩。",
         ),
+        // LOCAL 主题移植（opencode 主题库，2026-10-13）
+        (
+            "Pastel dark from the Catppuccin family; needs truecolor.",
+            "Catppuccin 家族柔和深色；需要真彩。",
+        ),
+        (
+            "Pastel light from the Catppuccin family; needs truecolor.",
+            "Catppuccin 家族柔和浅色；需要真彩。",
+        ),
+        (
+            "Classic dark purple palette; needs truecolor.",
+            "经典紫调深色；需要真彩。",
+        ),
+        (
+            "Retro warm dark with muted groove colors; needs truecolor.",
+            "复古暖调深色，低饱和 groove 配色；需要真彩。",
+        ),
+        (
+            "Cool blue-gray arctic palette; needs truecolor.",
+            "冷调蓝灰的北极色板；需要真彩。",
+        ),
+        (
+            "Atom One Dark-inspired balanced dark; needs truecolor.",
+            "Atom One Dark 风格的均衡深色；需要真彩。",
+        ),
+        (
+            "Low-saturation green forest dark; needs truecolor.",
+            "低饱和绿色森林深色；需要真彩。",
+        ),
+        (
+            "Ink-wash dark inspired by Katsushika Hokusai; needs truecolor.",
+            "葛饰北斋灵感的墨色深色；需要真彩。",
+        ),
+        (
+            "Minimal black with amber highlights; needs truecolor.",
+            "极简黑底琥珀高亮；需要真彩。",
+        ),
+        (
+            "Sarah Drasner's blue-hour dark; needs truecolor.",
+            "Sarah Drasner 的蓝调时刻深色；需要真彩。",
+        ),
+        (
+            "Ethan Schoonover's 16-color classic; needs truecolor.",
+            "Ethan Schoonover 的 16 色经典；需要真彩。",
+        ),
         (
             "Terminal's own background and text colors.",
             "使用终端自身的背景与文字颜色。",

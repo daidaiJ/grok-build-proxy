@@ -114,3 +114,9 @@ manager::remedy::tests::turn_surface_matches_the_remedy
 manager::tests::enrichment_aborts_when_disk_user_changes_mid_flight
 manager::tests::enrichment_task_preserves_interleaved_token_rotation
 pre_tui::tests::large_inherited_stderr_does_not_deadlock
+# 族U（2026-10-13，GATE_FORCE xai-grok-pager-render --lib theme:: 首跑暴露）：
+# color_support 探测断言依赖宿主终端句柄——代理 shell（stdout/stderr 管道化、
+# COLORTERM/WT_SESSION 泄漏）下 detect() 与真实 TTY 语义不一致，TrueColor vs
+# Ansi256 漂移。环境族，与主题移植改动无关（color_support.rs 未触碰）。
+theme::color_support::tests::standalone_color_uses_controlling_terminal_when_stderr_is_piped
+theme::color_support::tests::standalone_color_uses_stderr_terminal_not_stdout

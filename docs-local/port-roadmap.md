@@ -578,3 +578,21 @@
   拉起；/lsp on 零回合热加载；带历史拒绝；status 面板）；② 默认开 + eager
   bootstrap 的内存尾部（rust-analyzer）——懒启动为后续切片，挂真实抱怨触发；
   ③ T1 诊断按需 op 仍是 improvements todo 第一顺位。
+
+---
+
+### 2026-10-13 主题目录扩容（feat/local-theme-catalog-port）——11 套社区色板移植自 opencode
+
+- **状态**：施工完成待验证合入。从父目录同类 agent 吸收社区好评主题配色：捐献者
+  opencode 主题库（32 JSON 资产），移植 Catppuccin Mocha/Latte（第二浅色）、
+  Dracula、Gruvbox Dark、Nord、One Dark、Everforest、Kanagawa、Vesper、
+  Night Owl、Solarized Dark 共 11 套（与既有 6 主题零重叠，全 truecolor 门控）。
+- **落点**：pager-render `theme/` 新 ×9 文件 + mod.rs/cache.rs/syntax.rs 接线；
+  pager settings defs 两 catalog + i18n 中文描述 + settings_modal 测试分发 +
+  mermaid `theme_is_dark` 纳入 Latte。全部 ~60 槽位逐一映射（编译器强制完整），
+  donor 直采 + 色系内手调派生（文件头注明），donor 设计原貌保真。
+- **验证**：cargo check render/pager --all-targets + ctest 门控测试（render lib
+  theme:: + pager settings/theme/doctor 套件）+ ptyctl 活体抽查（`/theme` 切换
+  catppuccin-mocha 渲染）。
+- **遗留**：其余 21 套 opencode 主题（synthwave84/flexoki/zenburn/monokai 等）
+  同模式可增量移植，未纳入本次。
