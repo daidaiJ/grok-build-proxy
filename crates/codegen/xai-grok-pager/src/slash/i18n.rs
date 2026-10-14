@@ -351,9 +351,12 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("/theme <name>", "/theme <名称>"),
         ("/export [filename]", "/export [文件名]"),
         ("/cd [path]", "/cd [路径]"),
-        // LOCAL(/lsp): workspace 级 LSP 工具启停
-        ("Toggle LSP tools for this workspace", "切换本工作区的 LSP 工具"),
-        ("/lsp [on|off|status|clear]", "/lsp [on|off|status|clear]"),
+        // LOCAL(/lsp): LSP 统一操作面板
+        (
+            "Open the LSP panel (status, enable/disable, server picker)",
+            "打开 LSP 面板（状态、启用/关闭、server 勾选）",
+        ),
+        ("/lsp", "/lsp"),
         (
             "Set the cumulative child-agent cap (1–1,024)",
             "设置子代理累计上限 (1–1,024)",
@@ -2174,6 +2177,43 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Write", "撰写"),
         ("Drafts", "草稿"),
         ("move", "移动"),
+        ("toggle all", "全选/全不选"),
+        // LOCAL /lsp：统一操作面板（views/lsp_panel）
+        ("LSP tools", "LSP 工具"),
+        ("enabled", "启用"),
+        ("disabled", "禁用"),
+        (
+            "Workspace override: on (LSP tools enabled for next sessions)",
+            "本工作区覆盖：on（下次会话启用 LSP 工具）",
+        ),
+        (
+            "Workspace override: off (LSP tools disabled for next sessions)",
+            "本工作区覆盖：off（下次会话禁用 LSP 工具）",
+        ),
+        (
+            "Workspace override: not set (follows global config)",
+            "本工作区覆盖：未设置（跟随全局）",
+        ),
+        (
+            "Disabled — press e to enable; installed servers are auto-detected.",
+            "已禁用：按 e 启用，自动检测已安装的语言服务器。",
+        ),
+        ("Session backend", "本会话后端"),
+        ("running", "运行中"),
+        ("not running", "未运行"),
+        ("not started", "未启动"),
+        ("starting", "启动中"),
+        ("failed", "失败"),
+        ("enable/disable", "启用/关闭"),
+        ("No active session or no LSP backend in this session.", "当前无活动会话或本会话未装配 LSP 后端。"),
+        // LOCAL /lsp select 遗留键（面板化后仅存档）
+        ("LSP servers", "LSP 语言服务器"),
+        (
+            "Space to select servers to enable in this workspace; unchecked ones are disabled.",
+            "空格勾选本工作区要启用的 server；未勾选的将被禁用。",
+        ),
+        ("No language servers detected or configured.", "未检测到也未配置任何语言服务器。"),
+        ("(command not found)", "（命令未找到）"),
         ("value", "切换值"),
         ("labels", "标签行"),
         ("done", "完成"),

@@ -1,15 +1,10 @@
-//! LOCAL(/lsp): `/lsp` dispatch 门控与消息回显测试。
+//! LOCAL(/lsp): `/lsp` 面板 dispatch 门控与消息回显测试。
 //!
 //! 写入用例触碰进程 grok home（`grok_home()` OnceLock 缓存，测试内无法隔离）；
 //! 用 cwd `/tmp` 的夹具键与「写后即清」自我回收，不在真实 home 留下覆盖文件。
 
 use super::*;
 use crate::app::actions::LspConfigureRequest;
-use xai_grok_shell::extensions::lsp_status::LspStatusResponse;
-
-fn format_status(response: &LspStatusResponse) -> String {
-    crate::slash::commands::lsp::format_status(response)
-}
 
 #[test]
 fn lsp_set_on_session_with_history_writes_and_applies() {
@@ -88,23 +83,22 @@ fn lsp_set_writes_override_on_fresh_session_and_clear_removes_it() {
         &mut app,
     );
     let text = last_system_text(&app, id);
-    assert!(text.contains("已清除"), "expected the clear confirmation, got: {text}");
+    assert!(text.contains("已清除"), "got: {text}");
 }
 
 #[test]
-fn lsp_status_emits_fetch_effect_with_session_cwd_and_id() {
+fn lsp_panel_emits_fetch_effect_with_session_cwd_and_id() {
     let mut app = test_app_with_agent();
-    let id = AgentId(0);
-    let _ = test_agent(&app, id); // 夹具即活动 agent 视图
+    let _ = test_agent(&app, AgentId(0)); // 夹具即活动 agent 视图
 
     let effects = dispatch(
         Action::LspConfigure {
-            request: LspConfigureRequest::Status,
+            request: LspConfigureRequest::Panel,
         },
         &mut app,
     );
 
-    assert_eq!(effects.len(), 1, "status must emit exactly one effect");
+    assert_eq!(effects.len(), 1, "panel must emit exactly one effect");
     assert!(
         matches!(
             &effects[0],
@@ -115,9 +109,28 @@ fn lsp_status_emits_fetch_effect_with_session_cwd_and_id() {
 }
 
 #[test]
-fn lsp_status_renders_servers_and_session_state() {
-    use xai_grok_shell::extensions::lsp_status::{LspServerStatus, LspSessionStatus};
-    let response = LspStatusResponse {        enabled: true,
+fn lsp_panel_without_agent_session_reports_hint() {
+    let mut app = test_app(); // 无 agent 视图（welcome/dashboard）
+    let effects = dispatch(
+        Action::LspConfigure {
+            request: LspConfigureRequest::Panel,
+        },
+        &mut app,
+    );
+    assert!(effects.is_empty(), "no effect outside a session, got: {effects:?}");
+    assert!(
+        app.welcome_toast.as_ref().is_some_and(|(m, _)| m.contains("/lsp 面板")),
+        "expected an actionable hint toast, got: {:?}",
+        app.welcome_toast
+    );
+}
+
+#[test]
+fn lsp_status_fetch_opens_modal_with_checked_state() {
+    use xai_grok_shell::extensions::lsp_status::LspServerStatus;
+    let mut app = test_app_with_agent();
+    let response = xai_grok_shell::extensions::lsp_status::LspStatusResponse {
+        enabled: true,
         enabled_source: "default".to_string(),
         workspace_override: None,
         servers: vec![
@@ -126,57 +139,75 @@ fn lsp_status_renders_servers_and_session_state() {
                 command: "rust-analyzer".to_string(),
                 args: vec![],
                 source: "builtin".to_string(),
-                command_found: None,
-                running: Some(true),
+                command_found: Some(true),
+                disabled: false,
+                running: None,
             },
             LspServerStatus {
-                name: "gopls".to_string(),
-                command: "gopls".to_string(),
+                name: "jdtls".to_string(),
+                command: "jdtls".to_string(),
                 args: vec![],
-                source: "user: /home/.grok/lsp.json".to_string(),
+                source: "builtin".to_string(),
                 command_found: Some(false),
-                running: Some(false),
+                disabled: true,
+                running: None,
             },
         ],
-        session: Some(LspSessionStatus {
-            startup: "ready".to_string(),
-            startup_error: None,
-            running_servers: vec!["rust-analyzer".to_string()],
-        }),
+        session: None,
         error: None,
     };
 
-    let text = crate::slash::commands::lsp::format_status(&response);
-    assert!(text.contains("LSP 工具：启用（来源：默认开）"), "got: {text}");
-    assert!(text.contains("本工作区覆盖：未设置"), "got: {text}");
-    assert!(
-        text.contains("rust-analyzer — builtin — rust-analyzer — 运行中"),
-        "got: {text}"
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::LspStatusFetched {
+            cwd: std::path::PathBuf::from("/repo"),
+            session_id: Some("test-session".to_string()),
+            response,
+        }),
+        &mut app,
     );
+    assert!(effects.is_empty(), "panel open has no effects, got: {effects:?}");
+    let agent = test_agent(&app, AgentId(0));
     assert!(
-        text.contains("gopls — user: /home/.grok/lsp.json — gopls（命令未找到） — 未运行"),
-        "got: {text}"
+        matches!(
+            agent.active_modal,
+            Some(crate::views::modal::ActiveModal::LspPanel { .. })
+        ),
+        "expected the LSP panel modal to open"
     );
-    assert!(text.contains("本会话后端：就绪"), "got: {text}");
 }
 
 #[test]
-fn lsp_status_renders_error_and_empty_cases() {
-    let error = LspStatusResponse {
-        error: Some("boom".to_string()),
-        ..Default::default()
-    };
-    assert!(format_status(&error).contains("LSP 状态查询失败：boom"));
+fn lsp_servers_confirm_writes_deny_list_and_applies_then_clears() {
+    let mut app = test_app_with_agent();
+    let cwd = std::path::PathBuf::from("/tmp");
 
-    let empty = LspStatusResponse {
-        enabled: false,
-        enabled_source: "workspace_override".to_string(),
-        workspace_override: Some(false),
-        ..Default::default()
-    };
-    let text = format_status(&empty);
-    assert!(text.contains("LSP 工具：禁用（来源：/lsp 工作区覆盖）"), "got: {text}");
-    assert!(text.contains("本工作区覆盖：off"), "got: {text}");
-    assert!(text.contains("语言服务器：无"), "got: {text}");
-    assert!(text.contains("当前无活动会话或本会话未装配 LSP 后端。"), "got: {text}");
+    let effects = dispatch(
+        Action::LspServersConfirm {
+            cwd: cwd.clone(),
+            session_id: Some("test-session".to_string()),
+            disabled: vec!["jdtls".to_string(), "clangd".to_string()],
+        },
+        &mut app,
+    );
+    assert!(
+        effects.iter().any(
+            |e| matches!(e, Effect::ApplyLspTools { session_id: sid, .. } if sid == "test-session")
+        ),
+        "expected ApplyLspTools hot reload, got: {effects:?}"
+    );
+    let text = last_system_text(&app, AgentId(0));
+    assert!(text.contains("已保存"), "got: {text}");
+    assert!(text.contains("jdtls"), "deny list should be echoed, got: {text}");
+
+    // 空确认 = 清除覆盖（与面板 `c` 重置同款「写后即清」自回收）。
+    dispatch(
+        Action::LspServersConfirm {
+            cwd,
+            session_id: None,
+            disabled: vec![],
+        },
+        &mut app,
+    );
+    let text = last_system_text(&app, AgentId(0));
+    assert!(text.contains("已清除"), "got: {text}");
 }

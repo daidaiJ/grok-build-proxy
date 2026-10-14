@@ -160,7 +160,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 
 - **开箱即用**：`lsp` 工具默认开启（上游 `[features] lsp_tools` 默认关），零配置可用。内置五个知名语言服务器的 PATH 自动检测——Rust `rust-analyzer`、Go `gopls`、Python `pyright` → `basedpyright` → `pylsp`（按序三选一）、Java `jdtls`、C/C++ `clangd`——装了哪个用哪个。显式配置恒压 builtin：`~/.grok/lsp.json`（用户）、`<cwd>/.grok/lsp.json`（项目，受目录信任门控）、插件贡献均可按名覆盖，且任一配置 server 认领了某语言的文件扩展后该语言的 builtin 自动让位。检测只查 PATH 候选不执行二进制；服务器在会话启动时后台拉起，崩溃自动重启并回放已打开文档。
 - **统一 `lsp` 工具**：`goToDefinition` / `findReferences` / `hover` / `goToImplementation` / `documentSymbol` / `workspaceSymbol` 六个只读操作，按文件扩展路由到对应服务器。编辑 / patch 后的诊断被动回喂：多批诊断在 150ms 静默窗内合并成一次注入，连续编辑不重复 drain。
-- **`/lsp` 命令**：`on` / `off` / `clear` 写工作区覆盖（`~/.grok/feature-overrides/<编码后 cwd>.json`），`status` 显示门禁来源、生效 server 清单（来源 / 命令探测 / 运行态）与会话后端状态。**零回合会话写完立即热加载**——重建 harness 换 LSP 后端并重广播工具清单，无需 `/clear`；已有回合的会话报「热加载跳过」，改动对新会话生效。优先级：策略 pin > `GROK_LSP_TOOLS` > `/lsp` 工作区覆盖 > `[features] lsp_tools` > 服务端设置 > 默认开。
+- **`/lsp` 命令**：裸 `/lsp` 打开统一操作面板（usage 同款窗口 chrome）——状态显示（门禁来源、工作区覆盖、server 清单、会话后端）、`e` 一键启用/关闭、server 自动发现清单（配置 + builtin PATH 检测）、空格勾选 + Enter 确认（取消勾选的写入本工作区禁用清单，只记排除项，空清单 = 恢复全量跟随）、`c` 清除本工作区全部覆盖（含禁用清单）恢复跟随全局；翻转、重置与确认对零回合会话即时热加载。无 option 子命令——启用/关闭/状态/勾选全部在面板内完成。**零回合会话写完立即热加载**——重建 harness 换 LSP 后端并重广播工具清单，无需 `/clear`；已有回合的会话报「热加载跳过」，改动对新会话生效。优先级：策略 pin > `GROK_LSP_TOOLS` > `/lsp` 工作区覆盖 > `[features] lsp_tools` > 服务端设置 > 默认开。
 
 ### 交互与界面
 

@@ -449,6 +449,12 @@ impl AgentView {
             return self.apply_auth_modal_outcome(outcome);
         }
 
+        // LOCAL LspPanel: /lsp 统一面板（e 启用关闭，空格勾选，Enter 确认转 Action）。
+        if let ActiveModal::LspPanel { state } = modal {
+            let outcome = crate::views::lsp_panel::route_lsp_panel_key(state, key);
+            return self.apply_lsp_panel_outcome(outcome);
+        }
+
         // ResetSettingsConfirm: y/n routing
         // Handled before the generic char-match so Esc/F2/Ctrl+, route to Cancel (not modal close)
         if let Some(ActiveModal::ResetSettingsConfirm { modal, .. }) = self.active_modal.as_ref() {
@@ -494,6 +500,7 @@ impl AgentView {
             ActiveModal::CommandPalette { .. }
             | ActiveModal::ArgPicker { .. }
             | ActiveModal::AuthPanel { .. }
+            | ActiveModal::LspPanel { .. }
             | ActiveModal::SessionPicker { .. }
             | ActiveModal::DocPicker { .. }
             | ActiveModal::DocViewer { .. }
@@ -1714,6 +1721,48 @@ impl AgentView {
         }
     }
 
+    /// Map the /lsp panel outcome onto this host: Esc closes, `e` emits
+    /// `Action::LspConfigure(Set)` (deny/enable write + hot apply, panel stays open),
+    /// Enter converts the unchecked set into `Action::LspServersConfirm`.
+    fn apply_lsp_panel_outcome(
+        &mut self,
+        outcome: crate::views::lsp_panel::LspPanelOutcome,
+    ) -> InputOutcome {
+        use crate::views::lsp_panel::LspPanelOutcome;
+        match outcome {
+            LspPanelOutcome::Cancel => {
+                self.active_modal = None;
+                InputOutcome::Changed
+            }
+            LspPanelOutcome::ToggleEnabled(value) => {
+                // 面板本地态已翻转，这里只发写盘 + 热加载；不关面板。
+                InputOutcome::Action(Action::LspConfigure {
+                    request: crate::app::actions::LspConfigureRequest::Set(value),
+                })
+            }
+            LspPanelOutcome::ClearOverrides => {
+                // 面板本地态已回「跟随全局」，这里只发写盘 + 热加载；不关面板。
+                InputOutcome::Action(Action::LspConfigure {
+                    request: crate::app::actions::LspConfigureRequest::Clear,
+                })
+            }
+            LspPanelOutcome::Confirm => {
+                let Some(crate::views::modal::ActiveModal::LspPanel { state }) =
+                    self.active_modal.take()
+                else {
+                    return InputOutcome::Changed;
+                };
+                let disabled = state.disabled_on_confirm();
+                InputOutcome::Action(Action::LspServersConfirm {
+                    cwd: state.cwd,
+                    session_id: state.session_id,
+                    disabled,
+                })
+            }
+            LspPanelOutcome::Changed => InputOutcome::Changed,
+        }
+    }
+
     /// Copy the usage modal's session ID and toast the delivery outcome.
     /// Map a usage-modal routing outcome onto this host: the agent's modal slot, clipboard, and toast.
     fn apply_usage_modal_outcome(
@@ -2456,6 +2505,9 @@ impl AgentView {
             } else if let modal::ActiveModal::AuthPanel { state } = active_modal {
                 // LOCAL: /auth 供应商配置面板。
                 crate::views::auth_modal::render_auth_modal(buf, area, state);
+            } else if let modal::ActiveModal::LspPanel { state } = active_modal {
+                // LOCAL: /lsp 统一操作面板（modal_window 公共 chrome）。
+                crate::views::lsp_panel::render_lsp_panel(buf, area, state, compact, &theme);
             } else if let modal::ActiveModal::MemoryBrowser { state: mem_state } = active_modal {
                 crate::views::memory_modal::render_memory_modal(buf, area, mem_state, compact);
             } else if let modal::ActiveModal::Settings {

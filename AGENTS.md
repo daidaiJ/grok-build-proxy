@@ -259,7 +259,14 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   pyright→basedpyright→pylsp / jdtls / clangd，同名+扩展双重 gap 合并、config 恒压
   builtin）+ `/lsp status` 数据面（`x.ai/lspStatus`，门禁来源+server 清单+会话
   后端快照）+ **零回合会话热加载**（`x.ai/lspApply` → `ReloadLspHarness` 复用
-  model-switch 零回合重建簿记，推翻 v1「会话边界切换」）。遗留：活体 TUI 验证、
+  model-switch 零回合重建簿记，推翻 v1「会话边界切换」）；v2.1（2026-10-14，
+  `feat/local-lsp-server-picker`，三十七期）`/lsp select` server 勾选面板——
+  检测/配置到的 server 全列出、空格勾选确认后写本工作区禁用清单
+  （`feature-overrides` 增 `lsp_disabled_servers`，只记排除项），零回合热加载；
+  v2.2（2026-10-14，`feat/local-lsp-panel`，三十八期）`/lsp` 面板化——裸
+  `/lsp` 打开统一操作面板（modal_window 公共 chrome：状态显示 + `e` 启用关闭 +
+  `c` 清覆盖全量重置 + server 自动发现清单 + 空格勾选 Enter 确认，翻转/重置/
+  确认均即时热加载），option 子命令全部移除（面板内完成）。遗留：活体 TUI 验证、
   eager bootstrap 内存尾部（懒启动挂真实抱怨触发）、T1 诊断按需 op /
   T2 call hierarchy / T3 rename（[improvements-todo](docs-local/lsp-port/lsp-improvements-todo.md)
   顺位）。
@@ -268,17 +275,25 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   Dracula、Gruvbox Dark、Nord、One Dark、Everforest、Kanagawa、Vesper、
   Night Owl、Solarized Dark；Latte 为第二浅色，`feat/local-theme-catalog-port`
   随 v1.0.55 发版）；**Codex 品牌主题**（`codex`，`feat/local-codex-theme`，
-  PATCHES 三十七期）取 OpenAI Codex CLI 真实 UI 配色（ChatGPT 蓝体系 +
+  PATCHES 三十九期）取 OpenAI Codex CLI 真实 UI 配色（ChatGPT 蓝体系 +
   琥珀警告 + 近黑中性底），用户拍板弃用其 256 色无障碍板；**Ayu 主题**
-  （`ayu`，`feat/local-ayu-theme`，PATCHES 三十八期）移植自 qwen-code 主题
+  （`ayu`，`feat/local-ayu-theme`，PATCHES 四十期）移植自 qwen-code 主题
   定义（社区 Ayu dark，暖橙日落），同库其余主题按「避免同质化」筛除
   （qwen-dark 是 ayu 克隆、shades-of-purple 第三紫、github-dark 同族、
   浅色已饱和）。落点：pager-render
   `theme/` + mod.rs/cache.rs/syntax.rs 接线 + pager settings 目录/i18n/
   mermaid 浅色判定。~60 槽位逐一映射（编译器强制），全 truecolor 门控。
-  实现记录 PATCHES.md 三十六/三十七/三十八期；user-guide 06-theming 表
+  实现记录 PATCHES.md 三十六/三十九/四十期；user-guide 06-theming 表
   6→19 行；其余 21 套 opencode 主题可同模式增量移植（roadmap §6 台账）。
 
+- [`docs-local/subagent-model-group-todo.md`](docs-local/subagent-model-group-todo.md) —
+  **subagent 模型/effort 配置 + 模型组（跨供应商降级链）设计（设计完成待拍板，2026-10-14）**：
+  「模型组」一等公民原语（有序 `[model.<id>]` 供应商条目链，sticky/cooldown/首字节前降级/
+  notice+账本披露），subagent 绑定（`[subagents.model_groups]`/`[subagents.efforts]`，内置
+  类型按名寻址）为第一消费者，视觉桥 D8/D9（目录回填 `accepts_images` + 400 反应式摘除转桥）
+  为第二消费者（引用不施工）。现状锚点全核实：subagent 模型 pin/effort 管线/条目级 variants
+  均已有，缺口 = 组降级链 + per-agent effort config 入口；六拍板点待定。Ayu 主题分支按用户
+  指示随本专题一起合并发版。
 - [`docs-local/issues/`](docs-local/issues/README.md) — **使用问题台账（一 issue 一文件）**。
   当前 open/reproduced 条：**Ctrl+Enter send-now 幽灵气泡（P2，见上方待办条）**。
   最近一条 fixed **成本列裸 id 无价等三问题（P2）**：
@@ -291,6 +306,53 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   文末「复发与二次修复」节。
 
 ## 🔄 Handoff 摘要
+
+### /lsp 面板化（统一操作面板）— 已随 v1.0.57 发版（2026-10-14；tag 同日重指重发）
+
+- **当前状态：** 三十七期 `/lsp select` 的交互收敛 + 同日二次收敛（用户三点反馈
+  全收：面板太小/风格与 usage 不对齐 → 改走 `views/modal_window` 公共 chrome，
+  usage/stats 同尺寸档位 0.65/100、标题边框 + 七快捷键页脚，内容随光标滚动；
+  option 子命令残留 → `/lsp` 只开面板，on/off/status/clear/select 一律拒绝，
+  `Status` 语义与 `format_status` 移除；补面板内 `c` 键清覆盖：Clear 升级全量
+  重置——lsp_tools 覆盖 + server 禁用清单一并清除恢复跟随全局）。面板交互 =
+  状态显示（门禁来源 + 覆盖行 + server 勾选清单带运行态/命令探测 + 会话后端行）、
+  `e`/`t` 启用关闭（写覆盖 + `x.ai/lspApply` 热加载，面板保持打开）、server 自动
+  发现清单、空格勾选 + Enter 确认（禁用清单语义沿用三十七期）。**用户拍板不新增
+  v1.0.58：v1.0.57 tag 原地重指重发**——终版 merge `c64d3e52`，release run
+  `38529042608`（tag）/ build run `38529065030`（main 同 sha）双 job success、
+  4 资产非草稿（Windows zip sha256 核对 OK）；本机 `D:\tool\cli\grok2.exe` 部署
+  `grok 1.0.57 (c64d3e52c1ef)`，回滚点 `grok2.exe.bak-1.0.57-pre`（更早
+  `grok2.exe.bak-1.0.56` = 重指前版本）。实现记录 PATCHES.md 三十八期 + 补节。
+  shell 侧零改动。
+- **验证：** cargo check pager --lib 0 error 0 warning（本轮三连 rustc 0xc0000005
+  打在 update/config-types/shell-terminal 三个未触碰 crate，清 incremental +
+  CARGO_INCREMENTAL=0 + -j 4 后通过）；ctest 门控 pager `lsp` 过滤 14/14；
+  i18n 扫描 exit 0（lsp_panel 无挂）。
+- **遗留：** ① 真机 TUI 活体验证（面板开合与 chrome 渲染、e 翻转、c 重置、勾选
+  确认热加载回路）——与三十七期同批随新客户端补；② 三十七期遗留（取数与确认间
+  server 环境变化无检测、新 server 主动弹面板提示）继承不变。
+- **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
+  台账「/lsp 面板化」与「面板二次收敛」两条目；PATCHES.md 三十八期 + 补节。
+
+### /lsp select server 勾选面板 — 已随 v1.0.56 发版（2026-10-14）
+
+- **当前状态：** 检测 → 勾选 → 确认 → 热加载交互已合 main（merge `2321a579`，
+  分支 `feat/local-lsp-server-picker`）随 tag **`v1.0.56`** 发版：release run
+  `38509043454` / build run `38509032088` 双 job success、4 资产非草稿；本机
+  `D:\tool\cli\grok2.exe` 部署 `grok 1.0.56 (2321a5793c85)`（发行资产 sha256
+  核对一致），回滚点 `grok2.exe.bak-1.0.53`。实现记录 PATCHES.md 三十七期。
+  语义：`/lsp select` 列出检测/配置到的全部 server，空格勾选要启用的，确认后
+  取消勾选的写本工作区禁用清单（`feature-overrides` 增 `lsp_disabled_servers`，
+  只记排除项、空 = 清除覆盖），`build_lsp_backend` 单入口过滤 + 零回合
+  `x.ai/lspApply` 热加载。
+- **验证：** cargo check shell/pager --lib 0 error（首查 rustc 0xc0000005 增量
+  缓存损坏，清 incremental 重查）；GATE_FORCE shell `workspace_overrides` 6/6、
+  pager `lsp` 14/14；i18n 扫描 0 挂。
+- **遗留：** ① 真机 TUI 活体验证（面板开合 / 取消勾选后 status 标注 / 热加载
+  回路）；② 取数与确认之间 server 环境变化无检测（低风险）；③ 新 server 首次
+  检测时是否主动弹面板未做。
+- **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
+  台账 `/lsp select` 条目；PATCHES.md 三十七期。
 
 ### 主题目录扩容（11 套社区色板移植）— 已随 v1.0.55 发版（2026-10-14）
 

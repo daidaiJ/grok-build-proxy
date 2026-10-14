@@ -597,6 +597,77 @@
 - **遗留**：其余 21 套 opencode 主题（synthwave84/flexoki/zenburn/monokai 等）
   同模式可增量移植，未纳入本次。
 
+---
+
+### 2026-10-14 `/lsp select` server 勾选面板（feat/local-lsp-server-picker）——检测 → 勾选 → 确认 → 热加载
+
+- **状态**：施工完成、验证中/已验证（以本条落盘时的测试轮结果为准）。背景：三十五期
+  builtin 检测默认全量装配，用户当前项目未必全都要；本条给 LSP server 面加 per-workspace
+  禁用清单 + 勾选面板交互（用户 2026-10-14 提出）。
+- **语义拍板（默认执行，未单独征询）**：① 持久化 = grok-home
+  `feature-overrides` 增 `lsp_disabled_servers` 禁用清单（与 `/lsp on|off` 同文件同层，
+  机器本地不落项目仓库）；② 语义 = 只记排除项（取消勾选的才写盘），空清单 = 清除覆盖
+  恢复全量跟随；③ 生效面 = `build_lsp_backend` 单入口过滤（config/builtin/plugin 来源
+  一视同仁），零回合会话经 `x.ai/lspApply` 热加载；④ 入口 = `/lsp select`（别名
+  选择/勾选），`/lsp status` 增已禁用标注与提示行；⑤ 面板需在会话内打开（挂 agent
+  视图模态槽），welcome/dashboard 提示先进会话。
+- **落点**：shell `workspace_overrides`（新键读写 + 幂等写 + 文件整删惯例）、
+  `agent_ops.rs build_lsp_backend`（禁用过滤）、`extensions/lsp_status.rs`（disabled
+  标志）；pager `actions.rs`（LspConfigureRequest::Select / Effect select 位 /
+  TaskResult 携出参 / Action::LspServersConfirm）、`views/lsp_server_picker.rs`（新
+  模态）、`views/modal.rs` / `app/modals.rs` / `dispatch/router.rs` / `task_result.rs`
+  接线、`slash/commands/lsp.rs`（select 解析 + status 渲染）、i18n 5 键。
+- **验证**：cargo check shell/pager --lib 0 error（首查 rustc 0xc0000005 增量缓存
+  损坏，清 incremental 重查通过）；ctest 门控 shell `workspace_overrides` 6/6、
+  pager `lsp` 过滤 14/14；i18n 扫描 exit 0。
+- **遗留**：① 真机 TUI 活体验证（/lsp select 面板开合、取消勾选 jdtls 后
+  status 显示已禁用、零回合热加载生效）；② 面板初始勾选取自 status 快照，取数
+  与确认之间 server 环境变化无检测（低风险，记录）；③ 首次检测到新 server 时的
+  主动提示（是否弹面板）未做，走用户主动 /lsp select。
+
+### 2026-10-14 `/lsp` 面板化——统一操作面板（feat/local-lsp-panel）——三十七期 select 的交互收敛
+
+- **状态**：施工完成。用户 2026-10-14 追加：把 `/lsp` 的分离子命令（status 文本 /
+  on|off / select 面板）收敛为单一面板操作——启用关闭、状态显示、自动发现（启用
+  时）、手动勾选确认都在面板内完成。
+- **语义拍板（默认执行，未单独征询）**：① 裸 `/lsp`（及 panel/面板）= 打开统一
+  面板；`status` 保留文本回显，`on|off|clear` 保留直接子命令，旧 select 入口并进
+  面板（兼容别名）；② 面板内 `e`/`t` = 启用/关闭翻转（本地态先翻转保反馈，
+  dispatch 写 workspace 覆盖 + `x.ai/lspApply` 热加载，**面板保持打开**）；
+  ③ Enter 确认沿用三十七期禁用清单语义（全集 − 勾选集）并关面板；④ 面板渲染整份
+  lspStatus 快照（门禁来源 + 覆盖行 + server 勾选清单带运行态/命令探测 + 会话
+  后端行），禁用时 warning 色提示「按 e 启用，自动检测」。
+- **落点**：pager `slash/commands/lsp.rs`（Panel 解析 + label 抽共享）、新
+  `views/lsp_panel.rs`（替代 lsp_server_picker）、`modal.rs`（LspPanel 变体）、
+  `modals.rs`（ToggleEnabled 路由）、`router.rs` / `task_result.rs` /
+  `actions.rs` / `effects/mod.rs`（select 旗标改名 panel + Panel 臂）、i18n 16 键。
+  **shell 侧零改动**。
+- **验证**：cargo check pager --lib 0 error 0 warning；ctest 门控 pager `lsp`
+  过滤 16/16（新增 panel 取数旗标/无会话提示/回包开面板例）；i18n 扫描 exit 0。
+- **遗留**：① 真机 TUI 活体验证（面板开合、e 翻转后 status 同步、勾选确认热加载）
+  ——随三十七期同批补；② 三十七期遗留 ②③（取数与确认间环境变化无检测、新
+  server 主动提示）继承不变。
+
+### 2026-10-14 `/lsp` 面板二次收敛（同分支 feat/local-lsp-panel；v1.0.57 tag 重指重发）——usage 同款 chrome + 子命令全撤 + Clear 全量重置
+
+- **状态**：施工完成。用户对第一版面板三点反馈全收：① 面板太小/风格与 usage
+  modal 不对齐 → 改走 `views/modal_window` 公共 chrome（usage/stats 同尺寸档位
+  0.65/100，标题边框 + 七快捷键页脚 + 关闭按钮，内容随光标滚动）；② option
+  子命令残留 → `/lsp` 只开面板，on/off/status/clear/select 一律拒绝，
+  `LspConfigureRequest::Status` 与 `format_status` 整体移除，`panel` 旗标删除；
+  ③ 补面板内 `c` 键清覆盖：Clear 升级全量重置（lsp_tools 覆盖 + server 禁用
+  清单串联清除）。
+- **拍板**：不新增 v1.0.58，v1.0.57 tag 原地重指重发（用户明确指示；沿
+  v1.0.39 / v1.0.51 先例，注意删 tag 曾把 release 转 draft，需重传恢复发布）。
+- **落点**：`views/lsp_panel.rs`（chrome 化重写 + c 键 + label fns 迁入）、
+  `slash/commands/lsp.rs`（panel-only 解析）、`actions.rs`（Status 删 + 旗标删）、
+  `router.rs`（Clear 串联重置）、`task_result.rs` / `effects/mod.rs`（恒开面板）、
+  `modals.rs`（ClearOverrides 路由 + 新渲染签名）、i18n 2 键。shell 零改动。
+- **验证**：cargo check pager --lib 0 error 0 warning（三连 rustc 0xc0000005 打在
+  未触碰 crate，清 incremental + CARGO_INCREMENTAL=0 + -j 4 后通过）；
+  GATE_FORCE pager `lsp` 14/14；i18n 扫描 exit 0。
+- **遗留**：真机 TUI 活体验证（面板开合/chrome 渲染、e 翻转、c 重置、勾选确认
+  热加载）随新客户端补。
 ### 2026-10-14 Codex 品牌主题（feat/local-codex-theme）——OpenAI Codex CLI 真实 UI 配色移植
 
 - **状态**：施工完成待验证合入。捐献者 = 本地 clone `D:\CODE\ai\codex`
@@ -609,11 +680,11 @@
   （~60 槽位 + 签名测试）、mod.rs/cache.rs/syntax.rs、settings defs 两 catalog、
   slash i18n +1、settings_modal tests 分发、doctor 夹具 17→18、user-guide
   06-theming 表 18 行。mermaid `theme_is_dark` 浅色负名单制零改动。
-  实现记录 PATCHES.md 三十七期。
+  实现记录 PATCHES.md 三十九期。
 - **验证**：cargo check render/pager --all-targets 0 error 0 warning + GATE_FORCE
   合批测试（render theme 179/0 + pager 526/0；settings 单独 380/380 对齐基线）+
   i18n 扫描 0 新挂；合批首轮一挂为既有全局主题测试隔离 flake（native-lock 测试
-  × settings preview 并行互踩，重跑自愈，详见 PATCHES 三十七期运行备注）；
+  × settings preview 并行互踩，重跑自愈，详见 PATCHES 三十九期运行备注）；
   ptyctl 活体抽查随新客户端。
 - **遗留**：opencode 余 21 套社区主题同模式增量移植（继承上条）；
   Latte 浅色下 mermaid 活体抽查（继承上条）。
@@ -625,13 +696,13 @@
   后唯一引入 Ayu（暖橙日落深色，填空位），qwen-dark（ayu 克隆）/shades-of-
   purple（第三紫）/github-dark（同族）/浅色系/ansi 系全部剔除，结论沉淀于
   PATCHES 三十八期。`Ayu = 19`，别名 `ayu-dark`。
-- **落点**：同三十七期八处接线；theme/ayu.rs 新文件（~60 槽位 + 签名测试）；
+- **落点**：同三十九期八处接线；theme/ayu.rs 新文件（~60 槽位 + 签名测试）；
   doctor 夹具 18→19；user-guide 表 19 行；README/AGENTS 同步。
 - **验证**：cargo check render/pager --all-targets 0 error 0 warning + GATE_FORCE
   合批测试（render theme 180/0 + pager 526/0；settings 单独 380/0 对齐基线）+
   i18n 扫描 0 新挂；附带根除三十七期记过的 settings_modal 全局主题竞态 flake
   （59 个对照测试统一持 test_lock，fix 提交 f1de484 先行）；ptyctl 活体抽查
   随新客户端。
-- **合并顺序**：codex（三十七期）→ ayu（三十八期），分支叠建无冲突。
+- **合并顺序**：codex（三十九期）→ ayu（四十期），分支叠建无冲突。
 - **遗留**：opencode 余 21 套同模式增量移植时同样先过「同质化」筛
   （qwen-code 全库已筛毕，仅 ayu 入选）；Latte 浅色 mermaid 活体抽查（继承）。

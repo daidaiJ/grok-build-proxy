@@ -187,6 +187,8 @@
 | minidb / 持久化四接口 / SSH kaos / ACP / node-sdk | ❌ 不做（sqlite-journal、xai-acp-lib 已覆盖） | kimicode-port:67 |
 | `/mcp-config` 对话式 MCP 配置 | 不照搬（D4，只吸收"内置能力写成 SKILL.md"思想） | kimicode-port D4 |
 | cron 表达式调度 / ultraloop 关键词入口 | 不立项（fork scheduler interval 型覆盖主场景；P5/P6 按需随手） | step-code-port D5 |
+| codex async questions / Windows 沙箱 / MCP per-tool output_token_limit 等 | 候选清单见 codex-port（2026-10-14 调研完成，选型待拍板） | codex-port/README.md |
+| codex `/copy`、`/fork`、vim mode、worktree 会话、transcript search、主题、steer、插件 CLI | ✅ 已有（逐条 grep 复核，锚点见其「已有」表） | codex-port/README.md |
 
 ## 5. 已知盲区（「未核实」≠「没有」，后续预研先核再判）
 
