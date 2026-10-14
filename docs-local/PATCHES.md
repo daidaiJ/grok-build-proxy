@@ -2829,3 +2829,40 @@ note_below_content` 一挂（note fg 拿到 Reset）——复判为既有全局�
 flake（`info_line_chrome_is_muted_on_terminal_theme` 的 native-lock 窗口与
 settings preview 并行互踩；三十六期按过滤分开跑故未共现），同命令重跑 526/0
 零改动自愈，与 Codex 主题无关。活体 ptyctl 抽查随新客户端。
+
+## 三十八期：Ayu 主题——移植自 qwen-code 主题定义（2026-10-14，分支 feat/local-ayu-theme）
+
+> 需求：qwen-code 侧调研可引入主题。捐献者 = 本地 clone
+> `D:\CODE\ai\qwen-code`（`packages/cli/src/ui/themes/ayu.ts`，社区 Ayu dark）。
+> **用户拍板「避免同质化」**：该库候选逐一对照现有 19 主题筛查——`qwen-dark`
+> 是 ayu 的同源克隆（采样 8 色中 7 色相同，仅一强调色之差）、`shades-of-purple`
+> 将成第三紫调（Dracula/OscuraMidnight 之后）、`github-dark` 与 One Dark/Codex
+> 同族、`googlecode`/`xcode`/各 `*-light` 浅色已饱和（GrokDay/Latte 两个）、
+> `ansi`/`no-color` 被 `terminal` 覆盖——**唯一非同质化引入 = Ayu**，填
+> 「暖橙日落深色」空位（Vesper 的琥珀极简之外的首个全彩暖橙主题）。
+
+1. **新文件** `theme/ayu.rs`：donor 直采——Foreground `#AEACA6`→text_primary、
+   LightBlue `#59C2FF`→accent_user、AccentBlue `#39BAE6`→assistant/running/link、
+   AccentPurple `#D2A6FF`→verify/model、AccentCyan `#95E6CB`→skill/md_code、
+   AccentGreen `#AAD94C`→success/diff_insert_fg、AccentYellow `#FFB454`→
+   command/path/warning/plan（暖橙辨识位）、AccentRed `#F26D78`→error/
+   diff_delete_fg、Comment `#646A71`→gray、DiffAdded/Removed `#293022`/
+   `#3D1215`→diff 底色；底色梯度/边框细档/md 标题梯按 Nord 先例蓝黑色系内
+   手调派生（行内注明偏移比例）。签名测试（bg_base/command 原值 + is_dark +
+   display_name）。
+2. **接线（同三十七期八处 +1 变体 `Ayu = 19`）**：mod.rs（含滚动条对比度测试
+   分发臂）、cache.rs 解码臂、syntax.rs 深色臂、settings defs 两 catalog、
+   slash i18n 中文、settings_modal tests 分发、doctor 夹具 18→19（4 处）、
+   user-guide 表 19 行；mermaid `theme_is_dark` 浅色负名单制零改动。别名
+   `ayu-dark`。
+
+验证：cargo check render/pager --all-targets 0 error 0 warning；GATE_FORCE 合批
+测试（render theme 180/0 含 ayu 签名测试 + pager theme/settings/doctor/mermaid
+526/0；settings 单独 380/380 对齐基线）；i18n 扫描新增描述已带 zh 对，0 新挂。
+**附带根除既有 flake**：合批首两轮复现三十七期记过的 `clamped_preview_renders_
+note_below_content` 竞态（三十七期「重跑自愈」判断不准——ayu 分支连挂两次），
+根修 = settings_modal 59 个「渲染后对照 Theme::current()」测试统一补裸
+`test_lock()` 守卫（只串行化不改状态，已持锁的 2 个 pin_theme 用例跳过），
+读侧与全部改状态者共享同一把锁后竞窗结构性消除；fix 提交先行（f1de484），
+feat 随后。活体 ptyctl 抽查随新客户端。合并在 codex 主题（三十七期）之后——
+分支叠建，接线点编号顺延无冲突。

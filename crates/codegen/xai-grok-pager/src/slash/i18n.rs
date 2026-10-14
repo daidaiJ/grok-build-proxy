@@ -1398,6 +1398,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "OpenAI Codex CLI 的 ChatGPT 蓝近黑深色；需要真彩。",
         ),
         (
+            "Community Ayu dark with warm sunset-orange accents; needs truecolor.",
+            "社区 Ayu 深色，暖橙日落点缀；需要真彩。",
+        ),
+        (
             "Terminal's own background and text colors.",
             "使用终端自身的背景与文字颜色。",
         ),

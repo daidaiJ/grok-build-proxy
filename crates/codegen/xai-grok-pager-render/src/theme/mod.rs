@@ -9,6 +9,7 @@
 
 pub mod cache;
 pub mod catppuccin;
+pub mod ayu;
 pub mod codex;
 pub mod color_support;
 pub mod dracula;
@@ -58,6 +59,9 @@ pub enum ThemeKind {
     // LOCAL Codex 品牌主题（2026-10-14）：OpenAI Codex CLI 真实 UI 配色（ChatGPT 蓝体系），
     // 无障碍 256 色板（ada/dali 等）按用户决定弃用。需要 truecolor。
     Codex = 18,
+    // LOCAL Ayu 主题（2026-10-14，移植自 qwen-code ayu.ts）：社区 Ayu dark，
+    // 暖橙日落强调填空位。需要 truecolor。
+    Ayu = 19,
     /// Every bg is `Reset` so the terminal canvas shows through; legible on both polarities without appearance detection.
     /// Hidden and unparseable while `cache::terminal_theme_enabled()` is off.
     Terminal = 6,
@@ -85,6 +89,7 @@ impl ThemeKind {
         ThemeKind::NightOwl,
         ThemeKind::SolarizedDark,
         ThemeKind::Codex,
+        ThemeKind::Ayu,
         ThemeKind::Terminal,
     ];
 
@@ -151,6 +156,7 @@ impl ThemeKind {
             Self::NightOwl => "nightowl",
             Self::SolarizedDark => "solarized-dark",
             Self::Codex => "codex",
+            Self::Ayu => "ayu",
             Self::Terminal => "terminal",
             Self::Auto => "auto",
         }
@@ -176,7 +182,8 @@ impl ThemeKind {
             | Self::Vesper
             | Self::NightOwl
             | Self::SolarizedDark
-            | Self::Codex => true,
+            | Self::Codex
+            | Self::Ayu => true,
             // Reset plus named ANSI-16 entries only — nothing to quantize.
             Self::Terminal => false,
             // Auto is resolved to a concrete theme before rendering.
@@ -210,6 +217,7 @@ impl ThemeKind {
             Self::NightOwl => &["night-owl"],
             Self::SolarizedDark => &["solarized"],
             Self::Codex => &[],
+            Self::Ayu => &["ayu-dark"],
             Self::Terminal => &["terminal-default", "transparent", "native"],
             Self::Auto => &["system"],
         }
@@ -277,6 +285,7 @@ pub fn display_name_for_canonical(value: &str) -> &str {
         "nightowl" => "Night Owl",
         "solarized-dark" => "Solarized Dark",
         "codex" => "Codex",
+        "ayu" => "Ayu",
         "terminal" => "Terminal",
         other => other,
     }
@@ -406,6 +415,7 @@ impl Theme {
             ThemeKind::NightOwl => Self::night_owl(),
             ThemeKind::SolarizedDark => Self::solarized_dark(),
             ThemeKind::Codex => Self::codex(),
+            ThemeKind::Ayu => Self::ayu(),
             // Handled by the early return above.
             ThemeKind::Terminal => Self::terminal(),
             // Auto is resolved to a concrete theme before being stored; if reached, fall back to GrokNight
@@ -1146,6 +1156,7 @@ mod tests {
                 ThemeKind::NightOwl => Theme::night_owl(),
                 ThemeKind::SolarizedDark => Theme::solarized_dark(),
                 ThemeKind::Codex => Theme::codex(),
+                ThemeKind::Ayu => Theme::ayu(),
                 // Reset plus named ANSI entries: the scrollbar rides the
                 // terminal's own fg/bg contrast, so there is no RGB delta.
                 ThemeKind::Terminal => continue,

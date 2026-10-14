@@ -6,7 +6,7 @@ Grok Build draws all TUI colors from a central theme. You can switch themes whil
 
 ## Available Themes
 
-Grok includes six built-in themes plus twelve LOCAL-ported palettes (eleven community palettes sourced from opencode's theme library and the OpenAI Codex CLI identity palette), and an `auto` option that follows your system appearance:
+Grok includes six built-in themes plus thirteen LOCAL-ported palettes (eleven community palettes sourced from opencode's theme library, the OpenAI Codex CLI identity palette, and the community Ayu dark palette), and an `auto` option that follows your system appearance:
 
 | Theme | Config Names | Description | Truecolor Required |
 |-------|-------------|-------------|--------------------|
@@ -27,6 +27,7 @@ Grok includes six built-in themes plus twelve LOCAL-ported palettes (eleven comm
 | **Night Owl** | `nightowl`, `night-owl` | Sarah Drasner's blue-hour dark. | Yes |
 | **Solarized Dark** | `solarized-dark`, `solarized` | Ethan Schoonover's 16-color classic. | Yes |
 | **Codex** | `codex` | OpenAI Codex CLI's identity palette: near-black neutral base with ChatGPT-blue accents and the amber warning tone. | Yes |
+| **Ayu** | `ayu`, `ayu-dark` | The community Ayu dark palette: blue-black base with warm sunset-orange accents. | Yes |
 | **Terminal** | `terminal`, `terminal-default`, `transparent`, `native` | Your terminal's own colors: no background of its own, so the terminal canvas (translucency, background images) shows through. | No |
 
 Theme names are case-insensitive. The `auto` option (alias `system`) is documented under [Auto Theme (System Appearance)](#auto-theme-system-appearance).

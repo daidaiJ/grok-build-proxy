@@ -617,3 +617,21 @@
   ptyctl 活体抽查随新客户端。
 - **遗留**：opencode 余 21 套社区主题同模式增量移植（继承上条）；
   Latte 浅色下 mermaid 活体抽查（继承上条）。
+
+### 2026-10-14 Ayu 主题（feat/local-ayu-theme）——qwen-code 主题定义移植（叠 codex 分支）
+
+- **状态**：施工完成待验证合入。捐献者 `D:\CODE\ai\qwen-code`
+  （`packages/cli/src/ui/themes/ayu.ts`）；**用户拍板避免同质化**，逐候选筛查
+  后唯一引入 Ayu（暖橙日落深色，填空位），qwen-dark（ayu 克隆）/shades-of-
+  purple（第三紫）/github-dark（同族）/浅色系/ansi 系全部剔除，结论沉淀于
+  PATCHES 三十八期。`Ayu = 19`，别名 `ayu-dark`。
+- **落点**：同三十七期八处接线；theme/ayu.rs 新文件（~60 槽位 + 签名测试）；
+  doctor 夹具 18→19；user-guide 表 19 行；README/AGENTS 同步。
+- **验证**：cargo check render/pager --all-targets 0 error 0 warning + GATE_FORCE
+  合批测试（render theme 180/0 + pager 526/0；settings 单独 380/0 对齐基线）+
+  i18n 扫描 0 新挂；附带根除三十七期记过的 settings_modal 全局主题竞态 flake
+  （59 个对照测试统一持 test_lock，fix 提交 f1de484 先行）；ptyctl 活体抽查
+  随新客户端。
+- **合并顺序**：codex（三十七期）→ ayu（三十八期），分支叠建无冲突。
+- **遗留**：opencode 余 21 套同模式增量移植时同样先过「同质化」筛
+  （qwen-code 全库已筛毕，仅 ayu 入选）；Latte 浅色 mermaid 活体抽查（继承）。

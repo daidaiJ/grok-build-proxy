@@ -121,6 +121,11 @@ const THEME_CHOICES: &[EnumChoice] = &[
         description: "OpenAI Codex CLI's ChatGPT-blue near-black dark; needs truecolor.",
     },
     EnumChoice {
+        canonical: "ayu",
+        display: "Ayu",
+        description: "Community Ayu dark with warm sunset-orange accents; needs truecolor.",
+    },
+    EnumChoice {
         canonical: "terminal",
         display: "Terminal",
         description: "Terminal's own background and text colors.",
@@ -567,6 +572,11 @@ const CONCRETE_THEME_CHOICES: &[EnumChoice] = &[
         canonical: "codex",
         display: "Codex",
         description: "OpenAI Codex CLI's ChatGPT-blue near-black dark; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "ayu",
+        display: "Ayu",
+        description: "Community Ayu dark with warm sunset-orange accents; needs truecolor.",
     },
     EnumChoice {
         canonical: "terminal",
