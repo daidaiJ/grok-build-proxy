@@ -570,6 +570,9 @@ fn render_setting_row_selected_is_reversed_on_terminal_theme() {
 /// At an 80-col area a 42-col label fits on one line, so the full label renders without an ellipsis.
 #[test]
 fn render_setting_row_shows_full_label_when_one_line_fits() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let meta = SettingMeta {
         key: "test-key",
         category: SettingCategory::Appearance,
@@ -996,6 +999,9 @@ fn mouse_click_on_header_is_no_op() {
 
 #[test]
 fn selected_browse_row_label_is_bold() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let state = make_state();
     let meta = state
         .registry
@@ -1173,6 +1179,9 @@ fn mouse_moved_over_header_does_not_set_hover() {
 /// The `assert_eq` against `theme.bg_hover` survives both colored and quantize-to-Reset color levels.
 #[test]
 fn hover_row_renders_with_hover_style() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     let theme = Theme::current();
     let area = Rect {
@@ -1225,6 +1234,9 @@ fn hover_row_renders_with_hover_style() {
 /// The next render paints THAT choice with the hover bg without affecting other choices.
 #[test]
 fn picker_choice_mouse_hover_highlights_choice() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = picker_test_state();
     // Populate per-choice rects by rendering once, then drain the thread-local stash into `state.picker_choice_rects`
     let area = Rect {
@@ -1434,6 +1446,9 @@ fn scroll_wheel_advances_selection() {
 /// row is expanded. The pill is a property label, not a "restart pending" tracker.
 #[test]
 fn render_setting_row_emits_restart_pill_when_required() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let meta = SettingMeta {
         key: "test-key",
         category: SettingCategory::Appearance,
@@ -1507,6 +1522,9 @@ fn render_setting_row_emits_restart_pill_when_required() {
 /// That keeps the modal uncluttered for the common "I'm just browsing" case.
 #[test]
 fn render_setting_row_hides_restart_pill_when_at_default_and_collapsed() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let meta = SettingMeta {
         key: "test-key",
         category: SettingCategory::Appearance,
@@ -1602,6 +1620,9 @@ fn editor_render_fixture(buffer: &str, cursor_byte: usize) -> SettingsModalState
 /// Cursor lands at the visual column matching `cursor_byte` for buffers that fit entirely within the visible window.
 #[test]
 fn render_editing_value_cursor_at_logical_position_when_buffer_fits() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = editor_render_fixture("Grok Test", 4); // cursor between "Grok" and " Test"
     let area = Rect {
         x: 0,
@@ -1636,6 +1657,9 @@ fn render_editing_value_cursor_at_logical_position_when_buffer_fits() {
 /// The cursor renders at the LEFT edge, NOT the right.
 #[test]
 fn render_editing_value_cursor_pans_to_left_on_overflow_at_start() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Build a buffer wide enough to overflow a narrow window.
     let buffer = "A".repeat(80);
     let mut s = editor_render_fixture(&buffer, 0);
@@ -1670,6 +1694,9 @@ fn render_editing_value_cursor_pans_to_left_on_overflow_at_start() {
 /// That column is `buffer_room - 1` = `visible_buffer_w`; the last col is the cursor-reserve space and the cursor renders just inside it.
 #[test]
 fn render_editing_value_cursor_pans_to_right_on_overflow_at_end() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let buffer = "A".repeat(80);
     let cursor = buffer.len();
     let mut s = editor_render_fixture(&buffer, cursor);
@@ -1711,6 +1738,9 @@ fn render_editing_value_cursor_pans_to_right_on_overflow_at_end() {
 
 #[test]
 fn render_string_editor_keeps_narrow_graphemes_and_cursor_aligned() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let grapheme = "👩🏽\u{200d}💻";
     let combining = "e\u{301}";
     let text = format!("a{grapheme}{combining}");
@@ -1750,6 +1780,9 @@ fn render_string_editor_keeps_narrow_graphemes_and_cursor_aligned() {
 /// The validation-error row at y = header_rows + 1 renders the error message in accent_error.
 #[test]
 fn render_editing_value_paints_validation_error_row_and_buffer_red() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Use a buffer that fails KnownModel ("xyz" not in catalog).
     let mut s = editor_render_fixture("xyz", 3);
     let area = Rect {
@@ -1791,6 +1824,9 @@ fn render_editing_value_paints_validation_error_row_and_buffer_red() {
 /// So the assertion targets the unique "empty: uses shell default" substring that survives the cursor overdraw.
 #[test]
 fn render_editing_value_empty_buffer_shows_placeholder() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = editor_render_fixture("", 0);
     let area = Rect {
         x: 0,
@@ -1820,6 +1856,9 @@ fn render_editing_value_empty_buffer_shows_placeholder() {
 /// The arrows flank a centered value, NOT the old `[-]` / `[+]` adornments flush against the area edges.
 #[test]
 fn render_editing_value_int_populates_adornment_hit_rects() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Use a settings registry containing the real `max_thoughts_width` Int entry
     let mut s = SettingsModalState::new(
         Arc::new(SettingsRegistry::defaults()),
@@ -2084,6 +2123,9 @@ fn int_editing_value_ignores_other_text_input_keys() {
 /// Render the stepper and assert the `‹` / `›` arrow glyphs AND the value text are present on the input row.
 #[test]
 fn int_editing_value_renders_stepper_ui() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = int_stepper_fixture(125);
     let area = Rect {
         x: 0,
@@ -2172,6 +2214,9 @@ fn int_editing_value_esc_reverts() {
 /// The click maps to small steps to match the spinner convention; repeated clicks let the user fine-tune.
 #[test]
 fn int_editing_value_left_arrow_click_decrements_by_small_step() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = int_stepper_fixture(120);
     // Render once to populate `editor_adornment_rects`.
     let area = Rect {
@@ -2199,6 +2244,9 @@ fn int_editing_value_left_arrow_click_decrements_by_small_step() {
 /// Mouse click on the `›` right-arrow rect synthesizes an Up step. Mirror of the left-arrow test.
 #[test]
 fn int_editing_value_right_arrow_click_increments_by_small_step() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = int_stepper_fixture(120);
     let area = Rect {
         x: 0,
@@ -2225,6 +2273,9 @@ fn int_editing_value_right_arrow_click_increments_by_small_step() {
 /// Mouse click on the value text (between the arrows) is a no-op; clicks here shouldn't accidentally commit or step.
 #[test]
 fn int_editing_value_click_on_value_text_is_noop() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = int_stepper_fixture(120);
     let area = Rect {
         x: 0,
@@ -2605,6 +2656,9 @@ fn deep_link_picker_esc_reverts_preview_and_closes() {
 /// Layout: row 0 is the title, row 1 the description (subtitle), row 2 a gap, and rows 3..6 the choices.
 #[test]
 fn picker_renders_choices_in_order() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let s = picker_test_state();
     let area = Rect {
         x: 0,
@@ -2666,6 +2720,9 @@ fn picker_renders_choices_in_order() {
 /// Focus (BG and bold) tracks `choices_idx`; the filled-disc marker tracks the committed `original_value` until Enter.
 #[test]
 fn picker_separates_focus_highlight_from_committed_marker() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = picker_test_state();
     // Focus the second choice while committed value remains "first".
     s.transition_to_picking_enum("test_enum", 1, SettingValue::Enum("first"), true);
@@ -2806,6 +2863,9 @@ fn picker_separates_focus_highlight_from_committed_marker() {
 /// The marker must resolve that arm the same way as static `Enum`, including the empty-canonical clear sentinel (`""` / "(no override)").
 #[test]
 fn picker_string_original_value_fills_committed_marker() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = picker_test_state();
     s.transition_to_picking_enum("test_enum", 1, SettingValue::String("first".into()), true);
     let area = Rect {
@@ -3051,6 +3111,9 @@ fn fork_secondary_model_picker_opens_on_persisted_model() {
 
 #[test]
 fn render_picker_with_zero_height_is_noop() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let s = picker_test_state();
     let area = Rect {
         x: 0,
@@ -3071,6 +3134,9 @@ fn render_picker_with_zero_height_is_noop() {
 
 #[test]
 fn render_picker_with_zero_width_is_noop() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let s = picker_test_state();
     let area = Rect {
         x: 0,
@@ -3093,6 +3159,9 @@ fn render_picker_with_zero_width_is_noop() {
 /// The title must render, no choices must render, no panic.
 #[test]
 fn render_picker_at_height_2_renders_title_no_choices() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let s = picker_test_state();
     let area = Rect {
         x: 0,
@@ -3127,6 +3196,9 @@ fn render_picker_at_height_2_renders_title_no_choices() {
 /// choices then stay renderable. This test pins that fallback at an intermediate height.
 #[test]
 fn render_picker_drops_description_when_wrap_block_exceeds_height() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Synthetic registry with a description that, at width=20, would wrap to at least 5 lines
     let long_desc = "This description is intentionally long enough \
                      that at narrow widths the wrap block will not \
@@ -3186,6 +3258,9 @@ fn render_picker_drops_description_when_wrap_block_exceeds_height() {
 /// `…` must NOT appear and the full description text must be in the buffer.
 #[test]
 fn render_picker_long_description_wraps_no_ellipsis() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let entries = vec![SettingMeta {
         key: "long_enum",
         category: SettingCategory::Appearance,
@@ -3255,6 +3330,9 @@ fn render_picker_long_description_wraps_no_ellipsis() {
 /// Pins the wrap-at-width=60 catalog case from the user-feedback screenshot.
 #[test]
 fn picker_long_description_wraps_to_multiple_lines() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let entries = vec![SettingMeta {
         key: "wrap_enum",
         category: SettingCategory::Privacy,
@@ -3377,6 +3455,9 @@ fn picker_long_description_wraps_to_multiple_lines() {
 /// Asserts the row directly below a choice's line 1 is either the next choice's line 1 (when there are more choices) or blank.
 #[test]
 fn picker_short_description_stays_one_line() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let entries = vec![SettingMeta {
         key: "short_enum",
         category: SettingCategory::Appearance,
@@ -3445,6 +3526,9 @@ fn picker_short_description_stays_one_line() {
 /// Choices with an empty description render the symbol and display ONLY; no `·` separator, no trailing stray cells.
 #[test]
 fn picker_no_description_renders_symbol_and_display_only() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let entries = vec![SettingMeta {
         key: "nodesc_enum",
         category: SettingCategory::Appearance,
@@ -3513,6 +3597,9 @@ fn picker_no_description_renders_symbol_and_display_only() {
 /// Mirrors the two-line row hit-rects in Browse mode.
 #[test]
 fn picker_multi_line_choice_hit_rect_spans_all_lines() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Reuse the wrap fixture: long descriptions on both choices.
     let entries = vec![SettingMeta {
         key: "wrap_enum",
@@ -3616,6 +3703,9 @@ fn picker_multi_line_choice_hit_rect_spans_all_lines() {
 /// The earlier choices may shift off the top.
 #[test]
 fn picker_scroll_offset_accounts_for_variable_height() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Each description is at least 3 wrap lines wide at width=40
     let entries = vec![SettingMeta {
         key: "many_wrap",
@@ -3708,6 +3798,9 @@ fn picker_scroll_offset_accounts_for_variable_height() {
 /// Same shape as the description test above.
 #[test]
 fn render_picker_truncates_long_display_with_ellipsis() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let entries = vec![SettingMeta {
         key: "long_enum",
         category: SettingCategory::Appearance,
@@ -3758,6 +3851,9 @@ fn render_picker_truncates_long_display_with_ellipsis() {
 /// Long setting label in the title row truncates with `…`.
 #[test]
 fn render_picker_truncates_long_title_with_ellipsis() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let entries = vec![SettingMeta {
         key: "long_enum",
         category: SettingCategory::Appearance,
@@ -3808,6 +3904,9 @@ fn render_picker_truncates_long_title_with_ellipsis() {
 /// When choices > visible_h, the picker renders an overflow indicator `… N more` on the last visible row.
 #[test]
 fn render_picker_shows_more_indicator_when_choices_overflow() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Build a registry with 8 choices (exceeds 4-row viewport at height=8)
     let entries = vec![SettingMeta {
         key: "long_enum",
@@ -4505,6 +4604,9 @@ fn find_text_col(buf: &Buffer, y: u16, needle: &str) -> Option<u16> {
 /// Render the row list with default registry; assert that every section header AFTER the first has a blank line immediately above it.
 #[test]
 fn section_headers_have_blank_line_above_except_first() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     // Allocate a generous viewport so every category fits
     // The default registry contains 6 categories with 16 settings; the blank lines push us to ~23 lines, fits in 60
@@ -4569,6 +4671,9 @@ fn section_headers_have_blank_line_above_except_first() {
 /// When the viewport begins at a section header, we do NOT reserve a leading blank line above it; the header hugs the top of the row-list area.
 #[test]
 fn first_section_header_has_no_leading_gap() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     let area = Rect {
         x: 0,
@@ -4594,6 +4699,9 @@ fn first_section_header_has_no_leading_gap() {
 /// Click on a setting row's y-coordinate should match the rect stored in `state.row_rects`.
 #[test]
 fn row_rects_shift_down_for_blank_lines_above_headers() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     let area = Rect {
         x: 0,
@@ -4713,6 +4821,9 @@ fn synthetic_enum_chevron_meta() -> SettingMeta {
 /// 1 without truncation.
 #[test]
 fn narrow_terminal_drops_value_to_second_line() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let meta = synthetic_long_label_meta();
     let area = Rect {
         x: 0,
@@ -4769,6 +4880,9 @@ fn narrow_terminal_drops_value_to_second_line() {
 /// At wide area widths, the row collapses to a single line; full label + value on the same line.
 #[test]
 fn wide_terminal_keeps_value_on_first_line() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let meta = synthetic_long_label_meta();
     let area = Rect {
         x: 0,
@@ -4810,6 +4924,9 @@ fn wide_terminal_keeps_value_on_first_line() {
 /// The value still drops to line 2.
 #[test]
 fn pathologically_narrow_truncates_label_with_ellipsis() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let meta = synthetic_long_label_meta();
     let area = Rect {
         x: 0,
@@ -4848,6 +4965,9 @@ fn pathologically_narrow_truncates_label_with_ellipsis() {
 /// and the row chrome are far wider than the width=28 we render at. So the row drops to two lines.
 #[test]
 fn two_line_row_hit_rect_spans_both_lines() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     let row_idx = s
         .rows
@@ -4907,6 +5027,9 @@ fn two_line_row_hit_rect_spans_both_lines() {
 /// Expanded two-line rows render label (line 1), value (line 2), and the wrapped description on subsequent lines.
 #[test]
 fn two_line_row_with_expansion_renders_three_segments() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     // The coding-data row's label + value (with chevron) won't fit on a 28-col line, forcing two-line layout
     let row_idx = s
@@ -4972,6 +5095,9 @@ fn two_line_row_with_expansion_renders_three_segments() {
 /// must still paint its description below the chevron row, like normal expanded rows do.
 #[test]
 fn group_row_renders_expanded_description() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     let row_idx = s
         .rows
@@ -5235,6 +5361,9 @@ fn footer_total_height_grows_when_hints_wrap() {
 /// Also asserts that (b) at least one trailing cell renders a `─` glyph.
 #[test]
 fn section_header_style_matches_palette() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     let area = Rect {
         x: 0,
@@ -5301,6 +5430,9 @@ fn section_header_style_matches_palette() {
 /// position. Hint path renders ` / to search` in `gray_dim`.
 #[test]
 fn search_bar_focused_style_matches_palette() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let area = Rect {
         x: 0,
         y: 0,
@@ -5347,6 +5479,9 @@ fn search_bar_focused_style_matches_palette() {
 /// first few cells in gray_dim and left the rest at default would otherwise be missed.
 #[test]
 fn search_bar_placeholder_matches_palette() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let area = Rect {
         x: 0,
         y: 0,
@@ -5424,6 +5559,9 @@ fn string_editor_paste_sanitizes_validates_and_consumes_rejected_text() {
 
 #[test]
 fn filter_search_bar_keeps_narrow_graphemes_and_cursor_aligned() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let grapheme = "👩🏽\u{200d}💻";
     let combining = "e\u{301}";
     let mut state = make_state();
@@ -5455,6 +5593,9 @@ fn filter_search_bar_keeps_narrow_graphemes_and_cursor_aligned() {
 /// The inactive state should read as visually subordinate.
 #[test]
 fn bool_off_value_renders_in_dim_color() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let meta = SettingMeta {
         key: "test-bool-dim",
         category: SettingCategory::Appearance,
@@ -5540,6 +5681,9 @@ fn bool_off_value_renders_in_dim_color() {
 /// Bool rows leave it empty, Enum/String rows fill it with `" ›"`, but the column position (and therefore the value's right edge) is constant.
 #[test]
 fn chevron_column_is_at_constant_right_offset() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let bool_meta = SettingMeta {
         key: "test-bool-col",
         category: SettingCategory::Appearance,
@@ -5691,6 +5835,9 @@ fn chevron_column_is_at_constant_right_offset() {
 /// Before the fix, line-2's chevron landed 1 cell further right than line-1's, producing a staircase in mixed-layout row lists.
 #[test]
 fn chevron_column_aligns_across_one_and_two_line_layouts() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let theme = Theme::current();
     // `synthetic_enum_chevron_meta` has label "Coding data sharing" (19 chars) + value "choice_a" (8 chars)
     // At width=25 the one-line total (2 + 19 + 1 + 8 + 2 + 1 = 33) exceeds the width, so the layout flips to TwoLine
@@ -5768,6 +5915,9 @@ fn chevron_column_aligns_across_one_and_two_line_layouts() {
 /// regression that moved the centering math into the LONG branch only would then fail.
 #[test]
 fn docs_footer_tip_is_centered() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let theme = Theme::current();
     // Helper: render at `width` and return (full row text, tip start col, leading_ws, trailing_ws)
     let render = |width: u16| -> (String, usize, usize) {
@@ -5893,6 +6043,9 @@ fn enter_picker_for(key: &'static str) -> SettingsModalState {
 /// truncation. The live `theme` description fits one line at width=30 and never engages it.
 #[test]
 fn picker_description_word_wraps_no_ellipsis() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     // Synthetic enum setting with a description forced to wrap.
     // The description is ~140 chars; at width=30 with a small amount of chrome on either side, it MUST produce at least 4 description rows
     let long_desc = "This is a deliberately long description \
@@ -6496,6 +6649,9 @@ fn consent_chooser_drops_tip_and_reset() {
 /// The row-list-with-search-bar layout reserves row 1 (below the search bar) for a `─` divider in `gray_dim`; palette parity.
 #[test]
 fn search_bar_renders_divider_below() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let mut s = make_state();
     let area = Rect {
         x: 0,
@@ -6711,6 +6867,9 @@ fn max_thoughts_width_preview_content_is_italic() {
 /// only GrokDay renders the title darker.
 #[test]
 fn max_thoughts_width_preview_title_styling_distinguishes_from_content() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let area = Rect {
         x: 0,
         y: 0,
@@ -6880,6 +7039,9 @@ fn max_thoughts_width_preview_clamps_when_terminal_narrower_than_value() {
 /// The note uses `theme.text_secondary` fg, no bg tint, no modifier; it reads as chrome-level text aligned with the preview's left edge.
 #[test]
 fn clamped_preview_renders_note_below_content() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let area = Rect {
         x: 0,
         y: 0,
@@ -7094,6 +7256,9 @@ fn max_thoughts_width_preview_omitted_when_modal_too_narrow() {
 /// Test 9: the preview is gated on `setting_key == "max_thoughts_width"`.
 #[test]
 fn max_thoughts_width_preview_only_renders_for_max_thoughts_width_key() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let synthetic_meta = SettingMeta {
         key: "synthetic_int",
         category: SettingCategory::Advanced,
@@ -7142,6 +7307,9 @@ fn max_thoughts_width_preview_only_renders_for_max_thoughts_width_key() {
 /// Then we assert the wrap shape differs.
 #[test]
 fn max_thoughts_width_preview_updates_when_stepper_changes() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let area = Rect {
         x: 0,
         y: 0,
@@ -7598,6 +7766,9 @@ fn locked_row_footer_drops_the_keys_it_refuses() {
 /// Unlocked rows keep the plain value and chevron.
 #[test]
 fn locked_coding_data_sharing_row_renders_locked_value_without_chevron() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let area = Rect {
         x: 0,
         y: 0,
@@ -7664,6 +7835,9 @@ fn locked_coding_data_sharing_row_renders_locked_value_without_chevron() {
 /// A `\n` in a description starts a new painted line in the expanded detail instead of rendering as a control cell.
 #[test]
 fn expanded_description_newlines_start_new_lines() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let area = Rect {
         x: 0,
         y: 0,
@@ -7714,6 +7888,9 @@ fn expanded_description_newlines_start_new_lines() {
 /// Expanding a locked row replaces the registry description with the lock reason; the unlocked expansion shows the description.
 #[test]
 fn locked_coding_data_sharing_expanded_description_replaces_with_reason() {
+    let _theme_guard = crate::theme::cache::test_lock()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let area = Rect {
         x: 0,
         y: 0,
