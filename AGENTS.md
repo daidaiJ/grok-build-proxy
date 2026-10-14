@@ -251,9 +251,9 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   检测/配置到的 server 全列出、空格勾选确认后写本工作区禁用清单
   （`feature-overrides` 增 `lsp_disabled_servers`，只记排除项），零回合热加载；
   v2.2（2026-10-14，`feat/local-lsp-panel`，三十八期）`/lsp` 面板化——裸
-  `/lsp` 打开统一操作面板（状态显示 + `e` 启用关闭 + server 自动发现清单 +
-  空格勾选 Enter 确认，翻转/确认均即时热加载），status/on|off/clear 保留，
-  select 并入面板。遗留：活体 TUI 验证、
+  `/lsp` 打开统一操作面板（modal_window 公共 chrome：状态显示 + `e` 启用关闭 +
+  `c` 清覆盖全量重置 + server 自动发现清单 + 空格勾选 Enter 确认，翻转/重置/
+  确认均即时热加载），option 子命令全部移除（面板内完成）。遗留：活体 TUI 验证、
   eager bootstrap 内存尾部（懒启动挂真实抱怨触发）、T1 诊断按需 op /
   T2 call hierarchy / T3 rename（[improvements-todo](docs-local/lsp-port/lsp-improvements-todo.md)
   顺位）。
@@ -278,27 +278,32 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### /lsp 面板化（统一操作面板）— 已随 v1.0.57 发版（2026-10-14）
+### /lsp 面板化（统一操作面板）— 已随 v1.0.57 发版（2026-10-14；tag 同日重指重发）
 
-- **当前状态：** 三十七期 `/lsp select` 的交互收敛：裸 `/lsp`（及 panel/面板）打开
-  统一操作面板——状态显示（门禁来源 + 工作区覆盖 + server 勾选清单带运行态/命令
-  探测 + 会话后端行）、`e`/`t` 启用关闭（本地态先翻转保反馈，dispatch 写
-  workspace 覆盖 + `x.ai/lspApply` 热加载，**面板保持打开**）、server 自动发现
-  清单（config + builtin PATH）、空格勾选 + Enter 确认（禁用清单语义沿用三十七期）。
-  `status` 保留文本回显，`on|off|clear` 保留直接子命令，旧 select/选择/勾选 收编为
-  面板兼容别名。已合 main（merge `4a1d450d`，分支 `feat/local-lsp-panel`）随 tag
-  **`v1.0.57`** 发版：release run `38516906588`（tag）/ build run `38516899716`
-  （main 同 sha）双 job success、4 资产非草稿（Windows zip sha256 核对 OK）；
-  本机 `D:\tool\cli\grok2.exe` 部署 `grok 1.0.57 (4a1d450d933f)`，回滚点
-  `grok2.exe.bak-1.0.56`。实现记录 PATCHES.md 三十八期。shell 侧零改动。
-- **验证：** cargo check pager --lib 0 error 0 warning；ctest 门控 pager `lsp`
-  过滤 16/16（panel 取数旗标 / 无会话提示 / 回包开面板三新例）；i18n 扫描
-  exit 0（lsp_panel 无挂）。
-- **遗留：** ① 真机 TUI 活体验证（面板开合、e 翻转后 status 同步、勾选确认
-  热加载回路）——与三十七期同批随新客户端补；② 三十七期遗留（取数与确认间
+- **当前状态：** 三十七期 `/lsp select` 的交互收敛 + 同日二次收敛（用户三点反馈
+  全收：面板太小/风格与 usage 不对齐 → 改走 `views/modal_window` 公共 chrome，
+  usage/stats 同尺寸档位 0.65/100、标题边框 + 七快捷键页脚，内容随光标滚动；
+  option 子命令残留 → `/lsp` 只开面板，on/off/status/clear/select 一律拒绝，
+  `Status` 语义与 `format_status` 移除；补面板内 `c` 键清覆盖：Clear 升级全量
+  重置——lsp_tools 覆盖 + server 禁用清单一并清除恢复跟随全局）。面板交互 =
+  状态显示（门禁来源 + 覆盖行 + server 勾选清单带运行态/命令探测 + 会话后端行）、
+  `e`/`t` 启用关闭（写覆盖 + `x.ai/lspApply` 热加载，面板保持打开）、server 自动
+  发现清单、空格勾选 + Enter 确认（禁用清单语义沿用三十七期）。**用户拍板不新增
+  v1.0.58：v1.0.57 tag 原地重指重发**——终版 merge `c64d3e52`，release run
+  `38529042608`（tag）/ build run `38529065030`（main 同 sha）双 job success、
+  4 资产非草稿（Windows zip sha256 核对 OK）；本机 `D:\tool\cli\grok2.exe` 部署
+  `grok 1.0.57 (c64d3e52c1ef)`，回滚点 `grok2.exe.bak-1.0.57-pre`（更早
+  `grok2.exe.bak-1.0.56` = 重指前版本）。实现记录 PATCHES.md 三十八期 + 补节。
+  shell 侧零改动。
+- **验证：** cargo check pager --lib 0 error 0 warning（本轮三连 rustc 0xc0000005
+  打在 update/config-types/shell-terminal 三个未触碰 crate，清 incremental +
+  CARGO_INCREMENTAL=0 + -j 4 后通过）；ctest 门控 pager `lsp` 过滤 14/14；
+  i18n 扫描 exit 0（lsp_panel 无挂）。
+- **遗留：** ① 真机 TUI 活体验证（面板开合与 chrome 渲染、e 翻转、c 重置、勾选
+  确认热加载回路）——与三十七期同批随新客户端补；② 三十七期遗留（取数与确认间
   server 环境变化无检测、新 server 主动弹面板提示）继承不变。
 - **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
-  台账「/lsp 面板化」条目；PATCHES.md 三十八期。
+  台账「/lsp 面板化」与「面板二次收敛」两条目；PATCHES.md 三十八期 + 补节。
 
 ### /lsp select server 勾选面板 — 已随 v1.0.56 发版（2026-10-14）
 
