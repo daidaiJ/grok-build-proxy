@@ -1740,6 +1740,12 @@ impl AgentView {
                     request: crate::app::actions::LspConfigureRequest::Set(value),
                 })
             }
+            LspPanelOutcome::ClearOverrides => {
+                // 面板本地态已回「跟随全局」，这里只发写盘 + 热加载；不关面板。
+                InputOutcome::Action(Action::LspConfigure {
+                    request: crate::app::actions::LspConfigureRequest::Clear,
+                })
+            }
             LspPanelOutcome::Confirm => {
                 let Some(crate::views::modal::ActiveModal::LspPanel { state }) =
                     self.active_modal.take()
@@ -2500,8 +2506,8 @@ impl AgentView {
                 // LOCAL: /auth 供应商配置面板。
                 crate::views::auth_modal::render_auth_modal(buf, area, state);
             } else if let modal::ActiveModal::LspPanel { state } = active_modal {
-                // LOCAL: /lsp 统一操作面板。
-                crate::views::lsp_panel::render_lsp_panel(buf, area, state);
+                // LOCAL: /lsp 统一操作面板（modal_window 公共 chrome）。
+                crate::views::lsp_panel::render_lsp_panel(buf, area, state, compact, &theme);
             } else if let modal::ActiveModal::MemoryBrowser { state: mem_state } = active_modal {
                 crate::views::memory_modal::render_memory_modal(buf, area, mem_state, compact);
             } else if let modal::ActiveModal::Settings {

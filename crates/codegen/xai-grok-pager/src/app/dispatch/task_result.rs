@@ -601,38 +601,29 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             }
             vec![]
         }
-        // LOCAL: /lsp status 回包。状态块落 scrollback（agent 视图）或 toast；
-        // panel 模式改开 LSP 统一面板（裸 `/lsp` / `/lsp panel` 的数据面）。
+        // LOCAL: /lsp 面板取数回包 —— 打开 LSP 统一面板（裸 `/lsp` 的数据面）。
         TaskResult::LspStatusFetched {
             cwd,
             session_id,
-            panel,
             response,
         } => {
-            if panel {
-                if let Some(error) = &response.error {
-                    crate::app::dispatch::router::lsp_report(
-                        app,
-                        &format!("LSP 面板数据获取失败：{error}"),
-                    );
-                    return vec![];
-                }
-                if let ActiveView::Agent(id) = app.active_view
-                    && let Some(agent) = app.agents.get_mut(&id)
-                {
-                    agent.active_modal =
-                        Some(crate::views::modal::ActiveModal::LspPanel {
-                            state: Box::new(crate::views::lsp_panel::LspPanelState::new(
-                                cwd, session_id, response,
-                            )),
-                        });
-                }
+            if let Some(error) = &response.error {
+                crate::app::dispatch::router::lsp_report(
+                    app,
+                    &format!("LSP 面板数据获取失败：{error}"),
+                );
                 return vec![];
             }
-            crate::app::dispatch::router::lsp_report(
-                app,
-                &crate::slash::commands::lsp::format_status(&response),
-            );
+            if let ActiveView::Agent(id) = app.active_view
+                && let Some(agent) = app.agents.get_mut(&id)
+            {
+                agent.active_modal =
+                    Some(crate::views::modal::ActiveModal::LspPanel {
+                        state: Box::new(crate::views::lsp_panel::LspPanelState::new(
+                            cwd, session_id, response,
+                        )),
+                    });
+            }
             vec![]
         }
         // LOCAL: /lsp 零回合热加载回包。同步写回显之后追加一行权威结果。

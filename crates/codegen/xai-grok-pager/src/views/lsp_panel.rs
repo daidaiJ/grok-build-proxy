@@ -1,8 +1,10 @@
-//! LOCAL(/lsp): LSP 统一操作面板 —— `/lsp` 的主交互面：状态显示（门禁来源 /
+//! LOCAL(/lsp): LSP 统一操作面板 —— `/lsp` 的唯一交互面：状态显示（门禁来源 /
 //! 工作区覆盖 / 会话后端）、启用关闭（`e` 翻转，写 workspace 覆盖并热加载，
-//! 面板保持打开）、server 自动发现清单（config + builtin PATH 检测，启用时
-//! 自动接入）与手动勾选确认（空格勾选，Enter 确认写本工作区禁用清单并热加载）。
-//! 结构与 [`crate::views::auth_modal`] 同款：自带窗口 chrome + route_key + render。
+//! 面板保持打开）、覆盖重置（`c` 清除本工作区覆盖恢复跟随全局）、server 自动
+//! 发现清单（config + builtin PATH 检测，启用时自动接入）与手动勾选确认
+//! （空格勾选，Enter 确认写本工作区禁用清单并热加载）。
+//! 窗口 chrome 走 [`crate::views::modal_window`]（与 usage/stats modal 同款
+//! 尺寸档位与页脚快捷键），Esc/关闭按钮由 chrome 承担。
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -10,15 +12,37 @@ use std::path::PathBuf;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::Rect;
 use ratatui::prelude::{Buffer, Line, Modifier, Span, Style};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph, Widget};
+use ratatui::widgets::{Paragraph, Widget};
 
-use crate::slash::commands::lsp::{enabled_source_label, startup_label};
 use crate::slash::i18n::tr;
+use crate::theme::Theme;
+use crate::views::modal_window::{
+    self as mw, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
+};
 use xai_grok_shell::extensions::lsp_status::{LspServerStatus, LspStatusResponse};
 
-/// 面板尺寸（内容行随 server 数量自适应，上下限封顶）。
-const PANEL_MIN_WIDTH: u16 = 68;
-const PANEL_MIN_HEIGHT: u16 = 12;
+/// 门禁来源标签（面板状态头渲染用）。
+pub(crate) fn enabled_source_label(source: &str) -> &'static str {
+    match source {
+        "pin" => "策略 pin",
+        "env" => "环境变量 GROK_LSP_TOOLS",
+        "workspace_override" => "/lsp 工作区覆盖",
+        "config" => "[features] lsp_tools",
+        "remote" => "服务端设置",
+        _ => "默认开",
+    }
+}
+
+/// 会话后端启动阶段标签（面板会话行渲染用）。
+pub(crate) fn startup_label(startup: &str) -> &'static str {
+    match startup {
+        "not_started" => "未启动",
+        "starting" => "启动中",
+        "ready" => "就绪",
+        "failed" => "失败",
+        _ => "未知",
+    }
+}
 
 pub struct LspPanelState {
     /// 确认/翻转时写覆盖文件用的目标工作区与活动会话（打开面板时的快照）。
@@ -36,6 +60,10 @@ pub struct LspPanelState {
     /// 当前勾选（= 要启用的）；初始值 = 打开面板时的生效面（未被禁用的）。
     pub checked: BTreeSet<String>,
     pub cursor: usize,
+    /// 公共 chrome 状态（关闭按钮命中区 / 快捷键 hover 等）。
+    pub window: ModalWindowState,
+    /// 内容滚动偏移（清单超过内容区时跟随光标）。
+    pub scroll: u16,
 }
 
 impl LspPanelState {
@@ -66,6 +94,8 @@ impl LspPanelState {
             servers,
             checked,
             cursor: 0,
+            window: ModalWindowState::new(),
+            scroll: 0,
         }
     }
 
@@ -104,6 +134,12 @@ impl LspPanelState {
         self.enabled
     }
 
+    /// `c`：清除本工作区覆盖（显示面即时回到「跟随全局」；写盘与热加载在
+    /// dispatch 层 `Action::LspConfigure(Clear)`，面板保持打开）。
+    pub fn clear_overrides(&mut self) {
+        self.workspace_override = None;
+    }
+
     /// 确认语义：返回要禁用的名单（全集 − 勾选集）。空 = 全部启用（清除覆盖）。
     pub fn disabled_on_confirm(&self) -> Vec<String> {
         self.servers
@@ -111,6 +147,15 @@ impl LspPanelState {
             .filter(|s| !self.checked.contains(&s.name))
             .map(|s| s.name.clone())
             .collect()
+    }
+
+    /// 清单区首行的内容行号（状态头 + 可选禁用提示 + 空行之后）。
+    fn list_start(&self) -> usize {
+        if self.enabled {
+            3
+        } else {
+            4
+        }
     }
 }
 
@@ -120,6 +165,9 @@ pub enum LspPanelOutcome {
     /// `e` —— 启用/关闭翻转（面板本地态已更新），调用方发
     /// `Action::LspConfigure(Set)` 立即写覆盖并热加载；面板保持打开。
     ToggleEnabled(bool),
+    /// `c` —— 清除本工作区覆盖（面板本地态已回「跟随全局」），调用方发
+    /// `Action::LspConfigure(Clear)`；面板保持打开。
+    ClearOverrides,
     /// Esc —— 关闭面板，不落任何配置。
     Cancel,
     /// Enter —— 按 [`LspPanelState::disabled_on_confirm`] 语义提交。
@@ -148,31 +196,83 @@ pub fn route_lsp_panel_key(state: &mut LspPanelState, key: &KeyEvent) -> LspPane
         KeyCode::Char('e') | KeyCode::Char('t') => {
             LspPanelOutcome::ToggleEnabled(state.toggle_enabled())
         }
+        KeyCode::Char('c') => {
+            state.clear_overrides();
+            LspPanelOutcome::ClearOverrides
+        }
         KeyCode::Enter | KeyCode::Char('s') => LspPanelOutcome::Confirm,
         _ => LspPanelOutcome::Changed,
     }
 }
 
-pub fn render_lsp_panel(buf: &mut Buffer, area: Rect, state: &LspPanelState) {
-    let theme = crate::theme::Theme::current();
-    let content_lines = 6 + state.servers.len().max(1) as u16; // 状态头 2 + 空行 + 清单 + 会话行
-    let width = PANEL_MIN_WIDTH.min(area.width.saturating_sub(4));
-    let height = (PANEL_MIN_HEIGHT + content_lines).min(area.height.saturating_sub(4));
-    let x = area.x + (area.width.saturating_sub(width)) / 2;
-    let y = area.y + (area.height.saturating_sub(height)) / 2;
-    let panel = Rect { x, y, width, height };
+pub fn render_lsp_panel(
+    buf: &mut Buffer,
+    area: Rect,
+    state: &mut LspPanelState,
+    compact: bool,
+    theme: &Theme,
+) {
+    let shortcuts: Vec<Shortcut> = [
+        "e enable/disable",
+        "c reset overrides",
+        "\u{2191}/\u{2193} move",
+        "space toggle",
+        "a toggle all",
+        "Enter confirm",
+        "Esc close",
+    ]
+    .iter()
+    .map(|label| Shortcut {
+        label,
+        clickable: false,
+        id: 0,
+    })
+    .collect();
 
-    Clear.render(panel, buf);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::new().fg(theme.gray_bright))
-        .title(Span::styled(
-            "LSP",
-            Style::new().fg(theme.text_primary).add_modifier(Modifier::BOLD),
-        ));
-    let inner = block.inner(panel);
-    block.render(panel, buf);
+    // 与 usage/stats modal 同尺寸档位（窄内容但行数随 server 数增长）。
+    let sizing = ModalSizing {
+        width_pct: 0.65,
+        max_width: 100,
+        min_width: 44,
+        v_margin: 2,
+        h_pad: 2,
+        v_pad: 2,
+        footer_lines: 3,
+    }
+    .with_compact(compact);
+    let config = ModalWindowConfig {
+        title: tr("LSP"),
+        tabs: None,
+        shortcuts: &shortcuts,
+        sizing,
+        fold_info: None,
+    };
 
+    let Some(mca) = mw::render_modal_window(buf, area, &mut state.window, &config, theme) else {
+        return;
+    };
+    let content = mca.content;
+
+    let lines = panel_lines(state, theme);
+    let max_scroll = lines.len().saturating_sub(content.height as usize);
+    // 光标行跟随滚动（清单超长时不被滚出视野）。
+    let cursor_row = state.list_start() + state.cursor;
+    if cursor_row < state.scroll as usize {
+        state.scroll = cursor_row as u16;
+    } else if cursor_row >= state.scroll as usize + content.height as usize {
+        state.scroll = (cursor_row + 1 - content.height as usize) as u16;
+    }
+    state.scroll = state.scroll.min(max_scroll as u16);
+
+    let visible: Vec<Line> = lines
+        .into_iter()
+        .skip(state.scroll as usize)
+        .take(content.height as usize)
+        .collect();
+    Paragraph::new(visible).render(content, buf);
+}
+
+fn panel_lines(state: &LspPanelState, theme: &Theme) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
 
     // 状态头：门禁 + 来源 + 工作区覆盖。
@@ -225,7 +325,7 @@ pub fn render_lsp_panel(buf: &mut Buffer, area: Rect, state: &LspPanelState) {
             let mut row = format!("{marker} {} — {} — {}", server.name, server.source, server.command);
             if server.command_found == Some(false) {
                 row.push(' ');
-                row.push_str(&tr("(command not found)").to_string());
+                row.push_str(tr("(command not found)"));
             }
             if let Some(running) = server.running {
                 let label = if running { tr("running") } else { tr("not running") };
@@ -263,34 +363,7 @@ pub fn render_lsp_panel(buf: &mut Buffer, area: Rect, state: &LspPanelState) {
             Style::new().fg(theme.text_secondary),
         ))),
     }
-    lines.push(hint_line(&[
-        ("e", "enable/disable"),
-        ("↑/↓", "move"),
-        ("space", "toggle"),
-        ("a", "toggle all"),
-        ("Enter", "confirm"),
-        ("Esc", "close"),
-    ]));
-
-    let content_height = inner.height as usize;
-    lines.truncate(content_height);
-    Paragraph::new(lines).render(inner, buf);
-}
-
-/// 按键提示行（auth_modal hint_line 同款格式）。
-fn hint_line(hints: &[(&'static str, &'static str)]) -> Line<'static> {
-    let mut spans = Vec::new();
-    for (i, (key, label)) in hints.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::raw("  "));
-        }
-        spans.push(Span::styled(
-            (*key).to_string(),
-            Style::new().add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::raw(format!(" {}", tr(label))));
-    }
-    Line::from(spans)
+    lines
 }
 
 #[cfg(test)]
@@ -367,6 +440,22 @@ mod tests {
             LspPanelOutcome::ToggleEnabled(false)
         ));
         assert!(!state.enabled);
+    }
+
+    #[test]
+    fn clear_overrides_outcome_resets_local_view() {
+        let mut state =
+            LspPanelState::new(PathBuf::from("/repo"), None, response(vec![], false));
+        assert!(matches!(
+            route_lsp_panel_key(&mut state, &key(KeyCode::Char('e'))),
+            LspPanelOutcome::ToggleEnabled(true)
+        ));
+        assert_eq!(state.workspace_override, Some(true));
+        assert!(matches!(
+            route_lsp_panel_key(&mut state, &key(KeyCode::Char('c'))),
+            LspPanelOutcome::ClearOverrides
+        ));
+        assert_eq!(state.workspace_override, None);
     }
 
     #[test]

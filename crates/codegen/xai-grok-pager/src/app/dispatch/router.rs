@@ -182,19 +182,15 @@ fn dispatch_lsp_configure(
     };
 
     match request {
-        LspConfigureRequest::Status => {
-            // 数据面走 `x.ai/lspStatus` 扩展（门禁 + server 清单 + 会话后端快照），
-            // 回包经 TaskResult::LspStatusFetched 渲染；本函数只负责取数参数。
-            vec![Effect::FetchLspStatus { cwd, session_id, panel: false }]
-        }
         LspConfigureRequest::Panel => {
-            // 取数参数同 status，回包走 LSP 统一面板（task_result 侧开 LspPanel）。
-            // 面板挂在活动 agent 视图上；无会话时提示先进会话。
+            // 数据面走 `x.ai/lspStatus` 扩展（门禁 + server 清单 + 会话后端快照），
+            // 回包开 LSP 统一面板（task_result 侧）。面板挂在活动 agent 视图上；
+            // 无会话时提示先进会话。
             if !matches!(app.active_view, ActiveView::Agent(_)) {
                 lsp_report(app, "/lsp 面板需要在会话内使用（先进入会话再执行）。");
                 vec![]
             } else {
-                vec![Effect::FetchLspStatus { cwd, session_id, panel: true }]
+                vec![Effect::FetchLspStatus { cwd, session_id }]
             }
         }
         LspConfigureRequest::Set(value) => {
@@ -227,7 +223,11 @@ fn dispatch_lsp_configure(
             }
         }
         LspConfigureRequest::Clear => {
-            match workspace_overrides::write_workspace_override(&cwd, overrides_key, None) {
+            // 全量重置：lsp_tools 覆盖 + server 禁用清单一并清除（恢复跟随全局
+            // 配置与自动检测）。
+            match workspace_overrides::write_workspace_override(&cwd, overrides_key, None)
+                .and_then(|()| workspace_overrides::write_lsp_disabled_servers(&cwd, None))
+            {
                 Err(e) => {
                     lsp_report(app, &format!("清除 LSP 工作区覆盖失败：{e}"));
                     vec![]
@@ -240,9 +240,9 @@ fn dispatch_lsp_configure(
                                 cwd: cwd.clone(),
                                 session_id: sid.clone(),
                             });
-                            "已清除本工作区的 LSP 覆盖，恢复跟随全局配置。".to_string()
+                            "已清除本工作区的 LSP 覆盖（含 server 禁用清单），恢复跟随全局配置。".to_string()
                         }
-                        None => "已清除本工作区的 LSP 覆盖，恢复跟随全局配置（[features] lsp_tools）。"
+                        None => "已清除本工作区的 LSP 覆盖（含 server 禁用清单），恢复跟随全局配置（[features] lsp_tools）。"
                             .to_string(),
                     };
                     lsp_report(app, &msg);

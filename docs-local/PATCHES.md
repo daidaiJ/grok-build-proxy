@@ -2860,3 +2860,31 @@ E0716 tr 临时值借用 + 测试用例缺 TaskComplete 包装三处小修）；
 pager `lsp` 过滤 16/16（原 14 例改名迁移 + 新增 panel 取数旗标/无会话提示/
 回包开面板三例中的面板打开例并入计数）；i18n 扫描 exit 0（lsp_panel 无挂）。
 遗留：真机 TUI 活体验证（面板开合、e 翻转后 status 同步、勾选确认热加载）。
+
+### 三十八期补：面板二次收敛（usage 同款 chrome + 子命令全撤 + Clear 全量重置）（2026-10-14 同日，同分支 feat/local-lsp-panel；v1.0.57 tag 重指重发）
+
+> 用户反馈三：面板太小、风格与 usage modal 不对齐、option 子命令残留。三点全收：
+> v1.0.57 tag 不新增 v1.0.58，修复后原地重指重发（沿 v1.0.39 / v1.0.51 先例）。
+
+1. **公共 chrome（views/modal_window）**：`render_lsp_panel` 改走
+   `mw::render_modal_window`（与 usage/stats 同款 `ModalSizing`：width_pct 0.65 /
+   max 100 / v_margin 2 / footer_lines 3，compact 模式同款收缩），标题入边框、
+   七个快捷键入页脚（e/c/↑↓/space/a/Enter/Esc），`ModalWindowState` 挂进
+   `LspPanelState`（关闭按钮命中区随 chrome 承担）；内容超长随光标滚动。
+   自绘 Clear+Block 小窗与 hint_line 移除。
+2. **子命令全撤**：`/lsp` 只开面板——`takes_args: false`，任何非空参数（含
+   on/off/status/clear/select）一律 Error 并提示面板内完成；`status` 文本回显与
+   `format_status`、`LspConfigureRequest::Status` 整体移除（enabled_source_label /
+   startup_label 迁入 lsp_panel.rs）；`FetchLspStatus`/`TaskResult::LspStatusFetched`
+   的 `panel` 旗标随之删除（回包恒开面板）。
+3. **`c` 清覆盖（面板内新键）**：`LspConfigureRequest::Clear` 语义升级为全量
+   重置——`write_workspace_override(None)` + `write_lsp_disabled_servers(None)`
+   串联（恢复跟随全局配置与自动检测），回显与热加载路径复用。
+4. **i18n**：新 description/usage 键 2 条（旧 on|off|status|clear usage 键删除），
+   面板文案键沿用前版。
+
+**验证**：cargo check pager --lib 0 error 0 warning（本轮三连 rustc 0xc0000005
+分别打在 update/config-types/shell-terminal 三个未触碰 crate，清 incremental +
+CARGO_INCREMENTAL=0 + 限 -j 4 后通过）；GATE_FORCE pager `lsp` 过滤 14/14
+（status 文本 2 例与 panel 旗标例随面删除，新增 Clear 重置 outcome 与拒绝
+子命令 2 例）；i18n 扫描 exit 0。

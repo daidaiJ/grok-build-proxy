@@ -647,3 +647,24 @@
 - **遗留**：① 真机 TUI 活体验证（面板开合、e 翻转后 status 同步、勾选确认热加载）
   ——随三十七期同批补；② 三十七期遗留 ②③（取数与确认间环境变化无检测、新
   server 主动提示）继承不变。
+
+### 2026-10-14 `/lsp` 面板二次收敛（同分支 feat/local-lsp-panel；v1.0.57 tag 重指重发）——usage 同款 chrome + 子命令全撤 + Clear 全量重置
+
+- **状态**：施工完成。用户对第一版面板三点反馈全收：① 面板太小/风格与 usage
+  modal 不对齐 → 改走 `views/modal_window` 公共 chrome（usage/stats 同尺寸档位
+  0.65/100，标题边框 + 七快捷键页脚 + 关闭按钮，内容随光标滚动）；② option
+  子命令残留 → `/lsp` 只开面板，on/off/status/clear/select 一律拒绝，
+  `LspConfigureRequest::Status` 与 `format_status` 整体移除，`panel` 旗标删除；
+  ③ 补面板内 `c` 键清覆盖：Clear 升级全量重置（lsp_tools 覆盖 + server 禁用
+  清单串联清除）。
+- **拍板**：不新增 v1.0.58，v1.0.57 tag 原地重指重发（用户明确指示；沿
+  v1.0.39 / v1.0.51 先例，注意删 tag 曾把 release 转 draft，需重传恢复发布）。
+- **落点**：`views/lsp_panel.rs`（chrome 化重写 + c 键 + label fns 迁入）、
+  `slash/commands/lsp.rs`（panel-only 解析）、`actions.rs`（Status 删 + 旗标删）、
+  `router.rs`（Clear 串联重置）、`task_result.rs` / `effects/mod.rs`（恒开面板）、
+  `modals.rs`（ClearOverrides 路由 + 新渲染签名）、i18n 2 键。shell 零改动。
+- **验证**：cargo check pager --lib 0 error 0 warning（三连 rustc 0xc0000005 打在
+  未触碰 crate，清 incremental + CARGO_INCREMENTAL=0 + -j 4 后通过）；
+  GATE_FORCE pager `lsp` 14/14；i18n 扫描 exit 0。
+- **遗留**：真机 TUI 活体验证（面板开合/chrome 渲染、e 翻转、c 重置、勾选确认
+  热加载）随新客户端补。
