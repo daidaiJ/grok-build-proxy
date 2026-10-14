@@ -287,13 +287,14 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   6→19 行；其余 21 套 opencode 主题可同模式增量移植（roadmap §6 台账）。
 
 - [`docs-local/subagent-model-group-todo.md`](docs-local/subagent-model-group-todo.md) —
-  **subagent 模型/effort 配置 + 模型组（跨供应商降级链）设计（设计完成待拍板，2026-10-14）**：
-  「模型组」一等公民原语（有序 `[model.<id>]` 供应商条目链，sticky/cooldown/首字节前降级/
-  notice+账本披露），subagent 绑定（`[subagents.model_groups]`/`[subagents.efforts]`，内置
+  **subagent 模型/effort 配置 + 模型组（跨供应商降级链）设计（已落地，2026-10-14，
+  PATCHES 四十一期）**：
+  「模型组」一等公民原语（有序 `[model.<id>]` 供应商条目链，冷却/顺延/保守失败签名/
+  unified 事件披露），subagent 绑定（`[subagents.model_groups]`/`[subagents.efforts]`，内置
   类型按名寻址）为第一消费者，视觉桥 D8/D9（目录回填 `accepts_images` + 400 反应式摘除转桥）
-  为第二消费者（引用不施工）。现状锚点全核实：subagent 模型 pin/effort 管线/条目级 variants
-  均已有，缺口 = 组降级链 + per-agent effort config 入口；六拍板点待定。Ayu 主题分支按用户
-  指示随本专题一起合并发版。
+  为第二消费者（引用未施工）。v1 降级 = spawn 级（失败条目进程冷却 → 后续 spawn 顺延），
+  首字节前 failover/transcript notice/主循环绑组留 v2；实施偏差见文档「施工实况」节。
+  Ayu 主题分支按用户指示随本专题一起合并发版。
 - [`docs-local/issues/`](docs-local/issues/README.md) — **使用问题台账（一 issue 一文件）**。
   当前 open/reproduced 条：**Ctrl+Enter send-now 幽灵气泡（P2，见上方待办条）**。
   最近一条 fixed **成本列裸 id 无价等三问题（P2）**：
@@ -306,6 +307,30 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   文末「复发与二次修复」节。
 
 ## 🔄 Handoff 摘要
+
+### 模型组（跨供应商降级链）+ subagent 模型/effort 配置 — 已随 v1.0.58 发版（2026-10-15）
+
+- **当前状态：** `[model_groups.<name>]` 原语（有序 `[model.<id>]` 供应商条目链 +
+  条目级 effort + 进程级冷却）与 `[subagents.model_groups]`/`[subagents.efforts]`
+  绑定已合 main（ff `5622a9e`）随 tag **`v1.0.58`** 发版（PATCHES 四十一期，
+  分支 `feat/local-subagent-model-group`）。**同批合并**：Ayu 主题线（三十九期
+  Codex / 四十期 Ayu——`feat/local-ayu-theme` 本地停车提交首次入库，期号重编号
+  避让 lsp 三十七/三十八）+ send-now 幽灵气泡立案（open，不堵路）+ 视觉桥二轮
+  拍板文档（D8 目录回填 / D9 触发拓扑）。六拍板点按设计文档建议值落地。
+- **CI 与部署：** build run `38602934713` 双 job success（首跑 `38600433671` 红 =
+  `cfg(unix)` 门控的 isolated_spawn_e2e 夹具缺新字段，Windows check 覆盖不到，
+  `5622a9e` 补 3 字段修复；二跑红 = `reset_title_to_auto…` 既有计时 flake，重跑
+  过）；release run `38611494992` 双 job success、4 资产非草稿；本机部署
+  `grok 1.0.58 (5622a9e8afef)`（D:\tool-cli\grok2），回滚点
+  `grok2.exe.1.0.55-4788f51.bak`。
+- **验证：** cargo check shell --all-targets 0 error 0 warning；新测 8 例绿
+  （model_group 5 + config 解析 2 + 组链优先级 1）；GATE_FORCE `--lib group`
+  23/23（唯一挂为既有 /tmp 环境族，登记 win-skip 族V）；Linux CI shell 套件绿。
+- **遗留：** ① v2——首字节前 failover/会话内粘性、transcript 用户可见 notice、
+  主循环绑组（G4）；② 活体验证（真实三家 glm-5.3-flash 组断一家自动顺延、
+  effort 下探）随新客户端；③ 视觉桥 D8/D9 未施工（模型组原语已就位）。
+- **详情指针：** [`docs-local/subagent-model-group-todo.md`](docs-local/subagent-model-group-todo.md)
+  （「施工实况」节含偏差记录）；PATCHES.md 四十一期；roadmap §6 台账。
 
 ### /lsp 面板化（统一操作面板）— 已随 v1.0.57 发版（2026-10-14；tag 同日重指重发）
 

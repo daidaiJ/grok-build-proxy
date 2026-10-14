@@ -3001,4 +3001,7 @@ feat 随后。活体 ptyctl 抽查随新客户端。合并在 codex 主题（三
 `config/tests` 2 例（三张新表解析 + `[model_groups]` 形状/缺省）+
 `tests/rest.rs` 组链优先级 1 例（首选→冷却跳条目→全冷却 fall through 到
 AgentDefinition）；既有 `runtime_override_wins_over_subagents_models_pin` 等
-5 处解构随三元组返回适配。GATE_FORCE 套件结果见 handoff。
+5 处解构随三元组返回适配。GATE_FORCE `--lib group` 23/24——唯一挂
+`auth_error_no_retry_tests::model_switch_preserves_existing_conversation_group`
+为既有环境族（夹具写死 /tmp，NotAbsolute panic，与本改动无关），登记
+win-skip **族V** 后 23/23 全绿（含既有 conversation_group/auth 用例）。
