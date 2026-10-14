@@ -167,8 +167,8 @@
     1241: () 'agent'
     1242: () 'dashboard'
     1243: () 'peek'
-    2359: () 'camelCase'
-    2367: () 'std::ops::Not::not'
+    2356: () 'camelCase'
+    2364: () 'std::ops::Not::not'
   [id] x5
   [cmp] x4
   [test] x16
@@ -978,9 +978,9 @@
 
 ## app/dispatch/router.rs
   [plain] x23
-    194: () '/lsp 面板需要在会话内使用（先进入会话再执行）。'
-    243: () '已清除本工作区的 LSP 覆盖，恢复跟随全局配置。'
-    245: () '已清除本工作区的 LSP 覆盖，恢复跟随全局配置（[features] lsp_tools）。'
+    190: () '/lsp 面板需要在会话内使用（先进入会话再执行）。'
+    243: () '已清除本工作区的 LSP 覆盖（含 server 禁用清单），恢复跟随全局配置。'
+    245: () '已清除本工作区的 LSP 覆盖（含 server 禁用清单），恢复跟随全局配置（[features] lsp_tools）。'
     371: () '已清除本工作区的 server 禁用清单，恢复全部启用。正在热加载本会话…'
     384: () '已清除本工作区的 server 禁用清单，恢复全部启用（下次会话生效）。'
     488: (matches) 'local'
@@ -1002,9 +1002,9 @@
     1545: () 'This fix was cancelled because the session changed. Run `/doctor fix` again.'
     1564: () 'Fix cancelled.'
   [fmt] x10
-    205: (format) '写入 LSP 工作区覆盖失败：{e}'
-    217: (format) '已设置：本工作区（{}）{action} LSP 工具。'
-    220: (format) '已设置：本工作区（{}）{action} LSP 工具。会话尚未建立，definition 构建时生效。'
+    201: (format) '写入 LSP 工作区覆盖失败：{e}'
+    213: (format) '已设置：本工作区（{}）{action} LSP 工具。'
+    216: (format) '已设置：本工作区（{}）{action} LSP 工具。会话尚未建立，definition 构建时生效。'
     232: (format) '清除 LSP 工作区覆盖失败：{e}'
     344: (format) '写入 LSP server 选择失败：{e}'
     377: (format) '已保存：本工作区禁用 {}（{}）。会话尚未建立，definition 构建时生效。'
@@ -1292,49 +1292,49 @@
     300: () "Couldn't read clipboard text"
     301: () "Couldn't read clipboard contents"
     302: () "Couldn't paste clipboard contents"
-    645: () 'LSP 热加载无变化（目标状态与当前一致）。'
-    648: () 'LSP 热加载完成：LSP 工具已在本会话启用。'
-    650: () 'LSP 热加载完成：LSP 工具已从本会话摘除。'
-    719: () 'present'
-    727: () 'present'
-    1045: () 'SessionRestoreProgress'
-    1133: () '\\u{2717} Could not save your answer, so this notice returns next launch'
-    1155: () 'cancelled'
-    1275: () 'This fix was cancelled because the session changed. Run `/doctor fix` again.'
-    1689: () 'Session title reset to auto'
-    1706: () 'Session title reset to auto'
-    1744: () 'Session deleted, but dashboard membership could not be removed'
-    1746: () 'Session deleted'
-    1913: () 'Feedback was enqueued, but the response did not arrive in time. The send may still complete; do not resend ...'
-    1951: () 'Feedback was saved locally but was not sent. The draft was kept.'
-    1985: () 'Feedback was enqueued, but the response did not arrive in time. The send may still complete; do not resend ...'
+    636: () 'LSP 热加载无变化（目标状态与当前一致）。'
+    639: () 'LSP 热加载完成：LSP 工具已在本会话启用。'
+    641: () 'LSP 热加载完成：LSP 工具已从本会话摘除。'
+    710: () 'present'
+    718: () 'present'
+    1036: () 'SessionRestoreProgress'
+    1124: () '\\u{2717} Could not save your answer, so this notice returns next launch'
+    1146: () 'cancelled'
+    1266: () 'This fix was cancelled because the session changed. Run `/doctor fix` again.'
+    1680: () 'Session title reset to auto'
+    1697: () 'Session title reset to auto'
+    1735: () 'Session deleted, but dashboard membership could not be removed'
+    1737: () 'Session deleted'
+    1904: () 'Feedback was enqueued, but the response did not arrive in time. The send may still complete; do not resend ...'
+    1942: () 'Feedback was saved locally but was not sent. The draft was kept.'
+    1976: () 'Feedback was enqueued, but the response did not arrive in time. The send may still complete; do not resend ...'
   [fmt] x26
     144: (format) 'Could not load dashboard workspace: {error}'
     162: (format) 'Could not sync {count} dashboard session{}'
     178: (format) 'Could not archive {count} dashboard session{}'
     588: (format) 'Billing error: {error}'
-    616: (format) 'LSP 面板数据获取失败：{error}'
-    641: (format) 'LSP 热加载：{error}'
-    644: (format) 'LSP 热加载无变化：{note}'
-    1104: (format) 'Send now failed. Requeued: {error}'
-    1113: (format) "Couldn't save preferred model: {err} (still active for this session)"
-    1292: (format) 'This fix configures your local computer, not this SSH session.\\nOn your local computer, run: {command}'
-    1302: (format) 'Could not prepare the fix: {error}'
-    1312: (format) 'Could not apply the fix: {error}'
-    1564: (format) 'Session shared: {share_url}'
-    1574: (format) "Couldn't share session: {error}"
-    1645: (format) "Couldn't load session info: {error}"
-    1668: (format) 'Session renamed to \\"{safe}\\"'
-    1678: (format) "Couldn't rename session: {error}"
-    1714: (format) "Couldn't reset session title: {error}"
-    1835: (format) "Couldn't delete session: {error}"
-    1866: (format) "Couldn't load context info: {error}"
-    1893: (format) "Couldn't load session usage: {error}"
-    2039: (format) "Couldn't send feedback: {error}"
-    2053: (format) '{failure}. The draft was kept.'
-    2181: (format) "Couldn't upload a session trace; your feedback was still sent. {error}"
-    2301: (format) 'Interjection failed. Requeued: {error}'
-    2395: (format) 'Undo failed: {error}'
+    613: (format) 'LSP 面板数据获取失败：{error}'
+    632: (format) 'LSP 热加载：{error}'
+    635: (format) 'LSP 热加载无变化：{note}'
+    1095: (format) 'Send now failed. Requeued: {error}'
+    1104: (format) "Couldn't save preferred model: {err} (still active for this session)"
+    1283: (format) 'This fix configures your local computer, not this SSH session.\\nOn your local computer, run: {command}'
+    1293: (format) 'Could not prepare the fix: {error}'
+    1303: (format) 'Could not apply the fix: {error}'
+    1555: (format) 'Session shared: {share_url}'
+    1565: (format) "Couldn't share session: {error}"
+    1636: (format) "Couldn't load session info: {error}"
+    1659: (format) 'Session renamed to \\"{safe}\\"'
+    1669: (format) "Couldn't rename session: {error}"
+    1705: (format) "Couldn't reset session title: {error}"
+    1826: (format) "Couldn't delete session: {error}"
+    1857: (format) "Couldn't load context info: {error}"
+    1884: (format) "Couldn't load session usage: {error}"
+    2030: (format) "Couldn't send feedback: {error}"
+    2044: (format) '{failure}. The draft was kept.'
+    2172: (format) "Couldn't upload a session trace; your feedback was still sent. {error}"
+    2292: (format) 'Interjection failed. Requeued: {error}'
+    2386: (format) 'Undo failed: {error}'
   [cmp] x4
   [log] x24
 
@@ -1659,58 +1659,58 @@
     5074: () 'http'
     5090: () 'x.ai/modelCatalog'
     5094: () 'serialize model catalog params'
-    5130: () 'x.ai/lspStatus'
-    5135: () 'serialize lsp status params'
-    5166: () 'x.ai/lspApply'
-    5171: () 'serialize lsp apply params'
-    5203: () 'x.ai/providerModels'
-    5208: () 'serialize provider models params'
-    5253: () 'serialize reload params'
-    5264: () 'unexpected reload_models response'
-    5287: () 'GROK_CLI_CHAT_PROXY_BASE_URL'
-    5316: () 'serialize billing params'
-    5405: () 'serialize suggest params'
-    5443: () 'x.ai/suggestPrompt'
-    5445: () 'serialize suggestPrompt params'
-    5482: () 'serialize session/info params'
-    5493: () 'invalid session info response'
-    5499: () 'session info response missing result'
-    5513: () 'serialize session/usage params'
-    5522: () 'invalid session usage response'
-    5529: () 'not supported by this agent version'
-    5540: () 'reset session title'
-    5542: () 'rename session'
-    5547: () 'serialize rename params'
-    5611: () 'Title'
-    5614: () 'Shell version'
-    5618: () 'Session ID'
-    5620: () 'Conversation ID'
-    5622: () 'Working directory'
-    5623: () 'unknown'
-    5630: () 'Model'
-    5634: () 'Model Hash'
-    5637: () 'API Backend'
-    5640: () 'Sandbox'
-    5642: () 'Turn'
-    5645: () 'Context'
-    5682: () '  Auth method: API key (XAI_API_KEY)\\n'
-    5684: () '  Auth method: API key\\n'
-    5690: () '  Auth method: OAuth\\n'
-    5723: () 'promptId'
-    5725: () 'screenMode'
-    5737: () 'cancelSubagents'
-    5745: () 'rewindIfNoOutput'
-    5746: () 'rewindIfPristine'
-    5747: () 'promptId'
-    5767: () 'toBranch'
-    5807: () 'Attached images were not included (too large or could not be loaded).'
-    5824: () 'Attached images were not included (over the 50MB side-question limit)'
-    5837: () 'ACP content blocks are always JSON-serializable; failure is a bug'
-    5851: () 'content'
-    5852: () 'serialize btw content'
-    5879: () 'serialize interject params'
-    5944: () 'content'
-    5945: () 'serialize interject content'
+    5126: () 'x.ai/lspStatus'
+    5131: () 'serialize lsp status params'
+    5162: () 'x.ai/lspApply'
+    5167: () 'serialize lsp apply params'
+    5199: () 'x.ai/providerModels'
+    5204: () 'serialize provider models params'
+    5249: () 'serialize reload params'
+    5260: () 'unexpected reload_models response'
+    5283: () 'GROK_CLI_CHAT_PROXY_BASE_URL'
+    5312: () 'serialize billing params'
+    5401: () 'serialize suggest params'
+    5439: () 'x.ai/suggestPrompt'
+    5441: () 'serialize suggestPrompt params'
+    5478: () 'serialize session/info params'
+    5489: () 'invalid session info response'
+    5495: () 'session info response missing result'
+    5509: () 'serialize session/usage params'
+    5518: () 'invalid session usage response'
+    5525: () 'not supported by this agent version'
+    5536: () 'reset session title'
+    5538: () 'rename session'
+    5543: () 'serialize rename params'
+    5607: () 'Title'
+    5610: () 'Shell version'
+    5614: () 'Session ID'
+    5616: () 'Conversation ID'
+    5618: () 'Working directory'
+    5619: () 'unknown'
+    5626: () 'Model'
+    5630: () 'Model Hash'
+    5633: () 'API Backend'
+    5636: () 'Sandbox'
+    5638: () 'Turn'
+    5641: () 'Context'
+    5678: () '  Auth method: API key (XAI_API_KEY)\\n'
+    5680: () '  Auth method: API key\\n'
+    5686: () '  Auth method: OAuth\\n'
+    5719: () 'promptId'
+    5721: () 'screenMode'
+    5733: () 'cancelSubagents'
+    5741: () 'rewindIfNoOutput'
+    5742: () 'rewindIfPristine'
+    5743: () 'promptId'
+    5763: () 'toBranch'
+    5803: () 'Attached images were not included (too large or could not be loaded).'
+    5820: () 'Attached images were not included (over the 50MB side-question limit)'
+    5833: () 'ACP content blocks are always JSON-serializable; failure is a bug'
+    5847: () 'content'
+    5848: () 'serialize btw content'
+    5875: () 'serialize interject params'
+    5940: () 'content'
+    5941: () 'serialize interject content'
   [fmt] x63
     483: (format) "couldn't create session in worktree: {e}"
     935: (format) 'workspace loader task failed: {error}'
@@ -1764,17 +1764,17 @@
     5009: (format) 'Parse error: {e}'
     5065: (format) 'Parse error: {e}'
     5107: (format) 'Parse error: {e}'
-    5148: (format) 'Parse error: {e}'
-    5184: (format) 'Parse error: {e}'
-    5221: (format) 'Parse error: {e}'
-    5337: (format) 'Parse error: {e}'
-    5487: (format) "couldn't fetch session info: {e}"
-    5563: (format) "couldn't {verb}: {e}"
-    5646: (format) '{} / {} tokens ({}%)'
-    5687: (format) '{method}  Run `grok login` to use your SuperGrok subscription instead.\\n'
-    5811: (format) '{omitted} attached image(s) were not included (over the 50MB side-question limit or could not be loaded).'
-    5828: (format) '{omitted_by_cap} attached image(s) were not included (over the 50MB side-question limit)'
-    5888: (format) "couldn't send interjection: {e}"
+    5144: (format) 'Parse error: {e}'
+    5180: (format) 'Parse error: {e}'
+    5217: (format) 'Parse error: {e}'
+    5333: (format) 'Parse error: {e}'
+    5483: (format) "couldn't fetch session info: {e}"
+    5559: (format) "couldn't {verb}: {e}"
+    5642: (format) '{} / {} tokens ({}%)'
+    5683: (format) '{method}  Run `grok login` to use your SuperGrok subscription instead.\\n'
+    5807: (format) '{omitted} attached image(s) were not included (over the 50MB side-question limit or could not be loaded).'
+    5824: (format) '{omitted_by_cap} attached image(s) were not included (over the 50MB side-question limit)'
+    5884: (format) "couldn't send interjection: {e}"
   [id] x91
   [cmp] x66
   [log] x195
@@ -2899,35 +2899,13 @@
   [test] x57
 
 ## slash/commands/lsp.rs
-  [plain] x20
-    19: () 'lsp'
-    20: () 'Toggle LSP tools for this workspace'
-    21: () '/lsp [on|off|panel|status|clear]'
-    23: () 'on|off|panel|status|clear'
-    29: () 'panel'
-    31: () 'select'
-    32: () 'status'
-    34: () 'off'
-    35: () 'clear'
-    35: () 'reset'
-    49: () '策略 pin'
-    50: () '环境变量 GROK_LSP_TOOLS'
-    51: () '/lsp 工作区覆盖'
-    52: () '[features] lsp_tools'
-    83: () '本工作区覆盖：on（下次会话启用 LSP 工具）'
-    84: () '本工作区覆盖：off（下次会话禁用 LSP 工具）'
-    91: () '  安装 rust-analyzer / gopls / pyright / jdtls / clangd 会自动接入；也可在 ~/.grok/lsp.json 配置。'
-    119: () '当前无活动会话或本会话未装配 LSP 后端。'
-    122: () '用 /lsp 打开操作面板：启用/关闭、勾选本工作区要启用的 server（取消勾选的将被禁用，配置/自动检测到的都会列出）。'
-    126: () '/lsp 的改动立即热加载到零回合会话；已有回合的会话对新会话生效。'
-  [fmt] x4
-    38: (format) '用法：/lsp [on|off|panel|status|clear]（未知参数 “{other}”；裸 /lsp 打开操作面板；clear = 删除本工作区覆盖，恢复跟随全局配置）'
-    73: (format) 'LSP 状态查询失败：{error}'
-    78: (format) 'LSP 工具：{}（来源：{}）'
-    115: (format) '（{error}）'
-  [cmp] x10
-  [wrapped] x1
-  [test] x6
+  [plain] x5
+    17: () 'lsp'
+    18: () 'Open the LSP panel (status, enable/disable, server picker)'
+    19: () '/lsp'
+    26: () 'panel'
+    30: () '用法：/lsp —— 打开 LSP 面板，启用/关闭、状态显示与 server 勾选确认都在面板内完成。'
+  [test] x7
 
 ## slash/commands/mcps.rs
   [plain] x3
@@ -3976,23 +3954,25 @@
   [test] x13
 
 ## views/lsp_panel.rs
-  [plain] x9
-    170: () 'LSP'
-    268: () 'move'
-    269: () 'space'
-    269: () 'toggle'
-    270: () 'toggle all'
-    271: () 'Enter'
-    271: () 'confirm'
-    272: () 'Esc'
-    272: () 'close'
+  [plain] x11
+    27: () '策略 pin'
+    28: () '环境变量 GROK_LSP_TOOLS'
+    29: () '/lsp 工作区覆盖'
+    30: () '[features] lsp_tools'
+    216: () 'e enable/disable'
+    217: () 'c reset overrides'
+    218: () '\\u{2191}/\\u{2193} move'
+    219: () 'space toggle'
+    220: () 'a toggle all'
+    221: () 'Enter confirm'
+    222: () 'Esc close'
   [fmt] x3
-    225: (format) '{marker} {} — {} — {}'
-    232: (format) ' — {label}'
-    254: (format) '（{error}）'
-  [id] x1
-  [wrapped] x14
-  [test] x17
+    325: (format) '{marker} {} — {} — {}'
+    332: (format) ' — {label}'
+    354: (format) '（{error}）'
+  [cmp] x9
+  [wrapped] x15
+  [test] x18
 
 ## views/managed_connectors_wait.rs
   [id] x1

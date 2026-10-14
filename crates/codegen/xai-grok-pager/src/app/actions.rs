@@ -27,10 +27,9 @@ pub enum SwitchModelError {
     /// Any other failure (network, auth, server error, etc.).
     Other(String),
 }
-/// LOCAL(/lsp): `/lsp` 的子命令语义（Set/Clear 写 workspace 覆盖，Status 只读）。
+/// LOCAL(/lsp): `/lsp` 面板的写语义（Set/Clear 写 workspace 覆盖，Panel 只取数）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LspConfigureRequest {
-    Status,
     Set(bool),
     Clear,
     /// 打开 LSP 统一操作面板（`x.ai/lspStatus` 取数后弹 LspPanel：状态显示 +
@@ -59,12 +58,13 @@ pub enum Action {
     QuitConfirmed,
     /// Create a new session from the welcome screen.
     NewSession,
-    /// LOCAL(/lsp): workspace 级 LSP 工具启停（`/lsp`）。Set/Clear 在 dispatch 层
-    /// 过「新会话」门后写 grok-home 覆盖文件；Status 只读。
+    /// LOCAL(/lsp): LSP 面板的写语义。Set/Clear 在 dispatch 层过「新会话」门后
+    /// 写 grok-home 覆盖文件（Set = 启用/关闭，Clear = 清覆盖恢复跟随全局）；
+    /// Panel 取数后弹面板。
     LspConfigure {
         request: LspConfigureRequest,
     },
-    /// LOCAL(/lsp select): server 勾选面板确认 —— `disabled` = 取消勾选的 server
+    /// LOCAL(/lsp): 面板勾选确认 —— `disabled` = 取消勾选的 server
     /// 名（空 = 清除本工作区禁用清单，恢复全量跟随检测/配置）。写入 grok-home
     /// workspace 覆盖后对零回合活动会话发 `x.ai/lspApply` 热加载。
     LspServersConfirm {
@@ -2242,17 +2242,14 @@ pub enum Effect {
         /// 需要匹配的模型 id（聚合行去重后的集合）。
         model_ids: Vec<String>,
     },
-    /// LOCAL: /lsp status 数据面（`x.ai/lspStatus` 扩展）。门禁判定 + server 清单
+    /// LOCAL: /lsp 面板数据面（`x.ai/lspStatus` 扩展）。门禁判定 + server 清单
     /// （config + builtin 检测）+ 活动会话后端快照一次回包；解析/发送失败也折进
-    /// 回包体 `error` 字段，不进 Err 通道，保证状态块总能落盘。
+    /// 回包体 `error` 字段，不进 Err 通道，保证面板总能打开。
     FetchLspStatus {
         /// 目标工作区（会话 cwd；无会话时 app cwd）。
         cwd: std::path::PathBuf,
         /// 活动会话 id；shell 据此取该会话 LSP 后端快照。
         session_id: Option<String>,
-        /// `true` = 面板模式（裸 `/lsp` / `/lsp panel`）：回包后打开 LSP 面板
-        /// （而非落状态块文本）。
-        panel: bool,
     },
     /// LOCAL: /lsp 零回合热加载执行面（`x.ai/lspApply` 扩展）。Set/Clear 写完
     /// 工作区覆盖后对活动零回合会话发出；shell 重建 harness 换 LSP 后端并重广播
@@ -3366,12 +3363,11 @@ pub enum TaskResult {
         target: DoctorFixTarget,
         result: Result<crate::diagnostics::FixOutcome, String>,
     },
-    /// LOCAL: /lsp status 回包（`x.ai/lspStatus`）。解析/发送失败折进回包体
-    /// `error` 字段，状态块总能落盘。`panel = true` 时携出发参数打开 LSP 面板。
+    /// LOCAL: /lsp 面板取数回包（`x.ai/lspStatus`）。解析/发送失败折进回包体
+    /// `error` 字段；打开 LSP 面板。
     LspStatusFetched {
         cwd: std::path::PathBuf,
         session_id: Option<String>,
-        panel: bool,
         response: xai_grok_shell::extensions::lsp_status::LspStatusResponse,
     },
     /// LOCAL: /lsp 零回合热加载回包（`x.ai/lspApply`）。

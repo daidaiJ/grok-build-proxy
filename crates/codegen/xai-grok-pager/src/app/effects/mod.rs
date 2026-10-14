@@ -5117,13 +5117,9 @@ pub(crate) fn execute(
                 TaskResult::ModelCatalogFetched { response }
             });
         }
-        // LOCAL: /lsp status（`x.ai/lspStatus`）。错误也在回包体内（不进 Err 通道），
-        // 状态块总能落盘。
-        Effect::FetchLspStatus {
-            cwd,
-            session_id,
-            panel,
-        } => {
+        // LOCAL: /lsp 面板取数（`x.ai/lspStatus`）。错误也在回包体内（不进 Err 通道），
+        // 面板总能打开。
+        Effect::FetchLspStatus { cwd, session_id } => {
             let tx = acp_tx.clone();
             tasks.spawn(async move {
                 let req = acp::ExtRequest::new(
@@ -5155,7 +5151,7 @@ pub(crate) fn execute(
                         ..Default::default()
                     },
                 };
-                TaskResult::LspStatusFetched { cwd, session_id, panel, response }
+                TaskResult::LspStatusFetched { cwd, session_id, response }
             });
         }
         // LOCAL: /lsp 零回合热加载（`x.ai/lspApply`）。错误也在回包体内。

@@ -351,9 +351,12 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("/theme <name>", "/theme <名称>"),
         ("/export [filename]", "/export [文件名]"),
         ("/cd [path]", "/cd [路径]"),
-        // LOCAL(/lsp): workspace 级 LSP 工具启停
-        ("Toggle LSP tools for this workspace", "切换本工作区的 LSP 工具"),
-        ("/lsp [on|off|status|clear]", "/lsp [on|off|status|clear]"),
+        // LOCAL(/lsp): LSP 统一操作面板
+        (
+            "Open the LSP panel (status, enable/disable, server picker)",
+            "打开 LSP 面板（状态、启用/关闭、server 勾选）",
+        ),
+        ("/lsp", "/lsp"),
         (
             "Set the cumulative child-agent cap (1–1,024)",
             "设置子代理累计上限 (1–1,024)",
