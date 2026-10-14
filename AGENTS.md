@@ -275,6 +275,26 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### /lsp select server 勾选面板 — 已随 v1.0.56 发版（2026-10-14）
+
+- **当前状态：** 检测 → 勾选 → 确认 → 热加载交互已合 main（merge `2321a579`，
+  分支 `feat/local-lsp-server-picker`）随 tag **`v1.0.56`** 发版：release run
+  `38509043454` / build run `38509032088` 双 job success、4 资产非草稿；本机
+  `D:\tool\cli\grok2.exe` 部署 `grok 1.0.56 (2321a5793c85)`（发行资产 sha256
+  核对一致），回滚点 `grok2.exe.bak-1.0.53`。实现记录 PATCHES.md 三十七期。
+  语义：`/lsp select` 列出检测/配置到的全部 server，空格勾选要启用的，确认后
+  取消勾选的写本工作区禁用清单（`feature-overrides` 增 `lsp_disabled_servers`，
+  只记排除项、空 = 清除覆盖），`build_lsp_backend` 单入口过滤 + 零回合
+  `x.ai/lspApply` 热加载。
+- **验证：** cargo check shell/pager --lib 0 error（首查 rustc 0xc0000005 增量
+  缓存损坏，清 incremental 重查）；GATE_FORCE shell `workspace_overrides` 6/6、
+  pager `lsp` 14/14；i18n 扫描 0 挂。
+- **遗留：** ① 真机 TUI 活体验证（面板开合 / 取消勾选后 status 标注 / 热加载
+  回路）；② 取数与确认之间 server 环境变化无检测（低风险）；③ 新 server 首次
+  检测时是否主动弹面板未做。
+- **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
+  台账 `/lsp select` 条目；PATCHES.md 三十七期。
+
 ### 主题目录扩容（11 套社区色板移植）— 已随 v1.0.55 发版（2026-10-14）
 
 - **当前状态：** 从父目录 opencode 主题库移植 11 套社区好评主题（Catppuccin
