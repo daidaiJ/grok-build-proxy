@@ -33,8 +33,9 @@ pub enum LspConfigureRequest {
     Status,
     Set(bool),
     Clear,
-    /// 打开 server 勾选面板（`x.ai/lspStatus` 取数后弹 LspServerPicker）。
-    Select,
+    /// 打开 LSP 统一操作面板（`x.ai/lspStatus` 取数后弹 LspPanel：状态显示 +
+    /// 启用关闭 + server 勾选确认）。
+    Panel,
 }
 
 /// Synchronous, side-effect-free user intent.
@@ -2249,8 +2250,9 @@ pub enum Effect {
         cwd: std::path::PathBuf,
         /// 活动会话 id；shell 据此取该会话 LSP 后端快照。
         session_id: Option<String>,
-        /// `true` = `/lsp select`：回包后打开 server 勾选面板（而非落状态块）。
-        select: bool,
+        /// `true` = 面板模式（裸 `/lsp` / `/lsp panel`）：回包后打开 LSP 面板
+        /// （而非落状态块文本）。
+        panel: bool,
     },
     /// LOCAL: /lsp 零回合热加载执行面（`x.ai/lspApply` 扩展）。Set/Clear 写完
     /// 工作区覆盖后对活动零回合会话发出；shell 重建 harness 换 LSP 后端并重广播
@@ -3365,11 +3367,11 @@ pub enum TaskResult {
         result: Result<crate::diagnostics::FixOutcome, String>,
     },
     /// LOCAL: /lsp status 回包（`x.ai/lspStatus`）。解析/发送失败折进回包体
-    /// `error` 字段，状态块总能落盘。`select = true` 时携出发参数打开勾选面板。
+    /// `error` 字段，状态块总能落盘。`panel = true` 时携出发参数打开 LSP 面板。
     LspStatusFetched {
         cwd: std::path::PathBuf,
         session_id: Option<String>,
-        select: bool,
+        panel: bool,
         response: xai_grok_shell::extensions::lsp_status::LspStatusResponse,
     },
     /// LOCAL: /lsp 零回合热加载回包（`x.ai/lspApply`）。

@@ -184,37 +184,89 @@ fn lsp_status_renders_error_and_empty_cases() {
 }
 
 #[test]
-fn lsp_select_emits_fetch_effect_with_select_flag() {
+fn lsp_panel_emits_fetch_effect_with_panel_flag() {
     let mut app = test_app_with_agent();
     let effects = dispatch(
         Action::LspConfigure {
-            request: LspConfigureRequest::Select,
+            request: LspConfigureRequest::Panel,
         },
         &mut app,
     );
     assert!(
         matches!(
             &effects[..],
-            [Effect::FetchLspStatus { select: true, .. }]
+            [Effect::FetchLspStatus { panel: true, .. }]
         ),
-        "expected a single FetchLspStatus(select=true), got: {effects:?}"
+        "expected a single FetchLspStatus(panel=true), got: {effects:?}"
     );
 }
 
 #[test]
-fn lsp_select_without_agent_session_reports_hint() {
+fn lsp_panel_without_agent_session_reports_hint() {
     let mut app = test_app(); // 无 agent 视图（welcome/dashboard）
     let effects = dispatch(
         Action::LspConfigure {
-            request: LspConfigureRequest::Select,
+            request: LspConfigureRequest::Panel,
         },
         &mut app,
     );
     assert!(effects.is_empty(), "no effect outside a session, got: {effects:?}");
     assert!(
-        app.welcome_toast.as_ref().is_some_and(|(m, _)| m.contains("/lsp select")),
+        app.welcome_toast.as_ref().is_some_and(|(m, _)| m.contains("/lsp 面板")),
         "expected an actionable hint toast, got: {:?}",
         app.welcome_toast
+    );
+}
+
+#[test]
+fn lsp_status_fetch_panel_mode_opens_modal_with_checked_state() {
+    use xai_grok_shell::extensions::lsp_status::LspServerStatus;
+    let mut app = test_app_with_agent();
+    let response = LspStatusResponse {
+        enabled: true,
+        enabled_source: "default".to_string(),
+        workspace_override: None,
+        servers: vec![
+            LspServerStatus {
+                name: "rust-analyzer".to_string(),
+                command: "rust-analyzer".to_string(),
+                args: vec![],
+                source: "builtin".to_string(),
+                command_found: Some(true),
+                disabled: false,
+                running: None,
+            },
+            LspServerStatus {
+                name: "jdtls".to_string(),
+                command: "jdtls".to_string(),
+                args: vec![],
+                source: "builtin".to_string(),
+                command_found: Some(false),
+                disabled: true,
+                running: None,
+            },
+        ],
+        session: None,
+        error: None,
+    };
+
+    let effects = dispatch(
+        Action::TaskComplete(TaskResult::LspStatusFetched {
+            cwd: std::path::PathBuf::from("/repo"),
+            session_id: Some("test-session".to_string()),
+            panel: true,
+            response,
+        }),
+        &mut app,
+    );
+    assert!(effects.is_empty(), "panel open has no effects, got: {effects:?}");
+    let agent = test_agent(&app, AgentId(0));
+    assert!(
+        matches!(
+            agent.active_modal,
+            Some(crate::views::modal::ActiveModal::LspPanel { .. })
+        ),
+        "expected the LSP panel modal to open"
     );
 }
 

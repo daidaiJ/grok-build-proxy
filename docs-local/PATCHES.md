@@ -2824,3 +2824,39 @@ shell `workspace_overrides` 6/6（含新禁用清单往返/去重幂等/与 bool
 pager `lsp` 过滤 14/14（含 select 取数旗标、无会话提示、确认写清单 + 热加载
 effect + 写后自清回收、勾选面板 toggle/边界/确认语义三例）；i18n 扫描 exit 0。
 手工项（真机 TUI 面板开合 + 确认后热加载回路）列入遗留。
+
+## 三十八期：`/lsp` 面板化——统一操作面板（状态显示 + 启用关闭 + 自动发现 + 勾选确认）（2026-10-14，分支 feat/local-lsp-panel）
+
+> 需求：三十七期的 `/lsp select` 与文本 status、on/off 子命令割裂，用户要求把
+> `/lsp` 收敛为面板操作：面板内完成启用/关闭、状态显示、自动发现（启用时
+> builtin PATH 检测）与手动勾选确认。
+
+1. **命令层（pager `slash/commands/lsp.rs`）**：裸 `/lsp`（及 `panel`/`面板`）
+   改发 `LspConfigureRequest::Panel`（原 `Select` 改名并收编 select/选择/勾选
+   为兼容别名）——回包走面板而非文本；`status|状态` 保留文本回显，`on|off|
+   clear` 保留直接子命令。`enabled_source_label` / `startup_label` 抽成
+   pub(crate) 共享（status 文本与面板渲染同源）。usage 改
+   `/lsp [on|off|panel|status|clear]`。
+2. **面板视图（新 `views/lsp_panel.rs`，替代 lsp_server_picker）**：
+   `LspPanelState` 持有整份 `LspStatusResponse` 快照（门禁 + 来源 + 工作区
+   覆盖 + server 清单 + 会话后端）。渲染 = 状态头（LSP 工具 启用/禁用 + 来源
+   + 覆盖行；禁用时 warning 色提示「按 e 启用，自动检测已安装的语言服务器」）
+   + server 勾选清单（[x]/[ ] + 来源 + 命令探测 + 运行态）+ 会话后端行 +
+   六键 hint（e/↑↓/space/a/Enter/Esc）。按键路由增 `e|t` →
+   `LspPanelOutcome::ToggleEnabled`（本地态先翻转，面板保持打开）；Enter 确认
+   语义不变（全集 − 勾选集 = 禁用清单）。
+3. **接线**：`ActiveModal::LspServerPicker` → `LspPanel`（改名，键路由/绘制
+   分发/unreachable 组三处）；`FetchLspStatus`/`TaskResult::LspStatusFetched`
+   字段 `select` → `panel`；router 增 Panel 臂（需会话内，welcome 提示语改
+   「/lsp 面板需要在会话内使用」）；modals `apply_lsp_panel_outcome`：Toggle
+   发 `Action::LspConfigure(Set(新值))`（dispatch 写 workspace 覆盖 +
+   `x.ai/lspApply` 热加载，面板不关）、Confirm 走既有
+   `Action::LspServersConfirm`。shell 侧零改动（数据面/写面/热加载面三期已齐）。
+4. **i18n**：面板新键 16 条（状态头/覆盖三态/禁用提示/会话后端/运行态/启动
+   阶段/enable-disable）；三十七期两条遗留键标注存档保留。
+
+**验证**：cargo check pager --lib 0 error 0 warning（中途 E0425 导入缺失 +
+E0716 tr 临时值借用 + 测试用例缺 TaskComplete 包装三处小修）；GATE_FORCE
+pager `lsp` 过滤 16/16（原 14 例改名迁移 + 新增 panel 取数旗标/无会话提示/
+回包开面板三例中的面板打开例并入计数）；i18n 扫描 exit 0（lsp_panel 无挂）。
+遗留：真机 TUI 活体验证（面板开合、e 翻转后 status 同步、勾选确认热加载）。

@@ -312,10 +312,10 @@ pub enum ActiveModal {
     AuthPanel {
         state: Box<crate::views::auth_modal::AuthModalState>,
     },
-    /// LOCAL: `/lsp select` server 勾选面板。检测/配置到的 server 全列出，空格
-    /// 勾选本工作区要启用的，Enter 确认写 workspace 禁用清单并热加载。
-    LspServerPicker {
-        state: Box<crate::views::lsp_server_picker::LspServerPickerState>,
+    /// LOCAL: `/lsp` 统一操作面板 —— 状态显示、启用关闭（e）、server 自动发现
+    /// 清单与勾选确认（写 workspace 禁用清单并热加载）。
+    LspPanel {
+        state: Box<crate::views::lsp_panel::LspPanelState>,
     },
     /// Reset-settings confirmation, stacked above Settings. The underlying `SettingsModalState` is
     /// moved in/out so cancel preserves the user's filter/scroll position. The setting key lives only
@@ -685,7 +685,7 @@ impl ActiveModal {
             | ActiveModal::UsageInfo { .. }
             | ActiveModal::StatsInfo { .. }
             | ActiveModal::AuthPanel { .. }
-            | ActiveModal::LspServerPicker { .. }
+            | ActiveModal::LspPanel { .. }
             | ActiveModal::RememberNoteReview { .. } => vec![],
         }
     }
@@ -720,7 +720,7 @@ impl ActiveModal {
             ActiveModal::UsageInfo { .. } => tr("Usage"),
             ActiveModal::StatsInfo { .. } => tr("Model usage"),
             ActiveModal::AuthPanel { .. } => tr("Provider setup"),
-            ActiveModal::LspServerPicker { .. } => tr("LSP servers"),
+            ActiveModal::LspPanel { .. } => tr("LSP"),
         }
     }
 }

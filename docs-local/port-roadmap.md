@@ -624,3 +624,26 @@
   status 显示已禁用、零回合热加载生效）；② 面板初始勾选取自 status 快照，取数
   与确认之间 server 环境变化无检测（低风险，记录）；③ 首次检测到新 server 时的
   主动提示（是否弹面板）未做，走用户主动 /lsp select。
+
+### 2026-10-14 `/lsp` 面板化——统一操作面板（feat/local-lsp-panel）——三十七期 select 的交互收敛
+
+- **状态**：施工完成。用户 2026-10-14 追加：把 `/lsp` 的分离子命令（status 文本 /
+  on|off / select 面板）收敛为单一面板操作——启用关闭、状态显示、自动发现（启用
+  时）、手动勾选确认都在面板内完成。
+- **语义拍板（默认执行，未单独征询）**：① 裸 `/lsp`（及 panel/面板）= 打开统一
+  面板；`status` 保留文本回显，`on|off|clear` 保留直接子命令，旧 select 入口并进
+  面板（兼容别名）；② 面板内 `e`/`t` = 启用/关闭翻转（本地态先翻转保反馈，
+  dispatch 写 workspace 覆盖 + `x.ai/lspApply` 热加载，**面板保持打开**）；
+  ③ Enter 确认沿用三十七期禁用清单语义（全集 − 勾选集）并关面板；④ 面板渲染整份
+  lspStatus 快照（门禁来源 + 覆盖行 + server 勾选清单带运行态/命令探测 + 会话
+  后端行），禁用时 warning 色提示「按 e 启用，自动检测」。
+- **落点**：pager `slash/commands/lsp.rs`（Panel 解析 + label 抽共享）、新
+  `views/lsp_panel.rs`（替代 lsp_server_picker）、`modal.rs`（LspPanel 变体）、
+  `modals.rs`（ToggleEnabled 路由）、`router.rs` / `task_result.rs` /
+  `actions.rs` / `effects/mod.rs`（select 旗标改名 panel + Panel 臂）、i18n 16 键。
+  **shell 侧零改动**。
+- **验证**：cargo check pager --lib 0 error 0 warning；ctest 门控 pager `lsp`
+  过滤 16/16（新增 panel 取数旗标/无会话提示/回包开面板例）；i18n 扫描 exit 0。
+- **遗留**：① 真机 TUI 活体验证（面板开合、e 翻转后 status 同步、勾选确认热加载）
+  ——随三十七期同批补；② 三十七期遗留 ②③（取数与确认间环境变化无检测、新
+  server 主动提示）继承不变。

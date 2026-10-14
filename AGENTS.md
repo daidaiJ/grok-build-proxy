@@ -249,8 +249,11 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   model-switch 零回合重建簿记，推翻 v1「会话边界切换」）；v2.1（2026-10-14，
   `feat/local-lsp-server-picker`，三十七期）`/lsp select` server 勾选面板——
   检测/配置到的 server 全列出、空格勾选确认后写本工作区禁用清单
-  （`feature-overrides` 增 `lsp_disabled_servers`，只记排除项），零回合热加载。
-  遗留：活体 TUI 验证、
+  （`feature-overrides` 增 `lsp_disabled_servers`，只记排除项），零回合热加载；
+  v2.2（2026-10-14，`feat/local-lsp-panel`，三十八期）`/lsp` 面板化——裸
+  `/lsp` 打开统一操作面板（状态显示 + `e` 启用关闭 + server 自动发现清单 +
+  空格勾选 Enter 确认，翻转/确认均即时热加载），status/on|off/clear 保留，
+  select 并入面板。遗留：活体 TUI 验证、
   eager bootstrap 内存尾部（懒启动挂真实抱怨触发）、T1 诊断按需 op /
   T2 call hierarchy / T3 rename（[improvements-todo](docs-local/lsp-port/lsp-improvements-todo.md)
   顺位）。

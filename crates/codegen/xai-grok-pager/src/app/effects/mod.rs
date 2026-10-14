@@ -5122,7 +5122,7 @@ pub(crate) fn execute(
         Effect::FetchLspStatus {
             cwd,
             session_id,
-            select,
+            panel,
         } => {
             let tx = acp_tx.clone();
             tasks.spawn(async move {
@@ -5155,7 +5155,7 @@ pub(crate) fn execute(
                         ..Default::default()
                     },
                 };
-                TaskResult::LspStatusFetched { cwd, session_id, select, response }
+                TaskResult::LspStatusFetched { cwd, session_id, panel, response }
             });
         }
         // LOCAL: /lsp 零回合热加载（`x.ai/lspApply`）。错误也在回包体内。

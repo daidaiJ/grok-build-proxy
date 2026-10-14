@@ -2167,7 +2167,35 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Drafts", "草稿"),
         ("move", "移动"),
         ("toggle all", "全选/全不选"),
-        // LOCAL /lsp select：server 勾选面板（views/lsp_server_picker）
+        // LOCAL /lsp：统一操作面板（views/lsp_panel）
+        ("LSP tools", "LSP 工具"),
+        ("enabled", "启用"),
+        ("disabled", "禁用"),
+        (
+            "Workspace override: on (LSP tools enabled for next sessions)",
+            "本工作区覆盖：on（下次会话启用 LSP 工具）",
+        ),
+        (
+            "Workspace override: off (LSP tools disabled for next sessions)",
+            "本工作区覆盖：off（下次会话禁用 LSP 工具）",
+        ),
+        (
+            "Workspace override: not set (follows global config)",
+            "本工作区覆盖：未设置（跟随全局）",
+        ),
+        (
+            "Disabled — press e to enable; installed servers are auto-detected.",
+            "已禁用：按 e 启用，自动检测已安装的语言服务器。",
+        ),
+        ("Session backend", "本会话后端"),
+        ("running", "运行中"),
+        ("not running", "未运行"),
+        ("not started", "未启动"),
+        ("starting", "启动中"),
+        ("failed", "失败"),
+        ("enable/disable", "启用/关闭"),
+        ("No active session or no LSP backend in this session.", "当前无活动会话或本会话未装配 LSP 后端。"),
+        // LOCAL /lsp select 遗留键（面板化后仅存档）
         ("LSP servers", "LSP 语言服务器"),
         (
             "Space to select servers to enable in this workspace; unchecked ones are disabled.",

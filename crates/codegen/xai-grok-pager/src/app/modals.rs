@@ -449,10 +449,10 @@ impl AgentView {
             return self.apply_auth_modal_outcome(outcome);
         }
 
-        // LOCAL LspServerPicker: /lsp select 勾选面板（空格勾选，Enter 确认转 Action）。
-        if let ActiveModal::LspServerPicker { state } = modal {
-            let outcome = crate::views::lsp_server_picker::route_lsp_picker_key(state, key);
-            return self.apply_lsp_picker_outcome(outcome);
+        // LOCAL LspPanel: /lsp 统一面板（e 启用关闭，空格勾选，Enter 确认转 Action）。
+        if let ActiveModal::LspPanel { state } = modal {
+            let outcome = crate::views::lsp_panel::route_lsp_panel_key(state, key);
+            return self.apply_lsp_panel_outcome(outcome);
         }
 
         // ResetSettingsConfirm: y/n routing
@@ -500,7 +500,7 @@ impl AgentView {
             ActiveModal::CommandPalette { .. }
             | ActiveModal::ArgPicker { .. }
             | ActiveModal::AuthPanel { .. }
-            | ActiveModal::LspServerPicker { .. }
+            | ActiveModal::LspPanel { .. }
             | ActiveModal::SessionPicker { .. }
             | ActiveModal::DocPicker { .. }
             | ActiveModal::DocViewer { .. }
@@ -1721,20 +1721,27 @@ impl AgentView {
         }
     }
 
-    /// Map the /lsp select picker outcome onto this host: Esc closes, Enter converts
-    /// the unchecked set into `Action::LspServersConfirm` (deny-list write + hot apply).
-    fn apply_lsp_picker_outcome(
+    /// Map the /lsp panel outcome onto this host: Esc closes, `e` emits
+    /// `Action::LspConfigure(Set)` (deny/enable write + hot apply, panel stays open),
+    /// Enter converts the unchecked set into `Action::LspServersConfirm`.
+    fn apply_lsp_panel_outcome(
         &mut self,
-        outcome: crate::views::lsp_server_picker::LspPickerOutcome,
+        outcome: crate::views::lsp_panel::LspPanelOutcome,
     ) -> InputOutcome {
-        use crate::views::lsp_server_picker::LspPickerOutcome;
+        use crate::views::lsp_panel::LspPanelOutcome;
         match outcome {
-            LspPickerOutcome::Cancel => {
+            LspPanelOutcome::Cancel => {
                 self.active_modal = None;
                 InputOutcome::Changed
             }
-            LspPickerOutcome::Confirm => {
-                let Some(crate::views::modal::ActiveModal::LspServerPicker { state }) =
+            LspPanelOutcome::ToggleEnabled(value) => {
+                // 面板本地态已翻转，这里只发写盘 + 热加载；不关面板。
+                InputOutcome::Action(Action::LspConfigure {
+                    request: crate::app::actions::LspConfigureRequest::Set(value),
+                })
+            }
+            LspPanelOutcome::Confirm => {
+                let Some(crate::views::modal::ActiveModal::LspPanel { state }) =
                     self.active_modal.take()
                 else {
                     return InputOutcome::Changed;
@@ -1746,7 +1753,7 @@ impl AgentView {
                     disabled,
                 })
             }
-            LspPickerOutcome::Changed => InputOutcome::Changed,
+            LspPanelOutcome::Changed => InputOutcome::Changed,
         }
     }
 
@@ -2492,9 +2499,9 @@ impl AgentView {
             } else if let modal::ActiveModal::AuthPanel { state } = active_modal {
                 // LOCAL: /auth 供应商配置面板。
                 crate::views::auth_modal::render_auth_modal(buf, area, state);
-            } else if let modal::ActiveModal::LspServerPicker { state } = active_modal {
-                // LOCAL: /lsp select server 勾选面板。
-                crate::views::lsp_server_picker::render_lsp_server_picker(buf, area, state);
+            } else if let modal::ActiveModal::LspPanel { state } = active_modal {
+                // LOCAL: /lsp 统一操作面板。
+                crate::views::lsp_panel::render_lsp_panel(buf, area, state);
             } else if let modal::ActiveModal::MemoryBrowser { state: mem_state } = active_modal {
                 crate::views::memory_modal::render_memory_modal(buf, area, mem_state, compact);
             } else if let modal::ActiveModal::Settings {
