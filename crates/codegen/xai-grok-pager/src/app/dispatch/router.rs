@@ -185,16 +185,16 @@ fn dispatch_lsp_configure(
         LspConfigureRequest::Status => {
             // 数据面走 `x.ai/lspStatus` 扩展（门禁 + server 清单 + 会话后端快照），
             // 回包经 TaskResult::LspStatusFetched 渲染；本函数只负责取数参数。
-            vec![Effect::FetchLspStatus { cwd, session_id, select: false }]
+            vec![Effect::FetchLspStatus { cwd, session_id, panel: false }]
         }
-        LspConfigureRequest::Select => {
-            // 取数参数同 status，回包走勾选面板（task_result 侧开 LspServerPicker）。
+        LspConfigureRequest::Panel => {
+            // 取数参数同 status，回包走 LSP 统一面板（task_result 侧开 LspPanel）。
             // 面板挂在活动 agent 视图上；无会话时提示先进会话。
             if !matches!(app.active_view, ActiveView::Agent(_)) {
-                lsp_report(app, "/lsp select 需要在会话内使用（先进入会话再执行）。");
+                lsp_report(app, "/lsp 面板需要在会话内使用（先进入会话再执行）。");
                 vec![]
             } else {
-                vec![Effect::FetchLspStatus { cwd, session_id, select: true }]
+                vec![Effect::FetchLspStatus { cwd, session_id, panel: true }]
             }
         }
         LspConfigureRequest::Set(value) => {
@@ -330,7 +330,7 @@ fn dispatch_inner(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::NewSession => dispatch_new_session(app),
         // LOCAL(/lsp): workspace 级 LSP 工具启停/状态查询
         Action::LspConfigure { request } => dispatch_lsp_configure(app, request),
-        // LOCAL(/lsp select): 勾选面板确认 —— 写本工作区 server 禁用清单（空 =
+        // LOCAL(/lsp): 面板确认 —— 写本工作区 server 禁用清单（空 =
         // 清除覆盖），零回合活动会话随即热加载（shell 重建 LSP 后端）。
         Action::LspServersConfirm {
             cwd,

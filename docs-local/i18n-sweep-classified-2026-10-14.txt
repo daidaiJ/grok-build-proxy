@@ -158,17 +158,17 @@
 
 ## app/actions.rs
   [plain] x11
-    1034: () 'default'
-    1035: () 'ask'
-    1036: () 'auto'
-    1171: () 'off'
-    1178: () 'Off'
-    1207: () 'mouse'
-    1240: () 'agent'
-    1241: () 'dashboard'
-    1242: () 'peek'
-    2357: () 'camelCase'
-    2365: () 'std::ops::Not::not'
+    1035: () 'default'
+    1036: () 'ask'
+    1037: () 'auto'
+    1172: () 'off'
+    1179: () 'Off'
+    1208: () 'mouse'
+    1241: () 'agent'
+    1242: () 'dashboard'
+    1243: () 'peek'
+    2359: () 'camelCase'
+    2367: () 'std::ops::Not::not'
   [id] x5
   [cmp] x4
   [test] x16
@@ -978,7 +978,7 @@
 
 ## app/dispatch/router.rs
   [plain] x23
-    194: () '/lsp select 需要在会话内使用（先进入会话再执行）。'
+    194: () '/lsp 面板需要在会话内使用（先进入会话再执行）。'
     243: () '已清除本工作区的 LSP 覆盖，恢复跟随全局配置。'
     245: () '已清除本工作区的 LSP 覆盖，恢复跟随全局配置（[features] lsp_tools）。'
     371: () '已清除本工作区的 server 禁用清单，恢复全部启用。正在热加载本会话…'
@@ -1313,7 +1313,7 @@
     162: (format) 'Could not sync {count} dashboard session{}'
     178: (format) 'Could not archive {count} dashboard session{}'
     588: (format) 'Billing error: {error}'
-    616: (format) 'LSP server 列表获取失败：{error}'
+    616: (format) 'LSP 面板数据获取失败：{error}'
     641: (format) 'LSP 热加载：{error}'
     644: (format) 'LSP 热加载无变化：{note}'
     1104: (format) 'Send now failed. Requeued: {error}'
@@ -2899,34 +2899,35 @@
   [test] x57
 
 ## slash/commands/lsp.rs
-  [plain] x18
-    17: () 'lsp'
-    18: () 'Toggle LSP tools for this workspace'
-    19: () '/lsp [on|off|select|status|clear]'
-    21: () 'on|off|select|status|clear'
-    28: () 'off'
-    29: () 'clear'
-    29: () 'reset'
-    30: () 'select'
-    50: () '策略 pin'
-    51: () '环境变量 GROK_LSP_TOOLS'
-    52: () '/lsp 工作区覆盖'
-    53: () '[features] lsp_tools'
-    62: () '本工作区覆盖：on（下次会话启用 LSP 工具）'
-    63: () '本工作区覆盖：off（下次会话禁用 LSP 工具）'
-    70: () '  安装 rust-analyzer / gopls / pyright / jdtls / clangd 会自动接入；也可在 ~/.grok/lsp.json 配置。'
-    105: () '当前无活动会话或本会话未装配 LSP 后端。'
-    108: () '用 /lsp select 勾选本工作区要启用的 server（取消勾选的将被禁用，配置/自动检测到的都会列出）。'
-    112: () '/lsp 的改动立即热加载到零回合会话；已有回合的会话对新会话生效。'
-  [fmt] x5
-    33: (format) '用法：/lsp [on|off|select|status|clear]（未知参数 “{other}”；select = 勾选本工作区启用的 server；clear = 删除本工作区覆盖，恢复跟随全局配置）'
-    45: (format) 'LSP 状态查询失败：{error}'
-    58: (format) 'LSP 工具：{}（来源：{source_label}）'
-    99: (format) '本会话后端：{startup_label}'
-    101: (format) '（{error}）'
-  [cmp] x11
+  [plain] x20
+    19: () 'lsp'
+    20: () 'Toggle LSP tools for this workspace'
+    21: () '/lsp [on|off|panel|status|clear]'
+    23: () 'on|off|panel|status|clear'
+    29: () 'panel'
+    31: () 'select'
+    32: () 'status'
+    34: () 'off'
+    35: () 'clear'
+    35: () 'reset'
+    49: () '策略 pin'
+    50: () '环境变量 GROK_LSP_TOOLS'
+    51: () '/lsp 工作区覆盖'
+    52: () '[features] lsp_tools'
+    83: () '本工作区覆盖：on（下次会话启用 LSP 工具）'
+    84: () '本工作区覆盖：off（下次会话禁用 LSP 工具）'
+    91: () '  安装 rust-analyzer / gopls / pyright / jdtls / clangd 会自动接入；也可在 ~/.grok/lsp.json 配置。'
+    119: () '当前无活动会话或本会话未装配 LSP 后端。'
+    122: () '用 /lsp 打开操作面板：启用/关闭、勾选本工作区要启用的 server（取消勾选的将被禁用，配置/自动检测到的都会列出）。'
+    126: () '/lsp 的改动立即热加载到零回合会话；已有回合的会话对新会话生效。'
+  [fmt] x4
+    38: (format) '用法：/lsp [on|off|panel|status|clear]（未知参数 “{other}”；裸 /lsp 打开操作面板；clear = 删除本工作区覆盖，恢复跟随全局配置）'
+    73: (format) 'LSP 状态查询失败：{error}'
+    78: (format) 'LSP 工具：{}（来源：{}）'
+    115: (format) '（{error}）'
+  [cmp] x10
   [wrapped] x1
-  [test] x5
+  [test] x6
 
 ## slash/commands/mcps.rs
   [plain] x3
@@ -3974,20 +3975,24 @@
   [wrapped] x1
   [test] x13
 
-## views/lsp_server_picker.rs
-  [plain] x8
-    189: () 'move'
-    190: () 'space'
-    190: () 'toggle'
-    191: () 'toggle all'
-    192: () 'Enter'
-    192: () 'confirm'
-    193: () 'Esc'
-    193: () 'cancel'
-  [fmt] x1
-    165: (format) '{marker} {} — {} — {}'
-  [wrapped] x4
-  [test] x13
+## views/lsp_panel.rs
+  [plain] x9
+    170: () 'LSP'
+    268: () 'move'
+    269: () 'space'
+    269: () 'toggle'
+    270: () 'toggle all'
+    271: () 'Enter'
+    271: () 'confirm'
+    272: () 'Esc'
+    272: () 'close'
+  [fmt] x3
+    225: (format) '{marker} {} — {} — {}'
+    232: (format) ' — {label}'
+    254: (format) '（{error}）'
+  [id] x1
+  [wrapped] x14
+  [test] x17
 
 ## views/managed_connectors_wait.rs
   [id] x1

@@ -602,18 +602,18 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             vec![]
         }
         // LOCAL: /lsp status 回包。状态块落 scrollback（agent 视图）或 toast；
-        // select 模式改开 server 勾选面板（`/lsp select` 的数据面）。
+        // panel 模式改开 LSP 统一面板（裸 `/lsp` / `/lsp panel` 的数据面）。
         TaskResult::LspStatusFetched {
             cwd,
             session_id,
-            select,
+            panel,
             response,
         } => {
-            if select {
+            if panel {
                 if let Some(error) = &response.error {
                     crate::app::dispatch::router::lsp_report(
                         app,
-                        &format!("LSP server 列表获取失败：{error}"),
+                        &format!("LSP 面板数据获取失败：{error}"),
                     );
                     return vec![];
                 }
@@ -621,9 +621,9 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
                     && let Some(agent) = app.agents.get_mut(&id)
                 {
                     agent.active_modal =
-                        Some(crate::views::modal::ActiveModal::LspServerPicker {
-                            state: Box::new(crate::views::lsp_server_picker::LspServerPickerState::new(
-                                cwd, session_id, response.servers,
+                        Some(crate::views::modal::ActiveModal::LspPanel {
+                            state: Box::new(crate::views::lsp_panel::LspPanelState::new(
+                                cwd, session_id, response,
                             )),
                         });
                 }
