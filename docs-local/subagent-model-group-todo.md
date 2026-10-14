@@ -149,3 +149,29 @@ explore = "low"
 - 同步文件补丁登记 PATCHES.md；新环境族失败登记 `win-skip.txt`。
 - 施工前对照 [fork-feature-inventory](fork-feature-inventory.md)「已有」判定（本设计已核：
   模型组无、subagent pin 有、effort 管线有——防重复建设已做）。
+
+---
+
+## 施工实况（2026-10-14，PATCHES 四十一期）
+
+六拍板点按建议值落地：① per-agent `[subagents.efforts]` 赢过组条目 `effort`；② 401/403
+不触发降级；③ 独立 `[subagents.model_groups]` 表；④ 冷却 = 进程级内存态（`OnceLock`
+单例，跨会话共享，懒回收过期——比拍板建议的「会话级」更广，理由：冷却本意是让
+「故障的供应商」在后续 spawn 中被跳过，跨会话才符合直觉）；⑤ 主循环绑组未做（G4 维持）；
+⑥ 组条目沿用 `[model.<id>]` 自身的 context_window/簿记（无会话中途换条目，问题后移）。
+
+**与设计的偏差（如实记录）**：
+
+- **v1 降级语义 = spawn 级**：条目失败（任务尝试以 provider-unavailable 类错误终止）
+  → 进程冷却 → 后续 spawn/子代理解析顺延下一可用条目。设计 G2 的「首字节前 failover +
+  会话内粘性」需要会话中途换采样配置的簿记手术，留 v2。实际效果：失败任务的**下一次
+  spawn** 自动落下一家；长任务进行中的失败仍整任务报错，由父模型自然重试触发降级。
+- **降级触发点 = 子任务尝试终点**（`result.error` 保守签名匹配），sampler 层 429 重试
+  预算耗尽后的错误串按 429/5xx/connection/timeout/quota 归类；400/401/403 永不触发。
+- **披露面 v1 = unified.jsonl 事件**（`entry marked cooling` / `resolved past the
+  first entry`）；transcript 用户可见 notice 留 v2。
+
+**落地清单**：`[model_groups.<name>]` 配置（`ModelGroupConfig`/`ModelGroupEntry`，
+cooldown 缺省 10 分钟）；`[subagents.model_groups]`/`[subagents.efforts]` 三张 skip 表 +
+load 时 pin×组冲突 warn；解析优先级 spawn > pin > 组链 > AgentDefinition > 继承；组条目
+effort 带能力门 + variants 路由；`ModelGroupBinding` 随解析返回、失败标记冷却。

@@ -2464,7 +2464,7 @@ async fn runtime_override_wins_over_subagents_models_pin_in_precedence_path() {
         ctx
     };
     let ctx = build_ctx();
-    let (config, model_id) = resolve_effective_model_config(
+    let (config, model_id, _) = resolve_effective_model_config(
             Some("goal-model"),
             "explore",
             &ModelOverride::Inherit,
@@ -2477,7 +2477,7 @@ async fn runtime_override_wins_over_subagents_models_pin_in_precedence_path() {
         );
     assert_eq!(model_id.0.as_ref(), "goal-model");
     let ctx = build_ctx();
-    let (config, model_id) = resolve_effective_model_config(
+    let (config, model_id, _) = resolve_effective_model_config(
             None,
             "explore",
             &ModelOverride::Inherit,
@@ -2490,7 +2490,7 @@ async fn runtime_override_wins_over_subagents_models_pin_in_precedence_path() {
         );
     assert_eq!(model_id.0.as_ref(), "pinned-model");
     let ctx = build_ctx();
-    let (config, _) = resolve_effective_model_config(
+    let (config, _, _) = resolve_effective_model_config(
             Some("does-not-exist"),
             "explore",
             &ModelOverride::Inherit,
@@ -2528,7 +2528,7 @@ async fn fork_context_pins_parent_model_over_overrides() {
     if fork_context {
         runtime_override = Some(ctx.model_id.0.to_string());
     }
-    let (config, model_id) = resolve_effective_model_config(
+    let (config, model_id, _) = resolve_effective_model_config(
             runtime_override.as_deref(),
             "general-purpose",
             &agent_def,
@@ -2541,7 +2541,7 @@ async fn fork_context_pins_parent_model_over_overrides() {
         );
     assert_eq!(model_id.0.as_ref(), "parent-model");
     let ctx = build_ctx();
-    let (config, model_id) = resolve_effective_model_config(
+    let (config, model_id, _) = resolve_effective_model_config(
             None,
             "general-purpose",
             &agent_def,
@@ -2563,7 +2563,7 @@ async fn resolve_subagent_inherits_parent_model_without_pins() {
         let mut ctx = ctx_with_toggle(HashMap::new());
         ctx.sampling_config.model = parent_model.to_string();
         ctx.model_id = acp::ModelId::new(parent_model);
-        let (config, model_id) = resolve_subagent_sampling_config(
+        let (config, model_id, _) = resolve_subagent_sampling_config(
                 "explore",
                 &ModelOverride::Inherit,
                 &ctx,
@@ -2588,7 +2588,7 @@ async fn resolve_subagent_config_override_pin_applies_for_any_parent() {
             .insert("pinned-model".to_string(), test_model_entry("pinned-model"));
         ctx.subagent_model_overrides
             .insert("explore".to_string(), "pinned-model".to_string());
-        let (config, model_id) = resolve_subagent_sampling_config(
+        let (config, model_id, _) = resolve_subagent_sampling_config(
                 "explore",
                 &ModelOverride::Inherit,
                 &ctx,
@@ -2611,7 +2611,7 @@ async fn resolve_subagent_agent_definition_pin_applies_for_light_parent() {
     ctx.available_models
         .insert("pinned-model".to_string(), test_model_entry("pinned-model"));
     let agent_model = ModelOverride::Override("pinned-model".to_string());
-    let (config, model_id) = resolve_subagent_sampling_config(
+    let (config, model_id, _) = resolve_subagent_sampling_config(
             "explore",
             &agent_model,
             &ctx,
@@ -2633,7 +2633,7 @@ async fn resolve_subagent_config_override_wins_over_agent_definition() {
         .insert("agentdef-pin".to_string(), test_model_entry("agentdef-pin"));
     ctx.subagent_model_overrides.insert("explore".to_string(), "config-pin".to_string());
     let agent_model = ModelOverride::Override("agentdef-pin".to_string());
-    let (config, model_id) = resolve_subagent_sampling_config(
+    let (config, model_id, _) = resolve_subagent_sampling_config(
             "explore",
             &agent_model,
             &ctx,
@@ -2665,7 +2665,7 @@ async fn resolve_subagent_config_override_unselectable_model_falls_through_to_in
             crate::config::RequirementSource::Unknown,
         );
     ctx.agent_config = Some(cfg);
-    let (config, model_id) = resolve_subagent_sampling_config(
+    let (config, model_id, _) = resolve_subagent_sampling_config(
             "explore",
             &ModelOverride::Inherit,
             &ctx,
@@ -2691,7 +2691,7 @@ async fn resolve_subagent_config_override_user_allowlist_still_applies() {
     ctx.agent_config = Some(
         crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap(),
     );
-    let (config, model_id) = resolve_subagent_sampling_config(
+    let (config, model_id, _) = resolve_subagent_sampling_config(
             "explore",
             &ModelOverride::Inherit,
             &ctx,
@@ -2713,7 +2713,7 @@ async fn resolve_subagent_config_override_none_agent_config_blocks_unselectable(
     ctx.subagent_model_overrides
         .insert("explore".to_string(), "blocked-model".to_string());
     assert!(ctx.agent_config.is_none());
-    let (config, model_id) = resolve_subagent_sampling_config(
+    let (config, model_id, _) = resolve_subagent_sampling_config(
             "explore",
             &ModelOverride::Inherit,
             &ctx,
@@ -2731,7 +2731,7 @@ async fn resolve_subagent_config_override_unknown_model_falls_through_to_inherit
     ctx.model_id = acp::ModelId::new("grok-4.5");
     ctx.subagent_model_overrides
         .insert("explore".to_string(), "does-not-exist".to_string());
-    let (config, model_id) = resolve_subagent_sampling_config(
+    let (config, model_id, _) = resolve_subagent_sampling_config(
             "explore",
             &ModelOverride::Inherit,
             &ctx,
@@ -2748,7 +2748,7 @@ async fn resolve_subagent_agent_definition_unknown_model_falls_through_to_inheri
     ctx.sampling_config.model = "grok-4.5".to_string();
     ctx.model_id = acp::ModelId::new("grok-4.5");
     let agent_model = ModelOverride::Override("does-not-exist".to_string());
-    let (config, model_id) = resolve_subagent_sampling_config(
+    let (config, model_id, _) = resolve_subagent_sampling_config(
             "explore",
             &agent_model,
             &ctx,
@@ -2780,7 +2780,7 @@ async fn subagent_override_provider_model_spawns_cache_only_credentials() {
         ..Default::default()
     });
     ctx.subagent_model_overrides.insert("explore".to_string(), "proxied".to_string());
-    let (config, model_id) = resolve_subagent_sampling_config(
+    let (config, model_id, _) = resolve_subagent_sampling_config(
             "explore",
             &ModelOverride::Inherit,
             &ctx,
@@ -2792,7 +2792,7 @@ async fn subagent_override_provider_model_spawns_cache_only_credentials() {
             "a cold cache spawns with no key, never the parent session key"
         );
     provider.ensure_fresh_token(None).await.rotated().unwrap();
-    let (config, _) = resolve_subagent_sampling_config(
+    let (config, _, _) = resolve_subagent_sampling_config(
             "explore",
             &ModelOverride::Inherit,
             &ctx,
@@ -3313,4 +3313,90 @@ async fn progress_publisher_delivers_ticks_to_parent_cmd_channel() {
             assert_eq!(tool_call_count, 1);
         })
         .await;
+}
+
+/// A `[subagents.model_groups]` binding resolves through the chain: the first entry
+/// normally, cooling entries skipped, and an all-cooling group falls through to the
+/// agent-definition model with no binding returned.
+#[tokio::test]
+async fn model_group_binding_resolves_chain_with_cooldown_skip() {
+    use crate::agent::config::{ModelGroupConfig, ModelGroupEntry};
+    use crate::agent::model_group::ModelGroupRuntime;
+    use xai_grok_agent::config::ModelOverride;
+
+    let build_ctx = || {
+        let mut ctx = ctx_with_toggle(HashMap::new());
+        ctx.sampling_config.model = "parent-model".to_string();
+        ctx.model_id = acp::ModelId::new("parent-model");
+        for id in ["parent-model", "group-a", "group-b"] {
+            ctx.available_models
+                .insert(id.to_string(), test_model_entry(id));
+        }
+        ctx.subagent_group_bindings = HashMap::from([(
+            "explore".to_string(),
+            "cheap-flash".to_string(),
+        )]);
+        ctx.model_groups = HashMap::from([(
+            "cheap-flash".to_string(),
+            ModelGroupConfig {
+                entries: vec![
+                    ModelGroupEntry {
+                        model: "group-a".to_string(),
+                        effort: None,
+                    },
+                    ModelGroupEntry {
+                        model: "group-b".to_string(),
+                        effort: None,
+                    },
+                ],
+                sticky: None,
+                cooldown_minutes: None,
+            },
+        )]);
+        ctx
+    };
+    let ctx = build_ctx();
+    let (config, model_id, binding) = resolve_effective_model_config(
+        None,
+        "explore",
+        &ModelOverride::Inherit,
+        &ctx,
+    )
+    .await;
+    assert_eq!(config.model, "group-a", "the first group entry wins normally");
+    assert_eq!(model_id.0.as_ref(), "group-a");
+    assert_eq!(
+        binding.as_ref().map(|b| (b.group.as_str(), b.entry_idx)),
+        Some(("cheap-flash", 0))
+    );
+
+    ModelGroupRuntime::global().mark_cooldown("cheap-flash", 0, 10);
+    let ctx = build_ctx();
+    let (config, _, binding) = resolve_effective_model_config(
+        None,
+        "explore",
+        &ModelOverride::Inherit,
+        &ctx,
+    )
+    .await;
+    assert_eq!(
+        config.model, "group-b",
+        "a cooling first entry is skipped and the chain falls to the next entry"
+    );
+    assert_eq!(binding.as_ref().map(|b| b.entry_idx), Some(1));
+
+    ModelGroupRuntime::global().mark_cooldown("cheap-flash", 1, 10);
+    let ctx = build_ctx();
+    let (config, _, binding) = resolve_effective_model_config(
+        None,
+        "explore",
+        &ModelOverride::Override("group-a".to_string()),
+        &ctx,
+    )
+    .await;
+    assert_eq!(
+        config.model, "group-a",
+        "an all-cooling group falls through to the agent definition model"
+    );
+    assert!(binding.is_none(), "fall-through carries no group binding");
 }

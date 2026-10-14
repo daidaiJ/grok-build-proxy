@@ -706,3 +706,21 @@
 - **合并顺序**：codex（三十九期）→ ayu（四十期），分支叠建无冲突。
 - **遗留**：opencode 余 21 套同模式增量移植时同样先过「同质化」筛
   （qwen-code 全库已筛毕，仅 ayu 入选）；Latte 浅色 mermaid 活体抽查（继承）。
+
+### 2026-10-14 模型组（跨供应商降级链）+ subagent 模型/effort 配置（feat/local-subagent-model-group）
+
+- **状态**：施工完成（PATCHES 四十一期），随 Ayu 主题分支（三十九/四十期）一起合并
+  发版（用户指示同批交付）。设计文档 `docs-local/subagent-model-group-todo.md`
+  （六拍板点按建议值落地，偏差见其「施工实况」节）。
+- **落点**：shell `agent/model_group.rs`（进程级冷却运行态 + 失败签名分类器，新模块）、
+  `agent/config.rs`（`[model_groups.<name>]` 三类型 + Config 字段 + resolve_subagents
+  冲突 warn）、`config/mod.rs`（`[subagents.model_groups]`/`[subagents.efforts]`）、
+  `subagent/mod.rs`（解析链组分支 + 组条目 effort 能力门/variants 路由 +
+  `ModelGroupBinding` 三元组返回）、`subagent/handle_request.rs`（efforts
+  fill-if-none + 失败标冷却 unified 事件）、`mvp_agent/subagent_spawn.rs`（ctx 三新字段）。
+- **v1 语义**：降级 = spawn 级（失败条目进程冷却 → 后续 spawn 顺延下一可用条目）；
+  首字节前会话内 failover 与 transcript notice 留 v2。
+- **验证**：cargo check shell --all-targets 0 error；新测 8 例（model_group 5 +
+  config 2 + 组链优先级 1）；Linux CI shell 套件随合并后 build 验证。
+- **遗留**：v2（首字节前 failover/粘性、transcript notice、主循环绑组 G4）；
+  活体验证（真实三家 glm-5.3-flash 组断一家的自动顺延）随发版后新客户端。

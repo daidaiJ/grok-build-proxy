@@ -4501,3 +4501,41 @@ fn lsp_tools_pin_beats_workspace_override() {
         "requirements pin must win over the workspace /lsp override"
     );
 }
+
+#[test]
+fn subagents_config_parses_group_bindings_and_efforts() {
+    let config: toml::Value = toml::from_str(
+        "[subagents.model_groups]\nexplore = \"cheap-flash\"\n[subagents.efforts]\nexplore = \"low\"\ngeneral-purpose = \"high\"\n[subagents.models]\nother = \"some-model\"\n",
+    )
+    .unwrap();
+    let sa = crate::config::SubagentsConfig::resolve(None, &config);
+    assert_eq!(
+        sa.model_groups.get("explore").map(String::as_str),
+        Some("cheap-flash")
+    );
+    assert_eq!(sa.efforts.get("explore").map(String::as_str), Some("low"));
+    assert_eq!(
+        sa.efforts.get("general-purpose").map(String::as_str),
+        Some("high")
+    );
+    assert_eq!(sa.models.get("other").map(String::as_str), Some("some-model"));
+}
+
+#[test]
+fn model_groups_section_parses_entries_effort_and_cooldown_defaults() {
+    let raw: toml::Value = toml::from_str(
+        "[model_groups.cheap-flash]\nentries = [\n{ model = \"a-flash\", effort = \"high\" },\n{ model = \"b-flash\" },\n]\n",
+    )
+    .unwrap();
+    let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+    let group = cfg.model_groups.get("cheap-flash").expect("group parsed");
+    assert_eq!(group.entries.len(), 2);
+    assert_eq!(group.entries[0].model, "a-flash");
+    assert_eq!(group.entries[0].effort.as_deref(), Some("high"));
+    assert_eq!(group.entries[1].model, "b-flash");
+    assert!(group.entries[1].effort.is_none());
+    assert_eq!(group.cooldown_minutes(), 10, "default cooldown is 10 minutes");
+    let raw: toml::Value = toml::from_str("[subagents]\nenabled = true\n").unwrap();
+    let cfg = crate::agent::config::Config::new_from_toml_cfg(&raw).unwrap();
+    assert!(cfg.model_groups.is_empty(), "no section means no groups");
+}

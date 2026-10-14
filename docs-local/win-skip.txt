@@ -120,3 +120,9 @@ pre_tui::tests::large_inherited_stderr_does_not_deadlock
 # Ansi256 漂移。环境族，与主题移植改动无关（color_support.rs 未触碰）。
 theme::color_support::tests::standalone_color_uses_controlling_terminal_when_stderr_is_piped
 theme::color_support::tests::standalone_color_uses_stderr_terminal_not_stdout
+
+# 族V（2026-10-14，GATE_FORCE xai-grok-shell --lib group 首跑暴露）：同族N/族S根因
+# （create_test_actor 夹具写死 /tmp，support.rs:287 AbsPathBuf NotAbsolute panic）。
+# 该测试此前只随 auth_error_no_retry 家族在 Linux CI 跑，本机新过滤词首次命中。
+# 环境族，与模型组改动无关（model_switch/conversation_group 代码未触碰）。
+session::acp_session::auth_error_no_retry_tests::

@@ -292,6 +292,14 @@ pub(crate) struct SubagentSpawnContext {
     pub available_models: indexmap::IndexMap<String, crate::agent::config::ModelEntry>,
     /// Per-subagent model ID overrides from config.toml `[subagents.models]`.
     pub subagent_model_overrides: std::collections::HashMap<String, String>,
+    /// Per-subagent model-group bindings from config.toml `[subagents.model_groups]`.
+    /// Values name `[model_groups.<name>]` entries in the parent `Config`.
+    pub subagent_group_bindings: std::collections::HashMap<String, String>,
+    /// Per-subagent reasoning-effort overrides from config.toml `[subagents.efforts]`.
+    /// Applied below spawn-time runtime overrides and role/persona effort.
+    pub subagent_effort_overrides: std::collections::HashMap<String, String>,
+    /// Model-group definitions from config.toml `[model_groups.<name>]`.
+    pub model_groups: std::collections::HashMap<String, crate::agent::config::ModelGroupConfig>,
     /// Per-subagent enable/disable toggles from config.toml `[subagents.toggle]`.
     /// Omitted agents default to enabled (`true`).
     pub subagent_toggle: std::collections::HashMap<String, bool>,
@@ -616,14 +624,22 @@ impl SubagentPresentation {
         Arc::clone(&self.is_turn_active)
     }
 }
-/// Resolve the sampling config and model ID for a subagent. Precedence: `[subagents.models].{agent_name}` config override > explicit `AgentDefinition` model > the parent session's live sampling config.
+/// Resolve the sampling config and model ID for a subagent. Precedence: `[subagents.models].{agent_name}` config override > `[subagents.model_groups].{agent_name}` group binding > explicit `AgentDefinition` model > the parent session's live sampling config.
 /// Unknown pins warn and fall through. The caller applies runtime model overrides before this runs.
+/// The group branch walks the bound `[model_groups.<name>]` chain in order, skipping cooling
+/// entries (process-level `ModelGroupRuntime`) and unresolvable ids; the returned binding lets
+/// the caller mark the entry cooling when the child task later fails with a
+/// provider-unavailable error.
 #[tracing::instrument(level = "debug", skip_all)]
 async fn resolve_subagent_sampling_config(
     agent_name: &str,
     agent_model: &xai_grok_agent::config::ModelOverride,
     ctx: &SubagentSpawnContext,
-) -> (xai_grok_sampler::SamplerConfig, acp::ModelId) {
+) -> (
+    xai_grok_sampler::SamplerConfig,
+    acp::ModelId,
+    Option<crate::agent::model_group::ModelGroupBinding>,
+) {
     let (parent_config, parent_mid) = read_parent_sampling_config(ctx).await;
     let try_pin = |model_id: &str, source: &'static str, unknown_msg: &'static str| {
         match resolve_model_override_to_config(model_id, ctx) {
@@ -644,22 +660,72 @@ async fn resolve_subagent_sampling_config(
         }
     };
     if let Some(model_id) = ctx.subagent_model_overrides.get(agent_name)
-        && let Some(resolved) = try_pin(
+        && let Some((config, canonical_id)) = try_pin(
             model_id,
             "config_override",
             "Subagent model override references unknown model, falling through to inherit",
         )
     {
-        return resolved;
+        return (config, canonical_id, None);
+    }
+    if let Some(group_name) = ctx.subagent_group_bindings.get(agent_name) {
+        if let Some(group_config) = ctx.model_groups.get(group_name) {
+            for (idx, entry) in group_config.entries.iter().enumerate() {
+                if crate::agent::model_group::ModelGroupRuntime::global()
+                    .is_cooling(group_name, idx)
+                {
+                    continue;
+                }
+                if let Some((mut config, canonical_id)) = try_pin(
+                    &entry.model,
+                    "model_group",
+                    "Model group entry references unknown model, trying the next entry",
+                ) {
+                    apply_group_entry_effort(entry, &canonical_id, &mut config, ctx, agent_name);
+                    if idx != 0 {
+                        xai_grok_telemetry::unified_log::warn(
+                            "subagent model group: resolved past the first entry",
+                            None,
+                            Some(serde_json::json!({
+                                "agent": agent_name,
+                                "group": group_name,
+                                "entry_idx": idx,
+                                "model_id": canonical_id.0.as_ref(),
+                            })),
+                        );
+                    }
+                    return (
+                        config,
+                        canonical_id,
+                        Some(crate::agent::model_group::ModelGroupBinding::from_config(
+                            group_name,
+                            idx,
+                            group_config,
+                        )),
+                    );
+                }
+            }
+            tracing::warn!(
+                agent = agent_name,
+                group = %group_name,
+                "Model group has no usable entry (all cooling or unresolvable), falling through to inherit"
+            );
+        } else {
+            tracing::warn!(
+                agent = agent_name,
+                group = %group_name,
+                "[subagents.model_groups] references an unknown model group, falling through to inherit"
+            );
+        }
     }
     if let ModelOverride::Override(model_id) = agent_model
-        && let Some(resolved) = try_pin(
+        && let Some((config, canonical_id)) = try_pin(
             model_id,
             "agent_definition",
             "Agent definition model references unknown model, falling through to inherit",
         )
     {
-        return resolved;
+        return (config, canonical_id, None);
     }
     log_subagent_model_resolution(
         agent_name,
@@ -668,21 +734,73 @@ async fn resolve_subagent_sampling_config(
         &parent_mid,
         &parent_config,
     );
-    (parent_config, parent_mid)
+    (parent_config, parent_mid, None)
+}
+
+/// Apply a model group entry's `effort` override onto the resolved sampling config.
+/// Sits below the spawn runtime / `[subagents.efforts]` overrides (applied later in
+/// `run_shell_child`) and above the `[model.<id>]` entry default carried by
+/// `sampling_config_for_model`. Unsupported or unparseable efforts warn and keep the
+/// resolved config untouched.
+fn apply_group_entry_effort(
+    entry: &crate::agent::config::ModelGroupEntry,
+    model_id: &acp::ModelId,
+    config: &mut xai_grok_sampler::SamplerConfig,
+    ctx: &SubagentSpawnContext,
+    agent_name: &str,
+) {
+    use xai_grok_sampling_types::ReasoningEffort;
+    let Some(raw) = entry.effort.as_deref() else {
+        return;
+    };
+    let effort = match raw.parse::<ReasoningEffort>() {
+        Ok(effort) => effort,
+        Err(error) => {
+            tracing::warn!(
+                agent = agent_name,
+                value = raw,
+                %error,
+                "model group entry effort: parse failed, ignoring"
+            );
+            return;
+        }
+    };
+    if !ctx
+        .models_manager
+        .model_supports_reasoning_effort(model_id.0.as_ref())
+    {
+        tracing::warn!(
+            agent = agent_name,
+            model = %model_id.0,
+            effort = %effort,
+            "model group entry effort ignored: model does not support effort"
+        );
+        return;
+    }
+    if let Some(routed) = ctx.models_manager.model_for_effort(model_id.0.as_ref(), effort) {
+        config.model = routed;
+    }
+    config.reasoning_effort = Some(effort);
 }
 /// Resolve a subagent's effective sampling config and model id, honoring the model-resolution precedence.
 /// An explicit `runtime_override_model` is the goal role model or a persona override carried on `effective_runtime.model`.
 /// It is resolved HERE, BEFORE [`resolve_subagent_sampling_config`], where the user `[subagents.models]` pin and `AgentDefinition.model` apply. So a goal/persona override WINS over a user per-agent pin. An override that does not resolve to a known model warns and falls through to the pin path. Extracted from `run_shell_child` so the precedence is unit-testable without spawning a child session.
+/// The third tuple element carries the model-group binding (group + entry index + cooldown) when
+/// the resolution came from a `[subagents.model_groups]` chain; `None` otherwise.
 #[tracing::instrument(level = "debug", skip_all)]
 async fn resolve_effective_model_config(
     runtime_override_model: Option<&str>,
     subagent_type: &str,
     definition_model: &xai_grok_agent::config::ModelOverride,
     ctx: &SubagentSpawnContext,
-) -> (xai_grok_sampler::SamplerConfig, acp::ModelId) {
+) -> (
+    xai_grok_sampler::SamplerConfig,
+    acp::ModelId,
+    Option<crate::agent::model_group::ModelGroupBinding>,
+) {
     if let Some(model_id) = runtime_override_model {
-        if let Some(resolved) = resolve_model_override_to_config(model_id, ctx) {
-            return resolved;
+        if let Some((config, canonical_id)) = resolve_model_override_to_config(model_id, ctx) {
+            return (config, canonical_id, None);
         }
         tracing::warn!(
             model_id,

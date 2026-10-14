@@ -532,6 +532,15 @@ pub(crate) async fn run_shell_child(
         &definition,
     );
     let prompt = request.prompt.clone();
+    // LOCAL: `[subagents.efforts]` — per-agent effort config entry; sits below the spawn
+    // runtime override and role/persona effort (both already merged into `effective_runtime`).
+    if effective_runtime.reasoning_effort.is_none()
+        && let Some(effort) = ctx
+            .subagent_effort_overrides
+            .get(request.subagent_type.as_str())
+    {
+        effective_runtime.reasoning_effort = Some(effort.clone());
+    }
     if let Some(ref err) = effective_runtime.persona_error {
         tracing::error!(
             subagent_id = %request.id,
@@ -818,7 +827,8 @@ pub(crate) async fn run_shell_child(
     if request.fork_context {
         effective_runtime.model = Some(ctx.model_id.0.to_string());
     }
-    let (mut effective_sampling_config, mut effective_model_id) = resolve_effective_model_config(
+    let (mut effective_sampling_config, mut effective_model_id, model_group_binding) =
+        resolve_effective_model_config(
         effective_runtime.model.as_deref(),
         &request.subagent_type,
         &definition.model,
@@ -1946,6 +1956,30 @@ pub(crate) async fn run_shell_child(
         trace,
         mut cancellation_may_hide_usage,
     } = attempt_outcome;
+    // LOCAL: model group failover (spawn-level, v1) — a provider-unavailable task failure
+    // puts the used entry into the process-level cooldown so later spawns resolve to the
+    // next entry in the chain. See docs-local/subagent-model-group-todo.md (G2).
+    if let Some(binding) = model_group_binding.as_ref()
+        && let Some(error) = result.error.as_deref()
+        && crate::agent::model_group::error_is_provider_unavailable(error)
+    {
+        crate::agent::model_group::ModelGroupRuntime::global().mark_cooldown(
+            &binding.group,
+            binding.entry_idx,
+            binding.cooldown_minutes,
+        );
+        xai_grok_telemetry::unified_log::warn(
+            "subagent model group: entry marked cooling",
+            None,
+            Some(serde_json::json!({
+                "subagent_type": &request.subagent_type,
+                "group": &binding.group,
+                "entry_idx": binding.entry_idx,
+                "cooldown_minutes": binding.cooldown_minutes,
+                "error_preview": error.chars().take(160).collect::<String>(),
+            })),
+        );
+    }
     let OneTurnTraceCapture {
         before_copy_rx,
         child_prompt_id,

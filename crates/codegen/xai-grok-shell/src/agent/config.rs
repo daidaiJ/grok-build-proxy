@@ -165,6 +165,40 @@ pub struct ModelCatalogConfig {
     pub cache_minutes: Option<u64>,
 }
 
+/// LOCAL: `[model_groups.<name>]` — 模型组：跨供应商有序降级链。条目引用
+/// `[model.<id>]`（供应商 pin），顺序 = 优先级；消费方（subagent 绑定）在首选
+/// 条目冷却/不可解析时顺延到下一可用条目。见 docs-local/subagent-model-group-todo.md。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ModelGroupConfig {
+    /// 有序降级链。
+    #[serde(default)]
+    pub entries: Vec<ModelGroupEntry>,
+    /// 降级后粘住首个可用条目（缺省 true）。v1 语义：组解析跳过冷却中的条目。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sticky: Option<bool>,
+    /// 失败条目冷却分钟数（缺省 10）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cooldown_minutes: Option<u64>,
+}
+
+/// 模型组单条目。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ModelGroupEntry {
+    /// 引用 `[model.<id>]` 条目 id。
+    pub model: String,
+    /// 组级 effort 覆盖；spawn 显式与 `[subagents.efforts]` 优先于此值。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
+}
+
+impl ModelGroupConfig {
+    pub(crate) fn cooldown_minutes(&self) -> u64 {
+        self.cooldown_minutes.unwrap_or(10)
+    }
+}
+
 /// LOCAL: `[shell]` — Windows shell backend selection for the bash tool.
 /// Unix shells are unaffected (they follow `$SHELL`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1411,6 +1445,9 @@ pub struct Config {
     /// LOCAL: `[model_catalog]` 模型目录取数设置.
     #[serde(default, skip_serializing)]
     pub model_catalog: ModelCatalogConfig,
+    /// LOCAL: `[model_groups.<name>]` 模型组（跨供应商降级链）定义表.
+    #[serde(default, skip_serializing)]
+    pub model_groups: std::collections::HashMap<String, ModelGroupConfig>,
     /// LOCAL: `[shell]` Windows shell backend; resolved into the shell cascade at config load.
     #[serde(default, skip_serializing)]
     pub shell: ShellBackendConfig,
@@ -1498,6 +1535,17 @@ pub struct Config {
     /// Set alongside `subagents_enabled` from `SubagentsConfig::resolve()`.
     #[serde(skip)]
     pub subagent_model_overrides: std::collections::HashMap<String, String>,
+    /// Per-subagent model-group bindings from `[subagents.model_groups]` in config.toml.
+    /// Keys are agent names, values are `[model_groups.<name>]` group names.
+    /// Mutually exclusive with `subagent_model_overrides` per agent; the single-model
+    /// pin wins when both are set (warned at resolution).
+    #[serde(skip)]
+    pub subagent_group_bindings: std::collections::HashMap<String, String>,
+    /// Per-subagent reasoning-effort overrides from `[subagents.efforts]` in config.toml.
+    /// Keys are agent names, values are effort levels ("low"/"medium"/"high" ...).
+    /// Applied below spawn-time runtime overrides and role/persona effort.
+    #[serde(skip)]
+    pub subagent_effort_overrides: std::collections::HashMap<String, String>,
     /// Per-subagent enable/disable toggles from `[subagents.toggle]` in config.toml.
     /// Keys are agent names, values are booleans. Omitted agents default to enabled.
     #[serde(skip)]
@@ -1698,6 +1746,7 @@ impl Default for Config {
             network: NetworkConfig::default(),
             provider_usage: ProviderUsageConfig::default(),
             model_catalog: ModelCatalogConfig::default(),
+            model_groups: std::collections::HashMap::new(),
             shell: ShellBackendConfig::default(),
             notification_settings: NotificationsConfig::default(),
             tool_output_compression: Default::default(),
@@ -1779,6 +1828,8 @@ impl Default for Config {
             media_gen_batch_limits: xai_grok_tools::media_gen_limits::MediaGenBatchLimits::default(
             ),
             subagent_model_overrides: std::collections::HashMap::new(),
+            subagent_group_bindings: std::collections::HashMap::new(),
+            subagent_effort_overrides: std::collections::HashMap::new(),
             subagent_toggle: std::collections::HashMap::new(),
             subagent_roles: std::collections::HashMap::new(),
             subagent_personas: std::collections::HashMap::new(),
@@ -2210,7 +2261,17 @@ impl Config {
         self.resolve_subagent_limits(&sa, remote_settings.as_ref());
         self.subagents_enabled = sa.enabled;
         self.subagent_model_overrides = sa.models;
+        self.subagent_group_bindings = sa.model_groups;
+        self.subagent_effort_overrides = sa.efforts;
         self.subagent_toggle = sa.toggle;
+        for agent in self.subagent_model_overrides.keys().collect::<Vec<_>>() {
+            if self.subagent_group_bindings.contains_key(agent) {
+                tracing::warn!(
+                    agent = %agent,
+                    "[subagents.models] and [subagents.model_groups] are both set for this agent; the single-model pin wins"
+                );
+            }
+        }
         self.subagent_roles = sa.roles;
         self.subagent_personas = sa.personas;
         let env = std::env::var(crate::config::SubagentsConfig::ENV_MAX_DEPTH).ok();

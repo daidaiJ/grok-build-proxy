@@ -70,6 +70,18 @@ pub struct SubagentsConfig {
     /// Parsed from `[subagents.models]` in config.toml.
     #[serde(default)]
     pub models: std::collections::HashMap<String, String>,
+    /// Per-subagent model-group bindings.
+    /// Keys are agent names, values are `[model_groups.<name>]` group names.
+    /// Mutually exclusive with `models` per agent; the single-model pin wins when both are set.
+    /// Parsed from `[subagents.model_groups]` in config.toml.
+    #[serde(default)]
+    pub model_groups: std::collections::HashMap<String, String>,
+    /// Per-subagent reasoning-effort overrides.
+    /// Keys are agent names, values are effort levels ("low"/"medium"/"high" ...).
+    /// Applied below spawn-time runtime overrides and role/persona effort.
+    /// Parsed from `[subagents.efforts]` in config.toml.
+    #[serde(default)]
+    pub efforts: std::collections::HashMap<String, String>,
     /// Per-subagent enable/disable toggles.
     /// Keys are agent names, values are booleans.
     /// Omitted agents default to enabled (`true`).
@@ -93,6 +105,8 @@ impl Default for SubagentsConfig {
             limit_behavior: None,
             workflow_max_concurrent: None,
             models: std::collections::HashMap::new(),
+            model_groups: std::collections::HashMap::new(),
+            efforts: std::collections::HashMap::new(),
             toggle: std::collections::HashMap::new(),
             roles: std::collections::HashMap::new(),
             personas: std::collections::HashMap::new(),

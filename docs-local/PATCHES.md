@@ -2966,3 +2966,39 @@ note_below_content` 竞态（三十九期「重跑自愈」判断不准——ayu
 读侧与全部改状态者共享同一把锁后竞窗结构性消除；fix 提交先行（f1de484），
 feat 随后。活体 ptyctl 抽查随新客户端。合并在 codex 主题（三十九期）之后——
 分支叠建，接线点编号顺延无冲突。
+
+## 四十一期：模型组（跨供应商降级链）+ subagent 模型/effort 配置（2026-10-14，分支 feat/local-subagent-model-group）
+
+> 需求：内置 subagent 可配 model 与推理深度；同一 model id 来自多供应商，要能精确
+> 指定供应商条目并做降级链（A 家 flash 不可用换 B 家）。设计文档
+> `docs-local/subagent-model-group-todo.md`（六拍板点按建议值落地）。Ayu 主题分支
+> （三十九/四十期）按用户指示随本分支一起合并发版。
+
+1. **配置层**：新顶层 `[model_groups.<name>]`（`ModelGroupConfig`：`entries` 有序
+   降级链引用 `[model.<id>]` 条目 id、条目级 `effort` 覆盖、`sticky`（缺省 true，
+   v1 语义=组解析跳过冷却条目）、`cooldown_minutes` 缺省 10）；`[subagents.model_groups]`
+   （agent 名 → 组名，与 `[subagents.models]` 同 agent 并存时 pin 赢 + load 时 warn）、
+   `[subagents.efforts]`（agent 名 → effort）。`SubagentsConfig::resolve` + Config
+   字段（`#[serde(skip)]` 三张表 + `model_groups` 反序列化）。
+2. **解析链**：`resolve_subagent_sampling_config` 优先级扩为 spawn runtime override >
+   `[subagents.models]` pin > `[subagents.model_groups]` 组链 > `AgentDefinition.model` >
+   继承父会话；组分支按序跳过冷却条目（进程级 `ModelGroupRuntime` OnceLock 冷却表，
+   懒回收过期）与不可解析条目，全不可用 fall through + warn；返回值增
+   `ModelGroupBinding{group, entry_idx, cooldown_minutes}`。组条目 `effort` 应用带
+   能力门（`model_supports_reasoning_effort`）与 variants 路由（`model_for_effort`），
+   低于 spawn runtime/`[subagents.efforts]`（后者在 `run_shell_child` 里
+   fill-if-none 接到 `effective_runtime.reasoning_effort` 链，优先级 spawn > role/persona
+   > config efforts > 全局默认）。
+3. **降级运行时（v1 = spawn 级）**：子任务尝试失败且错误串命中 provider-unavailable
+   保守签名（429/rate limit/5xx/connection/timeout/quota；400/401/403 一律不触发）
+   → 用过的组条目进进程冷却（`unified_log::warn "subagent model group: entry marked
+   cooling"` 带组名/下标/错误预览），后续 spawn 解析自动顺延下一可用条目（非首选
+   条目命中时 `unified_log::warn "resolved past the first entry"`）。会话中途换条目
+   （首字节前 failover）与跨会话粘性留 v2；设计文档已记实况偏差。
+
+**验证**：`cargo check -p xai-grok-shell --all-targets` 0 error；新增
+`model_group_tests` 5 例（候选序/全冷却/冷却互不串组/重复标记/分类器正反例）+
+`config/tests` 2 例（三张新表解析 + `[model_groups]` 形状/缺省）+
+`tests/rest.rs` 组链优先级 1 例（首选→冷却跳条目→全冷却 fall through 到
+AgentDefinition）；既有 `runtime_override_wins_over_subagents_models_pin` 等
+5 处解构随三元组返回适配。GATE_FORCE 套件结果见 handoff。

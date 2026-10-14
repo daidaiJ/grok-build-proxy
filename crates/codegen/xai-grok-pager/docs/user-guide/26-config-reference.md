@@ -534,7 +534,20 @@ User-level configuration lives in `$GROK_HOME/config.toml` (default `~/.grok/con
 | `subagents.max_concurrent` | `integer` | `yes` | `user` | Max concurrent subagents. |
 | `subagents.max_depth` | `integer` | `yes` | `user` | Max nested subagent depth (clamped ≥1). |
 | `subagents.models.<name>` | `string` | `yes` | `user` | Per-subagent model id override. |
+| `subagents.model_groups.<name>` | `string` | `yes` | `user` | Bind a subagent to a `[model_groups.*]` fallback chain. Mutually exclusive with `subagents.models.<name>`; the single-model pin wins. |
+| `subagents.efforts.<name>` | `string` | `yes` | `user` | Per-subagent reasoning-effort override (e.g. `low`/`medium`/`high`). Sits below spawn-time overrides and role/persona effort. |
 | `subagents.toggle.<name>` | `boolean` | `yes` | `user` | Enable or disable an individual subagent type. Omitted agents default on. |
+
+### `model_groups`
+
+Ordered cross-provider fallback chains. Entries reference `[model.<id>]` ids (which pin a provider); when an entry's provider fails with rate-limit/5xx/connection errors, the entry cools down and later subagent spawns resolve to the next usable entry.
+
+| Key | Type / Values | Requirements | Managed | Details |
+| --- | --- | --- | --- | --- |
+| `model_groups.<name>.entries` | `array of tables` | `yes` | `user` | Ordered fallback chain; each entry is `{ model = "<model.<id>>", effort = "<optional effort>" }`. |
+| `model_groups.<name>.entries[].effort` | `string` | `no` | `user` | Group-level reasoning-effort override for that entry; ignored (with a warning) when the model does not support effort. |
+| `model_groups.<name>.sticky` | `boolean` | `no` | `user` | Kept for forward compatibility; resolution always skips cooling entries. |
+| `model_groups.<name>.cooldown_minutes` | `integer` | `no` | `user` | Minutes a failed entry stays out of resolution. Default 10. |
 
 ### `telemetry`
 
