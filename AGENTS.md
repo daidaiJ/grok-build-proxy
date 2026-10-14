@@ -278,6 +278,28 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### /lsp 面板化（统一操作面板）— 已随 v1.0.57 发版（2026-10-14）
+
+- **当前状态：** 三十七期 `/lsp select` 的交互收敛：裸 `/lsp`（及 panel/面板）打开
+  统一操作面板——状态显示（门禁来源 + 工作区覆盖 + server 勾选清单带运行态/命令
+  探测 + 会话后端行）、`e`/`t` 启用关闭（本地态先翻转保反馈，dispatch 写
+  workspace 覆盖 + `x.ai/lspApply` 热加载，**面板保持打开**）、server 自动发现
+  清单（config + builtin PATH）、空格勾选 + Enter 确认（禁用清单语义沿用三十七期）。
+  `status` 保留文本回显，`on|off|clear` 保留直接子命令，旧 select/选择/勾选 收编为
+  面板兼容别名。已合 main（merge `4a1d450d`，分支 `feat/local-lsp-panel`）随 tag
+  **`v1.0.57`** 发版：release run `38516906588`（tag）/ build run `38516899716`
+  （main 同 sha）双 job success、4 资产非草稿（Windows zip sha256 核对 OK）；
+  本机 `D:\tool\cli\grok2.exe` 部署 `grok 1.0.57 (4a1d450d933f)`，回滚点
+  `grok2.exe.bak-1.0.56`。实现记录 PATCHES.md 三十八期。shell 侧零改动。
+- **验证：** cargo check pager --lib 0 error 0 warning；ctest 门控 pager `lsp`
+  过滤 16/16（panel 取数旗标 / 无会话提示 / 回包开面板三新例）；i18n 扫描
+  exit 0（lsp_panel 无挂）。
+- **遗留：** ① 真机 TUI 活体验证（面板开合、e 翻转后 status 同步、勾选确认
+  热加载回路）——与三十七期同批随新客户端补；② 三十七期遗留（取数与确认间
+  server 环境变化无检测、新 server 主动弹面板提示）继承不变。
+- **详情指针：** [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) §6
+  台账「/lsp 面板化」条目；PATCHES.md 三十八期。
+
 ### /lsp select server 勾选面板 — 已随 v1.0.56 发版（2026-10-14）
 
 - **当前状态：** 检测 → 勾选 → 确认 → 热加载交互已合 main（merge `2321a579`，
