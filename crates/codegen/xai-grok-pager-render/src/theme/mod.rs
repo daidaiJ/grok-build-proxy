@@ -9,6 +9,7 @@
 
 pub mod cache;
 pub mod catppuccin;
+pub mod codex;
 pub mod color_support;
 pub mod dracula;
 pub mod env_appearance;
@@ -54,6 +55,9 @@ pub enum ThemeKind {
     Vesper = 15,
     NightOwl = 16,
     SolarizedDark = 17,
+    // LOCAL Codex 品牌主题（2026-10-14）：OpenAI Codex CLI 真实 UI 配色（ChatGPT 蓝体系），
+    // 无障碍 256 色板（ada/dali 等）按用户决定弃用。需要 truecolor。
+    Codex = 18,
     /// Every bg is `Reset` so the terminal canvas shows through; legible on both polarities without appearance detection.
     /// Hidden and unparseable while `cache::terminal_theme_enabled()` is off.
     Terminal = 6,
@@ -80,6 +84,7 @@ impl ThemeKind {
         ThemeKind::Vesper,
         ThemeKind::NightOwl,
         ThemeKind::SolarizedDark,
+        ThemeKind::Codex,
         ThemeKind::Terminal,
     ];
 
@@ -145,6 +150,7 @@ impl ThemeKind {
             Self::Vesper => "vesper",
             Self::NightOwl => "nightowl",
             Self::SolarizedDark => "solarized-dark",
+            Self::Codex => "codex",
             Self::Terminal => "terminal",
             Self::Auto => "auto",
         }
@@ -169,7 +175,8 @@ impl ThemeKind {
             | Self::Kanagawa
             | Self::Vesper
             | Self::NightOwl
-            | Self::SolarizedDark => true,
+            | Self::SolarizedDark
+            | Self::Codex => true,
             // Reset plus named ANSI-16 entries only — nothing to quantize.
             Self::Terminal => false,
             // Auto is resolved to a concrete theme before rendering.
@@ -202,6 +209,7 @@ impl ThemeKind {
             Self::Vesper => &[],
             Self::NightOwl => &["night-owl"],
             Self::SolarizedDark => &["solarized"],
+            Self::Codex => &[],
             Self::Terminal => &["terminal-default", "transparent", "native"],
             Self::Auto => &["system"],
         }
@@ -268,6 +276,7 @@ pub fn display_name_for_canonical(value: &str) -> &str {
         "vesper" => "Vesper",
         "nightowl" => "Night Owl",
         "solarized-dark" => "Solarized Dark",
+        "codex" => "Codex",
         "terminal" => "Terminal",
         other => other,
     }
@@ -396,6 +405,7 @@ impl Theme {
             ThemeKind::Vesper => Self::vesper(),
             ThemeKind::NightOwl => Self::night_owl(),
             ThemeKind::SolarizedDark => Self::solarized_dark(),
+            ThemeKind::Codex => Self::codex(),
             // Handled by the early return above.
             ThemeKind::Terminal => Self::terminal(),
             // Auto is resolved to a concrete theme before being stored; if reached, fall back to GrokNight
@@ -1135,6 +1145,7 @@ mod tests {
                 ThemeKind::Vesper => Theme::vesper(),
                 ThemeKind::NightOwl => Theme::night_owl(),
                 ThemeKind::SolarizedDark => Theme::solarized_dark(),
+                ThemeKind::Codex => Theme::codex(),
                 // Reset plus named ANSI entries: the scrollbar rides the
                 // terminal's own fg/bg contrast, so there is no RGB delta.
                 ThemeKind::Terminal => continue,

@@ -133,6 +133,7 @@ pub fn get_syntect() -> &'static Syntect {
         | ThemeKind::Vesper
         | ThemeKind::NightOwl
         | ThemeKind::SolarizedDark
+        | ThemeKind::Codex
         // Terminal remaps every token in `syntect_rgb_to_fg`, so the
         // source palette only has to be a full one — polarity is irrelevant.
         | ThemeKind::Terminal

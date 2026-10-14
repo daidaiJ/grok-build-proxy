@@ -2787,3 +2787,45 @@ ToolContext 字段换共享槽（ArcSwap），结构侵入不值当。
      `#[cfg(any(test, feature = "test-support"))]` 返回 None（测试构建永不读
      开发者 config；生产启动路径不变），单线程/多线程双验证。副产物：win-skip
      登记**族U**（color_support 探测断言依赖宿主 TTY，GATE_FORCE 首跑暴露）。
+
+## 三十七期：Codex 品牌主题——OpenAI Codex CLI 真实 UI 配色移植（2026-10-14，分支 feat/local-codex-theme）
+
+> 需求：引入 Codex 主题配色。捐献者 = 本地 clone `D:\CODE\ai\codex`（codex-rs/tui），
+> 取其**真实 UI 配色体系**（style.rs / color.rs / markdown_render.rs / 内置 tmTheme）。
+> **用户拍板：无障碍配色不要**——6 个内置 `.tmTheme`（ada/babbage/curie/cushman/dali/davinci）
+> 是 256 色无障碍变体（金/橙 `codex.accent`、`#FF5F5F` 主前景），整族弃用；品牌识别
+> 以 style.rs 的 ChatGPT 蓝体系为准。
+
+1. **donor 色源（真实 UI，非无障碍板）**：`UI_ACCENT = CHATGPT_BLUE_200 #63A8F8`
+   （picker 选中/正文强调）、`CHATGPT_BLUE_100 #A4CDFB`（选中填充）、
+   `warning_notice` 深底琥珀 `(196,167,103)`、`secondary_text_style`（fg/bg 60%
+   blend → 近黑底上 #999999）、`user_message_bg`（暗底白 12% 叠底）、tmTheme 暗底
+   前景 `#D0D0D0`、comment `#808080` / punctuation `#BCBCBC`、`markup.inserted/
+   deleted`（#00AF00/#FF5F5F）。codex 默认语法主题是 Catppuccin Mocha（fork 已有
+   独立主题），不重复吸收。
+2. **新文件** `theme/codex.rs`：~60 槽位完整映射（编译器强制）。直采槽位如上；
+   donor 未定义的（bg 深/浅梯度、hover、边框细档、verify、md 六级标题梯）按 Nord
+   先例在「ChatGPT 蓝 + 中性灰」色系内手调派生并文件头注明；md 标题 modifiers
+   对齐 codex markdown_render（h1 bold+underlined、h3 bold+italic）。底色取
+   `#141414` 近黑中性（codex 跟随终端底色的品牌观感），`bg_light = #303030`
+   即 codex 用户消息块白 12% 叠底的实算值。签名测试（bg_base/accent_user/
+   bg_light 原值 + is_dark + display_name）。
+3. **注册接线（同三十六期八处，+1 变体 `Codex = 18`）**：`theme/mod.rs`（mod 声明、
+   ThemeKind、ALL、display_name、aliases 空、requires_truecolor truecolor 门控、
+   `current()` 分发、display_name_for_canonical）；`theme/cache.rs` 解码臂；
+   `syntax.rs` 深色臂并 grok-night.tmTheme；pager `settings/defs.rs` 两 catalog
+   +1；`slash/i18n.rs` 中文描述 +1；`views/settings_modal/tests.rs` 分发臂 +1；
+   doctor 夹具 17→18（doctor_cmd/tests.rs 三处、diagnostics/doctor_format_tests.rs
+   一处）；user-guide 06-theming 表 +1 行（17→18）。mermaid `theme_is_dark` 是
+   浅色负名单制，Codex 为深色，零改动。
+4. **语义对照**：`theme_is_dark`/量化/Windows 对比度增强/ANSI16 覆盖等泛化路径
+   自动收编（遍历 ALL 的既有测试自动覆盖新变体）。
+
+验证：`cargo check -p xai-grok-pager-render -p xai-grok-pager --all-targets`
+0 error 0 warning；GATE_FORCE 合批测试（render theme 179/0 + pager theme/settings/
+doctor/mermaid 526/0；settings 单独 380/380 对齐三十六期基线）；i18n 扫描新增
+描述已带 zh 对，0 新挂。**运行备注**：合批首轮暴露 `clamped_preview_renders_
+note_below_content` 一挂（note fg 拿到 Reset）——复判为既有全局主题测试隔离
+flake（`info_line_chrome_is_muted_on_terminal_theme` 的 native-lock 窗口与
+settings preview 并行互踩；三十六期按过滤分开跑故未共现），同命令重跑 526/0
+零改动自愈，与 Codex 主题无关。活体 ptyctl 抽查随新客户端。

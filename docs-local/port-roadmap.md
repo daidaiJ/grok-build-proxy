@@ -596,3 +596,24 @@
   catppuccin-mocha 渲染）。
 - **遗留**：其余 21 套 opencode 主题（synthwave84/flexoki/zenburn/monokai 等）
   同模式可增量移植，未纳入本次。
+
+### 2026-10-14 Codex 品牌主题（feat/local-codex-theme）——OpenAI Codex CLI 真实 UI 配色移植
+
+- **状态**：施工完成待验证合入。捐献者 = 本地 clone `D:\CODE\ai\codex`
+  （codex-rs/tui style.rs / color.rs / markdown_render.rs / 内置 tmTheme），
+  取 ChatGPT 蓝体系（UI_ACCENT #63A8F8、BLUE_100 #A4CDFB、warning 琥珀
+  #C4A767、secondary 60% blend、user_message 白 12% 叠底、tmTheme 暗前景
+  #D0D0D0、diff 绿红 #00AF00/#FF5F5F）；**用户拍板无障碍配色不要**——6 个
+  256 色 `.tmTheme` 变体（金/橙 accent）整族弃用。
+- **落点**：同三十六期八处接线 +1 变体（`Codex = 18`）：theme/codex.rs 新文件
+  （~60 槽位 + 签名测试）、mod.rs/cache.rs/syntax.rs、settings defs 两 catalog、
+  slash i18n +1、settings_modal tests 分发、doctor 夹具 17→18、user-guide
+  06-theming 表 18 行。mermaid `theme_is_dark` 浅色负名单制零改动。
+  实现记录 PATCHES.md 三十七期。
+- **验证**：cargo check render/pager --all-targets 0 error 0 warning + GATE_FORCE
+  合批测试（render theme 179/0 + pager 526/0；settings 单独 380/380 对齐基线）+
+  i18n 扫描 0 新挂；合批首轮一挂为既有全局主题测试隔离 flake（native-lock 测试
+  × settings preview 并行互踩，重跑自愈，详见 PATCHES 三十七期运行备注）；
+  ptyctl 活体抽查随新客户端。
+- **遗留**：opencode 余 21 套社区主题同模式增量移植（继承上条）；
+  Latte 浅色下 mermaid 活体抽查（继承上条）。

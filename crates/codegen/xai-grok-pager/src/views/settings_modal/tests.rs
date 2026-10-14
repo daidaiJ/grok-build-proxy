@@ -6772,6 +6772,7 @@ fn max_thoughts_width_preview_title_styling_distinguishes_from_content() {
         crate::theme::ThemeKind::Vesper => crate::theme::Theme::vesper(),
         crate::theme::ThemeKind::NightOwl => crate::theme::Theme::night_owl(),
         crate::theme::ThemeKind::SolarizedDark => crate::theme::Theme::solarized_dark(),
+        crate::theme::ThemeKind::Codex => crate::theme::Theme::codex(),
         // Both bg tokens are Reset (bandless palette), so the two-tone
         // assertion below does not apply — the preview reads via the
         // underline cue instead.

@@ -1394,6 +1394,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "Ethan Schoonover 的 16 色经典；需要真彩。",
         ),
         (
+            "OpenAI Codex CLI's ChatGPT-blue near-black dark; needs truecolor.",
+            "OpenAI Codex CLI 的 ChatGPT 蓝近黑深色；需要真彩。",
+        ),
+        (
             "Terminal's own background and text colors.",
             "使用终端自身的背景与文字颜色。",
         ),

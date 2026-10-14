@@ -250,13 +250,16 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   eager bootstrap 内存尾部（懒启动挂真实抱怨触发）、T1 诊断按需 op /
   T2 call hierarchy / T3 rename（[improvements-todo](docs-local/lsp-port/lsp-improvements-todo.md)
   顺位）。
-- **主题目录扩容（社区色板移植，2026-10-13，`feat/local-theme-catalog-port`）** —
+- **主题目录扩容（社区色板移植 + Codex 品牌主题，2026-10-13/14）** —
   从父目录 opencode 主题库移植 11 套社区好评主题（Catppuccin Mocha/Latte、
   Dracula、Gruvbox Dark、Nord、One Dark、Everforest、Kanagawa、Vesper、
-  Night Owl、Solarized Dark；Latte 为第二浅色）。落点：pager-render `theme/`
-  新 ×9 文件 + mod.rs/cache.rs/syntax.rs 接线 + pager settings 目录/i18n/
+  Night Owl、Solarized Dark；Latte 为第二浅色，`feat/local-theme-catalog-port`
+  随 v1.0.55 发版）；**Codex 品牌主题**（`codex`，`feat/local-codex-theme`，
+  PATCHES 三十七期）取 OpenAI Codex CLI 真实 UI 配色（ChatGPT 蓝体系 +
+  琥珀警告 + 近黑中性底），用户拍板弃用其 256 色无障碍板。落点：pager-render
+  `theme/` + mod.rs/cache.rs/syntax.rs 接线 + pager settings 目录/i18n/
   mermaid 浅色判定。~60 槽位逐一映射（编译器强制），全 truecolor 门控。
-  实现记录 PATCHES.md 三十六期；user-guide 06-theming 表 6→17 行；
+  实现记录 PATCHES.md 三十六/三十七期；user-guide 06-theming 表 6→18 行；
   其余 21 套 opencode 主题可同模式增量移植（roadmap §6 台账）。
 
 - [`docs-local/issues/`](docs-local/issues/README.md) — **使用问题台账（一 issue 一文件）**。
