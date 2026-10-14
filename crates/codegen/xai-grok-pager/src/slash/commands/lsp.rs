@@ -16,9 +16,9 @@ impl SlashCommand for LspCommand {
     slash_meta! {
         name: "lsp",
         description: "Toggle LSP tools for this workspace",
-        usage: "/lsp [on|off|status|clear]",
+        usage: "/lsp [on|off|select|status|clear]",
         takes_args: true,
-        arg_placeholder: "on|off|status|clear",
+        arg_placeholder: "on|off|select|status|clear",
     }
 
     fn run(&self, _ctx: &mut CommandExecCtx, args: &str) -> CommandResult {
@@ -27,9 +27,10 @@ impl SlashCommand for LspCommand {
             "on" | "开启" => LspConfigureRequest::Set(true),
             "off" | "关闭" => LspConfigureRequest::Set(false),
             "clear" | "reset" | "auto" => LspConfigureRequest::Clear,
+            "select" | "选择" | "勾选" | "勾选面板" => LspConfigureRequest::Select,
             other => {
                 return CommandResult::Error(format!(
-                    "用法：/lsp [on|off|status|clear]（未知参数 “{other}”；clear = 删除本工作区覆盖，恢复跟随全局配置）"
+                    "用法：/lsp [on|off|select|status|clear]（未知参数 “{other}”；select = 勾选本工作区启用的 server；clear = 删除本工作区覆盖，恢复跟随全局配置）"
                 ));
             }
         };
@@ -76,6 +77,9 @@ pub(crate) fn format_status(response: &LspStatusResponse) -> String {
             if s.command_found == Some(false) {
                 line.push_str("（命令未找到）");
             }
+            if s.disabled {
+                line.push_str("（已禁用 — /lsp select 勾选恢复）");
+            }
             if let Some(running) = s.running {
                 line.push_str(if running { " — 运行中" } else { " — 未运行" });
             }
@@ -100,6 +104,10 @@ pub(crate) fn format_status(response: &LspStatusResponse) -> String {
         }
         None => lines.push("当前无活动会话或本会话未装配 LSP 后端。".to_string()),
     }
+    lines.push(
+        "用 /lsp select 勾选本工作区要启用的 server（取消勾选的将被禁用，配置/自动检测到的都会列出）。"
+            .to_string(),
+    );
     lines.push(
         "/lsp 的改动立即热加载到零回合会话；已有回合的会话对新会话生效。".to_string(),
     );
@@ -140,6 +148,8 @@ mod tests {
         // 裸 `/lsp` 也是 status 查询。
         assert_eq!(expect(run_with("")), Some(LspConfigureRequest::Status));
         assert_eq!(expect(run_with("clear")), Some(LspConfigureRequest::Clear));
+        assert_eq!(expect(run_with("select")), Some(LspConfigureRequest::Select));
+        assert_eq!(expect(run_with("选择")), Some(LspConfigureRequest::Select));
     }
 
     #[test]

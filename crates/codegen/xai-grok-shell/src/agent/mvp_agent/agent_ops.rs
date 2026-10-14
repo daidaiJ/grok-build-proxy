@@ -399,6 +399,19 @@ impl MvpAgent {
                 &inline_names,
             );
         let servers = crate::agent::folder_trust::filter_untrusted_project_lsp(cwd, sourced);
+        // LOCAL(/lsp select): per-workspace deny list from the picker — excluded
+        // servers are dropped regardless of source (config / builtin / plugin).
+        let disabled = crate::util::workspace_overrides::read_lsp_disabled_servers(cwd);
+        let servers = if disabled.is_empty() {
+            servers
+        } else {
+            let removed: Vec<&str> = disabled.iter().map(String::as_str).collect();
+            tracing::debug!(cwd = %cwd.display(), servers = ?removed, "dropping LSP servers on the workspace deny list");
+            servers
+                .into_iter()
+                .filter(|(name, _)| !disabled.contains(name))
+                .collect()
+        };
         if servers.is_empty() {
             let user_path = xai_grok_tools::util::grok_home::grok_home().join("lsp.json");
             let project_path = cwd.join(".grok").join("lsp.json");

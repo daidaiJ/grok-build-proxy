@@ -5119,7 +5119,11 @@ pub(crate) fn execute(
         }
         // LOCAL: /lsp status（`x.ai/lspStatus`）。错误也在回包体内（不进 Err 通道），
         // 状态块总能落盘。
-        Effect::FetchLspStatus { cwd, session_id } => {
+        Effect::FetchLspStatus {
+            cwd,
+            session_id,
+            select,
+        } => {
             let tx = acp_tx.clone();
             tasks.spawn(async move {
                 let req = acp::ExtRequest::new(
@@ -5151,7 +5155,7 @@ pub(crate) fn execute(
                         ..Default::default()
                     },
                 };
-                TaskResult::LspStatusFetched { response }
+                TaskResult::LspStatusFetched { cwd, session_id, select, response }
             });
         }
         // LOCAL: /lsp 零回合热加载（`x.ai/lspApply`）。错误也在回包体内。

@@ -246,7 +246,11 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   pyright→basedpyright→pylsp / jdtls / clangd，同名+扩展双重 gap 合并、config 恒压
   builtin）+ `/lsp status` 数据面（`x.ai/lspStatus`，门禁来源+server 清单+会话
   后端快照）+ **零回合会话热加载**（`x.ai/lspApply` → `ReloadLspHarness` 复用
-  model-switch 零回合重建簿记，推翻 v1「会话边界切换」）。遗留：活体 TUI 验证、
+  model-switch 零回合重建簿记，推翻 v1「会话边界切换」）；v2.1（2026-10-14，
+  `feat/local-lsp-server-picker`，三十七期）`/lsp select` server 勾选面板——
+  检测/配置到的 server 全列出、空格勾选确认后写本工作区禁用清单
+  （`feature-overrides` 增 `lsp_disabled_servers`，只记排除项），零回合热加载。
+  遗留：活体 TUI 验证、
   eager bootstrap 内存尾部（懒启动挂真实抱怨触发）、T1 诊断按需 op /
   T2 call hierarchy / T3 rename（[improvements-todo](docs-local/lsp-port/lsp-improvements-todo.md)
   顺位）。

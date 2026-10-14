@@ -33,6 +33,8 @@ pub enum LspConfigureRequest {
     Status,
     Set(bool),
     Clear,
+    /// 打开 server 勾选面板（`x.ai/lspStatus` 取数后弹 LspServerPicker）。
+    Select,
 }
 
 /// Synchronous, side-effect-free user intent.
@@ -60,6 +62,14 @@ pub enum Action {
     /// 过「新会话」门后写 grok-home 覆盖文件；Status 只读。
     LspConfigure {
         request: LspConfigureRequest,
+    },
+    /// LOCAL(/lsp select): server 勾选面板确认 —— `disabled` = 取消勾选的 server
+    /// 名（空 = 清除本工作区禁用清单，恢复全量跟随检测/配置）。写入 grok-home
+    /// workspace 覆盖后对零回合活动会话发 `x.ai/lspApply` 热加载。
+    LspServersConfirm {
+        cwd: std::path::PathBuf,
+        session_id: Option<String>,
+        disabled: Vec<String>,
     },
     /// Leave the welcome screen for the optimistic home session, or create one if none exists.
     LeaveHome,
@@ -2239,6 +2249,8 @@ pub enum Effect {
         cwd: std::path::PathBuf,
         /// 活动会话 id；shell 据此取该会话 LSP 后端快照。
         session_id: Option<String>,
+        /// `true` = `/lsp select`：回包后打开 server 勾选面板（而非落状态块）。
+        select: bool,
     },
     /// LOCAL: /lsp 零回合热加载执行面（`x.ai/lspApply` 扩展）。Set/Clear 写完
     /// 工作区覆盖后对活动零回合会话发出；shell 重建 harness 换 LSP 后端并重广播
@@ -3353,8 +3365,11 @@ pub enum TaskResult {
         result: Result<crate::diagnostics::FixOutcome, String>,
     },
     /// LOCAL: /lsp status 回包（`x.ai/lspStatus`）。解析/发送失败折进回包体
-    /// `error` 字段，状态块总能落盘。
+    /// `error` 字段，状态块总能落盘。`select = true` 时携出发参数打开勾选面板。
     LspStatusFetched {
+        cwd: std::path::PathBuf,
+        session_id: Option<String>,
+        select: bool,
         response: xai_grok_shell::extensions::lsp_status::LspStatusResponse,
     },
     /// LOCAL: /lsp 零回合热加载回包（`x.ai/lspApply`）。

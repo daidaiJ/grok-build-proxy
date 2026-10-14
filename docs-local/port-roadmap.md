@@ -596,3 +596,31 @@
   catppuccin-mocha 渲染）。
 - **遗留**：其余 21 套 opencode 主题（synthwave84/flexoki/zenburn/monokai 等）
   同模式可增量移植，未纳入本次。
+
+---
+
+### 2026-10-14 `/lsp select` server 勾选面板（feat/local-lsp-server-picker）——检测 → 勾选 → 确认 → 热加载
+
+- **状态**：施工完成、验证中/已验证（以本条落盘时的测试轮结果为准）。背景：三十五期
+  builtin 检测默认全量装配，用户当前项目未必全都要；本条给 LSP server 面加 per-workspace
+  禁用清单 + 勾选面板交互（用户 2026-10-14 提出）。
+- **语义拍板（默认执行，未单独征询）**：① 持久化 = grok-home
+  `feature-overrides` 增 `lsp_disabled_servers` 禁用清单（与 `/lsp on|off` 同文件同层，
+  机器本地不落项目仓库）；② 语义 = 只记排除项（取消勾选的才写盘），空清单 = 清除覆盖
+  恢复全量跟随；③ 生效面 = `build_lsp_backend` 单入口过滤（config/builtin/plugin 来源
+  一视同仁），零回合会话经 `x.ai/lspApply` 热加载；④ 入口 = `/lsp select`（别名
+  选择/勾选），`/lsp status` 增已禁用标注与提示行；⑤ 面板需在会话内打开（挂 agent
+  视图模态槽），welcome/dashboard 提示先进会话。
+- **落点**：shell `workspace_overrides`（新键读写 + 幂等写 + 文件整删惯例）、
+  `agent_ops.rs build_lsp_backend`（禁用过滤）、`extensions/lsp_status.rs`（disabled
+  标志）；pager `actions.rs`（LspConfigureRequest::Select / Effect select 位 /
+  TaskResult 携出参 / Action::LspServersConfirm）、`views/lsp_server_picker.rs`（新
+  模态）、`views/modal.rs` / `app/modals.rs` / `dispatch/router.rs` / `task_result.rs`
+  接线、`slash/commands/lsp.rs`（select 解析 + status 渲染）、i18n 5 键。
+- **验证**：cargo check shell/pager --lib 0 error（首查 rustc 0xc0000005 增量缓存
+  损坏，清 incremental 重查通过）；ctest 门控 shell `workspace_overrides` 6/6、
+  pager `lsp` 过滤 14/14；i18n 扫描 exit 0。
+- **遗留**：① 真机 TUI 活体验证（/lsp select 面板开合、取消勾选 jdtls 后
+  status 显示已禁用、零回合热加载生效）；② 面板初始勾选取自 status 快照，取数
+  与确认之间 server 环境变化无检测（低风险，记录）；③ 首次检测到新 server 时的
+  主动提示（是否弹面板）未做，走用户主动 /lsp select。

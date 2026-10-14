@@ -127,6 +127,7 @@ fn lsp_status_renders_servers_and_session_state() {
                 args: vec![],
                 source: "builtin".to_string(),
                 command_found: None,
+                disabled: false,
                 running: Some(true),
             },
             LspServerStatus {
@@ -135,6 +136,7 @@ fn lsp_status_renders_servers_and_session_state() {
                 args: vec![],
                 source: "user: /home/.grok/lsp.json".to_string(),
                 command_found: Some(false),
+                disabled: false,
                 running: Some(false),
             },
         ],
@@ -179,4 +181,75 @@ fn lsp_status_renders_error_and_empty_cases() {
     assert!(text.contains("本工作区覆盖：off"), "got: {text}");
     assert!(text.contains("语言服务器：无"), "got: {text}");
     assert!(text.contains("当前无活动会话或本会话未装配 LSP 后端。"), "got: {text}");
+}
+
+#[test]
+fn lsp_select_emits_fetch_effect_with_select_flag() {
+    let mut app = test_app_with_agent();
+    let effects = dispatch(
+        Action::LspConfigure {
+            request: LspConfigureRequest::Select,
+        },
+        &mut app,
+    );
+    assert!(
+        matches!(
+            &effects[..],
+            [Effect::FetchLspStatus { select: true, .. }]
+        ),
+        "expected a single FetchLspStatus(select=true), got: {effects:?}"
+    );
+}
+
+#[test]
+fn lsp_select_without_agent_session_reports_hint() {
+    let mut app = test_app(); // 无 agent 视图（welcome/dashboard）
+    let effects = dispatch(
+        Action::LspConfigure {
+            request: LspConfigureRequest::Select,
+        },
+        &mut app,
+    );
+    assert!(effects.is_empty(), "no effect outside a session, got: {effects:?}");
+    assert!(
+        app.welcome_toast.as_ref().is_some_and(|(m, _)| m.contains("/lsp select")),
+        "expected an actionable hint toast, got: {:?}",
+        app.welcome_toast
+    );
+}
+
+#[test]
+fn lsp_servers_confirm_writes_deny_list_and_applies_then_clears() {
+    let mut app = test_app_with_agent();
+    let cwd = std::path::PathBuf::from("/tmp");
+
+    let effects = dispatch(
+        Action::LspServersConfirm {
+            cwd: cwd.clone(),
+            session_id: Some("test-session".to_string()),
+            disabled: vec!["jdtls".to_string(), "clangd".to_string()],
+        },
+        &mut app,
+    );
+    assert!(
+        effects.iter().any(
+            |e| matches!(e, Effect::ApplyLspTools { session_id: sid, .. } if sid == "test-session")
+        ),
+        "expected ApplyLspTools hot reload, got: {effects:?}"
+    );
+    let text = last_system_text(&app, AgentId(0));
+    assert!(text.contains("已保存"), "got: {text}");
+    assert!(text.contains("jdtls"), "deny list should be echoed, got: {text}");
+
+    // 空确认 = 清除覆盖（与 /lsp clear 同款「写后即清」自回收）。
+    dispatch(
+        Action::LspServersConfirm {
+            cwd,
+            session_id: None,
+            disabled: vec![],
+        },
+        &mut app,
+    );
+    let text = last_system_text(&app, AgentId(0));
+    assert!(text.contains("已清除"), "got: {text}");
 }

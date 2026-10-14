@@ -2166,6 +2166,15 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Write", "撰写"),
         ("Drafts", "草稿"),
         ("move", "移动"),
+        ("toggle all", "全选/全不选"),
+        // LOCAL /lsp select：server 勾选面板（views/lsp_server_picker）
+        ("LSP servers", "LSP 语言服务器"),
+        (
+            "Space to select servers to enable in this workspace; unchecked ones are disabled.",
+            "空格勾选本工作区要启用的 server；未勾选的将被禁用。",
+        ),
+        ("No language servers detected or configured.", "未检测到也未配置任何语言服务器。"),
+        ("(command not found)", "（命令未找到）"),
         ("value", "切换值"),
         ("labels", "标签行"),
         ("done", "完成"),
