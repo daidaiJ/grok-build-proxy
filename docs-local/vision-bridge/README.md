@@ -16,7 +16,7 @@
 
 ## 文档导览
 
-- [plan.md](plan.md) — 施工计划：现状锚点、定案、T1–T3、验收、纪律。
+- [plan.md](plan.md) — 施工计划：现状锚点、定案（含二轮拍板 D8 目录回填 / D9 触发拓扑）、T1–T3、验收、纪律。
 - [notes/qwen-code.md](notes/qwen-code.md) — 兄弟目录 `D:/CODE/ai/qwen-code` 的实现对照（抄什么、不抄什么）。
 - [notes/siblings-survey.md](notes/siblings-survey.md) — 父目录其余 12 个同类 agent 视觉方案普查
   （2026-10-14）：三家有真桥（qwen-code 内联转写 / MiMo 委托视觉子代理 / minimax 服务端识图工具），

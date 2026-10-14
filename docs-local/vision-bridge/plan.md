@@ -1,6 +1,9 @@
 # 视觉桥施工计划
 
 > 状态：评估完成，未开工。与 [README.md](README.md) 同期（2026-09-27）。
+> **二轮拍板（2026-10-14）**：D8（能力位目录回填）与 D9（触发拓扑：前置判定 → 400 反应式 →
+> 终态人工）已补充，仍未开工。降级链引用
+> [subagent-model-group-todo](../subagent-model-group-todo.md) 的模型组原语（一个概念，两个消费者）。
 > 对照笔记见 [notes/qwen-code.md](notes/qwen-code.md)。
 
 ## 需求原话
@@ -32,6 +35,8 @@
 | TUI 是否允许粘贴图：ACP `meta.acceptsImages` / `inputModalities`，**缺省 true** | `xai-grok-pager/src/acp/model_state.rs`：`current_model_accepts_images` |
 | ACP 已发 `totalContextTokens` / reasoning，**从未发 acceptsImages** | `agent/config.rs`：`to_acp_model_info` |
 | 模型目录无视觉能力字段 | `ModelEntryConfig` / `ModelInfo`（`agent/config.rs`） |
+| 模型目录缓存条目也无模态字段（`reasoning: Option<bool>` 是同型先例） | `xai-grok-model-catalog/src/types.rs:38` `CatalogEntry` |
+| toml_edit 定点写回用户 `[model.<id>]` 的机制先例（注释/未知段保留、flock、原子） | `/auth` 面板 `write_model_entries`（v1.0.50，PATCHES 三十期） |
 | 描述源枚举只有用户附件 | `ImageDescribeSource::UserAttachment` |
 | 用户图描述失败 → 整回合 `acp::Error` | `transcribe_user_images` 的 `map_err` |
 | 配置参考已有 `models.image_description` | `xai-grok-pager/docs/user-guide/26-config-reference.md` |
@@ -126,6 +131,41 @@ T1 改成：
 ### D7 披露（T3，T1 至少打日志）
 
 用户可见一句：转写了几张、用了哪个模型、endpoint host（跨供应商时必须有 host）。失败同样披露「尝试过、图不可用」。T1 可先 `tracing` + 一条 `system_reminder`；T3 再接到 TUI/ACP 通知。
+
+### D8 能力位来源扩展：模型目录缓存回填（二轮拍板 2026-10-14）
+
+D1 的 `accepts_images` 不必全靠手写。模型目录缓存（`xai-grok-model-catalog`，v1.0.49/51）
+里大部分条目能对上用户 config 的 model id（裸 id↔`vendor/model` 段命中已有），用它回填：
+
+- **数据源增量**：`CatalogEntry` 今天无模态字段（`reasoning: Option<bool>` 是同型先例）。
+  两家源都带模态：OpenRouter `architecture.input_modalities`、models.dev `modalities.input`。
+  解析层加归一字段 `accepts_images: Option<bool>`（None = 源未给/无法判定），缓存 version +1。
+- **回填语义**：目录命中 → 补 `accepts_images` 到用户 `[model.<id>]`（toml_edit 定点写回，
+  `/auth` `write_model_entries` 同款机制）；**用户已显式写的永不覆盖，用户配置第一优先**；
+  目录未命中 → 保持 D1 的缺省表不动。回填值在 config 里的表现 = 写入显式字段（与手写等价），
+  因此 D1「显式字段永远赢」的次序不受影响。
+- **时机（拍板点）**：目录取数成功后随预热一次性/天回填（对齐 catalog 预热节奏）；
+  回填成功/跳过各打一条日志，不打扰用户。
+
+### D9 触发拓扑：前置判定 → 400 反应式 → 无桥告知 → 终态人工（二轮拍板 2026-10-14）
+
+三级触发，逐级兜底：
+
+1. **前置判定（首选，即 D2 常规路径）**：`accepts_images` 可信（用户显式写或 D8 目录回填命中）
+   且为 false → 图在出站前直接转桥（T1/T2 既有路径）。**无视觉模型/桥关**（D3）→ 不进上下文，
+   直接告知用户（notice：当前模型不识图且未配置视觉桥，图未发送）。
+2. **400 反应式（兜底，v2 增量）**：能力位不可判定（目录 miss + 用户未写，走了「缺省 true」类缺省）
+   → 请求照发；上游 400 且错误签名可**高置信**归因为「不支持图像输入」→ 本回合图像摘除转桥：
+   转写成功 → 剥图 + envelope 重发本回合；转写失败 → 剥图 + 不可用说明，回合继续（D4 原样适用）。
+   签名匹配表按供应商归档（OpenAI 系 "image input not supported" / 方舟 / cline 网关等），
+   **置信不足的 400 一律不动**——400 还有超长上下文等其他原因，错摘会掩盖真问题。
+3. **终态人工**：桥不可用（无视觉模型、描述失败且不可重试）→ 告知用户自行处理（切视觉模型或
+   移除图），不再自动重试。
+
+与既有定案的关系：D2「何时跑桥」保持不变（前置判定就是 D2）；D4 失败策略原样适用于反应路径
+的转写失败臂；新增的只有「反应式触发」与「无桥告知/终态人工」。桥的描述模型可引用**模型组**
+（见 [subagent-model-group-todo](../subagent-model-group-todo.md) G1/G5）：视觉组条目须
+`accepts_images == true`，跨供应商降级语义同组定义。
 
 ---
 
@@ -249,6 +289,7 @@ T1 改成：
 | 工具测试大面积转红 | T2 按能力拆用例，先改断言再改生产代码 |
 | 描述很慢，用户以为卡死 | T3 notice「正在用 {model} 转写 n 张图」；超时已有 240s |
 | 图内 prompt injection | D5：DATA + untrusted 标记 |
+| 400 签名误判把非图像 400 当图像问题 | D9：高置信签名表 + 置信不足不动（v2 才做反应路径） |
 | 统一池误烧 | 与 `docs-local/quota-pct-jump-audit.md` 同类；D3 就是为这个 |
 
 ## 工作量
