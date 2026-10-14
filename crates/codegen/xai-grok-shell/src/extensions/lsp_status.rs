@@ -75,6 +75,9 @@ pub struct LspServerStatus {
     /// 裸命令名的 PATH 探测结果；路径形态的 command 不探测，保持 `None`。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command_found: Option<bool>,
+    /// 是否在本工作区 `/lsp select` 禁用清单上（勾掉后不装配）。
+    #[serde(default)]
+    pub disabled: bool,
     /// 会话后端快照里的运行态；无会话可查时 `None`。
     #[serde(skip_serializing_if = "Option::is_none")]
     pub running: Option<bool>,
@@ -129,6 +132,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         &inline_names,
     );
     let project_allowed = crate::agent::folder_trust::project_scope_allowed(&cwd);
+    let disabled_servers = crate::util::workspace_overrides::read_lsp_disabled_servers(&cwd);
 
     // 会话后端快照（cfg borrow 已释放，可安全 await）。
     let session_backend = match &session_id {
@@ -161,6 +165,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
                     .is_some(),
                 )
             };
+            let disabled = disabled_servers.iter().any(|d| d == &name);
             LspServerStatus {
                 running: snapshot
                     .as_ref()
@@ -170,6 +175,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
                 args: cfg.args,
                 source: source.display_label(),
                 command_found,
+                disabled,
             }
         })
         .collect();

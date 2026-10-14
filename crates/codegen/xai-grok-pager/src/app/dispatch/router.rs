@@ -185,7 +185,17 @@ fn dispatch_lsp_configure(
         LspConfigureRequest::Status => {
             // 数据面走 `x.ai/lspStatus` 扩展（门禁 + server 清单 + 会话后端快照），
             // 回包经 TaskResult::LspStatusFetched 渲染；本函数只负责取数参数。
-            vec![Effect::FetchLspStatus { cwd, session_id }]
+            vec![Effect::FetchLspStatus { cwd, session_id, select: false }]
+        }
+        LspConfigureRequest::Select => {
+            // 取数参数同 status，回包走勾选面板（task_result 侧开 LspServerPicker）。
+            // 面板挂在活动 agent 视图上；无会话时提示先进会话。
+            if !matches!(app.active_view, ActiveView::Agent(_)) {
+                lsp_report(app, "/lsp select 需要在会话内使用（先进入会话再执行）。");
+                vec![]
+            } else {
+                vec![Effect::FetchLspStatus { cwd, session_id, select: true }]
+            }
         }
         LspConfigureRequest::Set(value) => {
             match
@@ -320,6 +330,64 @@ fn dispatch_inner(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::NewSession => dispatch_new_session(app),
         // LOCAL(/lsp): workspace 级 LSP 工具启停/状态查询
         Action::LspConfigure { request } => dispatch_lsp_configure(app, request),
+        // LOCAL(/lsp select): 勾选面板确认 —— 写本工作区 server 禁用清单（空 =
+        // 清除覆盖），零回合活动会话随即热加载（shell 重建 LSP 后端）。
+        Action::LspServersConfirm {
+            cwd,
+            session_id,
+            disabled,
+        } => {
+            use xai_grok_shell::util::workspace_overrides;
+            let value = if disabled.is_empty() { None } else { Some(disabled) };
+            match workspace_overrides::write_lsp_disabled_servers(&cwd, value.clone()) {
+                Err(e) => {
+                    lsp_report(app, &format!("写入 LSP server 选择失败：{e}"));
+                    vec![]
+                }
+                Ok(()) => {
+                    let mut effects = Vec::new();
+                    match (&session_id, value.as_ref()) {
+                        (Some(sid), Some(list)) => {
+                            effects.push(Effect::ApplyLspTools {
+                                cwd: cwd.clone(),
+                                session_id: sid.clone(),
+                            });
+                            lsp_report(
+                                app,
+                                &format!(
+                                    "已保存：本工作区禁用 {}（{}）。正在热加载本会话…",
+                                    list.len(),
+                                    list.join("、")
+                                ),
+                            );
+                        }
+                        (Some(sid), None) => {
+                            effects.push(Effect::ApplyLspTools {
+                                cwd: cwd.clone(),
+                                session_id: sid.clone(),
+                            });
+                            lsp_report(
+                                app,
+                                "已清除本工作区的 server 禁用清单，恢复全部启用。正在热加载本会话…",
+                            );
+                        }
+                        (None, Some(list)) => lsp_report(
+                            app,
+                            &format!(
+                                "已保存：本工作区禁用 {}（{}）。会话尚未建立，definition 构建时生效。",
+                                list.len(),
+                                list.join("、")
+                            ),
+                        ),
+                        (None, None) => lsp_report(
+                            app,
+                            "已清除本工作区的 server 禁用清单，恢复全部启用（下次会话生效）。",
+                        ),
+                    }
+                    effects
+                }
+            }
+        }
         Action::LeaveHome => leave_welcome_for_session(app),
         #[cfg(feature = "local-workspace")]
         Action::ConfirmWelcomeLocalWorkspaceAck => {

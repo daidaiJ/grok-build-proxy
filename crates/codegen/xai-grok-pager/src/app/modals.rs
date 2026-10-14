@@ -449,6 +449,12 @@ impl AgentView {
             return self.apply_auth_modal_outcome(outcome);
         }
 
+        // LOCAL LspServerPicker: /lsp select 勾选面板（空格勾选，Enter 确认转 Action）。
+        if let ActiveModal::LspServerPicker { state } = modal {
+            let outcome = crate::views::lsp_server_picker::route_lsp_picker_key(state, key);
+            return self.apply_lsp_picker_outcome(outcome);
+        }
+
         // ResetSettingsConfirm: y/n routing
         // Handled before the generic char-match so Esc/F2/Ctrl+, route to Cancel (not modal close)
         if let Some(ActiveModal::ResetSettingsConfirm { modal, .. }) = self.active_modal.as_ref() {
@@ -494,6 +500,7 @@ impl AgentView {
             ActiveModal::CommandPalette { .. }
             | ActiveModal::ArgPicker { .. }
             | ActiveModal::AuthPanel { .. }
+            | ActiveModal::LspServerPicker { .. }
             | ActiveModal::SessionPicker { .. }
             | ActiveModal::DocPicker { .. }
             | ActiveModal::DocViewer { .. }
@@ -1714,6 +1721,35 @@ impl AgentView {
         }
     }
 
+    /// Map the /lsp select picker outcome onto this host: Esc closes, Enter converts
+    /// the unchecked set into `Action::LspServersConfirm` (deny-list write + hot apply).
+    fn apply_lsp_picker_outcome(
+        &mut self,
+        outcome: crate::views::lsp_server_picker::LspPickerOutcome,
+    ) -> InputOutcome {
+        use crate::views::lsp_server_picker::LspPickerOutcome;
+        match outcome {
+            LspPickerOutcome::Cancel => {
+                self.active_modal = None;
+                InputOutcome::Changed
+            }
+            LspPickerOutcome::Confirm => {
+                let Some(crate::views::modal::ActiveModal::LspServerPicker { state }) =
+                    self.active_modal.take()
+                else {
+                    return InputOutcome::Changed;
+                };
+                let disabled = state.disabled_on_confirm();
+                InputOutcome::Action(Action::LspServersConfirm {
+                    cwd: state.cwd,
+                    session_id: state.session_id,
+                    disabled,
+                })
+            }
+            LspPickerOutcome::Changed => InputOutcome::Changed,
+        }
+    }
+
     /// Copy the usage modal's session ID and toast the delivery outcome.
     /// Map a usage-modal routing outcome onto this host: the agent's modal slot, clipboard, and toast.
     fn apply_usage_modal_outcome(
@@ -2456,6 +2492,9 @@ impl AgentView {
             } else if let modal::ActiveModal::AuthPanel { state } = active_modal {
                 // LOCAL: /auth 供应商配置面板。
                 crate::views::auth_modal::render_auth_modal(buf, area, state);
+            } else if let modal::ActiveModal::LspServerPicker { state } = active_modal {
+                // LOCAL: /lsp select server 勾选面板。
+                crate::views::lsp_server_picker::render_lsp_server_picker(buf, area, state);
             } else if let modal::ActiveModal::MemoryBrowser { state: mem_state } = active_modal {
                 crate::views::memory_modal::render_memory_modal(buf, area, mem_state, compact);
             } else if let modal::ActiveModal::Settings {

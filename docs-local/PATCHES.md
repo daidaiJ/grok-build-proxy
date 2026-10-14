@@ -2787,3 +2787,40 @@ ToolContext 字段换共享槽（ArcSwap），结构侵入不值当。
      `#[cfg(any(test, feature = "test-support"))]` 返回 None（测试构建永不读
      开发者 config；生产启动路径不变），单线程/多线程双验证。副产物：win-skip
      登记**族U**（color_support 探测断言依赖宿主 TTY，GATE_FORCE 首跑暴露）。
+
+## 三十七期：`/lsp select`——server 勾选面板（自动检测 + 用户勾选 + 确认生效）（2026-10-14，分支 feat/local-lsp-server-picker）
+
+> 需求：三十五期 builtin 检测默认把 PATH 上命中的五语言 server 全部装配，但
+> 用户当前项目未必全都要（非 Java 项目不想要 jdtls 等）。新增「检测 → 勾选 →
+> 确认 → 热加载」交互：`/lsp select` 列出检测/配置到的全部 server，空格勾选本
+> 工作区要启用的，Enter 确认；取消勾选的进本工作区禁用清单。
+
+1. **持久化（shell `util/workspace_overrides`）**：feature-overrides 文件增
+   `lsp_disabled_servers: Vec<String>`——**禁用清单语义**（只记排除项；空/缺省 =
+   清除覆盖、恢复全量跟随检测与配置）。读写 API `read_lsp_disabled_servers(_in)`
+   / `write_lsp_disabled_servers(_in)`；写入前去重排序（同选幂等、面板重复确认零
+   写放大）；与 `lsp_tools` bool 键同文件互不覆盖，文件无活跃键时整删（沿既有
+   惯例，read 侧对 JSON 损坏容错回退 None）。
+2. **装配过滤（shell）**：`MvpAgent::build_lsp_backend`（session spawn 与
+   `x.ai/lspApply` 热加载共用单入口）在 folder-trust 过滤后应用禁用清单——被禁
+   server 无论来源（config/builtin/plugin）一律不装配，debug 日志留痕。
+   `x.ai/lspStatus` 回包每 server 带 `disabled` 标志（面板初始勾选与 status
+   展示同源；serde default 向后兼容）。
+3. **pager**：`/lsp select`（别名 选择/勾选/勾选面板）→ `Effect::FetchLspStatus`
+   （新 `select` 位）→ 新 `views/lsp_server_picker` 模态（↑/↓/j/k 移动、空格
+   勾选、a 全选/全不选、Enter 确认、Esc 取消；无 server 时给空态文案）。确认 →
+   `Action::LspServersConfirm{cwd, session_id, disabled}` → 写覆盖 → 零回合活动
+   会话发 `x.ai/lspApply` 热加载（带回合由 shell turn_count 权威拒，改动对新
+   会话生效）；无会话时写覆盖 + 提示「definition 构建时生效」；welcome/dashboard
+   发起则提示先进会话。`/lsp status` 增「（已禁用 — /lsp select 勾选恢复）」标注
+   与 select 提示行。
+4. **i18n**：面板文案走 tr()（新键 4 条 + `toggle all`），hint 键（move/toggle/
+   confirm/cancel）复用既有表项；扫描器对新文件的 plain 项 = hint 元组键（与
+   auth_modal step_hints 同款已包裹口径，非裸文案）。
+
+**验证**：cargo check shell/pager --lib 0 error（首查遇 rustc 0xc0000005 增量
+缓存损坏，清 incremental + CARGO_INCREMENTAL=0 重查通过）；GATE_FORCE
+shell `workspace_overrides` 6/6（含新禁用清单往返/去重幂等/与 bool 键互存两例）、
+pager `lsp` 过滤 14/14（含 select 取数旗标、无会话提示、确认写清单 + 热加载
+effect + 写后自清回收、勾选面板 toggle/边界/确认语义三例）；i18n 扫描 exit 0。
+手工项（真机 TUI 面板开合 + 确认后热加载回路）列入遗留。
