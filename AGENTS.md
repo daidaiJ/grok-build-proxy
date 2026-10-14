@@ -266,6 +266,14 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   实现记录 PATCHES.md 三十六期；user-guide 06-theming 表 6→17 行；
   其余 21 套 opencode 主题可同模式增量移植（roadmap §6 台账）。
 
+- [`docs-local/subagent-model-group-todo.md`](docs-local/subagent-model-group-todo.md) —
+  **subagent 模型/effort 配置 + 模型组（跨供应商降级链）设计（设计完成待拍板，2026-10-14）**：
+  「模型组」一等公民原语（有序 `[model.<id>]` 供应商条目链，sticky/cooldown/首字节前降级/
+  notice+账本披露），subagent 绑定（`[subagents.model_groups]`/`[subagents.efforts]`，内置
+  类型按名寻址）为第一消费者，视觉桥 D8/D9（目录回填 `accepts_images` + 400 反应式摘除转桥）
+  为第二消费者（引用不施工）。现状锚点全核实：subagent 模型 pin/effort 管线/条目级 variants
+  均已有，缺口 = 组降级链 + per-agent effort config 入口；六拍板点待定。Ayu 主题分支按用户
+  指示随本专题一起合并发版。
 - [`docs-local/issues/`](docs-local/issues/README.md) — **使用问题台账（一 issue 一文件）**。
   当前 open/reproduced 条：**无**。最近一条 **成本列裸 id 无价等三问题（P2）**：
   v1.0.50 提出、v1.0.51 首修，v1.0.51 活回合复发（models.dev 主源瞬时失败静默
