@@ -17,6 +17,19 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 > 补充以文末"后记"追加。规约类完工文档（如 ui-i18n-plan）不归档但须在头部
 > 标明"已完工 + 保留角色"。更新本索引时先核对文件真实存在。
 
+- **Ctrl+Enter send-now 幽灵气泡（open，P2）** — 用户口述：回合中 Ctrl+Enter
+  立即入队后，对话流偶发在新提示词下方把**上一条输入**重画成新气泡；纯显示层
+  （模型上下文零错位，updates.jsonl 每条用户消息恰好一次已核实）。Ctrl+Enter
+  中途实为 send-now（取消当前回合并发送新提示词），用户实际两种模式混用：直接
+  Ctrl+Enter 发送输入框文本、先 Enter 本地排队再空 composer Ctrl+Enter 强发
+  队列顶行。四个未证实假设已锚定 file:line（见 issue 文件）；PTY 复现场景已写
+  （本机 Windows 跑不了 harness，面向 Linux CI）；**决定性取证（零改动，现有
+  v1.0.55 客户端可用）**：`GROK_LOG_FILE=<路径> RUST_LOG="info,qtrace=debug" grok2`
+  启动后复现一次，单文件 debug 日志的 qtrace 事件序列（带文本预览）可直接判定
+  旧文本从哪条路径冒出——注意 `GROK_DEBUG_LOG=1` firehose 收不到 qtrace
+  （RUST_LOG 免疫 + 无 qtrace 指令，EnvFilter 按显式 target 匹配）。
+  [`docs-local/issues/2026-10-14-send-now-ghost-user-bubble.md`](docs-local/issues/2026-10-14-send-now-ghost-user-bubble.md)。
+
 - **模型级代理启用配置（`[model.<id>] use_proxy`）** — 已合 main（`76891f3e`），随
   **`v1.0.43`** 发版；实现记录见 PATCHES.md 二十三期。`use_proxy = true` 让该
   模型的采样请求走进程级出口代理（`[network] proxy_url` / `GROK_PROXY`），**默认
@@ -267,7 +280,8 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   6→19 行；其余 21 套 opencode 主题可同模式增量移植（roadmap §6 台账）。
 
 - [`docs-local/issues/`](docs-local/issues/README.md) — **使用问题台账（一 issue 一文件）**。
-  当前 open/reproduced 条：**无**。最近一条 **成本列裸 id 无价等三问题（P2）**：
+  当前 open/reproduced 条：**Ctrl+Enter send-now 幽灵气泡（P2，见上方待办条）**。
+  最近一条 fixed **成本列裸 id 无价等三问题（P2）**：
   v1.0.50 提出、v1.0.51 首修，v1.0.51 活回合复发（models.dev 主源瞬时失败静默
   回退 + 匹配器裸 id 只认裸条目），二次修复（裸 id↔`vendor/model` 段命中 +
   匹配索引化 + 缓存迁 `cache/` + 启动预热 + /auth 回填思考位）随 v1.0.51 重指

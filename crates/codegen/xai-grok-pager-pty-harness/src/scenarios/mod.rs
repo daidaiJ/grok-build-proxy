@@ -17,6 +17,7 @@ pub mod large_codeblock;
 pub mod mixed_interaction;
 pub mod plan_approval_resume;
 pub mod resize_storm;
+pub mod send_now_chain_ghost;
 pub mod scroll_stress;
 pub mod streaming_render;
 pub mod x10_mouse_leak;
