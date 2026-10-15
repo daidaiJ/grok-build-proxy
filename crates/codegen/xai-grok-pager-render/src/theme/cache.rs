@@ -53,6 +53,7 @@ fn theme_kind_from_u8(byte: u8) -> ThemeKind {
         x if x == ThemeKind::SolarizedDark as u8 => ThemeKind::SolarizedDark,
         x if x == ThemeKind::Codex as u8 => ThemeKind::Codex,
         x if x == ThemeKind::Ayu as u8 => ThemeKind::Ayu,
+        x if x == ThemeKind::DeepDark as u8 => ThemeKind::DeepDark,
         x if x == ThemeKind::Terminal as u8 => ThemeKind::Terminal,
         x if x == ThemeKind::Auto as u8 => ThemeKind::Auto,
         _ => ThemeKind::GrokNight,

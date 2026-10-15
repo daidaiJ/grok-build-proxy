@@ -285,6 +285,11 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   mermaid 浅色判定。~60 槽位逐一映射（编译器强制），全 truecolor 门控。
   实现记录 PATCHES.md 三十六/三十九/四十期；user-guide 06-theming 表
   6→19 行；其余 21 套 opencode 主题可同模式增量移植（roadmap §6 台账）。
+  **Deep Dark 主题**（`deep-dark`，别名 `claude-dark`/`cc-dark`，
+  `feat/local-claude-theme-port`，PATCHES 四十二期）移植自泄露的 Claude Code
+  v2.1.88 darkTheme（Claude 赤陶橙品牌系，bg 派生拍板 #141414）；light/
+  daltonized 两档映射草案在 [`docs-local/claude-theme-port.md`](docs-local/claude-theme-port.md)
+  待拍板。
 
 - [`docs-local/subagent-model-group-todo.md`](docs-local/subagent-model-group-todo.md) —
   **subagent 模型/effort 配置 + 模型组（跨供应商降级链）设计（已落地，2026-10-14，

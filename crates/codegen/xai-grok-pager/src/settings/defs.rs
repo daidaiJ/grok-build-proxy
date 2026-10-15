@@ -126,6 +126,11 @@ const THEME_CHOICES: &[EnumChoice] = &[
         description: "Community Ayu dark with warm sunset-orange accents; needs truecolor.",
     },
     EnumChoice {
+        canonical: "deep-dark",
+        display: "Deep Dark",
+        description: "Claude Code dark palette with terracotta-orange brand accents; needs truecolor.",
+    },
+    EnumChoice {
         canonical: "terminal",
         display: "Terminal",
         description: "Terminal's own background and text colors.",
@@ -577,6 +582,11 @@ const CONCRETE_THEME_CHOICES: &[EnumChoice] = &[
         canonical: "ayu",
         display: "Ayu",
         description: "Community Ayu dark with warm sunset-orange accents; needs truecolor.",
+    },
+    EnumChoice {
+        canonical: "deep-dark",
+        display: "Deep Dark",
+        description: "Claude Code dark palette with terracotta-orange brand accents; needs truecolor.",
     },
     EnumChoice {
         canonical: "terminal",

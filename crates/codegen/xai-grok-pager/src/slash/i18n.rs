@@ -1405,6 +1405,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "社区 Ayu 深色，暖橙日落点缀；需要真彩。",
         ),
         (
+            "Claude Code dark palette with terracotta-orange brand accents; needs truecolor.",
+            "Claude Code 深色，赤陶橙品牌点缀；需要真彩。",
+        ),
+        (
             "Terminal's own background and text colors.",
             "使用终端自身的背景与文字颜色。",
         ),

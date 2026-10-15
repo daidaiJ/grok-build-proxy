@@ -3005,3 +3005,39 @@ AgentDefinition）；既有 `runtime_override_wins_over_subagents_models_pin` �
 `auth_error_no_retry_tests::model_switch_preserves_existing_conversation_group`
 为既有环境族（夹具写死 /tmp，NotAbsolute panic，与本改动无关），登记
 win-skip **族V** 后 23/23 全绿（含既有 conversation_group/auth 用例）。
+
+## 四十二期：Deep Dark 主题——Claude Code 泄露源码 darkTheme 移植（2026-10-15，分支 feat/local-claude-theme-port）
+
+**来源与判定**：Claude Code v2.1.88 经 npm `cli.js.map` 意外泄露（2026-03-31），
+主题定义取自公开存档仓 `qw0258/claude-code-v2.1.88` 的
+`src/utils/theme.ts`（`darkTheme`）。六内置主题四档判定：dark ✓（Claude 赤陶橙
+`#D77757` 与现有 20 主题零撞车）、light ✓ 次选（本轮未做）、daltonized 两档可选
+（success→蓝/diffAdded→深蓝的色盲安全变体）、ansi 两档 ✗（`Theme::quantized`
+自动降档已覆盖，同 Codex 期弃 256 色板先例）。预研记录
+`docs-local/claude-theme-port.md`（含 light/daltonized 的后续映射草案）。
+
+- **`theme/deep_dark.rs` 新文件**：~64 槽完整映射（编译器强制）。直采槽：
+  claude→accent_assistant、briefLabelYou→accent_user、claudeBlue（系统
+  spinner）→accent_running/accent_system、permission→accent_model/path/
+  fuzzy_accent/accent_remember（donor remember 同值）、planMode→accent_plan、
+  merged→accent_verify、background→accent_skill/md_code、success/error/
+  warning 语义三件套、bashBorder→command（Claude 的 bash 消息边框粉）、
+  ide→link_fg、diffAdded/Removed + Word 对 → diff 四槽、userMessageBackground
+  (+Hover)→bg_light/bg_hover、messageActionsBackground→bg_highlight、
+  memoryBackground→bg_visual、selectionBg→selection_border、promptBorder/
+  inactive/subtle/promptBorderShimmer→灰阶四件。donor 无终端背景槽（跟随终端），
+  bg_base 取 #141414（拍板默认）；deep_dark 的 `running` 槽用 claudeShimmer
+  （运转中=品牌色闪烁语义）；md 六级标题梯/边框细档在品牌橙+蓝紫色系内派生。
+- **命名**：用户拍板 `deep-dark`（`ThemeKind::DeepDark = 20`），别名
+  `claude-dark` / `cc-dark`。
+- **注册接线九处**（同 Ayu 期清单）：mod.rs（模块声明/枚举/ALL/display_name/
+  truecolor 门/aliases/canonical 显示名/apply_kind/测试分发）、cache.rs 解码臂、
+  syntax.rs 深色臂、settings defs 两 catalog、slash i18n 中英文、settings_modal
+  测试分发、doctor 夹具 19→20（3 处）、user-guide 06-theming 表 14 行；
+  mermaid theme_is_dark 负名单制零改动（深色默认收编）。
+
+**验证**：cargo check render/pager --all-targets 0 error 0 warning（首查 pager
+挂 i18n 表项嵌套括号，E0308 修正后绿）；GATE_FORCE render theme 175/0、
+pager theme 76/0、settings 380/0（对齐 Ayu 基线）、doctor 42/0（首跑两轮
+rustc 0xc0000005 增量缓存损坏，清 incremental + CARGO_INCREMENTAL=0 后绿）；
+i18n 扫描 exit 0。
