@@ -814,29 +814,56 @@ impl SessionActor {
         .await;
     }
     /// Run the image-transcription pipeline for a turn that contains user-supplied images.
-    /// Returns the new `user_message` text with the `<image>` and `<image_files>` envelopes prepended.
-    /// On any failure returns an `acp::Error` so the entire turn is aborted; we never silently drop image context.
+    /// LOCAL (vision bridge, D4): failure-tolerant by design — a describe failure
+    /// stamps an unavailable marker for that image and the turn continues; we
+    /// never abort a whole turn (and never drop images silently — the counts in
+    /// the return value feed the user-visible disclosure).
     pub(super) async fn transcribe_user_images(
         &self,
         original_user_message: String,
         images: &[agent_client_protocol::ImageContent],
-    ) -> Result<String, acp::Error> {
+    ) -> super::vision_bridge::UserImageTranscription {
+        use super::vision_bridge::{unavailable_marker, UserImageTranscription};
+        let degraded = |failed: usize, describe_model: String, describe_host: Option<String>| {
+            UserImageTranscription {
+                text: original_user_message.clone(),
+                described: 0,
+                failed,
+                skipped: 0,
+                describe_model,
+                describe_host,
+            }
+        };
         let prior = self.chat_state_handle.get_conversation().await;
         let outline = crate::session::image_describe::build_conversation_outline(&prior);
-        let session_dir = crate::session::persistence::ensure_owner_only_session_dir(
+        let session_dir = match crate::session::persistence::ensure_owner_only_session_dir(
             &crate::session::info::Info {
                 id: self.session_info.id.clone(),
                 cwd: self.session_info.cwd.clone(),
             },
-        )
-        .map_err(|e| {
-            acp::Error::internal_error().data(format!("failed to create session dir: {e}"))
-        })?;
-        let persisted = crate::session::image_describe::persist_user_images(&session_dir, images)
-            .map_err(|e| {
-            acp::Error::internal_error()
-                .data(format!("failed to save user images to assets dir: {e}"))
-        })?;
+        ) {
+            Ok(dir) => dir,
+            Err(e) => {
+                tracing::warn!(error = %e, "vision bridge: session dir create failed; images omitted");
+                return degraded(
+                    images.len(),
+                    self.image_description_model.clone(),
+                    None,
+                );
+            }
+        };
+        let persisted = match crate::session::image_describe::persist_user_images(&session_dir, images)
+        {
+            Ok(persisted) => persisted,
+            Err(e) => {
+                tracing::warn!(error = %e, "vision bridge: assets persist failed; images omitted");
+                return degraded(
+                    images.len(),
+                    self.image_description_model.clone(),
+                    None,
+                );
+            }
+        };
         let image_paths: Vec<String> = persisted
             .iter()
             .map(|p| p.path.to_string_lossy().into_owned())
@@ -855,11 +882,16 @@ impl SessionActor {
                 self.client_identifier.clone(),
                 Some(self.max_retries),
             );
-        let client = xai_grok_sampler::SamplingClient::new(sampler_config).map_err(|e| {
-            acp::Error::internal_error().data(format!(
-                "failed to build image-describe sampling client: {e}"
-            ))
-        })?;
+        // Host disclosure for the T3 notice: taken from the resolved describe
+        // endpoint BEFORE the config moves into the client.
+        let describe_host = super::vision_bridge::xai_url_host(&sampler_config.base_url);
+        let client = match xai_grok_sampler::SamplingClient::new(sampler_config) {
+            Ok(client) => client,
+            Err(e) => {
+                tracing::warn!(error = %e, "vision bridge: describe sampler build failed; images omitted");
+                return degraded(images.len(), describe_model, None);
+            }
+        };
         let model = &describe_model;
         let limit = crate::session::image_describe::IMAGE_DESCRIPTION_PROCESSING_LIMIT;
         let skip_count = persisted.len().saturating_sub(limit);
@@ -872,12 +904,15 @@ impl SessionActor {
                 "image transcription: skipping oldest images due to processing limit",
             );
         }
+        let mut described = 0usize;
+        let mut failed = 0usize;
         let mut description_parts = Vec::with_capacity(persisted.len());
         for (i, p) in persisted.iter().enumerate() {
             let part = if i < skip_count {
                 crate::session::image_describe::SKIPPED_IMAGE_MARKER.to_owned()
             } else {
-                self.image_describe_cache
+                match self
+                    .image_describe_cache
                     .get_or_describe(
                         client.clone(),
                         model,
@@ -889,10 +924,24 @@ impl SessionActor {
                         "",
                     )
                     .await
-                    .map_err(|e| {
-                        acp::Error::internal_error()
-                            .data(format!("image transcription failed: {e}"))
-                    })?
+                {
+                    Ok(description) => {
+                        described += 1;
+                        description
+                    }
+                    Err(e) => {
+                        // D4: stamp and continue; never surface provider error
+                        // text (may embed URLs/tokens) into the conversation.
+                        failed += 1;
+                        tracing::warn!(
+                            session_id = %self.session_info.id,
+                            image_index = i + 1,
+                            error = %e,
+                            "vision bridge: describe failed for user image"
+                        );
+                        unavailable_marker(i + 1)
+                    }
+                }
             };
             if persisted.len() > 1 {
                 description_parts.push(format!("Image {}: {}", i + 1, part));
@@ -901,10 +950,17 @@ impl SessionActor {
             }
         }
         let description = description_parts.join("\n\n");
-        Ok(crate::session::image_describe::render_image_user_message(
-            &description,
-            &image_paths,
-            &original_user_message,
-        ))
+        UserImageTranscription {
+            text: crate::session::image_describe::render_image_user_message(
+                &description,
+                &image_paths,
+                &original_user_message,
+            ),
+            described,
+            failed,
+            skipped: skip_count,
+            describe_model,
+            describe_host,
+        }
     }
 }

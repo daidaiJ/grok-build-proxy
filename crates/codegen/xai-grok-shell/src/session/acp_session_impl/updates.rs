@@ -10,6 +10,7 @@ pub(super) fn closes_cancel_rewind_window(update: &XaiSessionUpdate) -> bool {
             | XaiSessionUpdate::HookExecution { .. }
             | XaiSessionUpdate::ImageCompressed { .. }
             | XaiSessionUpdate::ImageDropped { .. }
+            | XaiSessionUpdate::VisionBridgeNotice { .. }
             | XaiSessionUpdate::BackgroundTasks { .. }
     )
 }

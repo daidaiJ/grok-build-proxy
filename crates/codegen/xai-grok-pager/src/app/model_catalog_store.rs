@@ -144,6 +144,7 @@ mod tests {
                     context_length: Some(256_000),
                     max_completion_tokens: Some(32_000),
                     reasoning: None,
+                accepts_images: None,
                 }),
             );
         }

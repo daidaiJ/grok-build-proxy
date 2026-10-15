@@ -1330,6 +1330,7 @@ mod tests {
                 context_length: Some(CONTEXT_WINDOW_FALLBACK),
                 max_completion_tokens: Some(131_072),
                 reasoning: Some(false),
+                accepts_images: None,
             }),
         );
         entries.insert(
@@ -1344,6 +1345,7 @@ mod tests {
                 context_length: Some(1_048_576),
                 max_completion_tokens: None,
                 reasoning: Some(true),
+            accepts_images: None,
             }),
         );
         crate::app::model_catalog_store::install(&ModelCatalogResponse {

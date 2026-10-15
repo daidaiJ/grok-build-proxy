@@ -84,6 +84,9 @@ enum AcpLine {
     ImageCompressed {
         message: String,
     },
+    VisionBridgeNotice {
+        message: String,
+    },
     MemoryFlushStarted,
     MemoryFlushCompleted {
         result: String,
@@ -211,6 +214,7 @@ fn acp_lifecycle_line(l: Lifecycle) -> AcpLine {
         Lifecycle::CompactCancelled => AcpLine::AutoCompactCancelled,
         Lifecycle::AutoContinue { total_tokens } => AcpLine::AutoContinueCompleted { total_tokens },
         Lifecycle::ImageCompressed { message } => AcpLine::ImageCompressed { message },
+        Lifecycle::VisionBridge { message } => AcpLine::VisionBridgeNotice { message },
         Lifecycle::MemoryFlushStarted => AcpLine::MemoryFlushStarted,
         Lifecycle::MemoryFlushCompleted { result, path } => {
             AcpLine::MemoryFlushCompleted { result, path }

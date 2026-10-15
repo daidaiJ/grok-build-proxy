@@ -30,10 +30,19 @@ struct ModelsDevModel {
     canonical_model_id: Option<String>,
     #[serde(default)]
     reasoning: Option<bool>,
+    /// LOCAL（视觉桥 D8）：`modalities.input`（缺席 = 源未给，`None`）。
+    #[serde(default)]
+    modalities: Option<DevModalities>,
     #[serde(default)]
     limit: DevLimit,
     #[serde(default)]
     cost: DevCost,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct DevModalities {
+    #[serde(default)]
+    input: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -96,6 +105,10 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
                 name: model.name,
                 canonical_id: model.canonical_model_id.filter(|s| !s.is_empty()),
                 reasoning: model.reasoning,
+                // LOCAL（视觉桥 D8）：modalities.input 列出 "image" 即识图；缺席 = None。
+                accepts_images: model.modalities.and_then(|mo| {
+                    (!mo.input.is_empty()).then(|| mo.input.iter().any(|m| m == "image"))
+                }),
                 pricing: ModelPricing {
                     input,
                     output,
@@ -138,6 +151,16 @@ mod tests {
         assert_eq!(glm.context_length, Some(128_000));
         assert_eq!(glm.max_completion_tokens, Some(96_000));
         assert_eq!(glm.reasoning, Some(true));
+        // LOCAL（视觉桥 D8）：modalities.input 仅 text → Some(false)；缺席 → None。
+        assert_eq!(glm.accepts_images, Some(false));
+        assert_eq!(
+            cat.entries
+                .iter()
+                .find(|e| e.id == "bare-model")
+                .expect("bare entry")
+                .accepts_images,
+            None
+        );
     }
 
     #[test]

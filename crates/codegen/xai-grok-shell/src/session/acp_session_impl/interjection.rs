@@ -96,7 +96,9 @@ impl SessionActor {
     }
     /// Normalize interjection images for injection (shared pipeline above); notices append to `wrapped` (TEXT side only).
     /// Returns the images to attach structurally.
-    /// Sessions whose template rejects inline images instead transcribe normalized survivors into the text via the describe pipeline.
+    /// LOCAL (vision bridge): the decision comes from the main model's image
+    /// capability, not the harness name — Native keeps the inline path, Bridge
+    /// transcribes into the text, Blocked strips and discloses.
     pub(super) async fn prepare_interjection_images(
         &self,
         wrapped: &mut String,
@@ -105,46 +107,75 @@ impl SessionActor {
         if images.is_empty() {
             return images;
         }
-        let is_cursor = self.is_cursor_harness();
+        let bridge = if self.is_cursor_harness() {
+            super::vision_bridge::ImageBridgeDecision::Bridge
+        } else {
+            self.resolve_image_bridge().await
+        };
         let images = self
-            .normalize_images_with_notices(wrapped, images, is_cursor)
+            .normalize_images_with_notices(wrapped, images, self.is_cursor_harness())
             .await;
-        if !is_cursor {
-            // The `<image_files>` block is the only durable record of where these images live.
-            // An interjection still goes through when the assets dir cannot be written.
-            if !images.is_empty() {
-                let persisted =
-                    crate::session::persistence::ensure_owner_only_session_dir(&self.session_info)
-                        .and_then(|session_dir| {
-                            crate::session::image_describe::persist_and_prepend_image_files(
-                                &session_dir,
-                                &images,
-                                wrapped.as_str(),
-                            )
-                        });
-                match persisted {
-                    Ok(with_files) => *wrapped = with_files,
-                    Err(error) => tracing::warn!(
-                        ?error,
-                        "interjection images not saved to assets; sending without <image_files>"
-                    ),
+        match bridge {
+            super::vision_bridge::ImageBridgeDecision::Bridge => {
+                if !images.is_empty() {
+                    // D4: failure-tolerant transcription; the counts surface in
+                    // the notice the caller's turn path already sends.
+                    let outcome = self.transcribe_user_images(wrapped.clone(), &images).await;
+                    let notice = if self.is_cursor_harness() {
+                        None
+                    } else {
+                        Some(super::vision_bridge::render_vision_bridge_notice(
+                            outcome.described,
+                            outcome.failed,
+                            outcome.skipped,
+                            &outcome.describe_model,
+                            outcome.describe_host.as_deref(),
+                        ))
+                    };
+                    *wrapped = outcome.text;
+                    if let Some(notice) = notice {
+                        self.send_vision_bridge_notice(notice).await;
+                    }
                 }
+                Vec::new()
             }
-            return images;
-        }
-        if !images.is_empty() {
-            match self.transcribe_user_images(wrapped.clone(), &images).await {
-                Ok(new_text) => *wrapped = new_text,
-                Err(e) => {
-                    tracing::warn!(?e, "interjection image processing failed; dropping images");
+            super::vision_bridge::ImageBridgeDecision::Blocked(reason) => {
+                if !images.is_empty() {
+                    self.send_vision_bridge_notice(
+                        super::vision_bridge::render_vision_bridge_blocked_notice(reason),
+                    )
+                    .await;
                     wrapped.push_str(
                         "\n\n[Note: the user attached image(s) to this message, but they could \
                          not be processed in this session and were dropped.]",
                     );
                 }
+                Vec::new()
+            }
+            super::vision_bridge::ImageBridgeDecision::Native => {
+                // The `<image_files>` block is the only durable record of where these images live.
+                // An interjection still goes through when the assets dir cannot be written.
+                if !images.is_empty() {
+                    let persisted =
+                        crate::session::persistence::ensure_owner_only_session_dir(&self.session_info)
+                            .and_then(|session_dir| {
+                                crate::session::image_describe::persist_and_prepend_image_files(
+                                    &session_dir,
+                                    &images,
+                                    wrapped.as_str(),
+                                )
+                            });
+                    match persisted {
+                        Ok(with_files) => *wrapped = with_files,
+                        Err(error) => tracing::warn!(
+                            ?error,
+                            "interjection images not saved to assets; sending without <image_files>"
+                        ),
+                    }
+                }
+                images
             }
         }
-        Vec::new()
     }
 
     /// Broadcast a mid-turn interjection to every attached client.

@@ -3564,14 +3564,20 @@ pub(crate) fn resolve_model_list(
                 if entry.info.api_backend == ApiBackend::default() {
                     entry.info.api_backend.clone_from(&donor.info.api_backend);
                 }
+                // LOCAL (vision bridge): the remote source stayed silent while
+                // the built-in entry knows — inherit the donor; otherwise D1
+                // defaults a silent remote entry to vision-capable.
+                if entry.info.accepts_images.is_none() {
+                    entry.info.accepts_images =
+                        Some(donor.info.accepts_images.unwrap_or(true));
+                }
             }
             if resolved.contains_key(key) {
                 tracing::debug!(model_key = %key, "prefetched model overriding default");
             }
         }
         resolved = prefetched;
-    }
-    let mut explicit_api_backend_keys = std::collections::HashSet::new();
+    }    let mut explicit_api_backend_keys = std::collections::HashSet::new();
     let mut explicit_supports_effort_false_keys = std::collections::HashSet::new();
     let mut explicit_menu_keys = std::collections::HashSet::new();
     for (key, model_override) in &cfg.config_models {
@@ -3800,7 +3806,14 @@ fn apply_global_scalar_defaults(
 pub(crate) fn default_model_entries(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntry> {
     default_models(endpoints)
         .into_iter()
-        .map(|(key, entry)| (key, ModelEntry::from_config_entry(&entry)))
+        .map(|(key, entry)| {
+            let mut model = ModelEntry::from_config_entry(&entry);
+            // LOCAL (vision bridge): the built-in grok family is vision-capable;
+            // D1 default `true` so grok-4.6 is never silently routed through the
+            // describe bridge.
+            model.info.accepts_images = Some(true);
+            (key, model)
+        })
         .collect()
 }
 /// Resolve a model against the available model map.
@@ -3940,6 +3953,9 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 use_proxy: false,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
                 experimental: None,
+                // LOCAL (vision bridge): the built-in grok family defaults to
+                // vision-capable (concretized again in `default_model_entries`).
+                accepts_images: Some(true),
     };
             (key, config)
         })
@@ -4082,6 +4098,12 @@ pub struct ModelEntryConfig {
     /// Defaults to the all-disabled state via `#[serde(default)]`.
     #[serde(default, skip_serializing_if = "is_default_laziness_detector")]
     pub laziness_detector: LazinessDetectorPerModelConfig,
+    /// LOCAL (vision bridge): whether this model accepts image input.
+    /// `None` = not specified at this source; resolution happens at the merge
+    /// points (builtin/remote default `true`, user-new default `false`, explicit
+    /// value always wins). See `ModelInfo::accepts_images` for the read side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accepts_images: Option<bool>,
 }
 impl Default for ModelEntryConfig {
     /// Matches the per-field serde defaults so construction sites (tests especially) can use `..Default::default()`
@@ -4131,6 +4153,8 @@ impl Default for ModelEntryConfig {
             laziness_detector: LazinessDetectorPerModelConfig::default(),
             // LOCAL(experimental): 本地实验特性集合默认未设
             experimental: None,
+            // LOCAL (vision bridge): unset = source silent; merge points concretize.
+            accepts_images: None,
         }
     }
 }
@@ -4205,6 +4229,10 @@ pub struct ConfigModelOverride {
     /// LOCAL: per-model egress-proxy opt-in (`use_proxy = true` in `[model.<id>]`);
     /// `None` keeps the default direct connection.
     pub use_proxy: Option<bool>,
+    /// LOCAL (vision bridge): explicit image-input capability from
+    /// `[model.<id>] accepts_images`; `None` inherits the base entry's
+    /// concretized value (user-new models fall back to `false`).
+    pub accepts_images: Option<bool>,
 }
 impl ConfigModelOverride {
     pub(crate) fn apply(
@@ -4324,6 +4352,11 @@ impl ConfigModelOverride {
         if let Some(v) = self.use_proxy {
             entry.info.use_proxy = v;
         }
+        // LOCAL (vision bridge): explicit user value wins; `None` inherits the
+        // base entry (builtin/prefetched concretized, user-new fallback `false`).
+        if self.accepts_images.is_some() {
+            entry.info.accepts_images = self.accepts_images;
+        }
         if self.api_key.is_some() {
             entry.api_key.clone_from(&self.api_key);
         }
@@ -4435,6 +4468,13 @@ pub struct ModelInfo {
     /// See [`LazinessDetectorPerModelConfig`].
     #[serde(default)]
     pub laziness_detector: LazinessDetectorPerModelConfig,
+    /// LOCAL (vision bridge): whether this model accepts image input.
+    /// Concretized at the catalog merge points (builtin/remote default `true`,
+    /// user-new `false` via the fallback base, explicit value always wins);
+    /// `None` only survives exotic construction paths and reads as `true`
+    /// (today's behavior) via [`Self::accepts_images`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accepts_images: Option<bool>,
 }
 impl Default for ModelInfo {
     /// [`Self::fallback`] with an empty slug, so construction sites (tests especially) can use `..Default::default()`
@@ -4488,6 +4528,10 @@ impl ModelInfo {
             reasoning_summary: None,
             use_proxy: false,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
+            // LOCAL (vision bridge): unknown slugs are assumed text-only; the
+            // user must declare `accepts_images = true` (or the catalog backfill
+            // must land it) before images flow to them.
+            accepts_images: Some(false),
         }
     }
     pub(crate) fn from_config(entry: &ModelEntryConfig) -> Self {
@@ -4532,7 +4576,14 @@ impl ModelInfo {
             reasoning_summary: entry.reasoning_summary,
             use_proxy: entry.use_proxy,
             laziness_detector: entry.laziness_detector.clone(),
+            accepts_images: entry.accepts_images,
         }
+    }
+    /// LOCAL (vision bridge): resolved image-input capability. `None` (source
+    /// never said) reads as `true`, preserving the historical "every model sees
+    /// images" behavior; explicit `false` is the only opt-out.
+    pub(crate) fn accepts_images(&self) -> bool {
+        self.accepts_images.unwrap_or(true)
     }
     /// Whether `id` is one of the ids this model sends: its own, or the one it uses at some effort.
     pub(crate) fn has_model_id(&self, id: &str) -> bool {
@@ -5246,6 +5297,9 @@ pub(crate) fn resolve_aux_model_sampling_config(
                 reasoning_summary: None,
                 use_proxy: false,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
+                // LOCAL (vision bridge): internal xAI-bearer proxy entries are
+                // vision-capable plumbing (grok-4.6 lineage).
+                accepts_images: Some(true),
             },
             mtls_cert_dir: None,
             api_key: Some(bearer),
@@ -5483,6 +5537,9 @@ fn resolve_hidden_default_web_search_sampling_config(
             reasoning_summary: None,
             use_proxy: false,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
+            // LOCAL (vision bridge): synthetic catalog-entry twin; silent reads
+            // as vision-capable (unchanged historical behavior).
+            accepts_images: None,
         },
         mtls_cert_dir: None,
         api_key: None,
@@ -5561,6 +5618,13 @@ pub(crate) fn to_acp_model_info(
                 map.insert(
                     "totalContextTokens".to_string(),
                     serde_json::Value::Number(total_context_tokens.into()),
+                );
+                // LOCAL (vision bridge): the TUI keys image-paste eligibility off
+                // this key; always present so a missing key can't mean "true" by
+                // accident (old sessions keep their missing-key fallback).
+                map.insert(
+                    "acceptsImages".to_string(),
+                    serde_json::Value::Bool(info.accepts_images()),
                 );
                 map.insert(
                     "agentType".to_string(),

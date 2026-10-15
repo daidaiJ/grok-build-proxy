@@ -1138,17 +1138,24 @@ impl SessionActor {
             }
             self.drain_between_turn_completions(&commit_ids).await;
             self.inject_workflow_status_reminder().await;
-            let user_message = if user_images.is_empty() {
-                user_message
-            } else if self.is_cursor_harness() {
-                self.transcribe_user_images(user_message, &user_images)
-                    .await
-                    .inspect_err(|err| turn_completion_emitter.emit_error(err))?
+            // LOCAL (vision bridge): one decision per image-bearing turn covers
+            // attachments and base64-in-text images alike. Native keeps today's
+            // path; Bridge transcribes; Blocked strips and discloses. The D6
+            // tool-image describe budget resets per user turn.
+            self.image_describe_cache.reset_tool_image_budget();
+            let image_bridge = if user_images.is_empty() && extra_images.is_empty() {
+                super::vision_bridge::ImageBridgeDecision::Native
             } else {
+                self.resolve_image_bridge().await
+            };
+            let native_persist = |session: &Self,
+                                  user_message: String,
+                                  images: &[agent_client_protocol::ImageContent]|
+             -> Result<String, acp::Error> {
                 let session_dir = crate::session::persistence::ensure_owner_only_session_dir(
                     &crate::session::info::Info {
-                        id: self.session_info.id.clone(),
-                        cwd: self.session_info.cwd.clone(),
+                        id: session.session_info.id.clone(),
+                        cwd: session.session_info.cwd.clone(),
                     },
                 )
                 .map_err(|e| {
@@ -1156,11 +1163,10 @@ impl SessionActor {
                         "session_dir_create_failed",
                         format!("failed to create session dir: {:?}", e.kind()),
                     )
-                })
-                .inspect_err(|err| turn_completion_emitter.emit_error(err))?;
+                })?;
                 crate::session::image_describe::persist_and_prepend_image_files(
                     &session_dir,
-                    &user_images,
+                    images,
                     &user_message,
                 )
                 .map_err(|e| {
@@ -1169,7 +1175,48 @@ impl SessionActor {
                         format!("failed to save user images to assets dir: {:?}", e.kind()),
                     )
                 })
-                .inspect_err(|err| turn_completion_emitter.emit_error(err))?
+            };
+            let user_message = match &image_bridge {
+                super::vision_bridge::ImageBridgeDecision::Native => {
+                    if user_images.is_empty() {
+                        user_message
+                    } else {
+                        native_persist(self, user_message, &user_images)
+                            .inspect_err(|err| turn_completion_emitter.emit_error(err))?
+                    }
+                }
+                super::vision_bridge::ImageBridgeDecision::Bridge => {
+                    // D4: failure-tolerant; counts drive the user disclosure.
+                    let mut all_images = user_images.clone();
+                    all_images.extend(extra_images.iter().cloned());
+                    let outcome = self
+                        .transcribe_user_images(user_message, &all_images)
+                        .await;
+                    let notice = super::vision_bridge::render_vision_bridge_notice(
+                        outcome.described,
+                        outcome.failed,
+                        outcome.skipped,
+                        &outcome.describe_model,
+                        outcome.describe_host.as_deref(),
+                    );
+                    self.send_vision_bridge_notice(notice).await;
+                    outcome.text
+                }
+                super::vision_bridge::ImageBridgeDecision::Blocked(reason) => {
+                    // Keep the `<image_files>` envelope: attachments stay on
+                    // disk and addressable, with zero pixels in the request.
+                    let user_message = if user_images.is_empty() {
+                        user_message
+                    } else {
+                        native_persist(self, user_message, &user_images)
+                            .inspect_err(|err| turn_completion_emitter.emit_error(err))?
+                    };
+                    self.send_vision_bridge_notice(
+                        super::vision_bridge::render_vision_bridge_blocked_notice(*reason),
+                    )
+                    .await;
+                    user_message
+                }
             };
             let attached_image_refs = if self.is_cursor_harness() {
                 Vec::new()
@@ -1230,7 +1277,12 @@ impl SessionActor {
                 }
             };
             user_chat.set_prompt_index(current_prompt_index);
-            if !self.is_cursor_harness() {
+            // LOCAL (vision bridge): attach pixels only on the native path; the
+            // bridge transcribed them, the blocked path stripped them.
+            if matches!(
+                image_bridge,
+                super::vision_bridge::ImageBridgeDecision::Native
+            ) {
                 for image in &user_images {
                     user_chat.add_image(pick_user_image_url(image));
                 }

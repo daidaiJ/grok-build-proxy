@@ -488,6 +488,19 @@ impl ModelsManager {
         self.inner.catalog.write().models.insert(id.into(), entry);
     }
 
+    /// LOCAL (vision bridge): resolved image-input capability for `model_id`
+    /// (catalog key or wire name). `None` when absent from the catalog.
+    pub(crate) fn model_accepts_images(&self, model_id: &str) -> Option<bool> {
+        self.with_catalog_entry(model_id, |e| e.info().accepts_images())
+    }
+
+    /// LOCAL (vision bridge): whether the model carries its own credentials
+    /// (BYOK gate for the vision-bridge D3 authorization). `None` when absent
+    /// from the catalog.
+    pub(crate) fn model_has_own_credentials(&self, model_id: &str) -> Option<bool> {
+        self.with_catalog_entry(model_id, |e| e.has_own_credentials())
+    }
+
     pub(crate) fn current_reasoning_effort(&self) -> Option<ReasoningEffort> {
         *self.inner.current_reasoning_effort.read()
     }

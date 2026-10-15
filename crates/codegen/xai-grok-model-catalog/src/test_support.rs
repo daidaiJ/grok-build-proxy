@@ -11,6 +11,7 @@ pub fn openrouter_fixture() -> &'static str {
       "name": "Grok 4",
       "context_length": 256000,
       "supported_parameters": ["reasoning", "temperature"],
+      "architecture": { "input_modalities": ["text", "image"] },
       "pricing": {
         "prompt": "0.000003",
         "completion": "0.000015",
@@ -82,6 +83,7 @@ pub fn models_dev_fixture() -> &'static str {
       "glm-5.3-flash": {
         "name": "GLM-5.3-Flash",
         "reasoning": true,
+        "modalities": { "input": ["text"] },
         "limit": { "context": 128000, "output": 96000 },
         "cost": { "input": 0.15, "output": 2.5, "cache_read": 0.02 }
       }

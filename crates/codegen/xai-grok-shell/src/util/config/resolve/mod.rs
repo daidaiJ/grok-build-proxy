@@ -14,6 +14,8 @@ mod tool_approvals;
 mod toolset;
 mod ui;
 mod version;
+// LOCAL (vision bridge): describe-model authorization.
+mod vision;
 
 pub use auto_mode::*;
 pub use compaction::*;
@@ -28,6 +30,8 @@ pub use system_prompt::*;
 pub use tool_approvals::*;
 pub use toolset::*;
 pub use ui::*;
+// LOCAL (vision bridge): crate-internal resolver.
+pub(crate) use vision::*;
 pub use version::*;
 
 // One crate-wide mutex serializes env mutation; `permissions.rs` tests name it via this module's path

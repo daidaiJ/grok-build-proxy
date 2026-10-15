@@ -120,6 +120,9 @@ pub(crate) enum Lifecycle {
     ImageCompressed {
         message: String,
     },
+    VisionBridge {
+        message: String,
+    },
     MemoryFlushStarted,
     MemoryFlushCompleted {
         result: String,
@@ -154,6 +157,7 @@ impl Lifecycle {
             Lifecycle::CompactCancelled => "Auto-compact cancelled.".to_string(),
             Lifecycle::AutoContinue { .. } => "Resumed after compaction.".to_string(),
             Lifecycle::ImageCompressed { message } => message.clone(),
+            Lifecycle::VisionBridge { message } => message.clone(),
             Lifecycle::MemoryFlushStarted => "Memory flush started.".to_string(),
             // `result`, `path`, and capture `detail` remain available in the
             // structured lifecycle event. Plain lines are trusted UI copy and

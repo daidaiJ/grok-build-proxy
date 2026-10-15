@@ -2,6 +2,7 @@
 use super::hooks::RewriteProblem;
 use super::mcp_argument_coercion;
 use super::*;
+use base64::Engine as _;
 use futures::StreamExt;
 use tracing::Instrument;
 use xai_grok_hooks::result::HookDecision;
@@ -3096,6 +3097,21 @@ impl SessionActor {
         } else {
             result.prompt_text
         };
+        // LOCAL (vision bridge): one decision covers every image path out of a
+        // tool result — read_file images, PDF pages, drained MCP images, and
+        // base64 found in the output text.
+        let may_have_images = !output_replaced
+            && (matches!(
+                &result.output,
+                ToolsToolOutput::ReadFile(ReadFileOutput::ImageContent(_))
+                    | ToolsToolOutput::ReadFile(ReadFileOutput::PdfPageImages(_))
+            ) || !tool_layer_images.is_empty()
+                || prompt_text.contains("data:image"));
+        let tool_image_bridge = if may_have_images {
+            self.resolve_image_bridge().await
+        } else {
+            super::vision_bridge::ImageBridgeDecision::Native
+        };
         let (prompt_text, inline_images, extracted_images) = if output_replaced {
             (
                 maybe_rewrite(path_rewriter.as_ref(), prompt_text),
@@ -3110,7 +3126,9 @@ impl SessionActor {
                 tool_parsed_args,
                 effective_tool_name,
                 requested_tool_name,
+                call_id,
                 tool_layer_images,
+                &tool_image_bridge,
             )
             .await
         };
@@ -3135,6 +3153,111 @@ impl SessionActor {
                 count,
                 "base64 images extracted from tool result",
             );
+            // LOCAL (vision bridge): pixels from tool results only reach the
+            // model on the native path; the bridge transcribes them into text
+            // follow-ups, the blocked path omits them with a disclosure.
+            if !matches!(
+                tool_image_bridge,
+                super::vision_bridge::ImageBridgeDecision::Native
+            ) {
+                let is_bridge = matches!(
+                    tool_image_bridge,
+                    super::vision_bridge::ImageBridgeDecision::Bridge
+                );
+                let acp_images: Vec<agent_client_protocol::ImageContent> = extracted_images
+                    .iter()
+                    .map(|img| agent_client_protocol::ImageContent::new(img.data.clone(), img.mime_type.clone()))
+                    .collect();
+                let mut norm_result = crate::session::image_normalize::normalize_images(
+                    acp_images,
+                    self.is_cursor_harness(),
+                )
+                .await;
+                let mut described = 0usize;
+                let mut failed = norm_result.dropped.len();
+                if !norm_result.re_encode_fallbacks.is_empty() {
+                    tracing::warn!(
+                        session_id = %self.session_info.id,
+                        notes = %norm_result.re_encode_fallbacks.join(" "),
+                        "Extracted tool image kept original after re-encode failure (vision bridge)",
+                    );
+                }
+                for (i, norm) in norm_result.images.iter().enumerate() {
+                    if !is_bridge {
+                        break;
+                    }
+                    let bytes = base64::engine::general_purpose::STANDARD
+                        .decode(&norm.data)
+                        .unwrap_or_default();
+                    match self
+                        .describe_tool_image(
+                            requested_tool_name,
+                            call_id,
+                            &bytes,
+                            &norm.mime_type,
+                            &format!(
+                                "image {}/{} extracted from the `{}` tool result",
+                                i + 1,
+                                norm_result.images.len(),
+                                requested_tool_name
+                            ),
+                        )
+                        .await
+                    {
+                        Ok(Some(description)) => {
+                            described += 1;
+                            deferred_followups.push(ConversationItem::system_reminder(
+                                &format!(
+                                    "[Image {}/{} extracted from the tool result above]",
+                                    i + 1,
+                                    norm_result.images.len()
+                                ),
+                            ));
+                            deferred_followups.push(ConversationItem::system_reminder(
+                                &crate::session::image_describe::render_image_description_block(
+                                    &description,
+                                ),
+                            ));
+                        }
+                        Ok(None) => {
+                            deferred_followups.push(ConversationItem::system_reminder(&format!(
+                                "[Image {}/{} from the tool result above skipped: tool-image \
+                                 describe budget exhausted]",
+                                i + 1,
+                                norm_result.images.len()
+                            )));
+                        }
+                        Err(_) => {
+                            failed += 1;
+                            deferred_followups.push(ConversationItem::system_reminder(
+                                &super::vision_bridge::unavailable_marker(i + 1),
+                            ));
+                        }
+                    }
+                }
+                let skipped = norm_result.images.len().saturating_sub(described).saturating_sub(failed);
+                if is_bridge {
+                    self.send_vision_bridge_notice(
+                        super::vision_bridge::render_vision_bridge_notice(
+                            described,
+                            failed,
+                            skipped,
+                            &self.image_description_model,
+                            None,
+                        ),
+                    )
+                    .await;
+                } else {
+                    self.send_vision_bridge_notice(format!(
+                        "Vision bridge off: {} image(s) extracted from the `{}` tool result \
+                         were not sent (this model cannot read images).",
+                        norm_result.images.len(),
+                        requested_tool_name
+                    ))
+                    .await;
+                }
+                return Ok(deferred_followups);
+            }
             let acp_images: Vec<agent_client_protocol::ImageContent> = extracted_images
                 .into_iter()
                 .map(|img| agent_client_protocol::ImageContent::new(img.data, img.mime_type))
@@ -3178,12 +3301,15 @@ impl SessionActor {
         tool_parsed_args: &serde_json::Value,
         effective_tool_name: &str,
         requested_tool_name: &str,
+        call_id: &str,
         tool_layer_images: Vec<xai_grok_tools::util::base64_images::ExtractedImage>,
+        image_bridge: &super::vision_bridge::ImageBridgeDecision,
     ) -> (
         String,
         Vec<ContentPart>,
         Vec<xai_grok_tools::util::base64_images::ExtractedImage>,
     ) {
+        use super::vision_bridge::ImageBridgeDecision;
         use crate::session::acp_conversion::maybe_rewrite;
         let mut prompt_text = prompt_text;
         let mut inline_images: Vec<ContentPart> = Vec::new();
@@ -3216,51 +3342,147 @@ impl SessionActor {
                 .or_else(|| tool_parsed_args.get("path"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
-            use crate::session::image_normalize::{InlineAttachVerdict, inline_attach_verdict};
-            match inline_attach_verdict(&image_content.data) {
-                InlineAttachVerdict::TooSmall => {
-                    prompt_text = format!(
-                        "[Image from {path} was not attached: too small for vision models]"
-                    );
+            // LOCAL (vision bridge): only the native path attaches pixels.
+            if matches!(image_bridge, ImageBridgeDecision::Native) {
+                use crate::session::image_normalize::{InlineAttachVerdict, inline_attach_verdict};
+                match inline_attach_verdict(&image_content.data) {
+                    InlineAttachVerdict::TooSmall => {
+                        prompt_text = format!(
+                            "[Image from {path} was not attached: too small for vision models]"
+                        );
+                    }
+                    InlineAttachVerdict::Unreadable => {
+                        prompt_text = format!(
+                            "[Image from {path} was not attached: invalid or unreadable image data]"
+                        );
+                    }
+                    InlineAttachVerdict::Attach => {
+                        let url = format!(
+                            "data:{};base64,{}",
+                            image_content.mime_type, image_content.data
+                        );
+                        inline_images.push(ContentPart::Image {
+                            url: std::sync::Arc::<str>::from(url),
+                        });
+                        prompt_text = format!("Read image file: {path}");
+                    }
                 }
-                InlineAttachVerdict::Unreadable => {
-                    prompt_text = format!(
-                        "[Image from {path} was not attached: invalid or unreadable image data]"
-                    );
-                }
-                InlineAttachVerdict::Attach => {
-                    let url = format!(
-                        "data:{};base64,{}",
-                        image_content.mime_type, image_content.data
-                    );
-                    inline_images.push(ContentPart::Image {
-                        url: std::sync::Arc::<str>::from(url),
-                    });
-                    prompt_text = format!("Read image file: {path}");
-                }
+            } else {
+                // Bytes for the describe call come from the session assets dir
+                // via the tool layer's own copy; decode the inline payload.
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&image_content.data)
+                    .unwrap_or_default();
+                prompt_text = self
+                    .describe_read_file_image(path, &bytes, &image_content.mime_type, image_bridge)
+                    .await;
             }
         }
         if !self.is_cursor_harness()
             && let ToolsToolOutput::ReadFile(ReadFileOutput::PdfPageImages(ref pdf)) = *output
         {
-            for page in &pdf.pages {
-                let url = format!("data:{};base64,{}", page.mime_type, page.data);
-                inline_images.push(ContentPart::Image {
-                    url: std::sync::Arc::<str>::from(url),
-                });
-            }
             let path = tool_parsed_args
                 .get("target_file")
                 .or_else(|| tool_parsed_args.get("path"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
-            prompt_text = format!(
-                "Read PDF file: {path} ({} pages rendered, {} total)",
-                pdf.pages.len(),
-                pdf.total_pages,
-            );
+            if matches!(image_bridge, ImageBridgeDecision::Native) {
+                for page in &pdf.pages {
+                    let url = format!("data:{};base64,{}", page.mime_type, page.data);
+                    inline_images.push(ContentPart::Image {
+                        url: std::sync::Arc::<str>::from(url),
+                    });
+                }
+                prompt_text = format!(
+                    "Read PDF file: {path} ({} pages rendered, {} total)",
+                    pdf.pages.len(),
+                    pdf.total_pages,
+                );
+            } else {
+                // D6: PDF pages each consume one budget slot; past-budget pages
+                // get a per-page skipped marker instead of pixels.
+                let mut page_parts = Vec::with_capacity(pdf.pages.len());
+                let mut transcribed = 0usize;
+                for (i, page) in pdf.pages.iter().enumerate() {
+                    let bytes = base64::engine::general_purpose::STANDARD
+                        .decode(&page.data)
+                        .unwrap_or_default();
+                    let part = match self
+                        .describe_tool_image(
+                            requested_tool_name,
+                            call_id,
+                            &bytes,
+                            &page.mime_type,
+                            &format!("PDF page {}/{} of {}", i + 1, pdf.pages.len(), path),
+                        )
+                        .await
+                    {
+                        Ok(Some(description)) => {
+                            transcribed += 1;
+                            crate::session::image_describe::render_image_description_block(
+                                &description,
+                            )
+                        }
+                        Ok(None) => format!(
+                            "[PDF page {} of {} skipped: tool-image describe budget exhausted]",
+                            i + 1,
+                            pdf.pages.len()
+                        ),
+                        Err(_) => super::vision_bridge::unavailable_marker(i + 1),
+                    };
+                    page_parts.push(format!("Page {}:\n{}", i + 1, part));
+                }
+                prompt_text = format!(
+                    "Read PDF file: {path} ({} pages transcribed of {} rendered, {} total)\n\n{}",
+                    transcribed,
+                    pdf.pages.len(),
+                    pdf.total_pages,
+                    page_parts.join("\n\n"),
+                );
+            }
         }
         (prompt_text, inline_images, extracted_images)
+    }
+    /// LOCAL (vision bridge): describe a `read_file` image (or stamp it
+    /// unavailable / not-sent) for a non-vision main model.
+    async fn describe_read_file_image(
+        &self,
+        path: &str,
+        bytes: &[u8],
+        mime_type: &str,
+        image_bridge: &super::vision_bridge::ImageBridgeDecision,
+    ) -> String {
+        match image_bridge {
+            super::vision_bridge::ImageBridgeDecision::Native => {
+                unreachable!("describe_read_file_image is only called off the native path")
+            }
+            super::vision_bridge::ImageBridgeDecision::Blocked(_) => format!(
+                "[Image from {path} was not sent: this model cannot read images and the \
+                 vision bridge is off]"
+            ),
+            super::vision_bridge::ImageBridgeDecision::Bridge => {
+                match self
+                    .describe_tool_image("read_file", path, bytes, mime_type, path)
+                    .await
+                {
+                    Ok(Some(description)) => {
+                        format!(
+                            "Read image file: {path}\n\n{}",
+                            crate::session::image_describe::render_image_description_block(
+                                &description
+                            )
+                        )
+                    }
+                    Ok(None) => format!(
+                        "[Image from {path} skipped: tool-image describe budget exhausted]"
+                    ),
+                    Err(_) => format!(
+                        "[Image from {path} unavailable: transcription failed, omitted from \
+                         this request]"
+                    ),
+                }
+            }
+        }
     }
     /// Handle a hard tool execution error (dispatch/validation failure).
     /// Tool failures are not fed to the doom-loop detector (error-count streaks were removed).

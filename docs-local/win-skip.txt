@@ -126,3 +126,19 @@ theme::color_support::tests::standalone_color_uses_stderr_terminal_not_stdout
 # 该测试此前只随 auth_error_no_retry 家族在 Linux CI 跑，本机新过滤词首次命中。
 # 环境族，与模型组改动无关（model_switch/conversation_group 代码未触碰）。
 session::acp_session::auth_error_no_retry_tests::
+
+# 族W（2026-10-15，GATE_FORCE xai-grok-shell --lib vision_bridge 首跑暴露）：同族N/S/V
+# 根因——create_test_actor 夹具写死 /tmp（support.rs:287 AbsPathBuf NotAbsolute panic）。
+# 视觉桥决策矩阵测试走同一夹具；环境族，与桥改动无关（Linux CI 验证）。
+session::acp_session::vision_bridge::tests::
+
+# 族X（2026-10-15，同轮 image_describe 过滤首跑暴露）：既有上游用例断言
+# contains("/assets/image-")——Windows 路径分隔符 \ 使前向斜杠断言恒假。
+# 路径分隔符环境族（\ vs /），Linux CI 通过；与视觉桥 envelope 改动无关
+# （render_image_files_block 输出未被触碰）。
+session::image_describe::tests::persist_and_prepend_image_files_writes_assets_and_lists_paths
+
+# 族Y（2026-10-15，--features config-docs 首跑暴露）：page_is_the_user_facing_field_list
+# 硬依赖上游 per-crate AGENTS.md（crates/codegen/xai-grok-shell/AGENTS.md），fork 无此文件。
+# 上游环境缺口；同模块校验 user-guide 行的 registered/unmirrored_features_have_rows 本机绿。
+config_docs::tests::page_is_the_user_facing_field_list

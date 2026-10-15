@@ -695,6 +695,21 @@ pub(crate) fn parse_remote_model_value(
         base_url,
         name,
         description: get_string(obj, "description"),
+        // LOCAL (vision bridge): remote may advertise image input; absent stays
+        // `None` and the catalog merge defaults it to `true`.
+        accepts_images: obj
+            .get("acceptsImages")
+            .or_else(|| obj.get("accepts_images"))
+            .or_else(|| meta.and_then(|m| m.get("acceptsImages")))
+            .and_then(|v| v.as_bool())
+            .or_else(|| {
+                // `inputModalities` lists "image" when the endpoint advertises vision.
+                obj.get("inputModalities")
+                    .or_else(|| obj.get("input_modalities"))
+                    .or_else(|| meta.and_then(|m| m.get("inputModalities")))
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.iter().any(|m| m.as_str() == Some("image")))
+            }),
         max_completion_tokens: get_u64(obj, "maxCompletionTokens")
             .or_else(|| get_u64(obj, "max_completion_tokens"))
             .and_then(|v| u32::try_from(v).ok()),

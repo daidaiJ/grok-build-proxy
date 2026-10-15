@@ -29,6 +29,8 @@ pub use load::*;
 pub use mcp::*;
 pub(crate) use mcp_reenable::{McpDefinitionIndex, needs_definition_scan};
 pub use model_entry_writes::{ModelEntryDraft, write_model_entries};
+// LOCAL（视觉桥 D8）：目录能力位回填（crate 内部消费，不走公开面板面）。
+pub(crate) use model_entry_writes::backfill_accepts_images;
 pub use permissions::*;
 pub use persist::*;
 // These types live in `xai-grok-config-types`; the re-export keeps `crate::util::config::{RemoteSettings, GoalRoleModel}` working

@@ -976,6 +976,9 @@ pub enum SessionUpdate {
     /// Prompt images dropped before send (integrity failure or the upscale cap).
     /// The model is told via a system-reminder; this notification shows the drops to the UI.
     ImageDropped { notes: Vec<String> },
+    /// LOCAL (vision bridge): image transcription / stripping disclosure.
+    /// One composed line; the pager renders it as a system scrollback block.
+    VisionBridgeNotice { message: String },
     /// Memory file listing for the pager's /memory modal.
     MemoryFiles {
         files: Vec<MemoryFileInfo>,

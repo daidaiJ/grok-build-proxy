@@ -377,6 +377,7 @@ User-level configuration lives in `$GROK_HOME/config.toml` (default `~/.grok/con
 | `model.<id>.api_backend` | `chat_completions / responses / messages` | `yes` | `user` | Wire protocol for this model. |
 | `model.<id>.api_base_url` | `string` | `yes` | `user` | Alternate API base used with XAI_API_KEY resolution. |
 | `model.<id>.api_key` | `string` | `yes` | `user` | Inline API key. Prefer `env_key`. Not a secret to put in a shared repo. |
+| `model.<id>.accepts_images` | `boolean` | `yes` | `user` | LOCAL: whether this model accepts image input. Unset: built-in / remote-catalog models default true, new `[model.<id>]` entries default false; the model-catalog backfill may write this key for you (an explicit value always wins). Text-only models route attached images through the vision bridge. |
 | `model.<id>.auth_provider` | `string` | `yes` | `user` | Name of a `[auth_provider.<name>]` helper that mints this model's bearer token. |
 | `model.<id>.auto_compact_threshold_percent` | `integer` | `yes` | `user` | Per-model auto-compact threshold (0-100). |
 | `model.<id>.base_url` | `string` | `yes` | `user` | Provider endpoint base URL. |
@@ -430,7 +431,7 @@ User-level configuration lives in `$GROK_HOME/config.toml` (default `~/.grok/con
 | `models.disabled_models` | `string[]` | `yes` | `user` | Remove these model IDs from the catalog. Wins over `hidden_models`. |
 | `models.extra_headers` | `map<string,string>` | `yes` | `user` | Request headers applied to every model; per-model keys win. |
 | `models.hidden_models` | `string[]` | `yes` | `user` | Hide these model IDs from the picker; `-m` can still select them. |
-| `models.image_description` | `string` | `yes` | `user` | Vision model used to transcribe user-supplied images. |
+| `models.image_description` | `string` | `yes` | `user` | Vision model used to transcribe user-supplied images. LOCAL: called only when the main model `accepts_images = false`. For a BYOK main model, the vision bridge runs only when you set this key explicitly (an unset key defaults to `grok-4.6` on xAI and is skipped for BYOK so no silent xAI spend). |
 | `models.inference_idle_timeout_secs` | `number` | `yes` | `user` | Global idle timeout for streaming inference when a model leaves it unset. |
 | `models.max_completion_tokens` | `number` | `yes` | `user` | Global max completion tokens default when a model leaves it unset. |
 | `models.max_retries` | `number` | `yes` | `user` | Global inference retry default when a model leaves it unset. |

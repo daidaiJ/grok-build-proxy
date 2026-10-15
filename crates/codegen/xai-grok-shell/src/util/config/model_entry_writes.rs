@@ -142,6 +142,97 @@ fn draft_to_item(entry: &ModelEntryDraft) -> toml_edit::Item {
     toml_edit::Item::Table(table)
 }
 
+/// LOCAL（视觉桥 D8）：目录取数成功后，把目录判定的 `accepts_images` 能力位
+/// 回填进用户 `config.toml` **已有**的 `[model.<id>]` 条目。
+///
+/// 规则（plan.md D8）：
+/// - 只碰用户文件里已存在的条目（`/auth` 新建语义不在这里发生）；
+/// - 用户已显式写 `accepts_images` 的条目**永不覆盖**（显式字段永远赢）；
+/// - 回填值与「无显式键时的解析缺省」相同则跳过（避免无谓的 config 重写）：
+///   条目 id 在内建/预取目录里（`catalog_keys` 命中）缺省 true，否则（用户新建）
+///   缺省 false；
+/// - 目录未命中或目录未给该字段（`None`）→ 跳过。
+///
+/// 返回实际写入的条目数；写回失败只记日志（回填是尽力而为的增强，不阻塞取数）。
+pub(crate) async fn backfill_accepts_images(
+    catalog: &xai_grok_model_catalog::ModelCatalog,
+    catalog_keys: &[String],
+) -> Result<usize> {
+    let catalog = catalog.clone();
+    let catalog_keys: std::collections::BTreeSet<String> =
+        catalog_keys.iter().cloned().collect();
+    let guard = super::persist::lock_config_writes()
+        .await
+        .map_err(|error| anyhow::anyhow!("lock config.toml for vision-capability backfill: {error}"))?;
+    guard
+        .run_blocking(move || backfill_accepts_images_locked(&catalog, &catalog_keys))
+        .await
+        .map_err(|error| anyhow::anyhow!("vision-capability backfill task failed: {error}"))?
+}
+
+fn backfill_accepts_images_locked(
+    catalog: &xai_grok_model_catalog::ModelCatalog,
+    catalog_keys: &std::collections::BTreeSet<String>,
+) -> Result<usize> {
+    let path = super::mcp::user_config_path();
+    let (destination, content) = super::persist::read_follow_bound(&path).map_err(|error| {
+        anyhow::anyhow!(
+            "read {} for vision-capability backfill: {error}",
+            path.display()
+        )
+    })?;
+    let mut doc = parse_config_document(&content, &path)?;
+    let Some(model_table) = doc.get_mut("model").and_then(|i| i.as_table_mut()) else {
+        return Ok(0);
+    };
+    // 先取键快照：匹配器要 `&str`，且借用不能横跨 `get_mut`。
+    let keys: Vec<String> = model_table
+        .iter()
+        .map(|(key, _)| key.to_owned())
+        .collect();
+    let mut written = 0usize;
+    for key in &keys {
+        let Some(entry) = model_table
+            .get_mut(key.as_str())
+            .and_then(|i| i.as_table_mut())
+        else {
+            continue;
+        };
+        if entry.contains_key("accepts_images") {
+            continue;
+        }
+        let Some(matched) = xai_grok_model_catalog::match_model(catalog, key) else {
+            continue;
+        };
+        let Some(capability) = matched.entry.accepts_images else {
+            continue;
+        };
+        // 无显式键时的解析缺省：覆盖内建/预取条目 → true；用户新建条目 → false。
+        let would_be_default = catalog_keys.contains(key);
+        if capability == would_be_default {
+            continue;
+        }
+        entry.insert("accepts_images", toml_edit::value(capability));
+        written += 1;
+        tracing::info!(
+            model_key = %key,
+            accepts_images = capability,
+            "model catalog: accepts_images backfilled from catalog (vision bridge D8)"
+        );
+    }
+    if written == 0 {
+        return Ok(0);
+    }
+    let content = doc.to_string();
+    super::persist::atomic_write_follow_bound(&path, &destination, &content).map_err(|error| {
+        anyhow::anyhow!(
+            "write {} for vision-capability backfill: {error}",
+            path.display()
+        )
+    })?;
+    Ok(written)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

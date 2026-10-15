@@ -133,6 +133,9 @@ mod workflow_write_smoke_check;
 pub(crate) use interjection::*;
 #[path = "acp_session_impl/laziness.rs"]
 mod laziness;
+// LOCAL (vision bridge): model-capability gating for image inputs.
+#[path = "acp_session_impl/vision_bridge.rs"]
+mod vision_bridge;
 #[cfg(test)]
 pub(crate) use laziness::*;
 #[path = "acp_session_impl/queue_mutation.rs"]

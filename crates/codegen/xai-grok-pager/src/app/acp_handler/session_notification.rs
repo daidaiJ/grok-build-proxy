@@ -299,6 +299,7 @@ pub(super) fn handle_session_notification_with_origin(
         | XaiSessionUpdate::AutoCompactCancelled { .. }
         | XaiSessionUpdate::RetryState(_)
         | XaiSessionUpdate::ImageDropped { .. }
+        | XaiSessionUpdate::VisionBridgeNotice { .. }
         | XaiSessionUpdate::MemoryFlushCompleted { .. }
         | XaiSessionUpdate::MemoryCaptureActivity { .. }
         | XaiSessionUpdate::MemoryDreamCompleted { .. }
@@ -1710,6 +1711,11 @@ pub(super) fn apply_session_event(
         XaiSessionUpdate::ImageDropped { notes } => {
             let message = notes.join("\n");
             tracing::info!("Image dropped: {message}");
+            scrollback.push_block(RenderBlock::system(message));
+            true
+        }
+        XaiSessionUpdate::VisionBridgeNotice { message } => {
+            tracing::info!("Vision bridge: {message}");
             scrollback.push_block(RenderBlock::system(message));
             true
         }
