@@ -180,6 +180,11 @@ pub(crate) struct CompactionConfig {
     pub prefix_released: AtomicBool,
     /// User/stop cancel for the current compact generation.
     pub cancel: CompactCancelGate,
+    /// LOCAL (experimental idle auto-compact): an idle-triggered compact is in
+    /// flight. The inline pre-sampling check skips while this is set so the two
+    /// paths can't double-compact; the idle task itself aborts when the session
+    /// stops being idle.
+    pub idle_compact_in_flight: std::sync::atomic::AtomicBool,
 }
 
 impl CompactionConfig {
