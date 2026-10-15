@@ -1,6 +1,7 @@
 # Subagent 模型配置优化与模型组（降级链）设计
 
-> 状态：**设计完成，待拍板开工**（2026-10-14）。六个拍板点见 §拍板点。
+> 状态：**已落地**（2026-10-14，PATCHES 四十一期，分支 `feat/local-subagent-model-group`
+> 随 Ayu 主题线同批发版）。六拍板点按建议值执行，实施偏差见文末「施工实况」节。
 > 需求原话：内置 subagent 可配 model 与推理深度；同一 model id 来自多个供应商，要能精确指定
 > 供应商条目并做降级链（A 家 4.1flash 用不了换 B 家 glm-5.3 flash）——「模型组」概念。
 > 视觉桥（[vision-bridge/plan.md](vision-bridge/plan.md) D8/D9）的降级链**引用本设计的模型组

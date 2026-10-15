@@ -741,3 +741,43 @@
 - **遗留**：light / daltonized 两档移植（映射草案在预研文档）；活体 TUI
   抽查（`/theme deep-dark` 切换 + 256 色 PTY 隐藏 + config 持久化）随发版后
   新客户端。
+
+### 2026-10-15 空闲时自动压缩主上下文（feat/local-idle-auto-compact）——实验特性 idle_auto_compact
+
+- **状态**：施工完成（PATCHES 四十三期），已合 main 待发版。需求原话：空闲时
+  自动压缩主上下文，默认不启用，配置文件开启实验性特性（参考 Codex/Claude
+  auto-compact）。
+- **落点**：`session/acp_session_impl/idle_compact.rs` 新模块（3s 防抖 + busy
+  select! 中止 + `run_compact_only` 复用）；`compaction_config.rs`
+  `idle_compact_in_flight`（inline/preflight 检查互斥）；`run_loop.rs` 成功回合
+  空闲点 spawn；`util/config/resolve/features.rs` 解析器（env
+  `GROK_IDLE_AUTO_COMPACT` > `[features] idle_auto_compact` > 默认关）。
+- **验证**：cargo check shell --all-targets 0 error 0 warning；新测 5 例（/tmp
+  夹具族本机跳过，Linux CI 跑）；config_docs 行校验绿。
+- **遗留**：活回合验证（真会话开 flag 看 fired/aborted 事件与下一条 prompt 的
+  TTFT 改善）随新客户端；配置无 per-session 覆盖（跟随全局开关）。
+
+### 2026-10-15 视觉桥 T1/T2/T3+D8（feat/local-vision-bridge）——纯文本主模型的图像转写
+
+- **状态**：施工完成（PATCHES 四十四期），已合 main 待发版。对照
+  vision-bridge/plan.md D1–D8 全落地；D9 二级（400 反应式摘除转桥）为 v2 增量未做。
+- **落点**：`session/acp_session_impl/vision_bridge.rs`（决策 + 披露文案 + 测试）、
+  `util/config/resolve/vision.rs`（D3 授权解析）、config 三层 accepts_images +
+  ACP meta + ModelsManager 访问器、turn/interjection/transcribe 三接线（D4
+  失败降级）、tool_calls 四口子 + D6 预算、`XaiSessionUpdate::VisionBridgeNotice`
+  三面（pager/headless/rewind-window）、model-catalog accepts_images 解析 +
+  prices.cache v3 + 启动预热回填（toml_edit 定点）。
+- **验证**：cargo check shell/pager/model-catalog --all-targets 0 error 0 warning；
+  model-catalog 41/41；shell GATE_FORCE 决策矩阵/D1 缺省表/config_docs 行校验绿；
+  pager 36/36；i18n 0 挂；win-skip 族W/X/Y 登记（Linux CI 验证）。
+- **遗留**：D9 二级反应路径（400 签名表按供应商归档，v2）；活回合验证（真实
+  VL 转写质量、BYOK 剥图告知、工具图预算耗尽路径）随新客户端；backfill 无
+  单测（依赖用户 config 面，unified 日志可观测）。
+
+### 2026-10-15 模型选择器目录详情展示——立项记录（未开工）
+
+- **状态**：用户口头需求（通过缓存的模型信息，在选模型时右边显示模态/支持思考/
+  上下文长度/美元价格），仅立项不施工。文档
+  [`docs-local/model-picker-catalog-details-todo.md`](model-picker-catalog-details-todo.md)
+  （数据源盘点：CatalogMatch 四字段全就位；设计草案 + 4 拍板点 + T1/T2 分期，
+  估 1–2 人天）。

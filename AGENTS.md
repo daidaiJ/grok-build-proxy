@@ -17,6 +17,30 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 > 补充以文末"后记"追加。规约类完工文档（如 ui-i18n-plan）不归档但须在头部
 > 标明"已完工 + 保留角色"。更新本索引时先核对文件真实存在。
 
+- **空闲时自动压缩主上下文（已落地，随发版待活体验证）** — 实验特性
+  `[features] idle_auto_compact`（默认关，env `GROK_IDLE_AUTO_COMPACT`）：
+  成功回合结束的空闲点若上下文已过 auto-compact 阈值，提前把摘要做完，
+  下一条 prompt 不再内联付延迟；3s 防抖 + 忙时 select! 中止（与用户 stop 同
+  取消语义）+ 与 inline 预采样检查互斥（idle_compact_in_flight）；成功门
+  （cancel/失败回合后不跑）+ 非 subagent。PATCHES 四十三期；落点
+  `session/acp_session_impl/idle_compact.rs` + run_loop hook + compaction
+  双检查守卫。**待活体验证**（开 flag 看 shell.idle_compact.fired/.aborted
+  事件与下一条 prompt TTFT 改善）随新客户端。
+
+- **视觉桥（已落地，随发版待活体验证）** — 纯文本主模型的图（用户贴图/查询
+  base64/read_file 图/PDF 页/MCP 抽取图）经识图模型转写，原图不进请求；
+  `model.<id>.accepts_images` 能力位（D1 缺省表 + ACP meta + 目录解析
+  acceptsImages/inputModalities + 启动预热 toml_edit 回填用户 config）；
+  D3 授权：BYOK 主模型必须显式 `[models] image_description` 否则剥图+告知
+  （绝不静默打 xAI）；D4 失败剥图标记回合继续；D6 工具图每回合 4 张预算；
+  `VisionBridgeNotice` 披露（计数+模型+host）。D9 二级 400 反应式留 v2。
+  PATCHES 四十四期；定案 [`docs-local/vision-bridge/plan.md`](docs-local/vision-bridge/plan.md)。
+
+- **模型选择器目录详情展示（立项未开工）** — 用户需求：选模型时右侧显示
+  模态/支持思考/上下文长度/美元价格（数据源 CatalogMatch 四字段全就位）。
+  [`docs-local/model-picker-catalog-details-todo.md`](docs-local/model-picker-catalog-details-todo.md)
+  （设计草案 + 4 拍板点 + T1/T2 分期，估 1–2 人天）。
+
 - **Ctrl+Enter send-now 幽灵气泡（open，P2）** — 用户口述：回合中 Ctrl+Enter
   立即入队后，对话流偶发在新提示词下方把**上一条输入**重画成新气泡；纯显示层
   （模型上下文零错位，updates.jsonl 每条用户消息恰好一次已核实）。Ctrl+Enter

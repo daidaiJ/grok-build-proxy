@@ -76,6 +76,7 @@ grok2 -p "ok"       # 真跑一次
 | 工具调用异常 | 部分 BYOK 网关不吃流式工具调用 → 该模型加 `stream_tool_calls = false` |
 | 误选内置 grok 模型就 401 | `[models] hidden_models = ["grok-4.6", "grok-4.5"]` 收进选择器（`-m` 仍可用），或 `disabled_models` 彻底移除 |
 | 联网检索/标题生成仍打 x.ai | `[models] web_search`、`session_summary`、`image_description`、`prompt_suggestion` 默认都是 `grok-4.6` → 一并指到第三方模型键 |
+| 纯文本模型贴图就 400 | LOCAL 视觉桥：主模型 `accepts_images = false` 时图走转写；BYOK 主模型必须显式写 `[models] image_description` 指到识图模型，否则剥图并提示（绝不静默打 x.ai） |
 
 细节：`api_key` 是明文写进 `config.toml`，库外密钥建议用 `env_http_headers`（值只在内存里）或 `env_key`；别把带 key 的配置提交进仓库。
 
@@ -220,7 +221,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 
 - **TUI 内文档**：`/docs`（或直接读 `<grok_home>/docs/user-guide/`）。其中 [`29-local-enhancements.md`](crates/codegen/xai-grok-pager/docs/user-guide/29-local-enhancements.md) 是本地增强总表（含"信号 → 该配什么"对照表），[`11-custom-models.md`](crates/codegen/xai-grok-pager/docs/user-guide/11-custom-models.md) 是第三方模型全量说明。
 - **skill `third-party-models`**：把"用第三方模型替代 grok 登录"的完整流程（机制、最小配置、常见坑速查、验证命令、本 fork 的额外能力）写成可被 agent 自动加载的 skill。放在 `~/.grok/skills/third-party-models/SKILL.md`，之后：`/third-party-models` 手动调用，或在你说"接自己的模型 / 不用 grok 账号 / 配 deepseek"时自动触发。
-- **仓库内开发资料**：`docs-local/PATCHES.md`（本地补丁账本，上游同步后按表重放）、`docs-local/WIN-TEST-GATE.md`（Windows 测试门控与分诊流水线）、`docs-local/provider-onboarding-api-cost-todo.md`（`/auth` 面板 + `/stats` 成本列 + 模型目录价格的设计与拍板账本）、`docs-local/ui-i18n-plan.md`、`docs-local/tool-output-compression-plan.md`、`docs-local/agent-cli-tracking/`（同类 agent CLI 的调研笔记）、`docs-local/agent-memory-design/`（agent 软件记忆模块的专题调研：七家落地对照、工程取舍、优化点与演进方向，含 Reddit / HN 社区风评）、`docs-local/startup-perf/`（grok2 启动耗时专题：span 画像 + ptyctl 驱动的复测流程、冷/热缓存实测，主因 `fetch_models_blocking` 与缓解选项）、`docs-local/usage/`（供应商套餐用量专题：各家 Coding Plan 用量接口与凭据调研 + `/usage` 面板显示供应商套餐量的施工方案）。
+- **仓库内开发资料**：`docs-local/PATCHES.md`（本地补丁账本，上游同步后按表重放）、`docs-local/WIN-TEST-GATE.md`（Windows 测试门控与分诊流水线）、`docs-local/provider-onboarding-api-cost-todo.md`（`/auth` 面板 + `/stats` 成本列 + 模型目录价格的设计与拍板账本）、`docs-local/model-picker-catalog-details-todo.md`（模型选择器右侧显示模态/思考/上下文长度/美元价格——立项待拍板）、`docs-local/ui-i18n-plan.md`、`docs-local/tool-output-compression-plan.md`、`docs-local/agent-cli-tracking/`（同类 agent CLI 的调研笔记）、`docs-local/agent-memory-design/`（agent 软件记忆模块的专题调研：七家落地对照、工程取舍、优化点与演进方向，含 Reddit / HN 社区风评）、`docs-local/startup-perf/`（grok2 启动耗时专题：span 画像 + ptyctl 驱动的复测流程、冷/热缓存实测，主因 `fetch_models_blocking` 与缓解选项）、`docs-local/usage/`（供应商套餐用量专题：各家 Coding Plan 用量接口与凭据调研 + `/usage` 面板显示供应商套餐量的施工方案）。
 
 ## 从源码构建
 
