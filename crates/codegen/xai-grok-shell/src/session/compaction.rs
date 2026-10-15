@@ -2158,6 +2158,8 @@ impl SessionActor {
     pub(crate) async fn check_auto_compact_needed(&self) -> Option<AutoCompactTriggerInfo> {
         // LOCAL (idle auto-compact): an idle-triggered compact owns the job right
         // now; firing a second one inline would double-summarize the same context.
+        // The idle task itself goes through [`Self::check_auto_compact_needed_inner`]
+        // (it owns the flag, the guard must not reject its owner).
         if self
             .compaction
             .idle_compact_in_flight
@@ -2165,6 +2167,11 @@ impl SessionActor {
         {
             return None;
         }
+        self.check_auto_compact_needed_inner().await
+    }
+
+    /// Threshold/suppression check without the idle-compact ownership guard.
+    pub(crate) async fn check_auto_compact_needed_inner(&self) -> Option<AutoCompactTriggerInfo> {
         if self
             .memory
             .is_flushing
