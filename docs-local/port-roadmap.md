@@ -724,3 +724,20 @@
   config 2 + 组链优先级 1）；Linux CI shell 套件随合并后 build 验证。
 - **遗留**：v2（首字节前 failover/粘性、transcript notice、主循环绑组 G4）；
   活体验证（真实三家 glm-5.3-flash 组断一家的自动顺延）随发版后新客户端。
+
+### 2026-10-15 Deep Dark 主题（feat/local-claude-theme-port）——Claude Code 泄露源码 darkTheme 移植
+
+- **状态**：施工完成（PATCHES 四十二期），待合并发版。预研与判定（dark ✓ /
+  light ✓ 次选 / daltonized 可选 / ansi ✗）在
+  [`docs-local/claude-theme-port.md`](claude-theme-port.md)，light 与
+  daltonized 两档映射草案已备、未施工。
+- **落点**：`theme/deep_dark.rs`（~64 槽映射，donor 直采 + 色系内派生）+
+  Ayu 期同款九处接线（mod/cache/syntax/defs×2/i18n/settings_modal 测试/
+  doctor 夹具 19→20/user-guide 表）；命名 `deep-dark`（用户拍板，别名
+  `claude-dark`/`cc-dark`），bg_base 派生拍板 #141414。
+- **验证**：cargo check render/pager --all-targets 0 error 0 warning；
+  GATE_FORCE render theme 175/0、pager theme 76/0、settings 380/0、
+  doctor 42/0；i18n 扫描 exit 0（rustc 0xc0000005 两轮，清 incremental 后绿）。
+- **遗留**：light / daltonized 两档移植（映射草案在预研文档）；活体 TUI
+  抽查（`/theme deep-dark` 切换 + 256 色 PTY 隐藏 + config 持久化）随发版后
+  新客户端。

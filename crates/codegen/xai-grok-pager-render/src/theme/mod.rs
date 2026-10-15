@@ -10,6 +10,7 @@
 pub mod cache;
 pub mod catppuccin;
 pub mod ayu;
+pub mod deep_dark;
 pub mod codex;
 pub mod color_support;
 pub mod dracula;
@@ -62,6 +63,9 @@ pub enum ThemeKind {
     // LOCAL Ayu 主题（2026-10-14，移植自 qwen-code ayu.ts）：社区 Ayu dark，
     // 暖橙日落强调填空位。需要 truecolor。
     Ayu = 19,
+    // LOCAL Deep Dark 主题（2026-10-15，移植自泄露的 Claude Code v2.1.88
+    // darkTheme）：Claude 赤陶橙品牌系，用户拍板命名 deep-dark。需要 truecolor。
+    DeepDark = 20,
     /// Every bg is `Reset` so the terminal canvas shows through; legible on both polarities without appearance detection.
     /// Hidden and unparseable while `cache::terminal_theme_enabled()` is off.
     Terminal = 6,
@@ -90,6 +94,7 @@ impl ThemeKind {
         ThemeKind::SolarizedDark,
         ThemeKind::Codex,
         ThemeKind::Ayu,
+        ThemeKind::DeepDark,
         ThemeKind::Terminal,
     ];
 
@@ -157,6 +162,7 @@ impl ThemeKind {
             Self::SolarizedDark => "solarized-dark",
             Self::Codex => "codex",
             Self::Ayu => "ayu",
+            Self::DeepDark => "deep-dark",
             Self::Terminal => "terminal",
             Self::Auto => "auto",
         }
@@ -183,7 +189,8 @@ impl ThemeKind {
             | Self::NightOwl
             | Self::SolarizedDark
             | Self::Codex
-            | Self::Ayu => true,
+            | Self::Ayu
+            | Self::DeepDark => true,
             // Reset plus named ANSI-16 entries only — nothing to quantize.
             Self::Terminal => false,
             // Auto is resolved to a concrete theme before rendering.
@@ -218,6 +225,7 @@ impl ThemeKind {
             Self::SolarizedDark => &["solarized"],
             Self::Codex => &[],
             Self::Ayu => &["ayu-dark"],
+            Self::DeepDark => &["claude-dark", "cc-dark"],
             Self::Terminal => &["terminal-default", "transparent", "native"],
             Self::Auto => &["system"],
         }
@@ -286,6 +294,7 @@ pub fn display_name_for_canonical(value: &str) -> &str {
         "solarized-dark" => "Solarized Dark",
         "codex" => "Codex",
         "ayu" => "Ayu",
+        "deep-dark" => "Deep Dark",
         "terminal" => "Terminal",
         other => other,
     }
@@ -416,6 +425,7 @@ impl Theme {
             ThemeKind::SolarizedDark => Self::solarized_dark(),
             ThemeKind::Codex => Self::codex(),
             ThemeKind::Ayu => Self::ayu(),
+            ThemeKind::DeepDark => Self::deep_dark(),
             // Handled by the early return above.
             ThemeKind::Terminal => Self::terminal(),
             // Auto is resolved to a concrete theme before being stored; if reached, fall back to GrokNight
@@ -1157,6 +1167,7 @@ mod tests {
                 ThemeKind::SolarizedDark => Theme::solarized_dark(),
                 ThemeKind::Codex => Theme::codex(),
                 ThemeKind::Ayu => Theme::ayu(),
+                ThemeKind::DeepDark => Theme::deep_dark(),
                 // Reset plus named ANSI entries: the scrollbar rides the
                 // terminal's own fg/bg contrast, so there is no RGB delta.
                 ThemeKind::Terminal => continue,
