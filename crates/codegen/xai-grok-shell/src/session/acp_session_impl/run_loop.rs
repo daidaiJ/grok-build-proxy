@@ -2421,6 +2421,17 @@ pub(super) async fn run_session(
                         // Early-session auto-title refresh (turns 3 and 6), then frozen
                         // Same success gating as the turn summary
                         session.maybe_refresh_title();
+                        // LOCAL (experimental idle auto-compact): same success gating as the turn
+                        // summary — never fire model work after a cancel or a failed turn.
+                        // The task itself no-ops when `[features] idle_auto_compact` is off.
+                        {
+                            let s = session.clone();
+                            tokio::task::spawn_local(async move {
+                                let enabled =
+                                    crate::util::config::resolve_idle_auto_compact_enabled();
+                                s.maybe_run_idle_auto_compact(enabled).await;
+                            });
+                        }
                     }
                 }
         }

@@ -27,6 +27,31 @@ pub(crate) fn turn_transient_retry_from_toml(v: Option<&TomlValue>) -> Option<bo
     v?.get("features")?.get("turn_transient_retry")?.as_bool()
 }
 
+pub(crate) fn idle_auto_compact_from_toml(v: Option<&TomlValue>) -> Option<bool> {
+    v?.get("features")?.get("idle_auto_compact")?.as_bool()
+}
+
+pub(crate) const ENV_IDLE_AUTO_COMPACT: &str = "GROK_IDLE_AUTO_COMPACT";
+
+/// Experimental: auto-compact the main context while the session is idle
+/// (no turn running, nothing queued) instead of only inline before the next
+/// model call. Opt-in: `[features] idle_auto_compact = true`, env
+/// `GROK_IDLE_AUTO_COMPACT`, default off.
+pub(crate) fn resolve_idle_auto_compact_enabled() -> bool {
+    if let Ok(v) = std::env::var(ENV_IDLE_AUTO_COMPACT) {
+        match v.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => return true,
+            "0" | "false" | "no" | "off" => return false,
+            _ => {}
+        }
+    }
+    crate::config::load_effective_config()
+        .ok()
+        .as_ref()
+        .and_then(|v| idle_auto_compact_from_toml(Some(v)))
+        .unwrap_or(false)
+}
+
 /// Spawn-time kill switch: `[features] turn_transient_retry`, `GROK_TURN_TRANSIENT_RETRY`, remote key (below local), default on.
 /// Loads local layers itself; call once per session.
 pub(crate) fn resolve_turn_transient_retry(remote: Option<bool>) -> bool {

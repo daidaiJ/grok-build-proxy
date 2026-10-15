@@ -1863,6 +1863,8 @@ pub(crate) const UNMIRRORED_BOOLEAN_FEATURES: &[&str] = &[
     "remember_mode",
     "remote_fetch",
     "zdr_access_enabled",
+    // LOCAL experimental: idle-time auto-compact ([features] idle_auto_compact).
+    "idle_auto_compact",
 ];
 /// A value written where a boolean was meant.
 /// Only these fail the load, so a key carrying some later release's typed value does not stop an older build from starting on the same config.

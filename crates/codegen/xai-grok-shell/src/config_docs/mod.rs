@@ -233,6 +233,8 @@ fn unmirrored_requirements(key: &str) -> &'static str {
         "remote_fetch" | "zdr_access_enabled" => "pin",
         "campaigns" => "yes",
         "remember_mode" => "—",
+        // LOCAL experimental: no deployment pin surface.
+        "idle_auto_compact" => "—",
         other => {
             panic!("UNMIRRORED_BOOLEAN_FEATURES key `{other}` has no Requirements expectation")
         }

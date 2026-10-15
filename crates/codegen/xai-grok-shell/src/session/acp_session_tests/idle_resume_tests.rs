@@ -205,6 +205,7 @@ async fn test_e2e_idle_resume_refreshes_model_metadata() {
                     tool_choice: crate::util::config::CompactionToolChoice::Auto,
                     prefire: crate::session::compaction_config::PrefireState::default(),
                     prefix_released: std::sync::atomic::AtomicBool::new(false),
+                    idle_compact_in_flight: std::sync::atomic::AtomicBool::new(false),
                     cancel: Default::default(),
                 },
                 long_reasoning_reminder:

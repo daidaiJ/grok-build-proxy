@@ -1842,6 +1842,7 @@ pub(crate) async fn spawn_session_actor(
             tool_choice: compaction_tool_choice,
             prefire: crate::session::compaction_config::PrefireState::default(),
             prefix_released: std::sync::atomic::AtomicBool::new(false),
+                    idle_compact_in_flight: std::sync::atomic::AtomicBool::new(false),
             cancel: Default::default(),
         },
         long_reasoning_reminder,

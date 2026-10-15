@@ -138,6 +138,7 @@ async fn create_test_actor(
             tool_choice: crate::util::config::CompactionToolChoice::Auto,
             prefire: crate::session::compaction_config::PrefireState::default(),
             prefix_released: std::sync::atomic::AtomicBool::new(false),
+                    idle_compact_in_flight: std::sync::atomic::AtomicBool::new(false),
             cancel: Default::default(),
         },
         long_reasoning_reminder: crate::session::long_reasoning_reminder::LongReasoningReminder {
@@ -1882,6 +1883,213 @@ fn suppress_reason_as_str_is_stable() {
     assert_eq!(SuppressReason::Schema.as_ref(), "schema");
     assert_eq!(SuppressReason::Other.as_ref(), "other");
 }
+
+// ---- LOCAL (experimental idle auto-compact) ----
+//
+// The idle path shares `run_compact_only` with the inline pre-sampling check;
+// these tests lock the handoff between the two: the idle task owns the compact
+// while it runs, the inline check stands down, and a session that turns busy
+// aborts the idle compact instead of racing it.
+
+fn idle_compact_in_flight(actor: &SessionActor) -> bool {
+    actor
+        .compaction
+        .idle_compact_in_flight
+        .load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// While an idle compact owns the job, the inline pre-sampling check must stand
+/// down so the same context is never summarized twice.
+#[tokio::test(flavor = "current_thread")]
+async fn idle_compact_in_flight_suppresses_inline_presampling_check() {
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let (gateway_tx, _gateway_rx) = mpsc::unbounded_channel();
+            let (persistence_tx, _persistence_rx) = mpsc::unbounded_channel();
+            let actor = Arc::new(
+                create_test_actor(180_000, 200_000, 85, gateway_tx, persistence_tx).await,
+            );
+            actor
+                .compaction
+                .idle_compact_in_flight
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            assert!(
+                actor.check_auto_compact_needed().await.is_none(),
+                "inline check must stand down while the idle compact owns the job"
+            );
+            actor
+                .compaction
+                .idle_compact_in_flight
+                .store(false, std::sync::atomic::Ordering::Relaxed);
+            assert!(
+                actor.check_auto_compact_needed().await.is_some(),
+                "inline check must fire again once the flag clears (over threshold)"
+            );
+        })
+        .await;
+}
+
+/// Over threshold + idle + enabled: the compact fires, the conversation shrinks,
+/// and the in-flight flag is released afterwards.
+#[tokio::test(flavor = "current_thread")]
+async fn idle_compact_fires_when_idle_over_threshold() {
+    use crate::extensions::notification::SessionUpdate as XaiSessionUpdate;
+    use crate::session::storage::SessionUpdate;
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let (gateway_tx, _gateway_rx) = mpsc::unbounded_channel();
+            let (persistence_tx, mut persistence_rx) = mpsc::unbounded_channel();
+            let actor = Arc::new(
+                create_test_actor(180_000, 200_000, 85, gateway_tx, persistence_tx).await,
+            );
+            let _server =
+                route_compaction_to_mock_server(&actor, "Summary of prior work. ".repeat(30)).await;
+            actor.chat_state_handle.replace_conversation(vec![
+                ConversationItem::system("sys"),
+                ConversationItem::user("u0"),
+                ConversationItem::assistant("a0"),
+                ConversationItem::user("final query"),
+            ]);
+            actor
+                .clone()
+                .maybe_run_idle_auto_compact_inner(
+                    true,
+                    std::time::Duration::ZERO,
+                )
+                .await;
+            assert!(
+                !idle_compact_in_flight(&actor),
+                "flag must be released after the compact settles"
+            );
+            let items = actor.chat_state_handle.get_conversation().await;
+            assert!(
+                items.len() < 4,
+                "conversation must have been compacted, got {} items",
+                items.len()
+            );
+            let mut saw_started = false;
+            let mut saw_completed = false;
+            while let Ok(msg) = persistence_rx.try_recv() {
+                if let PersistenceMsg::Update(SessionUpdate::Xai(notif)) = msg {
+                    match &notif.update {
+                        XaiSessionUpdate::AutoCompactStarted { .. } => saw_started = true,
+                        XaiSessionUpdate::AutoCompactCompleted { .. } => saw_completed = true,
+                        _ => {}
+                    }
+                }
+            }
+            assert!(saw_started, "AutoCompactStarted must reach the pager");
+            assert!(saw_completed, "AutoCompactCompleted must reach the pager");
+        })
+        .await;
+}
+
+/// Below threshold: the idle task is a no-op (no model call, flag released).
+#[tokio::test(flavor = "current_thread")]
+async fn idle_compact_skips_below_threshold() {
+    use crate::extensions::notification::SessionUpdate as XaiSessionUpdate;
+    use crate::session::storage::SessionUpdate;
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let (gateway_tx, _gateway_rx) = mpsc::unbounded_channel();
+            let (persistence_tx, mut persistence_rx) = mpsc::unbounded_channel();
+            let actor = Arc::new(
+                create_test_actor(50_000, 200_000, 85, gateway_tx, persistence_tx).await,
+            );
+            let _server =
+                route_compaction_to_mock_server(&actor, "Summary of prior work. ".repeat(30)).await;
+            actor
+                .clone()
+                .maybe_run_idle_auto_compact_inner(true, std::time::Duration::ZERO)
+                .await;
+            assert!(!idle_compact_in_flight(&actor));
+            let mut saw_started = false;
+            while let Ok(msg) = persistence_rx.try_recv() {
+                if let PersistenceMsg::Update(SessionUpdate::Xai(notif)) = msg {
+                    if matches!(
+                        &notif.update,
+                        XaiSessionUpdate::AutoCompactStarted { .. }
+                    ) {
+                        saw_started = true;
+                    }
+                }
+            }
+            assert!(!saw_started, "below threshold no compact may fire");
+        })
+        .await;
+}
+
+/// Disabled: nothing runs even when over threshold.
+#[tokio::test(flavor = "current_thread")]
+async fn idle_compact_disabled_is_noop() {
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let (gateway_tx, _gateway_rx) = mpsc::unbounded_channel();
+            let (persistence_tx, _persistence_rx) = mpsc::unbounded_channel();
+            let actor = Arc::new(
+                create_test_actor(180_000, 200_000, 85, gateway_tx, persistence_tx).await,
+            );
+            actor
+                .clone()
+                .maybe_run_idle_auto_compact_inner(false, std::time::Duration::ZERO)
+                .await;
+            assert!(!idle_compact_in_flight(&actor));
+            let items = actor.chat_state_handle.get_conversation().await;
+            assert_eq!(items.len(), 0, "no conversation was pushed; nothing happened");
+        })
+        .await;
+}
+
+/// The session turns busy during the grace window (user already queued a
+/// follow-up): the idle task aborts before any model call.
+#[tokio::test(flavor = "current_thread")]
+async fn idle_compact_aborts_when_session_turns_busy_during_grace() {
+    use crate::extensions::notification::SessionUpdate as XaiSessionUpdate;
+    use crate::session::storage::SessionUpdate;
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let (gateway_tx, _gateway_rx) = mpsc::unbounded_channel();
+            let (persistence_tx, mut persistence_rx) = mpsc::unbounded_channel();
+            let actor = Arc::new(
+                create_test_actor(180_000, 200_000, 85, gateway_tx, persistence_tx).await,
+            );
+            let _server =
+                route_compaction_to_mock_server(&actor, "Summary of prior work. ".repeat(30)).await;
+            let task = tokio::task::spawn_local(actor.clone().maybe_run_idle_auto_compact_inner(
+                true,
+                std::time::Duration::from_secs(2),
+            ));
+            // Turn the session "busy" mid-grace via the shared idle predicate's
+            // cheapest signal.
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            actor.state.lock().await.notifications_suppressed = true;
+            tokio::time::timeout(std::time::Duration::from_secs(5), task)
+                .await
+                .expect("idle compact task must abort promptly once busy")
+                .expect("task must not panic");
+            actor.state.lock().await.notifications_suppressed = false;
+            assert!(!idle_compact_in_flight(&actor), "flag must be released on abort");
+            let mut saw_started = false;
+            while let Ok(msg) = persistence_rx.try_recv() {
+                if let PersistenceMsg::Update(SessionUpdate::Xai(notif)) = msg {
+                    if matches!(
+                        &notif.update,
+                        XaiSessionUpdate::AutoCompactStarted { .. }
+                    ) {
+                        saw_started = true;
+                    }
+                }
+            }
+            assert!(!saw_started, "aborted before firing: no compact request");
+        })
+        .await;
+}
+
 mod preserve_prefix {
     use super::super::preserve_inherited_prefix;
     use super::super::project_preserved_reseed_tokens;

@@ -2156,6 +2156,15 @@ impl SessionActor {
     /// Uses `get_estimated_total_tokens()` (exact prior count plus a byte-estimate of items since last response) so tool results are accounted for.
     /// Returns `None` when `is_flushing`.
     pub(crate) async fn check_auto_compact_needed(&self) -> Option<AutoCompactTriggerInfo> {
+        // LOCAL (idle auto-compact): an idle-triggered compact owns the job right
+        // now; firing a second one inline would double-summarize the same context.
+        if self
+            .compaction
+            .idle_compact_in_flight
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return None;
+        }
         if self
             .memory
             .is_flushing
@@ -2213,6 +2222,14 @@ impl SessionActor {
     }
     /// Returns `Some` when tool call outputs have pushed the estimated token count past the context window, so pre-emptive compaction is needed.
     pub(crate) async fn check_preflight_overflow(&self) -> Option<AutoCompactTriggerInfo> {
+        // LOCAL (idle auto-compact): same double-compact guard as the pre-sampling check.
+        if self
+            .compaction
+            .idle_compact_in_flight
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            return None;
+        }
         if self.compaction.is_suppressed() {
             return None;
         }
