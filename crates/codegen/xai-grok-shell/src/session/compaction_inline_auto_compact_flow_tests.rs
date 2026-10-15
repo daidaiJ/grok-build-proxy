@@ -1952,6 +1952,10 @@ async fn idle_compact_fires_when_idle_over_threshold() {
                 ConversationItem::assistant("a0"),
                 ConversationItem::user("final query"),
             ]);
+            // `replace_conversation` reseeds the token ledger from the item
+            // byte estimate (the 4 stub items land far below threshold);
+            // re-seed the simulated usage so the idle check actually fires.
+            actor.chat_state_handle.record_token_usage(180_000);
             actor
                 .clone()
                 .maybe_run_idle_auto_compact_inner(
