@@ -245,23 +245,30 @@ mod tests {
         describe: Option<ModelEntry>,
         explicit: bool,
     ) -> ImageBridgeDecision {
-        let actor = crate::session::acp_session::support::create_test_actor(
-            0,
-            200_000,
-            85,
-            tokio::sync::mpsc::unbounded_channel().0,
-            tokio::sync::mpsc::unbounded_channel().0,
-        )
-        .await;
-        let main_id = "main-model";
-        actor.models_manager.insert_test_entry(main_id, main);
-        actor.models_manager.set_current_model_id(acp::ModelId::new(
-            std::sync::Arc::<str>::from(main_id),
-        ));
-        if let Some(describe) = describe {
-            actor.models_manager.insert_test_entry(TEST_MODEL, describe);
-        }
-        actor.resolve_image_bridge_with(explicit).await
+        // The test actor spawns LocalSet-bound helpers (hunk tracker), so the
+        // whole construction runs inside its own LocalSet.
+        let local = tokio::task::LocalSet::new();
+        local
+            .run_until(async move {
+                let actor = crate::session::acp_session::support::create_test_actor(
+                    0,
+                    200_000,
+                    85,
+                    tokio::sync::mpsc::unbounded_channel().0,
+                    tokio::sync::mpsc::unbounded_channel().0,
+                )
+                .await;
+                let main_id = "main-model";
+                actor.models_manager.insert_test_entry(main_id, main);
+                actor.models_manager.set_current_model_id(acp::ModelId::new(
+                    std::sync::Arc::<str>::from(main_id),
+                ));
+                if let Some(describe) = describe {
+                    actor.models_manager.insert_test_entry(TEST_MODEL, describe);
+                }
+                actor.resolve_image_bridge_with(explicit).await
+            })
+            .await
     }
 
     /// D1/D2: a vision-capable main model keeps the native path, whatever the
