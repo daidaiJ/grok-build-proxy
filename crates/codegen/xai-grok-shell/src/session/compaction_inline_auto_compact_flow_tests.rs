@@ -2064,15 +2064,18 @@ async fn idle_compact_aborts_when_session_turns_busy_during_grace() {
                 true,
                 std::time::Duration::from_secs(2),
             ));
-            // Turn the session "busy" mid-grace via the shared idle predicate's
-            // cheapest signal.
+            // Turn the session "busy" mid-grace via `state_is_busy`'s cheapest
+            // signal: a queued prompt waiting for promotion.
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-            actor.state.lock().await.notifications_suppressed = true;
+            let (input, _rx) = crate::session::acp_session::support::input_with_origin_rx(
+                "idle-compact-abort-prompt",
+                crate::session::PromptOrigin::User,
+            );
+            actor.state.lock().await.pending_inputs.push_back(input);
             tokio::time::timeout(std::time::Duration::from_secs(5), task)
                 .await
                 .expect("idle compact task must abort promptly once busy")
                 .expect("task must not panic");
-            actor.state.lock().await.notifications_suppressed = false;
             assert!(!idle_compact_in_flight(&actor), "flag must be released on abort");
             let mut saw_started = false;
             while let Ok(msg) = persistence_rx.try_recv() {
