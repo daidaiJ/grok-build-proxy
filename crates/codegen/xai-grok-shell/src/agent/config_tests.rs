@@ -8122,8 +8122,7 @@ fn explicit_supports_reasoning_effort_false_discards_inherited_menu() {
 /// A `/v1/models` row whose `capabilities` names no default keeps the menu but sends no effort, so the
 /// server applies its own instead of the lowest listed tier.
 #[test]
-fn capabilities_menu_without_default_resolves_to_no_reasoning_effort() {
-    let mut cfg = Config::default();
+fn capabilities_menu_without_default_resolves_to_no_reasoning_effort() {    let mut cfg = Config::default();
     cfg.endpoints.models_base_url = Some("https://test.example.com/v1".to_owned());
     let row = serde_json::json!({
         "id": "grok-4.6-build",
@@ -8828,4 +8827,72 @@ async fn process_key_from_model_env_key() {
             .as_deref(),
         Some(TOKEN)
     );
+}
+
+// ---- LOCAL (vision bridge): D1 `accepts_images` defaults (plan.md D1 表) ----
+
+fn accepts_images_cfg(extra: &str) -> Config {
+    let mut cfg = Config::default();
+    let toml_source = format!("{extra}");
+    let value: toml::Value = toml::from_str(&toml_source).unwrap();
+    let models = crate::agent::config_model_override_parse::parse_model_overrides(&value);
+    cfg.config_models = models.models;
+    cfg
+}
+
+/// 用户新建条目未写 `accepts_images` → 缺省 false（fallback 基座）。
+#[test]
+fn user_new_model_defaults_to_text_only() {
+    let cfg = accepts_images_cfg("[model.my-text]\nmodel = \"some-text\"\nbase_url = \"https://api.example.com/v1\"\ncontext_window = 128000\n");
+    let list = resolve_model_list(&cfg, None);
+    let entry = list.get("my-text").expect("user-new entry exists");
+    assert_eq!(entry.info.accepts_images, Some(false));
+    assert!(!entry.info.accepts_images());
+}
+
+/// 用户显式写 `accepts_images = true` → 永远赢（即便盖在内建条目上）。
+#[test]
+fn explicit_accepts_images_always_wins() {
+    let cfg = accepts_images_cfg(
+        "[model.\"grok-4.6\"]\nmodel = \"grok-4.6\"\nbase_url = \"https://api.example.com/v1\"\ncontext_window = 256000\naccepts_images = false\n",
+    );
+    let list = resolve_model_list(&cfg, None);
+    let entry = list.get("grok-4.6").expect("builtin override exists");
+    assert_eq!(entry.info.accepts_images, Some(false));
+}
+
+/// 内建条目缺省 true；config 盖写未提该字段时继承 true。
+#[test]
+fn builtin_defaults_to_vision_capable() {
+    let list = resolve_model_list(&Config::default(), None);
+    let entry = list.get("grok-4.6").expect("builtin grok-4.6");
+    assert_eq!(entry.info.accepts_images, Some(true));
+
+    let cfg = accepts_images_cfg(
+        "[model.\"grok-4.6\"]\nmodel = \"grok-4.6\"\nbase_url = \"https://api.example.com/v1\"\ncontext_window = 256000\n",
+    );
+    let list = resolve_model_list(&cfg, None);
+    let entry = list.get("grok-4.6").expect("builtin override");
+    assert_eq!(entry.info.accepts_images, Some(true), "unset inherits base");
+}
+
+/// 远端条目给 `inputModalities`（不含 image）→ Some(false)，盖过内建 true；
+/// 远端未给该字段 → 继承内建 true。
+#[test]
+fn remote_row_input_modalities_override_builtin() {
+    let mut cfg = Config::default();
+    cfg.endpoints.models_base_url = Some("https://test.example.com/v1".to_owned());
+    let row = serde_json::json!({
+        "id": "grok-4.6-build",
+        "inputModalities": ["text"]
+    });
+    let parsed = crate::remote::client::parse_remote_model_value(&row, "https://test.example.com/v1")
+        .expect("row parses");
+    assert_eq!(parsed.accepts_images, Some(false));
+    let mut prefetched = IndexMap::new();
+    prefetched.insert("grok-4.6-build".to_owned(), ModelEntry::from_config_entry(&parsed));
+    let entry = resolve_model_list(&cfg, Some(prefetched))
+        .shift_remove("grok-4.6-build")
+        .expect("prefetched key exists");
+    assert_eq!(entry.info.accepts_images, Some(false));
 }

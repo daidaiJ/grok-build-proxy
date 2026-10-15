@@ -52,6 +52,8 @@ pub struct CatalogMatch {
     pub max_completion_tokens: Option<u64>,
     /// 是否支持思考/推理（/auth 目录回填 `supports_reasoning_effort` 用）。
     pub reasoning: Option<bool>,
+    /// LOCAL（视觉桥 D8）：是否接受图像输入（用户 `[model.<id>] accepts_images` 回填用）。
+    pub accepts_images: Option<bool>,
 }
 
 impl CatalogMatch {
@@ -66,6 +68,8 @@ impl CatalogMatch {
             context_length: entry.context_length,
             max_completion_tokens: entry.max_completion_tokens,
             reasoning: entry.reasoning,
+            // LOCAL（视觉桥 D8）：能力位随匹配条目出包，回填与 /auth 思考位同型。
+            accepts_images: entry.accepts_images,
         }
     }
 }
@@ -209,7 +213,8 @@ fn completed_entries(
 
 const DISK_CACHE_FILE: &str = "prices.cache";
 /// v2：条目新增 `reasoning` 位 + 缓存迁入 `cache/`（v1 一律视为过期重新取数）。
-const DISK_CACHE_VERSION: u32 = 2;
+/// v3：条目新增 `accepts_images` 能力位（视觉桥 D8；v2 一律视为过期重新取数）。
+const DISK_CACHE_VERSION: u32 = 3;
 /// 读上限：models.dev 全量原始 JSON 5.4MB，条目化后更小；超限视为损坏。
 const DISK_CACHE_READ_CAP: u64 = 32 * 1024 * 1024;
 /// tmp 残留清扫龄期（write_atomic 的 best-effort 清扫参数）。
@@ -366,7 +371,8 @@ fn install_fetched(source: &CatalogSource, catalog: &ModelCatalog, at_ms: u64, t
 /// 进程薄表即返回；过期才后台取数。与面板触发共用全局单飞锁 + 同一份磁盘
 /// 缓存，天然去重；失败仅记日志（宁旧勿空，缓存维持旧值，下次面板/启动再试）。
 /// 目的：/stats 成本列与 /auth 目录回填在首次打开时就有热数据。
-pub fn spawn_startup_prefetch(cache_minutes: Option<u64>) {
+/// `catalog_keys` = 当前模型目录的键集（视觉桥 D8 能力位回填的「缺省判定」用）。
+pub fn spawn_startup_prefetch(cache_minutes: Option<u64>, catalog_keys: Vec<String>) {
     // 无 tokio runtime（纯同步测试等）静默跳过，与 spawn_purge_stale_upload_scratch 同守卫。
     if tokio::runtime::Handle::try_current().is_err() {
         return;
@@ -390,7 +396,28 @@ pub fn spawn_startup_prefetch(cache_minutes: Option<u64>) {
         }
         let client = http_client();
         match fetch_catalog(&client).await {
-            Ok((source, catalog, at_ms)) => install_fetched(&source, &catalog, at_ms, "startup"),
+            Ok((source, catalog, at_ms)) => {
+                install_fetched(&source, &catalog, at_ms, "startup");
+                // LOCAL（视觉桥 D8）：目录取数成功 → 尽力回填 accepts_images；
+                // 失败只记日志，不打扰取数结果。
+                match crate::util::config::backfill_accepts_images(&catalog, &catalog_keys).await
+                {
+                    Ok(0) => {}
+                    Ok(n) => {
+                        xai_grok_telemetry::unified_log::info(
+                            "model catalog: accepts_images backfilled",
+                            None,
+                            Some(serde_json::json!({ "written": n })),
+                        );
+                    }
+                    Err(e) => {
+                        xai_grok_telemetry::unified_log::warn(
+                            "model catalog: accepts_images backfill failed",
+                            None,
+                            Some(serde_json::json!({ "error": e.to_string() })),
+                        );
+                    }                }
+            }
             Err(e) => {
                 xai_grok_telemetry::unified_log::warn(
                     "model catalog: prefetch failed",
@@ -569,6 +596,7 @@ mod tests {
             name: format!("name-of-{id}"),
             canonical_id: None,
             reasoning: None,
+            accepts_images: None,
             pricing: ModelPricing {
                 input,
                 output: input.map(|v| v * 5.0),

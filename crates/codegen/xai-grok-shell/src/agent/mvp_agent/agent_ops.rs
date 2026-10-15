@@ -2412,7 +2412,11 @@ impl MvpAgent {
         crate::upload::trace::spawn_purge_stale_upload_scratch();
         // 模型目录价格缓存启动预热：TTL 内至多一次真实取数（磁盘缓存/单飞去重），
         // /stats 成本列与 /auth 目录回填由此在首次打开就有热数据。
-        crate::extensions::model_catalog::spawn_startup_prefetch(cfg.model_catalog.cache_minutes);
+        // 视觉桥 D8：附当前目录键集，供 accepts_images 回填做「解析缺省」判定。
+        crate::extensions::model_catalog::spawn_startup_prefetch(
+            cfg.model_catalog.cache_minutes,
+            models_manager.models().keys().cloned().collect::<Vec<_>>(),
+        );
         let storage_mode = cfg.storage_mode;
         let default_yolo_mode = cfg.default_yolo_mode;
         let default_auto_mode = cfg.default_auto_mode;

@@ -136,6 +136,9 @@ mod laziness;
 // LOCAL (experimental): idle-time auto-compact.
 #[path = "acp_session_impl/idle_compact.rs"]
 mod idle_compact;
+// LOCAL (vision bridge): model-capability gating for image inputs.
+#[path = "acp_session_impl/vision_bridge.rs"]
+mod vision_bridge;
 #[cfg(test)]
 pub(crate) use laziness::*;
 #[path = "acp_session_impl/queue_mutation.rs"]

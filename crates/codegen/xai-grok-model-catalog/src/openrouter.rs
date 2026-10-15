@@ -52,8 +52,17 @@ struct OpenRouterModel {
     /// `reasoning` 是否在支持参数表里（缺席 = 源未给，`None`）。
     #[serde(default)]
     supported_parameters: Vec<String>,
+    /// LOCAL（视觉桥 D8）：`architecture.input_modalities`（缺席 = 源未给，`None`）。
+    #[serde(default)]
+    architecture: Option<OpenRouterArchitecture>,
     #[serde(default)]
     top_provider: TopProvider,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct OpenRouterArchitecture {
+    #[serde(default)]
+    input_modalities: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -93,6 +102,11 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
             let get = |key: &str| pricing.get(key).cloned().unwrap_or(serde_json::Value::Null);
             let reasoning = (!m.supported_parameters.is_empty())
                 .then(|| m.supported_parameters.iter().any(|p| p == "reasoning"));
+            // LOCAL（视觉桥 D8）：input_modalities 列出 "image" 即识图；空列表 = 源未给（None）。
+            let accepts_images = m.architecture.and_then(|a| {
+                (!a.input_modalities.is_empty())
+                    .then(|| a.input_modalities.iter().any(|m| m == "image"))
+            });
             CatalogEntry {
                 id: m.id,
                 provider_id: provider_id().to_string(),
@@ -100,6 +114,7 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
                 name: m.name,
                 canonical_id: m.canonical_slug.filter(|s| !s.is_empty()),
                 reasoning,
+                accepts_images,
                 pricing: ModelPricing {
                     input: price_from(get("prompt")).map(per_million),
                     output: price_from(get("completion")).map(per_million),
@@ -141,12 +156,16 @@ mod tests {
         assert_eq!(grok.max_completion_tokens, Some(32_000));
         assert_eq!(grok.canonical_id.as_deref(), Some("x-ai/grok-4"));
         assert_eq!(grok.reasoning, Some(true));
+        // LOCAL（视觉桥 D8）：input_modalities 含 image → Some(true)；
+        // architecture 缺席 → None（未知）。
+        assert_eq!(grok.accepts_images, Some(true));
         let chat = cat
             .entries
             .iter()
             .find(|e| e.id == "deepseek/deepseek-chat-v3.1")
             .expect("chat entry");
         assert_eq!(chat.reasoning, Some(false), "参数表存在但无 reasoning");
+        assert_eq!(chat.accepts_images, None, "architecture 缺席 = 未知");
         let free = cat
             .entries
             .iter()

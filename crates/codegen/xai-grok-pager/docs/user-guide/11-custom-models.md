@@ -99,10 +99,23 @@ temperature = 0.7                         # Sampling temperature
 top_p = 0.95                              # Nucleus sampling parameter
 max_completion_tokens = 8192              # Maximum tokens per response
 context_window = 128000                   # Total context window in tokens
+accepts_images = false                    # LOCAL: image input; unset defaults to false for new entries (built-in/remote models: true)
 extra_headers = { "x-api-key" = "sk-..." } # Extra request headers, sent verbatim (optional)
 query_params = { api-version = "2026-07-22" } # Query params appended to every request URL (optional)
 env_http_headers = { "X-Tenant" = "TENANT_TOKEN" }    # Headers from env vars, resolved at client build (optional)
 ```
+
+### Image Input (Vision Bridge, LOCAL)
+
+`accepts_images` declares whether the model can read images. A text-only model
+(`accepts_images = false`) routes attached images through the **vision bridge**:
+a separate vision model transcribes them into text, and the original pixels
+never reach the main model's request. Point the bridge at a vision-capable model
+with `[models] image_description`; for a BYOK main model the bridge only runs
+when that key is set explicitly (otherwise images are stripped and you get a
+notice, so nothing is ever spent on xAI silently). Tool-returned images
+(`read_file`, PDF pages, MCP screenshots) go through the same bridge with a
+per-turn budget of 4 images.
 
 ### Credential Resolution
 

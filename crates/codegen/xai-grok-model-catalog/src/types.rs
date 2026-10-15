@@ -48,6 +48,10 @@ pub struct CatalogEntry {
     /// models.dev `reasoning` 布尔）；`None` = 源未给该字段。
     #[serde(default)]
     pub reasoning: Option<bool>,
+    /// LOCAL（视觉桥 D8）：是否接受图像输入（OpenRouter `architecture.input_modalities`
+    /// 含 `image` / models.dev `modalities.input` 含 `image`）；`None` = 源未给/无法判定。
+    #[serde(default)]
+    pub accepts_images: Option<bool>,
     pub pricing: ModelPricing,
     pub context_length: Option<u64>,
     pub max_completion_tokens: Option<u64>,

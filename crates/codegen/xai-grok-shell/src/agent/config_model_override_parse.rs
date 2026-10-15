@@ -768,6 +768,7 @@ mod tests {
             stream_tool_calls: Some(false),
             reasoning_summary: Some(ReasoningSummary::None),
             use_proxy: Some(true),
+            accepts_images: Some(true),
         }
     }
 

@@ -905,6 +905,7 @@ mod tests {
                 context_length: Some(163_840),
                 max_completion_tokens: Some(163_840),
                 reasoning: None,
+            accepts_images: None,
             }),
         );
         let lines = model_card_lines(&row, &Theme::current(), 80, &pricing)
