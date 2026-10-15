@@ -67,7 +67,7 @@ impl SessionActor {
             self.clear_idle_compact_in_flight();
             return;
         }
-        let Some(trigger_info) = self.check_auto_compact_needed().await else {
+        let Some(trigger_info) = self.check_auto_compact_needed_inner().await else {
             xai_grok_telemetry::unified_log::debug(
                 "shell.idle_compact.skipped",
                 Some(self.session_info.id.0.as_ref()),
