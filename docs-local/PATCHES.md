@@ -3073,6 +3073,26 @@ i18n 扫描 exit 0。
 `compaction_inline_auto_compact_flow_tests` 模块（win-skip 族 /tmp 夹具，本机跳过，
 Linux CI 跑）；config_docs 行注册测试绿（--features config-docs）。
 
+**CI 修复四轮（2026-10-16）**：build `38768559297` Linux 6 挂——① idle 自锁：
+idle 任务置 `idle_compact_in_flight` 后调 `check_auto_compact_needed` 被自己的
+守卫拦住，拆 `check_auto_compact_needed_inner` 让 owner 走 inner 绕开守卫
+（`60da10b`）；② 中止测试信号修正：`state_is_busy` 不含
+`notifications_suppressed`，原 abort 信号打不进中止臂，改推 pending_inputs
+（`c335b26`）。build `38773838791` 2 挂（其一为 `reset_title_to_auto…` 既有计时
+flake 重跑过）——③ fires 测试：`replace_conversation` 按消息字节估算
+`reseed_total_tokens` 把 180k 种子抹掉致阈值检查永不过，replace 后
+`record_token_usage(180_000)` 重播种（`1064109`，绝对置位 mutations.rs:438）。
+build `38823680111` 仍挂 fires "got 4 items"——④ 真根因是断言语义错：
+`build_compacted_history`（xai-chat-state compaction_utils.rs:936）无条件产出
+[System, user_meta(prefix), 重挂 last query, summary] 恰 4 条，`len < 4` 恒假
+且无法区分「未压缩/压缩成功」两态；分支采样诊断（Started+Completed+checkpoint
+全到、cancelled=false）证实压缩全程成功，断言改摘要文本语义（mock 摘要必须出现
+在对话中）。**夹具副产**：`create_test_actor` 的 cwd 写死 `/tmp` 被 Windows
+AbsPathBuf 拒绝（族S 根因），改 `cfg!(windows)` 分支用 `env::temp_dir`，模块
+本机 GATE_SKIP=0 全跑 42/42 绿，win-skip 族S 撤销
+`session::acp_session::compaction::inline_auto_compact_flow_tests::` 条目
+（其余两族条目保留）。build `38894033624` 双 job success（`e63a954`）。
+
 ## 四十四期：视觉桥 T1/T2/T3 + D8——纯文本主模型经识图模型转写用户图/工具图（2026-10-15，分支 feat/local-vision-bridge）
 
 **需求**：`docs-local/vision-bridge/plan.md`（D1–D9 拍板定案）整期落地：部分文本
@@ -3125,3 +3145,8 @@ vision.rs 3/3 + D1 缺省表 4/4 + D5 envelope/image_describe 存量绿 + config
 auth_modal/stats_modal）；i18n 扫描 0 挂。win-skip 新登记族W（vision_bridge
 决策测试 /tmp 夹具）、族X（image_describe 路径分隔符，上游既有）、族Y（上游
 per-crate AGENTS.md 缺席）——三者均 Linux CI 验证。
+
+**CI 修复（2026-10-16，build `38768559297`）**：vision 决策测试 3 挂——
+`create_test_actor` 内部 `spawn_local` 需 LocalSet 上下文，`decision_for` 包
+`tokio::task::LocalSet::run_until` 修复（`4a2ddbf`）；二轮起全绿。族W/X 本机
+跳过项经 Linux CI 验证绿。

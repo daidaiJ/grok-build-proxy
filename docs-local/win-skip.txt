@@ -97,7 +97,8 @@ session::acp_session::turn_end_reporting_tests::
 # 族S acp_session compaction/goal 家族 —— 同族N根因（create_test_actor 夹具写死
 # /tmp，support.rs:287 AbsPathBuf NotAbsolute panic），2026-10-11 T0 分诊时
 # 首次撞到的三个族，按族R格式整族跳过，行为验证走 Linux CI。
-session::acp_session::compaction::inline_auto_compact_flow_tests::
+# 2026-10-16：inline_auto_compact_flow_tests 夹具已改 cfg!(windows) 分支用
+# env::temp_dir（PATCHES 四十三期 CI 补记），本机 42/42 全绿，撤销其条目。
 session::acp_session::goal_compaction_reseed_tests::
 session::acp_session::inline_auto_compact_flow_tests::
 

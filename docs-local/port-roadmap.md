@@ -752,8 +752,10 @@
   `idle_compact_in_flight`（inline/preflight 检查互斥）；`run_loop.rs` 成功回合
   空闲点 spawn；`util/config/resolve/features.rs` 解析器（env
   `GROK_IDLE_AUTO_COMPACT` > `[features] idle_auto_compact` > 默认关）。
-- **验证**：cargo check shell --all-targets 0 error 0 warning；新测 5 例（/tmp
-  夹具族本机跳过，Linux CI 跑）；config_docs 行校验绿。
+- **验证**：cargo check shell --all-targets 0 error 0 warning；新测 5 例；config_docs
+  行校验绿。CI 四轮收口（run 38768559297→38773838791→38823680111→38894033624，
+  修复链与根因见 PATCHES 四十三期补记）；夹具 cwd 修复后本机模块 42/42、
+  win-skip 族S 撤销本模块条目。随 v1.0.60 发版。
 - **遗留**：活回合验证（真会话开 flag 看 fired/aborted 事件与下一条 prompt 的
   TTFT 改善）随新客户端；配置无 per-session 覆盖（跟随全局开关）。
 
@@ -769,7 +771,8 @@
   prices.cache v3 + 启动预热回填（toml_edit 定点）。
 - **验证**：cargo check shell/pager/model-catalog --all-targets 0 error 0 warning；
   model-catalog 41/41；shell GATE_FORCE 决策矩阵/D1 缺省表/config_docs 行校验绿；
-  pager 36/36；i18n 0 挂；win-skip 族W/X/Y 登记（Linux CI 验证）。
+  pager 36/36；i18n 0 挂；win-skip 族W/X/Y 登记（Linux CI 验证）。CI 决策测试
+  LocalSet 修复（`4a2ddbf`）后全绿，随 v1.0.60 发版。
 - **遗留**：D9 二级反应路径（400 签名表按供应商归档，v2）；活回合验证（真实
   VL 转写质量、BYOK 剥图告知、工具图预算耗尽路径）随新客户端；backfill 无
   单测（依赖用户 config 面，unified 日志可观测）。

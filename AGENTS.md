@@ -219,10 +219,12 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   `notes/community-sentiment.md`（Reddit 归档 API + HN Algolia，含原始引语）。边界：只谈 agent
   软件内部的记忆模块（指令层 / 自动记忆层 / 会话内上下文管理），不做独立 memory 框架选型。
 - [`docs-local/vision-bridge/`](docs-local/vision-bridge/README.md) — 视觉桥：纯文本主模型
-  用识图模型转写用户图 / 工具图。**评估完成、未开工**；分期 T1 能力位 `accepts_images` +
-  打开已有 `image_describe`（Cursor 管线在本 fork 写死关闭）→ T2 工具结果/`read_file`/PDF
-  剥图或转写 → T3 披露与 BYOK 禁止静默打 xAI。整回合切视觉 agent 明确不做。对照兄弟目录
-  Qwen Code。净开发约 6–11 人天。分支拟 `feat/local-vision-bridge`。基线：2026-09-27 `main`。
+  用识图模型转写用户图 / 工具图。**T1/T2/T3+D8 已落地**（`feat/local-vision-bridge`，
+  PATCHES 四十四期，随 v1.0.60 发版；D9 二级 400 反应式 v2 未做）：T1 能力位
+  `accepts_images` + D2/D3 决策授权 → T2 工具结果/`read_file`/PDF 剥图或转写
+  → T3 `VisionBridgeNotice` 披露与 BYOK 禁止静默打 xAI。整回合切视觉 agent 明确
+  不做。对照兄弟目录 Qwen Code。定案与 D1–D9 全文见目录内
+  [plan.md](docs-local/vision-bridge/plan.md)。
 - [`docs-local/workflow-pi-port/`](docs-local/workflow-pi-port/README.md) — **workflow ×
   pi 特性移植预研（选型完成；P1 已落地，P2 T1 已落地、T2 未开工）**：对照 pi（earendil-works/pi，
   `0.84.0`–`v1.0.0`）近两月特性与 `xai-workflow` 现状，结论 = 编排原语不缺、真缺口三个
@@ -336,6 +338,41 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   文末「复发与二次修复」节。
 
 ## 🔄 Handoff 摘要
+
+### 空闲自动压缩 + 视觉桥 — 已随 v1.0.60 发版（2026-10-16）
+
+- **当前状态：** 两特性经四轮 CI 收口后合 main（终态 merge `c38f835`）随 tag
+  **`v1.0.60`** 发版。① 实验特性 `[features] idle_auto_compact`（默认关，env
+  `GROK_IDLE_AUTO_COMPACT` > config，PATCHES 四十三期）：成功回合结束空闲点跑与
+  inline 同套压缩（3s 防抖 + busy select! 中止同用户 stop 取消语义 +
+  `idle_compact_in_flight` 双检查互斥），inline 预采样检查保留为 backstop。②
+  视觉桥 T1/T2/T3+D8（PATCHES 四十四期）：`model.<id>.accepts_images` 三层能力位
+  （D1 缺省表：内建/远端缺省 true、用户新建 false、显式恒赢）+ D3 BYOK 授权
+  （未显式 `[models] image_description` 绝不静默打 xAI）+ D4 失败剥图回合继续 +
+  D5 untrusted 转写文案 + D6 工具图每回合 4 张预算 + T3 `VisionBridgeNotice`
+  三面披露 + D8 目录回填（prices.cache v3 + 启动预热 toml_edit 定点写回）；
+  D9 二级（400 反应式摘除转桥）v2 未做。
+- **CI 四轮（build）：** `38768559297`（6 挂：idle 自锁→拆
+  `check_auto_compact_needed_inner`，`60da10b`；中止测试信号→改推 pending_inputs，
+  `c335b26`；vision 决策测试缺 LocalSet，`4a2ddbf`）→ `38773838791`（2 挂：既有
+  计时 flake 重跑过 + fires 测试 replace_conversation 字节估算重置账本→重播种，
+  `1064109`）→ `38823680111`（1 挂：fires 断言语义错——`build_compacted_history`
+  无条件产出恰 4 条使 `len < 4` 恒假；断言改摘要文本语义 + 夹具 cwd `/tmp`→
+  `env::temp_dir` 修 Windows 族S 根因，本机模块 42/42、win-skip 撤销该条目，
+  `e63a954`）→ `38894033624` 双 job success；release run `38897915383` 4 资产
+  非草稿；本机部署 `grok 1.0.60 (c38f8353ade8)`（D:\tool-cli\grok2），回滚点
+  `grok2.exe.1.0.58-5622a9e.bak`。
+- **验证：** cargo check shell/pager/model-catalog --all-targets 0 error 0
+  warning；idle 5 例随模块本机 42/42（夹具修复后 GATE_SKIP=0 全跑）+ Linux CI
+  全绿；model-catalog 41/41（双源 accepts_images 解析断言）；shell GATE_FORCE
+  vision 决策 3/3 + D1 缺省表 4/4 + config_docs 行校验 2/2；pager 合批 36/36；
+  i18n 扫描 0 挂。
+- **遗留：** ① 两特性活体验证（开 flag 看 `shell.idle_compact.fired/.aborted`
+  事件与下一条 prompt TTFT 改善；真实 VL 转写质量 / BYOK 剥图告知 / 工具图预算
+  耗尽路径）随新客户端；② D9 二级未施工；③ backfill 无单测（依赖用户 config
+  面，unified 日志可观测）。
+- **详情指针：** PATCHES.md 四十三/四十四期 + CI 补记；roadmap §6 台账
+  2026-10-15 两条目；设计定案 [`docs-local/vision-bridge/plan.md`](docs-local/vision-bridge/plan.md)。
 
 ### 模型组（跨供应商降级链）+ subagent 模型/effort 配置 — 已随 v1.0.58 发版（2026-10-15）
 
