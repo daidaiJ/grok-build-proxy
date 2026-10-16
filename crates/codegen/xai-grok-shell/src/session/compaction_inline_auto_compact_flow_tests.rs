@@ -31,7 +31,15 @@ async fn create_test_actor(
     gateway_tx: mpsc::UnboundedSender<xai_acp_lib::AcpClientMessage>,
     persistence_tx: mpsc::UnboundedSender<PersistenceMsg>,
 ) -> SessionActor {
-    let cwd = AbsPathBuf::new(std::path::PathBuf::from("/tmp")).unwrap();
+    // Windows: "/tmp" has no drive and is rejected by AbsPathBuf (the win-skip
+    // 族N/S root cause); fall back to the OS temp dir there so this module can
+    // also run in local Windows sessions.
+    let cwd = AbsPathBuf::new(if cfg!(windows) {
+        std::env::temp_dir()
+    } else {
+        std::path::PathBuf::from("/tmp")
+    })
+    .unwrap();
     let fs = Arc::new(MockFs::new(cwd.to_path_buf()));
     let terminal = Arc::new(DummyTerminal {});
     let (hunk_tx, _hunk_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -1967,12 +1975,6 @@ async fn idle_compact_fires_when_idle_over_threshold() {
                 !idle_compact_in_flight(&actor),
                 "flag must be released after the compact settles"
             );
-            let items = actor.chat_state_handle.get_conversation().await;
-            assert!(
-                items.len() < 4,
-                "conversation must have been compacted, got {} items",
-                items.len()
-            );
             let mut saw_started = false;
             let mut saw_completed = false;
             while let Ok(msg) = persistence_rx.try_recv() {
@@ -1984,6 +1986,18 @@ async fn idle_compact_fires_when_idle_over_threshold() {
                     }
                 }
             }
+            let items = actor.chat_state_handle.get_conversation().await;
+            // The compacted history is [System, user_meta(prefix), re-added
+            // last query, summary, …] — its length can legitimately equal the
+            // original, so assert on the summary content instead of the count.
+            assert!(
+                items
+                    .iter()
+                    .any(|item| item.text_content().contains("Summary of prior work")),
+                "compacted history must carry the mock summary, got {} items: {:?}",
+                items.len(),
+                items.iter().map(|i| i.text_content()).collect::<Vec<_>>(),
+            );
             assert!(saw_started, "AutoCompactStarted must reach the pager");
             assert!(saw_completed, "AutoCompactCompleted must reach the pager");
         })
