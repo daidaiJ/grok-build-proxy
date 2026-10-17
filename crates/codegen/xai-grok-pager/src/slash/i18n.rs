@@ -1876,6 +1876,7 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Resets", "重置时间"),
         // -- LOCAL: 供应商套餐用量（usage_modal 的 Usage limit 标签页） --
         ("Plan usage", "套餐用量"),
+        ("Balance", "余额"),
         ("Couldn't load plan usage", "套餐用量加载失败"),
         ("Loading plan usage\u{2026}", "正在加载套餐用量…"),
         ("Queried at {time}", "查询于 {time}"),

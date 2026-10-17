@@ -870,9 +870,14 @@ fn provider_usage_lines(
     theme: &Theme,
 ) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
+    // DeepSeek 官方 API 是按量计费余额（无套餐窗口），块标题用「余额」。
+    let title = match snapshot.provider {
+        xai_grok_provider_usage::UsageProviderId::DeepSeek => tr("Balance"),
+        _ => tr("Plan usage"),
+    };
     let mut header = match &snapshot.plan_name {
-        Some(plan) => format!("{} ({plan})", tr("Plan usage")),
-        None => tr("Plan usage").to_string(),
+        Some(plan) => format!("{title} ({plan})"),
+        None => title.to_string(),
     };
     header.push_str(&format!(" \u{2014} {}", snapshot.provider.display_name()));
     lines.push(Line::styled(header, header_style(theme)));
@@ -894,6 +899,13 @@ fn provider_usage_lines(
             tr(window_kind_label(win.kind)).to_string(),
             header_style(theme),
         ));
+        if win.kind == xai_grok_provider_usage::UsageWindowKind::Balance {
+            // 余额窗（DeepSeek 官方 API）：金额即数据本体，无百分比无进度条。
+            if let Some(note) = &win.note {
+                lines.push(plain(theme, note.clone()));
+            }
+            continue;
+        }
         lines.push(usage_bar_line(win.used_pct.unwrap_or(0.0), theme));
         if win.used_pct.is_none() {
             lines.push(muted_line(theme, tr("Usage unknown (provider gave no usable figure).")));
@@ -911,12 +923,13 @@ fn provider_usage_lines(
     lines
 }
 
-/// 窗口粒度标签（复用既有「Weekly limit」/「Monthly limit」键；5h 新增）。
+/// 窗口粒度标签（复用既有「Weekly limit」/「Monthly limit」键；5h/余额新增）。
 fn window_kind_label(kind: xai_grok_provider_usage::UsageWindowKind) -> &'static str {
     match kind {
         xai_grok_provider_usage::UsageWindowKind::FiveHour => "5h window",
         xai_grok_provider_usage::UsageWindowKind::Weekly => "Weekly limit",
         xai_grok_provider_usage::UsageWindowKind::Monthly => "Monthly limit",
+        xai_grok_provider_usage::UsageWindowKind::Balance => "Balance",
     }
 }
 
@@ -1467,6 +1480,47 @@ mod tests {
         // 查询时间点行（非在途：无刷新标记）。
         assert!(text.iter().any(|l| l.contains("Queried at")), "{text:?}");
         assert!(!text.iter().any(|l| l.contains("Refreshing")), "{text:?}");
+    }
+
+    fn deepseek_snapshot() -> xai_grok_provider_usage::PlanUsageSnapshot {
+        // 官方文档示例逐字夹具，走真实 parse_response 全链路。
+        xai_grok_provider_usage::parse_response(
+            xai_grok_provider_usage::UsageProviderId::DeepSeek,
+            200,
+            r#"{"is_available":true,"balance_infos":[{"currency":"CNY",
+                "total_balance":"110.00","granted_balance":"10.00","topped_up_balance":"100.00"}]}"#,
+            1_760_000_000_000,
+        )
+        .expect("deepseek snapshot")
+    }
+
+    #[test]
+    fn deepseek_balance_block_renders_amount_without_bar() {
+        let state = state_with_session();
+        let response = xai_grok_shell::extensions::provider_usage::ProviderUsageResponse {
+            provider: Some(xai_grok_provider_usage::UsageProviderId::DeepSeek),
+            snapshot: Some(deepseek_snapshot()),
+            error: None,
+            error_kind: None,
+        };
+        let entry = provider_cache_entry(response);
+        let theme = Theme::current();
+        let lines = usage_limit_lines(&state, Some(&entry), false, None, None, &theme);
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        // 头行用「余额」标题 + 供应商来源标注（不用 Plan usage）。
+        assert!(
+            text[0].contains("Balance") && text[0].contains("DeepSeek"),
+            "{text:?}"
+        );
+        assert!(!text[0].contains("Plan usage"), "{text:?}");
+        // 金额行原样呈现（含赠金标注），无百分比条、无 unknown 行。
+        assert!(text.iter().any(|l| l.contains("¥110 · grants ¥10")), "{text:?}");
+        assert!(
+            !text.iter().any(|l| l.contains("Usage unknown")),
+            "{text:?}"
+        );
+        assert!(!text.iter().any(|l| l.ends_with("0%")), "{text:?}");
+        assert!(text.iter().any(|l| l.contains("Queried at")), "{text:?}");
     }
 
     #[test]

@@ -135,12 +135,12 @@
 
 ## app/acp_handler/settings.rs
   [plain] x6
-    129: () 'GROK_PRIVACY_NOTICE_ROLLOUT'
-    133: () 'GROK_PRIVACY_BANNER_RESHOW_DAYS'
-    201: () 'GROK_SESSION_PICKER_GROUPED'
-    366: () 'ask'
-    384: () 'auto'
-    406: () 'serialize yolo_mode_changed params'
+    134: () 'GROK_PRIVACY_NOTICE_ROLLOUT'
+    138: () 'GROK_PRIVACY_BANNER_RESHOW_DAYS'
+    206: () 'GROK_SESSION_PICKER_GROUPED'
+    371: () 'ask'
+    389: () 'auto'
+    411: () 'serialize yolo_mode_changed params'
   [id] x7
   [cmp] x4
   [log] x12
@@ -158,17 +158,17 @@
 
 ## app/actions.rs
   [plain] x11
-    1035: () 'default'
-    1036: () 'ask'
-    1037: () 'auto'
-    1172: () 'off'
-    1179: () 'Off'
-    1208: () 'mouse'
-    1241: () 'agent'
-    1242: () 'dashboard'
-    1243: () 'peek'
-    2356: () 'camelCase'
-    2364: () 'std::ops::Not::not'
+    1040: () 'default'
+    1041: () 'ask'
+    1042: () 'auto'
+    1177: () 'off'
+    1184: () 'Off'
+    1213: () 'mouse'
+    1246: () 'agent'
+    1247: () 'dashboard'
+    1248: () 'peek'
+    2361: () 'camelCase'
+    2369: () 'std::ops::Not::not'
   [id] x5
   [cmp] x4
   [test] x16
@@ -507,113 +507,114 @@
   [test] x25
 
 ## app/cli.rs
-  [plain] x102
-    29: () 'oauth'
-    29: () 'oidc'
-    35: () 'oauth'
-    105: () 'stable'
-    105: () 'enterprise'
-    108: () 'alpha'
-    108: () 'enterprise'
-    111: () 'alpha'
-    111: () 'stable'
-    157: () 'CMD'
-    228: () 'list'
-    240: () 'URL'
-    243: () 'DIR'
-    249: () 'leader'
-    260: () 'reauth'
-    261: () '--reauthenticate'
-    262: () 'false'
-    266: () 'model'
-    266: () 'MODEL'
-    271: () 'effort'
-    272: () 'EFFORT'
-    277: () 'yolo'
-    280: () 'PATH'
-    285: () 'DIR'
-    293: () 'leader'
-    357: () 'GROK_AGENT_SECRET'
-    399: () 'grok'
-    401: () 'Grok Build TUI'
-    420: () 'version'
-    430: () 'PATH'
-    436: () 'debug'
-    441: () 'FILE'
-    449: () 'yolo'
-    454: () 'trust'
-    458: () 'allow'
-    459: () 'allowedTools'
-    460: () 'RULE'
-    466: () 'deny'
-    467: () 'disallowedTools'
-    468: () 'RULE'
-    475: () 'single'
-    476: () 'print'
-    477: () 'PROMPT'
-    485: () 'JSON'
-    486: () 'single'
-    493: () 'PATH'
-    494: () 'single'
-    503: () 'plain'
-    512: () 'SCHEMA'
-    515: () 'model'
-    515: () 'MODEL'
-    520: () 'effort'
-    521: () 'EFFORT'
-    526: () 'rules'
-    531: () 'MODE'
-    535: () 'DETAIL'
-    541: () 'PROMPT'
-    548: () 'resume'
-    550: () 'SESSION_ID_OR_TITLE'
-    558: () 'load'
-    559: () 'SESSION_ID'
-    575: () 'continue'
-    583: () 'SESSION_ID'
-    590: () 'worktree'
-    594: () 'ref'
-    594: () 'worktree'
-    611: () 'CWD'
-    613: () 'chat'
-    620: () 'SERVER_ID'
-    622: () 'chat'
-    627: () 'PATH'
-    627: () 'chat'
-    655: () 'agent'
-    655: () 'NAME'
-    658: () 'agents'
-    658: () 'JSON'
-    661: () 'tools'
-    661: () 'TOOLS'
-    664: () 'TOOLS'
-    676: () 'MODE'
-    688: () 'MODE'
-    690: () 'continue'
-    690: () 'stop'
-    706: () 'SECS'
-    714: () 'GROK_SANDBOX'
-    714: () 'PROFILE'
-    717: () 'MODE'
-    723: () 'MODE'
-    726: () 'terminal'
-    743: () 'installer'
-    743: () 'VALUE'
-    751: () 'minimal'
-    756: () 'fullscreen'
-    756: () 'minimal'
-    759: () 'GROK_LOG_SAMPLING'
-    765: () 'oauth'
-    771: () 'leader'
-    775: () 'PROMPT'
-    776: () 'single'
-    831: () '--experimental-memory'
-    833: () '--no-memory'
-    847: () 'grok'
+  [plain] x103
+    20: () 'grok'
+    47: () 'oauth'
+    47: () 'oidc'
+    53: () 'oauth'
+    123: () 'stable'
+    123: () 'enterprise'
+    126: () 'alpha'
+    126: () 'enterprise'
+    129: () 'alpha'
+    129: () 'stable'
+    175: () 'CMD'
+    246: () 'list'
+    258: () 'URL'
+    261: () 'DIR'
+    267: () 'leader'
+    278: () 'reauth'
+    279: () '--reauthenticate'
+    280: () 'false'
+    284: () 'model'
+    284: () 'MODEL'
+    289: () 'effort'
+    290: () 'EFFORT'
+    295: () 'yolo'
+    298: () 'PATH'
+    303: () 'DIR'
+    311: () 'leader'
+    375: () 'GROK_AGENT_SECRET'
+    417: () 'grok'
+    419: () 'Grok Build TUI'
+    438: () 'version'
+    448: () 'PATH'
+    454: () 'debug'
+    459: () 'FILE'
+    467: () 'yolo'
+    472: () 'trust'
+    476: () 'allow'
+    477: () 'allowedTools'
+    478: () 'RULE'
+    484: () 'deny'
+    485: () 'disallowedTools'
+    486: () 'RULE'
+    493: () 'single'
+    494: () 'print'
+    495: () 'PROMPT'
+    503: () 'JSON'
+    504: () 'single'
+    511: () 'PATH'
+    512: () 'single'
+    521: () 'plain'
+    530: () 'SCHEMA'
+    533: () 'model'
+    533: () 'MODEL'
+    538: () 'effort'
+    539: () 'EFFORT'
+    544: () 'rules'
+    549: () 'MODE'
+    553: () 'DETAIL'
+    559: () 'PROMPT'
+    566: () 'resume'
+    568: () 'SESSION_ID_OR_TITLE'
+    576: () 'load'
+    577: () 'SESSION_ID'
+    593: () 'continue'
+    601: () 'SESSION_ID'
+    608: () 'worktree'
+    612: () 'ref'
+    612: () 'worktree'
+    629: () 'CWD'
+    631: () 'chat'
+    638: () 'SERVER_ID'
+    640: () 'chat'
+    645: () 'PATH'
+    645: () 'chat'
+    673: () 'agent'
+    673: () 'NAME'
+    676: () 'agents'
+    676: () 'JSON'
+    679: () 'tools'
+    679: () 'TOOLS'
+    682: () 'TOOLS'
+    694: () 'MODE'
+    706: () 'MODE'
+    708: () 'continue'
+    708: () 'stop'
+    724: () 'SECS'
+    732: () 'GROK_SANDBOX'
+    732: () 'PROFILE'
+    735: () 'MODE'
+    741: () 'MODE'
+    744: () 'terminal'
+    761: () 'installer'
+    761: () 'VALUE'
+    769: () 'minimal'
+    774: () 'fullscreen'
+    774: () 'minimal'
+    777: () 'GROK_LOG_SAMPLING'
+    783: () 'oauth'
+    789: () 'leader'
+    793: () 'PROMPT'
+    794: () 'single'
+    849: () '--experimental-memory'
+    851: () '--no-memory'
+    865: () 'grok'
   [id] x85
-  [cmp] x2
+  [cmp] x3
   [log] x4
-  [test] x256
+  [test] x265
 
 ## app/command_catalog.rs
   [id] x5
@@ -992,15 +993,15 @@
     1378: () 'Could not open file'
     1391: () 'Opening in default app\\u{2026}'
     1393: () 'Could not open file'
-    1484: () "External sessions can't be deleted"
-    1488: () "Deleting chat conversations isn't supported yet"
-    1491: (matches) 'local'
-    1491: (matches) 'remote'
-    1491: (matches) 'both'
-    1497: () 'Cannot delete session: dashboard workspace is read-only'
-    1500: () 'Deleting session\\u{2026}'
-    1545: () 'This fix was cancelled because the session changed. Run `/doctor fix` again.'
-    1564: () 'Fix cancelled.'
+    1508: () "External sessions can't be deleted"
+    1512: () "Deleting chat conversations isn't supported yet"
+    1515: (matches) 'local'
+    1515: (matches) 'remote'
+    1515: (matches) 'both'
+    1521: () 'Cannot delete session: dashboard workspace is read-only'
+    1524: () 'Deleting session\\u{2026}'
+    1569: () 'This fix was cancelled because the session changed. Run `/doctor fix` again.'
+    1588: () 'Fix cancelled.'
   [fmt] x10
     201: (format) '写入 LSP 工作区覆盖失败：{e}'
     213: (format) '已设置：本工作区（{}）{action} LSP 工具。'
@@ -1011,7 +1012,7 @@
     439: (format) 'Local workspace: {err}'
     847: (format) 'scroll log: recording to {}'
     860: (format) 'debug toggles: scroll {} \\u{00b7} fps {} \\u{00b7} log {}. Toggle with /debug <scroll|fps|log>'
-    1554: (format) 'Applying {}…'
+    1578: (format) 'Applying {}…'
   [id] x4
   [cmp] x3
   [log] x4
@@ -1086,8 +1087,8 @@
     625: () 'Deleting session\\u{2026}'
     627: () 'current'
     676: () 'Folder trusted for this session only. Run `grok --trust` here to save it for next time.'
-    1486: () 'auto'
-    1487: () 'ask'
+    1493: () 'auto'
+    1494: () 'ask'
   [fmt] x16
     123: (format) '--effort/--reasoning-effort: {}'
     227: (format) 'new-session-{}'
@@ -1096,15 +1097,15 @@
     282: (format) 'agent-type-mismatch-{}'
     330: (format) 'Local workspace unavailable ({err}); using sandbox'
     566: (format) 'delete-session-{}'
-    1389: (format) 'Session {}, use {cmd} to switch between sessions'
-    1394: (format) 'Session: {}'
-    1544: (format) 'Worktree ready: {}'
-    1698: (format) '\\n{draft_text}'
-    1746: (format) 'Session creation failed: {error}'
-    1819: (format) 'Cannot create worktree: {error}'
-    1908: (format) 'Switched to {display_name} ({eff} effort)'
-    1910: (format) 'Switched to {display_name}'
-    1934: (format) "Couldn't switch model: {msg}"
+    1390: (format) 'Session {}, use {cmd} to switch between sessions'
+    1395: (format) 'Session: {}'
+    1552: (format) 'Worktree ready: {}'
+    1712: (format) '\\n{draft_text}'
+    1760: (format) 'Session creation failed: {error}'
+    1833: (format) 'Cannot create worktree: {error}'
+    1922: (format) 'Switched to {display_name} ({eff} effort)'
+    1924: (format) 'Switched to {display_name}'
+    1948: (format) "Couldn't switch model: {msg}"
   [id] x9
   [log] x7
 
@@ -1118,22 +1119,22 @@
     994: () 'conversation'
     1063: () 'Restoring session from remote...'
     1231: () 'SessionLoaded'
-    1378: () 'SessionLoadFailed'
-    1410: () 'debounce expiry'
-    1453: () 'card detail'
-    1496: () 'SessionRestored'
-    1547: () 'SessionRestoreFailed'
-    1571: () 'deep search results'
-    1624: () "Chat conversations can't be resumed in a worktree"
+    1385: () 'SessionLoadFailed'
+    1417: () 'debounce expiry'
+    1460: () 'card detail'
+    1503: () 'SessionRestored'
+    1554: () 'SessionRestoreFailed'
+    1578: () 'deep search results'
+    1631: () "Chat conversations can't be resumed in a worktree"
   [fmt] x8
     175: (format) 'Restoring code for session {}...'
     177: (format) 'Loading session {}...'
     1104: (format) 'Restoring session {session_id} from remote...'
-    1266: (format) '\\u{2713} Code restored: {s}'
-    1270: (format) '\\u{26A0} Code restore failed: {s}'
-    1392: (format) "Couldn't load session: {error}"
-    1523: (format) 'Session restored. Loading {local_session_id}...'
-    1556: (format) "Couldn't restore session: {error}"
+    1267: (format) '\\u{2713} Code restored: {s}'
+    1271: (format) '\\u{26A0} Code restore failed: {s}'
+    1399: (format) "Couldn't load session: {error}"
+    1530: (format) 'Session restored. Loading {local_session_id}...'
+    1563: (format) "Couldn't restore session: {error}"
   [id] x26
   [cmp] x6
   [log] x5
@@ -2139,7 +2140,7 @@
 ## app/modals.rs
   [plain] x1
     57: (matches) 'model'
-  [test] x159
+  [test] x160
 
 ## app/mode_switch.rs
   [plain] x3
@@ -2154,7 +2155,12 @@
   [test] x25
 
 ## app/model_catalog_store.rs
-  [test] x24
+  [fmt] x2
+    80: (format) '{i}/{UNPRICED_LABEL}'
+    81: (format) '{UNPRICED_LABEL}/{o}'
+  [cmp] x3
+  [wrapped] x3
+  [test] x38
 
 ## app/mouse.rs
   [plain] x1
@@ -2288,8 +2294,8 @@
 
 ## app/session_title_resolve.rs
   [fmt] x2
-    145: (format) "couldn't resume worktree session: {detail}"
-    147: (format) '{msg}; {}'
+    147: (format) "couldn't resume worktree session: {detail}"
+    149: (format) '{msg}; {}'
   [id] x1
   [log] x1
 
@@ -2303,7 +2309,7 @@
     108: (write) 'startup cancelled before an agent was ready'
 
 ## app/startup_failure/render.rs
-  [plain] x22
+  [plain] x21
     10: () 'Mode'
     11: () 'Version'
     16: () 'Steps'
@@ -2313,20 +2319,19 @@
     101: () 'none'
     140: () 'Start Grok again.'
     141: () 'Check your network connection, then start Grok again.'
-    152: () 'grok leader kill'
-    160: () 'reading your local configuration'
-    161: () "checking your organization's managed policy"
-    162: () 'loading your account settings'
-    163: () 'reading the list of available models'
-    164: () 'starting the local agent'
-    165: () 'connecting to the shared leader'
-    166: () 'waiting for the agent to respond'
-    167: () 'refreshing your sign-in'
-    168: () 'preparing the interface'
-    169: () 'creating the session'
-    183: () 'local agent'
-    184: () 'shared leader'
-  [fmt] x8
+    165: () 'reading your local configuration'
+    166: () "checking your organization's managed policy"
+    167: () 'loading your account settings'
+    168: () 'reading the list of available models'
+    169: () 'starting the local agent'
+    170: () 'connecting to the shared leader'
+    171: () 'waiting for the agent to respond'
+    172: () 'refreshing your sign-in'
+    173: () 'preparing the interface'
+    174: () 'creating the session'
+    188: () 'local agent'
+    189: () 'shared leader'
+  [fmt] x9
     22: (format) "Couldn't start Grok: startup timed out after {}.\\n\\n{explanation}"
     28: (format) 'Startup cancelled while connecting to the {}.'
     59: (format) 'The longest step was {doing}.'
@@ -2334,7 +2339,8 @@
     94: (format) '{}={}{still_running}'
     114: (format) '  {:<column_width$} '
     114: (format) '{label}:'
-    177: (format) '{}, then {target}'
+    156: (format) '{} leader kill'
+    182: (format) '{}, then {target}'
 
 ## app/status_blocks.rs
   [fmt] x5
@@ -2944,11 +2950,12 @@
     22: () '/model <name> [effort]'
     28: () '<model> [effort]'
     56: () 'Usage: /model <name> [effort]'
-  [fmt] x3
+  [fmt] x4
     76: (format) 'Unknown model: {trimmed}'
-    153: (format) '{} (current)'
-    193: (format) '{prefix} {}'
-  [test] x80
+    168: (format) '{detail} \\u{b7} {base_description}'
+    174: (format) '{} (current)'
+    214: (format) '{prefix} {}'
+  [test] x89
 
 ## slash/commands/multiline.rs
   [plain] x3
@@ -4448,7 +4455,7 @@
     301: () 'y copy'
     306: () 'Esc close'
   [wrapped] x27
-  [test] x66
+  [test] x63
 
 ## views/status_line/mod.rs
   [fmt] x1
@@ -4563,7 +4570,7 @@
   [test] x12
 
 ## views/usage_modal.rs
-  [plain] x16
+  [plain] x17
     51: () 'Context usage'
     52: () 'Usage limit'
     53: () 'Session info'
@@ -4572,30 +4579,31 @@
     568: () 'c copy session ID'
     577: () 'y copy all'
     583: () 'Esc close'
-    917: () '5h window'
-    918: () 'Weekly limit'
-    919: () 'Monthly limit'
-    1067: () 'USAGE_PERIOD_TYPE_WEEKLY'
-    1067: () 'tokens / week'
-    1068: () 'USAGE_PERIOD_TYPE_MONTHLY'
-    1068: () 'tokens / month'
-    1069: () 'tokens / period'
+    929: () '5h window'
+    930: () 'Weekly limit'
+    931: () 'Monthly limit'
+    932: () 'Balance'
+    1080: () 'USAGE_PERIOD_TYPE_WEEKLY'
+    1080: () 'tokens / week'
+    1081: () 'USAGE_PERIOD_TYPE_MONTHLY'
+    1081: () 'tokens / month'
+    1082: () 'tokens / period'
   [fmt] x12
     763: (format) '{}: {error}'
     809: (format) '{}: {error}'
     839: (format) '{}: {error}'
-    874: (format) '{} ({plan})'
-    966: (format) '{} ({tier})'
-    975: (format) '{}: {reset}'
-    999: (format) '{used:.2}'
-    1000: (format) '{cap:.2}'
-    1019: (format) '{}: {why}'
-    1029: (format) '{}: ≥ {tokens} {}'
-    1051: (format) '{delta:.0}'
-    1077: (format) '{}: {error}'
+    879: (format) '{title} ({plan})'
+    979: (format) '{} ({tier})'
+    988: (format) '{}: {reset}'
+    1012: (format) '{used:.2}'
+    1013: (format) '{cap:.2}'
+    1032: (format) '{}: {why}'
+    1042: (format) '{}: ≥ {tokens} {}'
+    1064: (format) '{delta:.0}'
+    1090: (format) '{}: {error}'
   [cmp] x6
   [wrapped] x33
-  [test] x156
+  [test] x170
 
 ## views/welcome/consent.rs
   [plain] x2

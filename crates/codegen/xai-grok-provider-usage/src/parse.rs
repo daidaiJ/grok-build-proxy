@@ -31,6 +31,7 @@ pub(super) fn parse_response(
         UsageProviderId::GlmCoding => providers::glm::parse(&value)?,
         UsageProviderId::KimiCoding => providers::kimi::parse(&value)?,
         UsageProviderId::MiniMaxCoding => providers::minimax::parse(&value)?,
+        UsageProviderId::DeepSeek => providers::deepseek::parse(&value)?,
     };
     Ok(finish(provider, plan_name, windows, now_ms))
 }
@@ -40,7 +41,9 @@ fn error_message(provider: UsageProviderId, body: &str) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(body).ok()?;
     match provider {
         // {"type":"error","error":{"type":"AuthError","message":"Missing API key."}}
-        UsageProviderId::OpenCodeGo => {
+        // DeepSeek 官方信封同形：{"error":{"message":"Authentication Fails …",
+        // "type":"authentication_error"}}（OpenAI 风格）。
+        UsageProviderId::OpenCodeGo | UsageProviderId::DeepSeek => {
             Some(value.pointer("/error/message")?.as_str()?.to_string())
         }
         // {"success":false,"error":{"code":"UNAUTHORIZED",...}}

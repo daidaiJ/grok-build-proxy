@@ -7,7 +7,8 @@
 //! 职责边界：本 crate 只做「端点组装 + 请求头 + 响应 → [`PlanUsageSnapshot`]」的
 //! 纯函数，HTTP 由调用方执行（shell 扩展层）。百分比语义在适配器内归一为
 //! **已用** 0–100（opencode/GLM 原生已用、Command Code 由美元 used/cap 换算、
-//! Kimi 由计数换算、MiniMax 剩余反转）。
+//! Kimi 由计数换算、MiniMax 剩余反转）；DeepSeek 官方 API 是按量计费余额，
+//! 金额进 `note`（Balance 窗口，无百分比）。
 //!
 //! 多次尝试：GLM 的裸 key/Bearer 前缀分歧、MiniMax 的新旧两条端点路径，统一建模
 //! 为「按序尝试的 [`PreparedRequest`] 列表」：解析返回
