@@ -3318,3 +3318,9 @@ usage_modal 过滤 25/25（新增 DeepSeek 渲染断言：余额标题 + 金额�
 unknown 行）；i18n 扫描 exit 0。**活体验证（ptyctl 真 TUI + 真 API，release
 bin 核对 exe mtime）**：/model 切官方 1017 → /usage 面板「余额 — DeepSeek /
 余额 / ¥99.89 / 查询于 10-17 19:50」；切回 Ark 回归 SuperGrok 周限额块零变化。
+
+**发版补记（四十九期）**：四十六/四十七/四十八/四十九期四项同批随 tag
+`v1.0.62` 发版（2026-10-17）：release run `39033051450` / main build run
+`39030472409` 双 job success、4 资产非草稿；本机部署
+`grok 1.0.62 (6d6161809c5c)`（D:\tool-cli\grok2，rename-aside 替换），回滚点
+`grok2.exe.1.0.61-acc31ae.bak`。

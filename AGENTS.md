@@ -380,11 +380,15 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### DeepSeek 官方 API 余额上 /usage 面板 — 已合 main 待发版（2026-10-17）
+### DeepSeek 官方 API 余额上 /usage 面板 — 已随 v1.0.62 发版（2026-10-17）
 
 - **当前状态：** 供应商套餐用量第六家（PATCHES 四十九期，分支
-  `feat/local-deepseek-balance-usage`，merge `25fa7be`）：base_url host 命中
-  `api.deepseek.com` 的模型（本机 `deepseek/deepseek-v4.1-flash-1017`）在 /usage
+  `feat/local-deepseek-balance-usage`，merge `25fa7be`）**随 tag `v1.0.62` 发版**：
+  release run `39033051450` / main build run `39030472409` 双 job success、4 资产
+  非草稿；本机部署 `grok 1.0.62 (6d6161809c5c)`（D:\tool-cli\grok2），回滚点
+  `grok2.exe.1.0.61-acc31ae.bak`（同批含四十六/四十七/四十八期三项）。
+  判定 = base_url host 命中 `api.deepseek.com` 的模型（本机
+  `deepseek/deepseek-v4.1-flash-1017`）在 /usage
   面板显示官方余额。`GET /user/balance`（Bearer 同 key，官方文档
   https://api-docs.deepseek.com/zh-cn/api/get-user-balance）→ 每币种一条
   `UsageWindowKind::Balance` 窗口（金额进 `note`，`granted_balance>0` 附
@@ -398,16 +402,17 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   i18n 扫描 exit 0；活体验证（ptyctl 真 TUI + 真 API，release bin 核对 mtime）：
   官方 1017 面板「余额 — DeepSeek / 余额 / ¥99.89 / 查询于 10-17 19:50」；切回
   Ark 回归 SuperGrok 周限额块零变化。
-- **遗留：** ① 随下次发版；② `grants`/`unavailable` 标记活体未采到（本机余额无
-  赠金），夹具单测覆盖。
+- **遗留：** ① `grants`/`unavailable` 标记活体未采到（本机余额无
+  赠金），夹具单测覆盖；活体验证随新客户端（已部署 v1.0.62）。
 - **详情指针：** PATCHES.md 四十九期；
   [`docs-local/usage/provider-quota-display-todo.md`](docs-local/usage/provider-quota-display-todo.md)
   （第六家追加节）。
 
-### /model picker 目录详情列 + 视觉桥 D9 反应式 + 命令提示跟随二进制名 — 已合 main 待发版（2026-10-17）
+### /model picker 目录详情列 + 视觉桥 D9 反应式 + 命令提示跟随二进制名 — 已随 v1.0.62 发版（2026-10-17）
 
-- **当前状态：** 三项改动各自分支合 main，**按用户指示推送但不发版**（tag 留
-  待拍板）。① /model picker 右侧目录详情列（四十六期，`feat/local-model-picker-catalog-details`，
+- **当前状态：** 三项改动各自分支合 main，**随 tag `v1.0.62` 发版**（2026-10-17，
+  release run `39033051450` / build run `39030472409` 双 job success、4 资产非草稿）。
+  ① /model picker 右侧目录详情列（四十六期，`feat/local-model-picker-catalog-details`，
   纯 pager 面）：行右列显「模态 上下文 思考 价格」token 串，本地 meta
   优先/价格来自目录/负缓存 `–`；dashboard `/model` 下拉经
   `build_model_items` description 注入 + 模型列表到达即预取
