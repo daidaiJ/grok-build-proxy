@@ -15,7 +15,7 @@ pub(super) fn render(failure: &StartupFailure) -> String {
             let advice = advice_for(timings, context.attempt);
             rows.push(("Steps", format_steps(timings)));
             if let Some(command) = advice.next_step.command() {
-                rows.push(("Try", command.to_owned()));
+                rows.push(("Try", command));
             }
             let explanation = fill_indented(&advice.explanation(), "  ", "  ");
             format!(
@@ -146,10 +146,15 @@ impl NextStep {
         }
     }
     /// Kept out of the prose so wrapping can never split it.
-    fn command(self) -> Option<&'static str> {
+    fn command(self) -> Option<String> {
         match self {
-            Self::Retry | Self::CheckNetworkThenRetry => Some(CONNECT_UI_TIMEOUT_TRY_COMMAND),
-            Self::RestartSharedLeader => Some("grok leader kill"),
+            Self::Retry | Self::CheckNetworkThenRetry => {
+                Some(CONNECT_UI_TIMEOUT_TRY_COMMAND.to_owned())
+            }
+            // LOCAL: 命令示例跟随实际二进制名（发行名 grok2 / 用户任意改名）
+            Self::RestartSharedLeader => {
+                Some(format!("{} leader kill", crate::app::cli::current_binary_name()))
+            }
         }
     }
 }
