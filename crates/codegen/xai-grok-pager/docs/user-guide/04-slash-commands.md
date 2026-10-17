@@ -108,6 +108,8 @@ Switch models. Accepts a model ID or display name (case-insensitive), and for re
 /model Reasoning X high
 ```
 
+LOCAL: the model list shows a catalog detail column on the right of each row — image support (vision/text), context window, reasoning support, and per-1M USD input/output pricing (e.g. `视觉 256k 思考 $3/$15`). Data comes from the model catalog; unknown segments are omitted, a known miss shows `–`, and missing prices show `–` (same convention as the `/stats` cost column). Opening the picker prefetches the catalog, so the first frame may briefly show fewer fields until the response lands.
+
 ### `/effort <level>`
 
 Set reasoning effort on the **current** model without reselecting it. Levels are `low`, `medium`, `high`, and `xhigh`, and it only applies when the active model supports reasoning effort.

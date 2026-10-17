@@ -103,6 +103,11 @@ pub enum Action {
     OpenPrevLink,
     /// Fetch the session list for the session picker on the welcome screen.
     FetchSessionList,
+    /// LOCAL: prefetch model-catalog rows when a `/model` picker opens, so the
+    /// picker's right-hand detail column (modality / context / reasoning /
+    /// price) has data on its first paint. Reads the active agent's model list;
+    /// the process-level store's single-flight + negative cache guard repeats.
+    FetchModelCatalogForPicker,
     /// Cycle the active session picker's source filter.
     CycleSessionSourceFilter,
     /// Load a selected session from the session picker.

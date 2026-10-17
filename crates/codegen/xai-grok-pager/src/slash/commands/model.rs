@@ -142,12 +142,33 @@ fn matched_reasoning_prefix(
 
 /// One row per logical model.
 /// Reasoning models get a trailing space in `insert_text` so the prompt widget chains into the effort sub-menu.
+///
+/// LOCAL: the description column carries the catalog detail tokens
+/// (modality / context / reasoning / price) ahead of the original description —
+/// the slash dropdown (dashboard + in-session) and the ArgPicker right column
+/// all render this string. The store is normally warm from the startup
+/// prewarm; a cold store falls back to the plain description.
 fn build_model_items(models: &ModelState) -> Vec<ArgItem> {
+    use crate::app::model_catalog_store::picker_detail_label;
+
     let current_id = models.current.as_ref();
     let mut items: Vec<ArgItem> = Vec::with_capacity(models.available.len());
     for (id, info) in &models.available {
         let is_current = current_id == Some(id);
         let supports = supports_reasoning_effort(info);
+
+        let base_description = info.description.clone().unwrap_or_default();
+        let detail = picker_detail_label(
+            info.meta.as_ref(),
+            crate::app::model_catalog_store::get(id.0.as_ref())
+                .as_ref()
+                .map(|m| m.as_ref()),
+        );
+        let description = match (!detail.is_empty(), !base_description.is_empty()) {
+            (true, true) => format!("{detail} \u{b7} {base_description}"),
+            (true, false) => detail,
+            (false, _) => base_description,
+        };
 
         let display = if is_current {
             format!("{} (current)", info.name)
@@ -167,7 +188,7 @@ fn build_model_items(models: &ModelState) -> Vec<ArgItem> {
             display,
             match_text: info.name.clone(),
             insert_text,
-            description: info.description.clone().unwrap_or_default(),
+            description,
         });
     }
     items
@@ -266,9 +287,70 @@ mod tests {
         );
     }
 
+    /// LOCAL: build_model_items carries the catalog detail tokens in the
+    /// description column — detail first, original description after a `·`,
+    /// cold store falls back to the plain description. Uses a unique model id;
+    /// the process-level store is shared across the test binary (same caveat
+    /// as the model_catalog_store lifecycle test).
     #[test]
-    fn empty_query_returns_one_row_per_logical_model() {
+    fn build_model_items_injects_catalog_detail_into_description() {
+        use xai_grok_model_catalog::{CatalogSource, ModelPricing};
+        use xai_grok_shell::extensions::model_catalog::{CatalogMatch, ModelCatalogResponse};
+
+        let model_id = "detail-seeded-model";
         let mut state = ModelState::default();
+        let (id, info) = plain_model(model_id, "Detail Seeded");
+        state.available.insert(id, info);
+
+        // 冷 store（本 id 无条目）：回退原 description
+        let items = build_model_items(&state);
+        let row = items
+            .iter()
+            .find(|i| i.match_text == "Detail Seeded")
+            .unwrap();
+        assert_eq!(row.description, "");
+
+        // 目录命中：详情 token 在前，原描述跟在 `·` 后（这里原描述为空则只留详情）
+        let matched = CatalogMatch {
+            source: CatalogSource::OpenRouter,
+            model_id: "vendor/detail-seeded-model".into(),
+            provider_id: "openrouter".into(),
+            name: "Detail Seeded".into(),
+            match_score: 100,
+            pricing: ModelPricing {
+                input: Some(3.0),
+                output: Some(15.0),
+                cache_read: None,
+                cache_write: None,
+            },
+            context_length: Some(256_000),
+            max_completion_tokens: Some(32_000),
+            reasoning: Some(true),
+            accepts_images: Some(false),
+        };
+        let mut entries = std::collections::BTreeMap::new();
+        entries.insert(model_id.to_string(), Some(matched));
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        crate::app::model_catalog_store::install(&ModelCatalogResponse {
+            entries,
+            fetched_at_ms: now,
+            cache: "fetch".into(),
+            error: None,
+        });
+
+        let items = build_model_items(&state);
+        let row = items
+            .iter()
+            .find(|i| i.match_text == "Detail Seeded")
+            .unwrap();
+        assert_eq!(row.description, "text 256k reasoning $3/$15");
+    }
+
+    #[test]
+    fn empty_query_returns_one_row_per_logical_model() {        let mut state = ModelState::default();
         let (rid, rinfo) = model_with_reasoning("reasoning-x", "Reasoning X");
         let (pid, pinfo) = plain_model("grok-4.5", "Grok 4.5");
         state.available.insert(rid, rinfo);
@@ -403,7 +485,6 @@ mod tests {
         let mut state = ModelState::default();
         let (id, info) = model_with_reasoning("reasoning-x", "Reasoning X");
         state.available.insert(id, info);
-
         let cmd = ModelCommand;
         let ctx = AppCtx {
             models: &state,
