@@ -3068,6 +3068,16 @@ impl SessionActor {
             if structured_output_native {
                 request.json_schema = json_schema.clone();
             }
+            // LOCAL (vision bridge D9 tier-2): attach the reactive transcription
+            // hook so an image-input capability rejection (high-confidence 400
+            // signature) retries with text transcriptions instead of bare
+            // placeholders. No-op for bridge/blocked models — pixels never leave.
+            // Image-free requests skip the hook entirely (no describe client).
+            request.image_bridge = if request.image_urls().is_empty() {
+                None
+            } else {
+                self.resolve_reactive_image_bridge().await
+            };
             request.hosted_tools = self.hosted_tools_for_turn();
             request.max_output_tokens = self
                 .tool_context

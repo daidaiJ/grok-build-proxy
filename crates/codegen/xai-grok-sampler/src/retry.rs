@@ -117,6 +117,13 @@ pub fn classify_error(
         return RetryDecision::RetryWithImageStrip;
     }
 
+    // LOCAL (vision bridge D9 tier-2): a high-confidence "model cannot take
+    // image input" rejection strips images and retries; the shell-attached
+    // bridge hook turns the stripped pixels into text transcriptions first.
+    if err.is_image_input_unsupported_error() {
+        return RetryDecision::RetryWithImageStrip;
+    }
+
     if err.is_retry_vetoed() {
         return RetryDecision::Fatal(clone_error(err));
     }

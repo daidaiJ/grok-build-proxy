@@ -665,12 +665,140 @@ pub struct ConversationRequest {
     pub prompt_cache_key: Option<String>,
     /// What the sampler does when the response stops with `Length`.
     pub length_policy: LengthPolicy,
+    /// LOCAL (vision bridge D9): reactive transcription hook. The shell attaches
+    /// it to image-bearing requests; the sampler calls it only when an upstream
+    /// rejection strips images, so the retry carries text transcriptions
+    /// instead of pixels. `None` = plain strip (pre-D9 behavior).
+    pub image_bridge: Option<ImageBridgeHook>,
+}
+
+/// Async output of [`ImageBridgeHook`]: one note per URL, `Some(text)` = final
+/// text to inject in place of the stripped image, `None` = transcription
+/// unavailable (the generic unavailable placeholder stays).
+pub type ImageTranscriptionNotes = Vec<(std::sync::Arc<str>, Option<String>)>;
+pub type ImageTranscriptionFuture =
+    std::pin::Pin<Box<dyn std::future::Future<Output = ImageTranscriptionNotes> + Send>>;
+
+/// LOCAL (vision bridge D9): per-request reactive transcription hook.
+///
+/// Lives on [`ConversationRequest`] so the sampler can consult it mid-retry
+/// without knowing about the describe pipeline (shell-owned; injected).
+#[derive(Clone)]
+pub struct ImageBridgeHook {
+    transcribe: Arc<dyn Fn(Vec<std::sync::Arc<str>>) -> ImageTranscriptionFuture + Send + Sync>,
+}
+
+impl ImageBridgeHook {
+    pub fn new(
+        transcribe: impl Fn(Vec<std::sync::Arc<str>>) -> ImageTranscriptionFuture + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            transcribe: Arc::new(transcribe),
+        }
+    }
+
+    pub async fn transcribe(&self, urls: Vec<std::sync::Arc<str>>) -> ImageTranscriptionNotes {
+        (self.transcribe)(urls).await
+    }
+}
+
+impl std::fmt::Debug for ImageBridgeHook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ImageBridgeHook(<transcribe>)")
+    }
 }
 
 impl ConversationRequest {
     /// Strip every image; returns the stripped URLs.
     pub fn strip_images(&mut self) -> Vec<Arc<str>> {
         strip_images_where(&mut self.items, |_| true)
+    }
+
+    /// Collect every image URL currently present, without mutating anything.
+    /// LOCAL (vision bridge D9): the sampler uses this to hand the bridge hook
+    /// the exact pixel set a strip-retry is about to drop.
+    pub fn image_urls(&self) -> Vec<Arc<str>> {
+        let mut out = Vec::new();
+        for item in &self.items {
+            match item {
+                ConversationItem::User(user) => {
+                    for part in &user.content {
+                        if let ContentPart::Image { url } = part {
+                            out.push(Arc::clone(url));
+                        }
+                    }
+                }
+                ConversationItem::ToolResult(result) => {
+                    for part in &result.images {
+                        if let ContentPart::Image { url } = part {
+                            out.push(Arc::clone(url));
+                        }
+                    }
+                }
+                ConversationItem::System(_)
+                | ConversationItem::Assistant(_)
+                | ConversationItem::BackendToolCall(_)
+                | ConversationItem::Reasoning(_) => {}
+            }
+        }
+        out
+    }
+
+    /// LOCAL (vision bridge D9): strip every image, swapping each stripped
+    /// user-image part for its transcription text when the hook provided one
+    /// (a `None` note keeps [`IMAGE_STRIP_PLACEHOLDER`]); tool-result images
+    /// are dropped like [`strip_images_where`] does, with the transcription
+    /// appended to the tool text. Returns the stripped URLs.
+    pub fn strip_images_with_transcriptions(
+        &mut self,
+        transcriptions: &ImageTranscriptionNotes,
+    ) -> Vec<Arc<str>> {
+        let note_for =
+            |url: &str| -> Option<&Option<String>> {
+                transcriptions
+                    .iter()
+                    .find(|(candidate, _)| candidate.as_ref() == url)
+                    .map(|(_, note)| note)
+            };
+        let mut stripped = Vec::new();
+        for item in &mut self.items {
+            match item {
+                ConversationItem::User(user) => {
+                    for part in &mut user.content {
+                        if let ContentPart::Image { url } = part {
+                            stripped.push(Arc::clone(url));
+                            let text: Arc<str> = match note_for(url).and_then(|n| n.clone()) {
+                                Some(note) => Arc::from(note.as_str()),
+                                None => Arc::from(IMAGE_STRIP_PLACEHOLDER),
+                            };
+                            *part = ContentPart::Text { text };
+                        }
+                    }
+                }
+                ConversationItem::ToolResult(result) => {
+                    let mut appended: Vec<String> = Vec::new();
+                    result.images.retain(|part| match part {
+                        ContentPart::Image { url } => {
+                            stripped.push(Arc::clone(url));
+                            if let Some(Some(note)) = note_for(url) {
+                                appended.push(note.clone());
+                            }
+                            false
+                        }
+                        ContentPart::Text { .. } => true,
+                    });
+                    for note in appended {
+                        let line = format!("{}\n{note}", result.content);
+                        result.content = Arc::from(line.as_str());
+                    }
+                }
+                ConversationItem::System(_)
+                | ConversationItem::Assistant(_)
+                | ConversationItem::BackendToolCall(_)
+                | ConversationItem::Reasoning(_) => {}
+            }
+        }
+        stripped
     }
 }
 
@@ -4940,5 +5068,95 @@ mod tests {
         // The legacy placeholder sentinel must not appear
         let body_str = serde_json::to_string(&input).unwrap();
         assert!(!body_str.contains("__RAW_OUTPUT_PLACEHOLDER_"));
+    }
+
+    /// LOCAL (vision bridge D9): `image_urls` collects user + tool-result
+    /// pixels without mutating; the transcribing strip swaps each user image
+    /// for its note (placeholder when absent) and appends tool notes to the
+    /// tool text.
+    #[test]
+    fn image_urls_and_transcribing_strip_cover_user_and_tool_parts() {
+        let mut request = ConversationRequest {
+            items: vec![
+                {
+                    let mut user = match ConversationItem::user("look") {
+                        ConversationItem::User(u) => u,
+                        _ => unreachable!(),
+                    };
+                    user.add_image("data:image/png;base64,AAA");
+                    ConversationItem::User(user)
+                },
+                ConversationItem::ToolResult(ToolResultItem {
+                    tool_call_id: "call-1".into(),
+                    content: "screenshot".into(),
+                    images: vec![ContentPart::Image {
+                        url: Arc::from("data:image/jpeg;base64,BBB"),
+                    }],
+                }),
+            ],
+            ..Default::default()
+        };
+
+        let urls = request.image_urls();
+        assert_eq!(urls.len(), 2, "one user image + one tool image");
+
+        let notes: ImageTranscriptionNotes = vec![
+            (Arc::from("data:image/png;base64,AAA"), Some("<image>red square</image>".into())),
+            (Arc::from("data:image/jpeg;base64,BBB"), None),
+        ];
+        let stripped = request.strip_images_with_transcriptions(&notes);
+        assert_eq!(stripped.len(), 2);
+
+        let ConversationItem::User(user) = &request.items[0] else {
+            panic!("user item must survive");
+        };
+        assert!(
+            user.content.iter().any(|p| matches!(p, ContentPart::Text { text } if text.contains("<image>red square</image>"))),
+            "user image replaced by its transcription, got {user:?}"
+        );
+        let ConversationItem::ToolResult(result) = &request.items[1] else {
+            panic!("tool item must survive");
+        };
+        assert!(
+            result.images.is_empty(),
+            "tool images dropped even without a note"
+        );
+        assert!(
+            result.content.contains("screenshot"),
+            "tool text preserved: {result:?}"
+        );
+        assert!(
+            !result.content.contains("red square"),
+            "a None note must not inject anything into the tool text: {result:?}"
+        );
+
+        // A second strip pass (nothing left) collects nothing.
+        assert!(request.image_urls().is_empty());
+    }
+
+    /// A `None` note on a user image keeps the generic unavailable placeholder.
+    #[test]
+    fn transcribing_strip_keeps_placeholder_without_note() {
+        let mut request = ConversationRequest {
+            items: vec![{
+                let mut user = match ConversationItem::user("look") {
+                    ConversationItem::User(u) => u,
+                    _ => unreachable!(),
+                };
+                user.add_image("data:image/png;base64,CCC");
+                ConversationItem::User(user)
+            }],
+            ..Default::default()
+        };
+        let notes: ImageTranscriptionNotes =
+            vec![(Arc::from("data:image/png;base64,CCC"), None)];
+        request.strip_images_with_transcriptions(&notes);
+        let ConversationItem::User(user) = &request.items[0] else {
+            panic!("user item must survive");
+        };
+        assert!(
+            user.content.iter().any(|p| matches!(p, ContentPart::Text { text } if text.as_ref() == IMAGE_STRIP_PLACEHOLDER)),
+            "None note keeps the generic placeholder, got {user:?}"
+        );
     }
 }

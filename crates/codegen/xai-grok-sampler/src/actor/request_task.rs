@@ -416,14 +416,41 @@ async fn apply_retry_decision(
             }
         }
         RetryDecision::RetryWithImageStrip => {
-            let stripped_urls = request.strip_images();
-            if stripped_urls.is_empty() {
-                // Nothing left to strip; upgrade to fatal.
-                let terminal_event_queued = emit_failed(event_tx, request_id, err);
-                send_completion(completion, Err(clone_error(err)), terminal_event_queued);
-                return false;
-            }
             let reason = strip_reason_for_image_error(err);
+            // LOCAL (vision bridge D9 tier-2): on a server-confirmed image
+            // rejection, hand the pixels to the shell-attached bridge hook and
+            // inject the transcriptions into the retry. Heuristic strips
+            // (413 / connection reset) keep the plain placeholder behavior.
+            let bridge = match reason {
+                StripReason::ServerRejected => request.image_bridge.clone(),
+                StripReason::PayloadHeuristic => None,
+            };
+            let stripped_urls = if let Some(bridge) = bridge {
+                let urls = request.image_urls();
+                if urls.is_empty() {
+                    // Nothing left to strip; upgrade to fatal.
+                    let terminal_event_queued = emit_failed(event_tx, request_id, err);
+                    send_completion(completion, Err(clone_error(err)), terminal_event_queued);
+                    return false;
+                }
+                let notes = tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        handle_cancellation(event_tx, request_id, completion);
+                        return false;
+                    }
+                    notes = bridge.transcribe(urls) => notes,
+                };
+                request.strip_images_with_transcriptions(&notes)
+            } else {
+                let stripped = request.strip_images();
+                if stripped.is_empty() {
+                    // Nothing left to strip; upgrade to fatal.
+                    let terminal_event_queued = emit_failed(event_tx, request_id, err);
+                    send_completion(completion, Err(clone_error(err)), terminal_event_queued);
+                    return false;
+                }
+                stripped
+            };
             tracing::warn!(
                 stripped = stripped_urls.len(),
                 reason = reason.as_ref(),
@@ -946,6 +973,13 @@ fn strip_reason_for_image_error(err: &SamplingError) -> StripReason {
             code: Some(ApiErrorCode::InvalidImage),
             ..
         } => StripReason::ServerRejected,
+        // LOCAL (vision bridge D9 tier-2): a high-confidence image-input
+        // capability rejection is also server-confirmed.
+        SamplingError::Api { .. }
+            if err.is_image_input_unsupported_error() =>
+        {
+            StripReason::ServerRejected
+        }
         SamplingError::Api { .. }
         | SamplingError::StreamError { .. }
         | SamplingError::Auth { .. }
@@ -1070,6 +1104,21 @@ mod tests {
         assert_eq!(
             strip_reason_for_image_error(&heuristic),
             StripReason::PayloadHeuristic
+        );
+
+        // LOCAL (vision bridge D9 tier-2): a high-confidence image-input
+        // capability rejection is server-confirmed even without a code.
+        let signature = SamplingError::Api {
+            status: StatusCode::BAD_REQUEST,
+            message: "image input is not supported by this model".into(),
+            model_metadata: None,
+            retry_after_secs: None,
+            should_retry: None,
+            error_code: None,
+        };
+        assert_eq!(
+            strip_reason_for_image_error(&signature),
+            StripReason::ServerRejected
         );
     }
 
