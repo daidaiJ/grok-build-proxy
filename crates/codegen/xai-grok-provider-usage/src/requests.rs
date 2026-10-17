@@ -29,6 +29,10 @@ pub fn prepare_requests(
             headers: bearer(key),
         }],
         UsageProviderId::MiniMaxCoding => minimax_requests(key, base_url, &url),
+        UsageProviderId::DeepSeek => vec![PreparedRequest {
+            url: url(&deepseek_origin(base_url), "/user/balance"),
+            headers: bearer(key),
+        }],
     }
 }
 
@@ -82,6 +86,15 @@ fn kimi_origin(base_url: Option<&str>) -> String {
     }
 }
 
+/// DeepSeek：默认 api.deepseek.com；base_url 指向 deepseek.com 其他 host 时跟随
+/// （官方文档 https://api-docs.deepseek.com/zh-cn/api/get-user-balance）。
+fn deepseek_origin(base_url: Option<&str>) -> String {
+    match base_url.and_then(origin_of) {
+        Some(o) if o.contains("deepseek.com") => o,
+        _ => "https://api.deepseek.com".to_string(),
+    }
+}
+
 /// 从 base_url 提取 scheme+host origin（如 `https://api.kimi.com/coding` → `https://api.kimi.com`）。
 fn origin_of(base_url: &str) -> Option<String> {
     let rest = base_url.split_once("://")?;
@@ -103,6 +116,7 @@ mod tests {
             UsageProviderId::OpenCodeGo,
             UsageProviderId::CommandCode,
             UsageProviderId::KimiCoding,
+            UsageProviderId::DeepSeek,
         ] {
             let reqs = prepare_requests(provider, "sk-test", None);
             assert_eq!(reqs.len(), 1, "{provider:?}");
@@ -122,6 +136,10 @@ mod tests {
         assert_eq!(
             prepare_requests(UsageProviderId::KimiCoding, "sk-test", None)[0].url,
             "https://api.kimi.com/coding/v1/usages"
+        );
+        assert_eq!(
+            prepare_requests(UsageProviderId::DeepSeek, "sk-test", None)[0].url,
+            "https://api.deepseek.com/user/balance"
         );
     }
 
@@ -165,6 +183,16 @@ mod tests {
         // 非 kimi host 的 base_url 不影响默认端点
         let reqs = prepare_requests(UsageProviderId::KimiCoding, "k1", Some("https://example.com/v1"));
         assert_eq!(reqs[0].url, "https://api.kimi.com/coding/v1/usages");
+    }
+
+    #[test]
+    fn deepseek_follows_base_host_and_drops_path() {
+        // 官方推理 base_url 带 /v1：余额端点用 scheme+host origin + /user/balance。
+        let reqs = prepare_requests(UsageProviderId::DeepSeek, "k1", Some("https://api.deepseek.com/v1"));
+        assert_eq!(reqs[0].url, "https://api.deepseek.com/user/balance");
+        // 非 deepseek host 的 base_url 不影响默认端点
+        let reqs = prepare_requests(UsageProviderId::DeepSeek, "k1", Some("https://example.com/v1"));
+        assert_eq!(reqs[0].url, "https://api.deepseek.com/user/balance");
     }
 
     #[test]

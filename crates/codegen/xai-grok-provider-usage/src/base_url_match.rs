@@ -13,7 +13,9 @@ use crate::types::UsageProviderId;
 /// - Kimi For Coding：host `api.kimi.com`/`api.kimi.ai` 且路径带 `/coding`
 ///   （同 host 还有非 coding API，须限定）；
 /// - MiniMax：`api.minimaxi.com`/`api.minimax.io`/`api.minimax.cn`（国内新推理
-///   域名无额度接口公开出处，但同一账号体系，查询仍走 api.minimaxi.com）。
+///   域名无额度接口公开出处，但同一账号体系，查询仍走 api.minimaxi.com）；
+/// - DeepSeek 开放平台：host `api.deepseek.com`（官方 API，推理路径如 `/v1`
+///   不影响匹配）。
 pub fn provider_for_base_url(base_url: &str) -> Option<UsageProviderId> {
     let url = base_url.to_lowercase();
     if url.contains("opencode.ai") && url.contains("/zen/go") {
@@ -31,6 +33,8 @@ pub fn provider_for_base_url(base_url: &str) -> Option<UsageProviderId> {
         || url.contains("api.minimax.cn")
     {
         Some(UsageProviderId::MiniMaxCoding)
+    } else if url.contains("api.deepseek.com") {
+        Some(UsageProviderId::DeepSeek)
     } else {
         None
     }
@@ -78,6 +82,14 @@ mod tests {
         assert_eq!(
             provider_for_base_url("https://api.minimax.cn/v1"),
             Some(MiniMaxCoding)
+        );
+        assert_eq!(
+            provider_for_base_url("https://api.deepseek.com/v1"),
+            Some(DeepSeek)
+        );
+        assert_eq!(
+            provider_for_base_url("https://api.deepseek.com"),
+            Some(DeepSeek)
         );
     }
 

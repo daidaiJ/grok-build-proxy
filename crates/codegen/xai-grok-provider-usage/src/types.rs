@@ -13,16 +13,19 @@ pub enum UsageProviderId {
     KimiCoding,
     /// MiniMax Coding Plan。
     MiniMaxCoding,
+    /// DeepSeek 开放平台（官方 API，按量计费；查余额而非套餐窗口）。
+    DeepSeek,
 }
 
 impl UsageProviderId {
     /// 全部合法配置值，供配置校验与错误提示。
-    pub const ALL: [UsageProviderId; 5] = [
+    pub const ALL: [UsageProviderId; 6] = [
         UsageProviderId::OpenCodeGo,
         UsageProviderId::CommandCode,
         UsageProviderId::GlmCoding,
         UsageProviderId::KimiCoding,
         UsageProviderId::MiniMaxCoding,
+        UsageProviderId::DeepSeek,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -32,6 +35,7 @@ impl UsageProviderId {
             UsageProviderId::GlmCoding => "glm-coding",
             UsageProviderId::KimiCoding => "kimi-coding",
             UsageProviderId::MiniMaxCoding => "minimax",
+            UsageProviderId::DeepSeek => "deepseek",
         }
     }
 
@@ -43,6 +47,7 @@ impl UsageProviderId {
             UsageProviderId::GlmCoding => "GLM Coding Plan",
             UsageProviderId::KimiCoding => "Kimi For Coding",
             UsageProviderId::MiniMaxCoding => "MiniMax Coding Plan",
+            UsageProviderId::DeepSeek => "DeepSeek",
         }
     }
 
@@ -64,15 +69,18 @@ pub enum UsageWindowKind {
     Weekly,
     /// 月窗口（仅在无 5h/周窗口时由渲染层展示）。
     Monthly,
+    /// 余额窗（金额即数据，无百分比无重置；DeepSeek 官方 API）。
+    Balance,
 }
 
 impl UsageWindowKind {
-    /// 渲染优先级：5h > 周 > 月（用户拍板 2）。
+    /// 渲染优先级：5h > 周 > 月 > 余额。
     pub fn rank(self) -> u8 {
         match self {
             UsageWindowKind::FiveHour => 0,
             UsageWindowKind::Weekly => 1,
             UsageWindowKind::Monthly => 2,
+            UsageWindowKind::Balance => 3,
         }
     }
 }
@@ -148,5 +156,6 @@ mod tests {
     fn window_rank_orders_five_hour_weekly_monthly() {
         assert!(UsageWindowKind::FiveHour.rank() < UsageWindowKind::Weekly.rank());
         assert!(UsageWindowKind::Weekly.rank() < UsageWindowKind::Monthly.rank());
+        assert!(UsageWindowKind::Monthly.rank() < UsageWindowKind::Balance.rank());
     }
 }
