@@ -849,3 +849,22 @@
 - **遗留**：D9 活体验证（真实「能力位说 true 上游拒图」场景：notice、转写质量、
   重试时延）随新客户端；三级拓扑的第三级（桥不可用终态告知）四十四期已覆盖，
   无新增。
+
+### 2026-10-17 DeepSeek 官方 API 余额上 /usage 面板（feat/local-deepseek-balance-usage）——收口
+
+- **内容**：供应商套餐用量第六家（用户点名，官方接口
+  https://api-docs.deepseek.com/zh-cn/api/get-user-balance）。provider-usage 增
+  `UsageProviderId::DeepSeek` + `UsageWindowKind::Balance`（余额是金额非百分比，
+  金额进 note；`granted_balance>0` 附 `· grants`，`is_available=false` 追加
+  `· unavailable`）+ `providers/deepseek.rs`（`GET /user/balance` Bearer，
+  origin 跟随 deepseek.com base_url host）+ base_url 匹配 `api.deepseek.com`；
+  pager 块标题分流（DeepSeek → 余额）+ 余额窗渲染（无 bar 无 unknown 行）+
+  i18n「余额」。shell 扩展零改动（通用管线吃第六家）。判定边界：Ark /
+  Command Code / ClinePass 的 deepseek 系列 id base_url 各指网关不命中。
+- **验证**：cargo check 三 crate --all-targets 0 error 0 warning；
+  provider-usage lib 63/63（+9）、pager usage_modal 25/25（+1）、i18n 扫描
+  exit 0；活体验证（ptyctl 真 TUI + 真 API，release bin 核对 mtime）：官方
+  1017 面板「余额 — DeepSeek / 余额 / ¥99.89 / 查询于 10-17 19:50」，切回 Ark
+  回归 SuperGrok 块零变化。merge `25fa7be`。
+- **遗留**：随下次发版；`grants`/`unavailable` 标记活体未采到（本机余额无赠金），
+  夹具单测覆盖。PATCHES 四十九期。

@@ -158,7 +158,9 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   替代 SuperGrok 并标注来源、窗口粒度 5h>周>月、控制台账户/Cookie/AK-SK 类凭据
   一律不支持（火山 Ark / 百炼据此剔除）、缓存默认 5 分钟可配（`[provider_usage]
   cache_minutes`，单位分钟）。**首批五家全实现**：OpenCode Go + Command Code（点名）
-  + 智谱 GLM / Kimi / MiniMax（拍板追加）；Cline / Token Unlimited 放弃。供应商判定
+  + 智谱 GLM / Kimi / MiniMax（拍板追加）；**第六家 DeepSeek 官方 API 余额**
+  （2026-10-17，PATCHES 四十九期：Balance 窗口金额进 note，块标题分流「余额」）；
+  Cline / Token Unlimited 放弃。供应商判定
   = 模型 `base_url` host 匹配（无显式配置）。落点：新 crate
   `xai-grok-provider-usage`（纯函数适配器层，一家一文件 + 夹具单测）、shell
   `x.ai/providerUsage` 扩展（TTL 缓存 + GLM 裸key/Bearer 重试 + MiniMax 双路径）、
@@ -377,6 +379,30 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   sandbox×leader 互斥、`x.ai/*` 无稳定契约、Windows 侧未实测。
 
 ## 🔄 Handoff 摘要
+
+### DeepSeek 官方 API 余额上 /usage 面板 — 已合 main 待发版（2026-10-17）
+
+- **当前状态：** 供应商套餐用量第六家（PATCHES 四十九期，分支
+  `feat/local-deepseek-balance-usage`，merge `25fa7be`）：base_url host 命中
+  `api.deepseek.com` 的模型（本机 `deepseek/deepseek-v4.1-flash-1017`）在 /usage
+  面板显示官方余额。`GET /user/balance`（Bearer 同 key，官方文档
+  https://api-docs.deepseek.com/zh-cn/api/get-user-balance）→ 每币种一条
+  `UsageWindowKind::Balance` 窗口（金额进 `note`，`granted_balance>0` 附
+  `· grants`，`is_available=false` 追加 `· unavailable`）；pager 块标题分流
+  （DeepSeek → 余额）+ 余额窗渲染（无 bar 无 unknown 行）；shell 扩展零改动
+  （通用管线直接吃第六家）。Ark / Command Code / ClinePass 的 deepseek 系列 id
+  base_url 各指网关，host 匹配天然不命中。
+- **验证：** cargo check provider-usage/pager/shell --all-targets 0 error 0
+  warning；provider-usage lib 63/63（新增 9：官方文档夹具/多币种/unavailable/
+  未知币种/空 infos/401 信封/origin 跟随）、pager usage_modal 25/25（新增 1）、
+  i18n 扫描 exit 0；活体验证（ptyctl 真 TUI + 真 API，release bin 核对 mtime）：
+  官方 1017 面板「余额 — DeepSeek / 余额 / ¥99.89 / 查询于 10-17 19:50」；切回
+  Ark 回归 SuperGrok 周限额块零变化。
+- **遗留：** ① 随下次发版；② `grants`/`unavailable` 标记活体未采到（本机余额无
+  赠金），夹具单测覆盖。
+- **详情指针：** PATCHES.md 四十九期；
+  [`docs-local/usage/provider-quota-display-todo.md`](docs-local/usage/provider-quota-display-todo.md)
+  （第六家追加节）。
 
 ### /model picker 目录详情列 + 视觉桥 D9 反应式 + 命令提示跟随二进制名 — 已合 main 待发版（2026-10-17）
 

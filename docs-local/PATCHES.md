@@ -3287,3 +3287,34 @@ reactive eligibility 为已登记 /tmp 夹具环境族（族W 同根因，Linux 
 
 **验证**：cargo check -p xai-grok-pager --all-targets 0 error；
 ctest pager lib `display_name_from_argv0` 1/1。
+
+## 四十九期：DeepSeek 官方 API 余额上 /usage 面板（2026-10-17，分支 feat/local-deepseek-balance-usage）
+
+**需求**：用户点名「给 deepseek 官方 api 对应的 model id 集成余额查询」，官方
+接口 https://api-docs.deepseek.com/zh-cn/api/get-user-balance。本机 config 唯一
+命中 `deepseek/deepseek-v4.1-flash-1017`（base_url `https://api.deepseek.com/v1`）；
+Ark / Command Code / ClinePass 的 deepseek 系列 id base_url 各指网关，host 匹配
+天然不命中。调研文档 §「官方 API key 直连」当时已预留该落点（余额是金额，
+不是百分比）。
+
+- **provider-usage（第六家）**：`UsageProviderId::DeepSeek`（配置值 "deepseek"，
+  显示名 DeepSeek）+ `UsageWindowKind::Balance`（rank 殿后）。`providers/deepseek.rs`：
+  `GET /user/balance`（Bearer 同 key，origin 跟随 deepseek.com base_url host、
+  推理路径 `/v1` 剥除）→ 每币种一条 Balance 窗口，`used_pct` 恒 None，金额进
+  `note`（`granted_balance`>0 附 `· grants`；`is_available=false` 追加
+  `· unavailable`，对齐 Command Code `limited` 先例；`topped_up_balance` =
+  余额 − 赠金不重复展示）；`balance_infos` 缺失/空/无可用条目 = Parse 错误。
+  错误信封 OpenAI 风格 `/error/message`（与 OpenCode Go 共臂）。
+- **pager**：块标题供应商分流（DeepSeek → `tr("Balance")`「余额」，其余供应商
+  仍「Plan usage」）+ 余额窗渲染（金额行 plain、无 bar、无 unknown 行；窗口
+  裁剪规则不受影响——Balance ≠ Monthly 恒不裁）；i18n 增 `("Balance","余额")`。
+- **shell 扩展零改动**：`x.ai/providerUsage` 通用管线直接吃第六家（判定/TTL
+  缓存/(供应商, SK 指纹) 单飞/错误分层全部复用）。
+
+**验证**：cargo check provider-usage/pager/shell --all-targets 0 error 0
+warning（11m33s）；provider-usage lib 63/63（新增 9：官方文档逐字夹具/多币种/
+unavailable/未知币种回退/空 infos/401 信封/500/origin 跟随/ALL 往返）；pager
+usage_modal 过滤 25/25（新增 DeepSeek 渲染断言：余额标题 + 金额行 + 无 bar 无
+unknown 行）；i18n 扫描 exit 0。**活体验证（ptyctl 真 TUI + 真 API，release
+bin 核对 exe mtime）**：/model 切官方 1017 → /usage 面板「余额 — DeepSeek /
+余额 / ¥99.89 / 查询于 10-17 19:50」；切回 Ark 回归 SuperGrok 周限额块零变化。
