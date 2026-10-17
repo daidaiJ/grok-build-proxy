@@ -942,7 +942,11 @@ impl AgentView {
                                             window:
                                                 crate::views::modal_window::ModalWindowState::new(),
                                         });
-                                        return InputOutcome::Changed;
+                                        // LOCAL: /model picker 打开即预取目录（右侧详情列）；
+                                        // 同 FetchSessionList 先例——modal 已开、Action 只补取数。
+                                        return InputOutcome::Action(
+                                            Action::FetchModelCatalogForPicker,
+                                        );
                                     }
                                 }
                                 self.active_modal = None;
@@ -1935,13 +1939,48 @@ impl AgentView {
                     "theme" | "t" => "Pick theme",
                     _ => "Pick option",
                 };
+                // LOCAL: /model picker 模型阶段的行右侧目录详情（模态/上下文/思考/价格）。
+                // 渲染时查进程级 store，目录回包落地后下一帧自动补显。行文本 → 模型 id
+                // 经 `match_text`（= info.name）映射回 `models.available`。
+                let model_phase =
+                    matches!(command.as_str(), "model" | "m") && args_query.is_empty();
+                let details: Vec<String> = if model_phase {
+                    items
+                        .iter()
+                        .map(|item| {
+                            let entry = self
+                                .session
+                                .models
+                                .available
+                                .iter()
+                                .find(|(_, info)| info.name.as_str() == item.match_text);
+                            let fetched = entry.and_then(|(id, _)| {
+                                crate::app::model_catalog_store::get(id.0.as_ref())
+                            });
+                            crate::app::model_catalog_store::picker_detail_label(
+                                entry.and_then(|(_, info)| info.meta.as_ref()),
+                                fetched.as_ref().map(|m| m.as_ref()),
+                            )
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
                 let picker_entries: Vec<PickerEntry> = items
                     .iter()
                     .enumerate()
                     .map(|(i, item)| {
+                        let right: &str = if model_phase {
+                            match details.get(i) {
+                                Some(d) if !d.is_empty() => d.as_str(),
+                                _ => item.description.as_str(),
+                            }
+                        } else {
+                            item.description.as_str()
+                        };
                         PickerEntry::Row(PickerRow {
                             label: &item.display,
-                            right_label: &item.description,
+                            right_label: right,
                             selected: state.hovered == Some(i)
                                 || (state.hovered.is_none() && i == state.selected),
                             expanded: false,

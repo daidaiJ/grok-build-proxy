@@ -771,6 +771,9 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Resume session", "恢复会话"),
         ("Pick reasoning effort", "选择推理强度"),
         ("Pick model", "选择模型"),
+        // LOCAL: /model picker 行右侧目录详情（模态段）
+        ("vision", "视觉"),
+        ("text", "文本"),
         ("Pick theme", "选择主题"),
         ("Pick option", "选择选项"),
         ("Reset setting?", "重置设置？"),

@@ -1439,6 +1439,30 @@ fn dispatch_inner(action: Action, app: &mut AppView) -> Vec<Effect> {
                 vec![Effect::FetchModelCatalog { model_ids: needed }]
             }
         }
+        // LOCAL: /model picker 打开时预取目录（右侧详情列的模态/上下文/思考/价格）。
+        // 目标 = 当前 agent 的全部可用模型 id；单飞与负缓存由 store 把关。
+        Action::FetchModelCatalogForPicker => {
+            let ActiveView::Agent(id) = app.active_view else {
+                return vec![];
+            };
+            let Some(agent) = app.agents.get(&id) else {
+                return vec![];
+            };
+            let ids: Vec<String> = agent
+                .session
+                .models
+                .available
+                .keys()
+                .map(|k| k.0.to_string())
+                .collect();
+            let needed =
+                crate::app::model_catalog_store::ids_needing_fetch(ids.iter().map(String::as_str));
+            if needed.is_empty() || crate::app::model_catalog_store::is_loading() {
+                return vec![];
+            }
+            crate::app::model_catalog_store::begin_loading();
+            vec![Effect::FetchModelCatalog { model_ids: needed }]
+        }
         Action::CancelLogin => dispatch_cancel_login(app),
         Action::SubmitAuthCode(code) => dispatch_submit_auth_code(app, code),
         Action::CopyAuthUrl => {

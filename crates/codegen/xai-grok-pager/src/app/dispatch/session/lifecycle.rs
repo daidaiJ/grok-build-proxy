@@ -1380,6 +1380,7 @@ pub(in crate::app::dispatch) fn handle_session_created(
     let has_switch_target =
         agent_count > 1 || (app.screen_mode.is_minimal() && app.next_agent_id > 1);
     if let Some(agent) = app.agents.get_mut(&agent_id) {
+        let models_arrived = new_models.is_some();
         let session_id_clone = session_id.clone();
         if agent.session.created_via_new
             && has_switch_target
@@ -1410,6 +1411,12 @@ pub(in crate::app::dispatch) fn handle_session_created(
         }
         let mut effects =
             deferred_mode_effects(&session_id_clone, deferred_mode, deferred_permission);
+        // LOCAL: 模型列表到达即预取目录（dashboard/会话 /model 详情列共用 store）
+        if models_arrived {
+            effects.extend(crate::app::model_catalog_store::prefetch_effect(
+                &agent.session.models,
+            ));
+        }
         let mut drain = if app.reconnect_pending {
             QueueDrain {
                 effects: vec![],
@@ -1524,6 +1531,7 @@ pub(in crate::app::dispatch) fn handle_worktree_session_created(
     let identity_rebind = super::super::dashboard::WorkspaceIdentityRebind::capture(app);
     crate::app::workspace_sync::allow_loaded_session(app, session_id.0.as_ref());
     if let Some(agent) = app.agents.get_mut(&agent_id) {
+        let models_arrived = new_models.is_some();
         agent.session.finish_command();
         agent.mark_turn_finished(TurnEnd::Aborted);
         let session_id_clone = session_id.clone();
@@ -1556,6 +1564,12 @@ pub(in crate::app::dispatch) fn handle_worktree_session_created(
         }
         let mut effects =
             deferred_mode_effects(&session_id_clone, deferred_mode, deferred_permission);
+        // LOCAL: 模型列表到达即预取目录（dashboard/会话 /model 详情列共用 store）
+        if models_arrived {
+            effects.extend(crate::app::model_catalog_store::prefetch_effect(
+                &agent.session.models,
+            ));
+        }
         let mut drain = if app.reconnect_pending {
             QueueDrain {
                 effects: vec![],

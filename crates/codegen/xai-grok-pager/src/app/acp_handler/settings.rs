@@ -12,6 +12,11 @@ pub(super) fn handle_models_update(notif: &acp::ExtNotification, app: &mut AppVi
         );
 
         app.models.update_catalog(new_models.available.clone());
+        // LOCAL: 模型列表到达即预取目录（dashboard/会话 /model 详情列共用 store；
+        // store 负缓存 + 单飞把门，重复到达零成本）。放在 stale 检查前，避免
+        // `new_models.current` 的部分移动影响借用。
+        app.pending_effects
+            .extend(crate::app::model_catalog_store::prefetch_effect(&new_models));
         let stale = app
             .models
             .current

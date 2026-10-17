@@ -1280,7 +1280,9 @@ impl AgentView {
                             previous_palette: None,
                             window: crate::views::modal_window::ModalWindowState::new(),
                         });
-                        return InputOutcome::Changed;
+                        // LOCAL: 打开即预取目录，右侧详情列首帧就有数据
+                        //（FetchSessionList 先例：modal 已开、Action 只补取数副作用）。
+                        return InputOutcome::Action(Action::FetchModelCatalogForPicker);
                     }
                 }
                 InputOutcome::Changed

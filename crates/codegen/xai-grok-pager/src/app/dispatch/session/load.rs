@@ -1243,6 +1243,7 @@ pub(in crate::app::dispatch) fn handle_session_loaded(
         agent.session.restore_degree = restore_degree;
         agent.session.finish_turn(&mut agent.scrollback);
         agent.mark_turn_finished(TurnEnd::Aborted);
+        let models_arrived = new_models.is_some();
         if let Some(placeholder_id) = agent.loading_placeholder_id.take() {
             agent.scrollback.remove_entry(placeholder_id);
         }
@@ -1301,6 +1302,12 @@ pub(in crate::app::dispatch) fn handle_session_loaded(
             }
         }
         let mut effects = Vec::new();
+        // LOCAL: 模型列表到达即预取目录（dashboard/会话 /model 详情列共用 store）
+        if models_arrived {
+            effects.extend(crate::app::model_catalog_store::prefetch_effect(
+                &agent.session.models,
+            ));
+        }
         if let Some(directive) = agent.pending_first_prompt.take() {
             agent.session.enqueue_prompt_front(directive);
         }
