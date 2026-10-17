@@ -59,6 +59,7 @@
 | **智谱 / z.ai GLM Coding Plan** | 5h + 周 | 同 key（先裸 key，`code:1001` 信封再换 Bearer） | 读源码核实 + host 存活实测 | **首批**（拍板 6；已实现） |
 | **Kimi For Coding** | 5h + 周 | Bearer 同 key | 读源码核实（零实测） | **首批**（拍板 6；已实现） |
 | **MiniMax Coding Plan** | 5h + 周（激活位门控） | Bearer 同 key | 读源码核实（零实测） | **首批**（拍板 6；已实现） |
+| **DeepSeek 开放平台（官方 API）** | 无窗口（按量计费余额，金额） | Bearer 同 key | 官方文档 | **第六家追加**（2026-10-17 用户点名；已实现） |
 | 火山 Ark Coding Plan | session/周/月 | **AK/SK 第二套凭据**（推理 key 实测被拒） | 读源码核实 + 推理 key 实测被拒 | **剔除**（违反拍板 3） |
 | 百炼 / 千问 Token Plan | 5h + 周 | console 临时 token 两步链路 | 读源码核实 + 第三方记录 | **剔除**（违反拍板 3；2026-10-10 复核官方 CLI 源码：单 key 仍不支持，见调研文档 §3） |
 | Cline（本机在用）/ Token Unlimited（本机在用） | 未知 | 未知 | 调研盲区（调研文档当时按收录标准剔除） | **放弃**（拍板 7，不会长期订阅） |
@@ -183,6 +184,15 @@ pub struct PlanUsageWindow {
   `Effect::FetchProviderUsage`（无 nonce，触发端单飞守卫）+
   `TaskResult::ProviderUsageFetched`（带 model_id，回包无条件落 agent 级缓存）+
   `usage_limit_lines` 供应商分流（stale-while-revalidate + 查询时间点行）+ i18n。
+- **第六家追加：DeepSeek 官方 API 余额**——已完成（2026-10-17，分支
+  `feat/local-deepseek-balance-usage`）：base_url 指向 `api.deepseek.com` 的模型
+  id（本机 `deepseek/deepseek-v4.1-flash-1017`）在 /usage 面板显示官方余额。
+  `GET /user/balance`（Bearer 同 key，官方文档夹具）；余额是金额非百分比 →
+  新增 `UsageWindowKind::Balance`（rank 殿后，金额进 `note`，`is_available=false`
+  追加 `· unavailable`），pager 块标题分流（DeepSeek → 余额）+ 余额窗渲染
+  （无 bar 无 unknown 行）。shell 扩展零改动（通用管线直接吃第六家）。
+  判定注意：Ark / Command Code / ClinePass 的 deepseek 系列 id base_url 各自
+  指向网关，host 匹配天然不命中，只有官方 `api.deepseek.com` 启用。
 
 ## 验收标准
 
