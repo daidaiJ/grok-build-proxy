@@ -3,6 +3,24 @@ use clap::{ArgAction, Parser, Subcommand, ValueHint};
 use clap_complete::Shell;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+
+/// The user-visible binary name for command hints (e.g. `grok --resume <id>`):
+/// the invoked argv[0] file stem, so a renamed binary (`grok2`, or anything
+/// else) renders copy that actually runs. Falls back to `grok` when argv[0]
+/// is unavailable.
+pub(crate) fn current_binary_name() -> String {
+    display_name_from_argv0(std::env::args().next().as_deref().unwrap_or(""))
+}
+
+fn display_name_from_argv0(argv0: &str) -> String {
+    let name = std::path::Path::new(argv0)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .unwrap_or("grok");
+    name.strip_suffix(".exe").unwrap_or(name).to_owned()
+}
+
 /// Top-level commands for the pager binary.
 #[derive(Debug, Clone, Subcommand)]
 pub enum Command {
@@ -847,8 +865,7 @@ impl PagerArgs {
             .unwrap_or("grok")
             .to_owned();
         Self::parse_from(std::iter::once(bin_name).chain(std::env::args().skip(1)))
-    }
-    /// Apply launch-directory path anchoring and `--cwd` after early commands have been dispatched without filesystem or process initialization.
+    }    /// Apply launch-directory path anchoring and `--cwd` after early commands have been dispatched without filesystem or process initialization.
     pub fn apply_cwd(self) -> anyhow::Result<Self> {
         let launch_dir = std::env::current_dir().ok();
         self.apply_cwd_from(launch_dir.as_deref())
@@ -1492,5 +1509,17 @@ mod tests {
             panic!("expected agent subcommand");
         };
         assert_eq!(agent.reasoning_effort.as_deref(), Some("max"));
+    }
+
+    /// LOCAL: command hints follow the invoked binary name (任意改名自适应).
+    #[test]
+    fn display_name_from_argv0_follows_renamed_binary() {
+        use super::display_name_from_argv0 as display;
+        assert_eq!(display("grok"), "grok");
+        assert_eq!(display("grok2"), "grok2");
+        assert_eq!(display("D:\\tool-cli\\grok2\\grok2.exe"), "grok2");
+        assert_eq!(display("/usr/local/bin/my-own-name"), "my-own-name");
+        // 缺 argv[0] / 空名回退
+        assert_eq!(display(""), "grok");
     }
 }

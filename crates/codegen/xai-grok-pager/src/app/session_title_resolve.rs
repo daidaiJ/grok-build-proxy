@@ -66,9 +66,11 @@ pub(crate) fn select_by_title<'a>(
                 .map(|s| format!("  {}  {:?}", s.info.id, s.display_title()))
                 .collect::<Vec<_>>()
                 .join("\n");
+            // LOCAL: 命令示例跟随实际二进制名（发行名 grok2 / 用户任意改名）
+            let bin = super::cli::current_binary_name();
             anyhow::bail!(
                 "Multiple sessions match title {:?}:\n{listing}\n\
-                 Resume by session id instead: grok --resume <session-id>",
+                 Resume by session id instead: {bin} --resume <session-id>",
                 arg.trim()
             );
         }
