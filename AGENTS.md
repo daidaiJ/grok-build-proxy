@@ -280,6 +280,18 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   headless `--non-interactive-denial continue`（`feat/local-shell-command-analysis`，
   PATCHES 十八期）；P2 分支树随 kimicode P1 落地（branch summarization 未做）；
   P3/P4 未动。
+- [`docs-local/opencode-port/`](docs-local/opencode-port/README.md) — **opencode
+  v2 TUI 特性移植预研（复核定稿：四件标「移植优选」+ 1 件可选；2026-10-17 用户
+  拍板通知音频/toast 与键位配置层不立项）**：对照 anomalyco/opencode `v2.0.32`
+  （2.0 于 2026-10-13 发布，本地 clone `D:\CODE\ai\opencode` dev `22e771f`），
+  只取 TUI 呈现层（2.0 把 TUI 升级为多会话工作台：tabs + 停靠面板 + worktree
+  工作区 + 通知层 + 插件插槽）。移植优选 = ① diff 呈现面（per-turn 改动文件
+  聚合 + `/diff` 停靠面板，踩 hunk-tracker/block_viewer/dock 地基，第一顺位）
+  ② worktree 管理补全（列表/切入/删除安全检查；创建侧 `/fork --worktree` 已有）
+  ③ 连续工具调用分组 ④ prompt stash 面板；可选 = 会话内 tabs rail（dashboard
+  已覆盖大半，挂触发信号）。fork 侧逐条系统反查定「已有/缺」——上轮口头推荐
+  误报 6 项撤销，锚点台账在其 §3（已回填 fork-feature-inventory §4）；全部候选
+  模型无关纯客户端（国模适配 ★）。施工顺位随 roadmap 拍板。
 
 - [`docs-local/lsp-port/`](docs-local/lsp-port/README.md) — **LSP 专题（v1
   workspace 启停 + v2 开箱即用均已落地）**：v1 `/lsp on|off|status|clear`（PATCHES

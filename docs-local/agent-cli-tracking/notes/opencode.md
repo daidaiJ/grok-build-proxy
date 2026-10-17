@@ -38,3 +38,12 @@ TypeScript/Bun monorepo，Effect-TS 风格的后端（`packages/opencode`+`packa
 1. **`packages/llm/src/cache-policy.ts` 的声明式缓存策略**：把"在哪打断点"从玄学变成带成本论证的一等策略层（auto=三断点），按协议能力门控注入，手工 hint 可覆盖——任何自研 agent harness 都可直接抄这套抽象。
 2. **压缩即记账**（overflow.ts + compaction.ts）：阈值=模型上下文−保留 buffer，工具结果 2000 字符截断+白名单豁免、近期 turn 保 2k–15k token、增量锚定摘要——压缩后消息 ID 稳定，兼顾缓存命中，闭环完整。
 3. **超长输出落盘委派**（truncate.ts）：截断不是丢信息，而是存文件并把"用 explore 子代理/Grep 处理"写进 tool result，把上下文压力转化为 task 工具的用法，与 subagent 机制联动，是上下文经济的聪明解法。
+
+## v2 更新（2026-10-17）
+
+opencode 2.0（2026-10-13 发布，本地克隆已同步 `v2.0.32`）把 TUI 从单会话聊天窗
+升级为多会话工作台（tabs + 停靠面板 + worktree 工作区 + 通知层 + TUI 插件插槽）。
+TUI 层移植候选已另立专题并复核定稿：
+[../../opencode-port/README.md](../../opencode-port/README.md)（四件标「移植优选」
++ 1 件可选；通知音频/toast 与键位配置层经 fork 现状反查后用户拍板不立项）。
+本篇 1.x 机制面判定（上方 §最值得借鉴的设计）继续有效。

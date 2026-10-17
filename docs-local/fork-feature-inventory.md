@@ -189,6 +189,8 @@
 | cron 表达式调度 / ultraloop 关键词入口 | 不立项（fork scheduler interval 型覆盖主场景；P5/P6 按需随手） | step-code-port D5 |
 | codex async questions / Windows 沙箱 / MCP per-tool output_token_limit 等 | 候选清单见 codex-port（2026-10-14 调研完成，选型待拍板） | codex-port/README.md |
 | codex `/copy`、`/fork`、vim mode、worktree 会话、transcript search、主题、steer、插件 CLI | ✅ 已有（逐条 grep 复核，锚点见其「已有」表） | codex-port/README.md |
+| opencode v2 TUI：diff 呈现面（per-turn 改动文件 + `/diff` 停靠）、worktree 管理补全、连续工具调用分组、prompt stash 面板 | 候选清单见 opencode-port（2026-10-17 复核定稿标「移植优选」；通知音频/toast 与键位配置层拍板不立项） | opencode-port/README.md |
+| opencode v2 `/copy`、命令面板、OSC 9;4+tab 标题、通知层（事件/协议/focus 门控）、dashboard 多会话、`/fork --worktree`、块折叠、`/timeline`、草稿单槽 stash、transcript 窗口化渲染、release highlights | ✅ 已有（逐条系统反查复核，锚点见其「复核撤销台账」表；上轮口头推荐误报 6 项由此撤销） | opencode-port/README.md |
 
 ## 5. 已知盲区（「未核实」≠「没有」，后续预研先核再判）
 
