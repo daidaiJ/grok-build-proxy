@@ -33,13 +33,19 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   acceptsImages/inputModalities + 启动预热 toml_edit 回填用户 config）；
   D3 授权：BYOK 主模型必须显式 `[models] image_description` 否则剥图+告知
   （绝不静默打 xAI）；D4 失败剥图标记回合继续；D6 工具图每回合 4 张预算；
-  `VisionBridgeNotice` 披露（计数+模型+host）。D9 二级 400 反应式留 v2。
-  PATCHES 四十四期；定案 [`docs-local/vision-bridge/plan.md`](docs-local/vision-bridge/plan.md)。
+  `VisionBridgeNotice` 披露（计数+模型+host）。D9 二级 400 反应式已落地
+  （2026-10-17，四十七期：高置信签名 → 采样器既有剥图重试归 ServerRejected →
+  请求级转写钩子把像素换 D5 envelope 注入重试，失败臂 D4 占位继续）。PATCHES
+  四十四/四十七期；定案与 D9 施工记录
+  [`docs-local/vision-bridge/plan.md`](docs-local/vision-bridge/plan.md)。
 
-- **模型选择器目录详情展示（立项未开工）** — 用户需求：选模型时右侧显示
-  模态/支持思考/上下文长度/美元价格（数据源 CatalogMatch 四字段全就位）。
-  [`docs-local/model-picker-catalog-details-todo.md`](docs-local/model-picker-catalog-details-todo.md)
-  （设计草案 + 4 拍板点 + T1/T2 分期，估 1–2 人天）。
+- **模型选择器目录详情展示（已落地合 main，2026-10-17；发版待用户拍板）** — 用户需求：
+  /model 选模型时行右侧空白列显示模态/上下文长度/是否支持思考/美元价格。行
+  `right_label` 改显目录四字段 token 串（`文本 256k reasoning $3/$15`），本地
+  meta 恒优先、价格来自目录（负缓存显式 `–`）、渲染时查进程级 store 回包自动
+  补显；打开经新 `Action::FetchModelCatalogForPicker` 预取。纯 pager 面。
+  PATCHES 四十六期；实况与 T2 剩余见
+  [`docs-local/model-picker-catalog-details-todo.md`](docs-local/model-picker-catalog-details-todo.md)。
 
 - **Ctrl+Enter send-now 幽灵气泡（open，P2）** — 用户口述：回合中 Ctrl+Enter
   立即入队后，对话流偶发在新提示词下方把**上一条输入**重画成新气泡；纯显示层
@@ -351,8 +357,60 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   全命中原厂价；验证与遗留见
   [`issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md`](docs-local/issues/2026-10-11-catalog-bare-ids-and-auth-panel-fixes.md)
   文末「复发与二次修复」节。
+- [`docs-local/dsh-port/`](docs-local/dsh-port/README.md) — **dsh（DeepSeek Harness）
+  适配移植预研（调研完成，P1 设计原型已出、未开工）**：对照 deepseek-ai/deepseek-harness
+  （基线 `v0.2.1-rc.2` 2026-10-17）为 deepseek-flash 做的 harness↔模型接口适配。
+  1017 官方口径"针对 dsh/CodeBuddy/WorkBuddy 优化"经核实无请求格式变更（rc.2 适配
+  提交只改显示名），真适配面 = dsh 的缓存友好会话协议。判定只移植「上下文工程」三件：
+  P1 系统提示 in-history 追加（保 KV cache 前缀，设计原型
+  [`context-engineering-design.md`](docs-local/dsh-port/context-engineering-design.md)，
+  含三 backend probe 门与 limit-probe A/B 验收）；工具 addition-only 块 + beta header
+  随 deferred-tool-exposure P2 T2 顺带；reasoning 回传待端点 probe。Files 图片管线
+  （fork 有视觉桥）/Search API/effort 方言判定已有或不移植。
+- [`docs-local/dsh-desktop-architecture.md`](docs-local/dsh-desktop-architecture.md) —
+  **dsh 桌面端架构路线评估 + grok 桌面客户端可行性（调研完成，未立项）**：官方桌面 =
+  Electron 壳包完整 Web 应用（RunAsNode 起 Host、127.0.0.1 + OS 分配端口、
+  `dsh-app://` 协议），第三方 Tauri 版证明壳可替换核心不动；grok 侧底座已就绪——
+  `grok agent` stdio/serve/headless/leader 四模式（标准 ACP，fork 经 `xai-acp-lib`
+  继承），缺的只是 UI 层。推荐 Tauri v2 + ACP WebSocket（P0 聊天流 → P1 权限/diff
+  → P2 多会话 → P3 workflow/插件市场）；MVP 替代 = xterm.js 托管 TUI。风险：
+  sandbox×leader 互斥、`x.ai/*` 无稳定契约、Windows 侧未实测。
 
 ## 🔄 Handoff 摘要
+
+### /model picker 目录详情列 + 视觉桥 D9 反应式 + 命令提示跟随二进制名 — 已合 main 待发版（2026-10-17）
+
+- **当前状态：** 三项改动各自分支合 main，**按用户指示推送但不发版**（tag 留
+  待拍板）。① /model picker 右侧目录详情列（四十六期，`feat/local-model-picker-catalog-details`，
+  纯 pager 面）：行右列显「模态 上下文 思考 价格」token 串，本地 meta
+  优先/价格来自目录/负缓存 `–`；dashboard `/model` 下拉经
+  `build_model_items` description 注入 + 模型列表到达即预取
+  （`prefetch_effect()`：三处 lifecycle/load 安装点 + `x.ai/models/update`
+  通知路径）加热 store，ArgPicker 打开时 `Action::FetchModelCatalogForPicker`
+  预取。② 视觉桥 D9 tier-2 反应式摘图转桥（四十七期，
+  `feat/local-vision-bridge-d9`）：400/415 高置信「不支持图像输入」签名
+  （中英方言）→ 采样器 `RetryWithImageStrip` 归 ServerRejected → 请求级
+  `ImageBridgeHook`（eligibility 与前置门同构，D3 授权复用）把剥掉的像素经共享
+  describe 缓存转成 D5 envelope 注入重试；失败臂 D4 占位继续；413 启发式路径
+  维持纯剥图；转写只进本回合重试请求（存储历史剥图语义不变）。
+  ③ 命令提示跟随实际二进制名（四十八期，`feat/local-resume-hint-bin-name`）：
+  `app::cli::current_binary_name()`（argv[0] 剥 `.exe`）修 resume 提示与
+  startup failure 的 `grok leader kill`；diagnostics 别名族 open
+  （issues/2026-10-17-binary-name-in-command-hints.md，P3）。
+- **验证：** cargo check pager/sampler/sampling-types/chat-state --all-targets
+  0 error；GATE_FORCE 四 crate lib 批量过滤 65/65 + 注入/argv0 单测 3/3；
+  sampler 集成 test_actor 2/2（假服务器全链路）；shell vision_bridge 纯函数
+  6/6（决策矩阵 6 例 = 已登记 /tmp 夹具环境族，Linux CI 验证）；i18n 扫描
+  exit 0；win-skip 族W 补登记 recap_display_only_tests；ptyctl 活体（release
+  构建，/model 下拉与 picker 右列）见 roadmap §6。
+- **遗留：** ① 活体验证随新客户端（picker 右列渲染与 zh 文案；D9 需真实
+  「能力位 true 上游拒图」场景看 notice/转写质量/重试时延；resume 提示需
+  触发同名多会话路径）；② picker T2 剩余（窄终端主动折叠、stale 标注）未见
+  需要；③ D9 转写不落存储历史（已记录取舍）；④ diagnostics 别名族二进制名
+  适配 open（P3）。
+- **详情指针：** PATCHES.md 四十六/四十七/四十八期；roadmap §6 当日三条目；
+  [`docs-local/model-picker-catalog-details-todo.md`](docs-local/model-picker-catalog-details-todo.md)
+  与 [`docs-local/vision-bridge/plan.md`](docs-local/vision-bridge/plan.md)（D9 施工记录节）。
 
 ### 空闲自动压缩 + 视觉桥 — 已随 v1.0.60 发版（2026-10-16）
 

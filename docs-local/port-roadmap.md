@@ -794,3 +794,58 @@
   （headless `grok stats --json` 照旧）。PATCHES 四十五期；随 v1.0.61 发版。
 - **遗留**：活体 TUI 抽查（新客户端 /stats 看 4 标签页 + `/stats month`
   直跳 + 极简文本报表月窗段）；自然月（本月 1 号起）口径如需再立项。
+
+### 2026-10-17 /model picker 右侧目录详情列（feat/local-model-picker-catalog-details）——T1 收口
+
+- **状态**：用户拍板「右边空白区域显示模态/上下文/思考 + 定价」落地。行右侧
+  `right_label` 列（原 description 常空）改显目录四字段 token 串
+  （`文本 256k reasoning $3/$15`），未知段省略、负缓存显式 `–`；本地 meta 恒
+  优先（上下文/模态/思考），价格只来自目录。ArgPicker 渲染时查进程级 store
+  （回包落地下一帧自动补显），picker 打开经新 `Action::FetchModelCatalogForPicker`
+  触发取数（FetchSessionList 先例）。**活体验证补强**：dashboard `/model` 下拉
+  （用户日常所见面）走 `SuggestionRow` 复制 ArgItem.description——
+  `build_model_items` 改为详情 token 前置拼进 description；pager 侧 store 由
+  「模型列表到达即预取」`prefetch_effect()` 加热（三处 lifecycle/load 安装点 +
+  `x.ai/models/update` 通知路径，补齐 dashboard 下拉永远冷 store 的缺口）。
+  纯 pager 面，无 shell 改动。PATCHES 四十六期。
+- **验证**：cargo check 四 crate --all-targets 0 error；GATE_FORCE 四 crate lib
+  批量过滤 65/65 + 注入单测；i18n 扫描 exit 0；ptyctl 活体（release bin 实测：
+  `/model` 下拉右列出「文本 1M 推理 $0.02/$0.4 · Volcengine Ark coding plan…」，
+  模态/上下文/思考/价格四字段 + 原描述齐活）。
+- **遗留**：T2 剩余（窄终端主动折叠、stale-while-revalidate 标注）未见需要；
+  活体 TUI 抽查随新客户端。
+- **验证坑（已入 memory）**：TUI 活体必须编 `-p xai-grok-pager-bin`——bin 在
+  独立 composition-root crate，`-p xai-grok-pager` 只编 lib，旧 exe 会静默
+  顶替（本次实证 mtime 停在 10-14，五轮「验证」无效）。
+
+### 2026-10-17 命令提示跟随实际二进制名（feat/local-resume-hint-bin-name）——收口
+
+- **状态**：用户报「`grok --resume <id>` 提示未同步发行名 grok2」，要求任意
+  改名自适应。新 `app::cli::current_binary_name()`（argv[0] 文件名，剥 `.exe`，
+  缺省 grok）；修 `session_title_resolve`（resume 提示）与 `startup_failure`
+  （`grok leader kill`）两处用户可见命令示例。diagnostics 别名族
+  （`grok doctor fix` / `grok wrap ssh` + doctor 写 shell 配置的 alias）影响
+  配置产物面，单独立项 open（issues/2026-10-17-binary-name-in-command-hints.md，
+  P3）。PATCHES 四十八期。
+- **验证**：cargo check --all-targets 0 error；ctest pager lib
+  `display_name_from_argv0` 1/1。
+- **遗留**：diagnostics 别名族适配（open，见上）；活体触发 resume 报错路径
+  随新客户端。
+
+### 2026-10-17 视觉桥 D9 tier-2 反应式摘图转桥（feat/local-vision-bridge-d9）——收口
+
+- **状态**：v1.0.60 视觉桥遗留的 D9 第二级落地：400 且高置信「不支持图像输入」
+  签名（中英网关方言归一，Api 400/415）→ 采样器既有 RetryWithImageStrip 归
+  ServerRejected → shell 挂在请求上的转写钩子（eligibility 与前置门同构：只挂
+  accepts_images==true + D3 授权 + 描述模型识图）把剥掉的像素转成 D5 envelope
+  注入重试请求；失败臂按 D4 占位继续。PayloadHeuristic（413/连接重置）维持纯
+  剥图；置信不足的 400 一律不动。成功发 transient VisionBridgeNotice +
+  unified 日志。PATCHES 四十七期；实现细节与取舍见
+  [`docs-local/vision-bridge/plan.md`](vision-bridge/plan.md) D9 施工记录节。
+- **验证**：sampling-types lib 3/3 + sampler lib 26/26 + 集成 test_actor 2/2
+  （假服务器全链路：签名 400 → 转写 → 重试体含 envelope 不含像素）；
+  shell vision_bridge 纯函数 6/6（决策矩阵 6 例为已登记 /tmp 夹具环境族，
+  Linux CI 验证）；win-skip 族W 补登记 recap_display_only_tests。
+- **遗留**：D9 活体验证（真实「能力位说 true 上游拒图」场景：notice、转写质量、
+  重试时延）随新客户端；三级拓扑的第三级（桥不可用终态告知）四十四期已覆盖，
+  无新增。

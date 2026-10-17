@@ -3181,3 +3181,109 @@ GATE_FORCE `ctest.sh -p xai-grok-tools --lib model_usage_ledger` 13/13；
 门控 `ctest.sh -p xai-grok-pager --lib stats` 38/38（stats_modal 17 +
 slash::commands::stats 8 + stats_cmd 9 + 同名杂项 4）；i18n 扫描 exit 0
 （报告 i18n-sweep-classified-2026-10-17.txt）。
+
+## 四十六期：/model picker 右侧目录详情列——模态/上下文/思考/价格（2026-10-17，分支 feat/local-model-picker-catalog-details）
+
+**需求**：用户口述「/model 选模型时，优化下右边的空白区域，显示模态上下文，
+是否支持思考」「还有定价」——模型行右侧空白列（原 right_label=description，
+模型条目常为空）改显目录四字段。
+
+- **model_catalog_store**：新 `picker_detail_label(meta, matched)` 组合器 +
+  `fmt_tokens`（999/256k/1M）+ `fmt_price`（≤2 位小数去尾零）。token 串
+  「模态 上下文 思考 价格」单空格拼接（`文本 256k reasoning $3/$15`），未知段
+  逐段省略；模态=本地 meta `acceptsImages`（视觉桥 D1）优先、目录兜底；上下文
+  本地 `totalContextTokens` 恒在恒优先（拍板 3：本地为准）；思考=本地
+  `supportsReasoningEffort` 或目录 `reasoning==Some(true)`，只标支持；价格只来
+  自目录，已知无命中（负缓存）显式 `–`（与 /stats 成本列同口径），本进程未取到
+  先不显示——回包落地后下一帧自动补显（渲染时查进程级 store，无需状态接线）。
+- **modals.rs ArgPicker 渲染**：`command=model|m && args_query 空`（模型阶段）
+  时按行 `match_text`（=info.name）映射回 `models.available` 取 id，查 store
+  组装 right_label；effort 阶段与其他 ArgPicker（theme 等）原样。
+- **取数触发**：新 `Action::FetchModelCatalogForPicker`（actions/router 接线），
+  两条打开路径（input.rs ModelPicker 快捷键、modals.rs /model 输入流）开 modal
+  后返回该 Action（FetchSessionList 先例：modal 已开、Action 只补取数副作用）；
+  router 对当前 agent 全部模型 id 过 `ids_needing_fetch`，单飞+负缓存由 store
+  把关，复用既有 `Effect::FetchModelCatalog`。
+- **description 注入 + 启动预取（活体验证补强）**：`build_model_items` 把详情
+  token 串拼进 ArgItem.description（`{detail} · {原描述}`）——dashboard `/model`
+  下拉与会话内下拉（`SuggestionRow::from_arg` 复制 description）即见四字段；
+  ArgPicker 渲染时查 store 保持更鲜活。pager 侧进程 store 由「模型列表到达即
+  预取」加热：`prefetch_effect()`（store 负缓存+单飞+6h 新鲜度把门）接三处
+  lifecycle/load 模型安装点 + `x.ai/models/update` 通知路径（`pending_effects`
+  通道）——补齐此前只有 /stats、/auth、ArgPicker 三个触发点、dashboard 下拉
+  永远冷 store 的缺口（shell 启动预热的 store 在 shell 侧，pager 读不到）。
+- **i18n**：+`vision`/视觉、`text`/文本（`reasoning`/推理 复用既有键）；
+  组合器内字面量直进 `tr()`（扫描器可识别形态）。
+- **文档**：user-guide 04-slash-commands /model 节补详情列说明；
+  model-picker-catalog-details-todo.md 补施工实况（T1 落地，T2 剩余窄终端主动
+  折叠与 stale 标注未见需要）。
+
+**验证**：cargo check -p xai-grok-pager -p xai-grok-sampler -p xai-grok-sampling-types
+-p xai-chat-state --all-targets 0 error；GATE_FORCE 四 crate lib 批量过滤 65/65
+（pager 36 含 model_catalog_store 9、sampler 26、sampling-types 3）+ 增项
+build_model_items 注入 1/1；ptyctl 活体见 roadmap §6；i18n 扫描 exit 0
+（新键全 wrapped）。
+
+## 四十七期：视觉桥 D9 tier-2——400 反应式摘图转桥（2026-10-17，分支 feat/local-vision-bridge-d9）
+
+**范围**：v1.0.60 视觉桥（四十四期）遗留的 D9 第二级——能力位不可判定（目录
+miss + 用户未写，走了缺省 true）时请求照发，上游 400 且签名可高置信归因
+「不支持图像输入」→ 本回合摘图转写重发；置信不足的 400 一律不动。三级拓扑的
+一级（前置判定）与三级（终态人工告知）四十四期已覆盖。
+
+- **sampling-types**：① `SamplingError::is_image_input_unsupported_error()`——
+  Api 400/415 且消息同时命中图像 token（image/multimodal/多模态/图片/图像）与
+  不支持 token（not support/unsupported/不支持），中英网关方言归一；StreamError
+  显式 false（置信不足不动）。② `ConversationRequest.image_bridge:
+  Option<ImageBridgeHook>`（`Arc<dyn Fn(urls) -> BoxFuture<notes>>`，手动
+  Debug/Clone）+ `image_urls()`（无突变收集）+
+  `strip_images_with_transcriptions()`——user 图原位换 envelope 文本（无 note
+  保持既有 IMAGE_STRIP_PLACEHOLDER），tool 图丢弃、note 追加进 tool 文本
+  （front path T2 同款 render_image_description_block 语义）。
+- **sampler**：`classify_error` 新签名 → 既有 `RetryWithImageStrip`；
+  `strip_reason_for_image_error` 归 `ServerRejected`（服务器确认级）。重试臂：
+  ServerRejected 且 hook 在场时 `image_urls()` → hook 转写（`tokio::select!`
+  与取消令牌互斥）→ 转写注入后重发；PayloadHeuristic（413/连接重置）维持纯剥图。
+- **shell**：`vision_bridge.rs` 新 `resolve_reactive_image_bridge(_with)`——
+  eligibility 与前置门同构（只挂 `accepts_images==true` 的模型 + D3 授权 +
+  描述模型自身识图；Bridge/Blocked 永不挂），D3 explicit 位可注入（测试不读真实
+  config）。hook 执行体：data URL 解码（空 mime 回落 image/png）→ 共享
+  `ImageDescribeCache::get_or_describe`（UserAttachment 命名空间，与 front path
+  同图共享缓存）→ D5 envelope；失败（解码/描述）返回 None（D4：占位继续，
+  provider 错误只进日志）。成功发 transient `VisionBridgeNotice`
+  （rejected → transcribed with {model} ({host})）+ unified 日志
+  `shell.vision_bridge.reactive`。turn.rs 主回合请求逐循环装配。
+- **chat-state**：request_builder 请求体补 `image_bridge: None`（chat-state 恒不
+  置钩子，shell 装配）。
+- **持久化语义**：ServerRejected 在 Completed 后仍从存储历史剥图 + 既有提示
+  （不变）；转写文本只进本回合重试请求（D9「重发本回合」字面范围），存储历史
+  不留转写——已知取舍：历史留像素会让后续每请求重吃 400。
+- **win-skip 族W**：`recap_display_only_tests::`（strip_reason 过滤词首跑暴露的
+  /tmp 夹具环境族，与本次改动无关）。
+
+**验证**：cargo check 四 crate --all-targets 0 error；sampling-types lib 3/3
+（签名表 12 断言 + strip/notes 两用例）；sampler lib 26/26（classify/reason 归类）
++ 集成 test_actor 2/2（假服务器全链路：签名 400 → hook 转写 → 重试体含
+envelope 不含像素；既有 invalid_image 回归绿）；shell vision_bridge 模块
+GATE_SKIP=0 直跑 6/12——6 纯函数全绿（含新 decode_data_url），6 决策矩阵/
+reactive eligibility 为已登记 /tmp 夹具环境族（族W 同根因，Linux CI 验证）。
+
+## 四十八期：命令提示跟随实际二进制名——resume/leader kill 两处（2026-10-17，分支 feat/local-resume-hint-bin-name）
+
+**需求**：用户口述「`grok --resume <id>` 这里的 grok 没有和进程二进制名同步」，
+要求「用户任意修改二进制名也能正确适配」。发行名是 `grok2`，用户面提示里写死
+`grok` 的命令示例照抄即错。
+
+- **helper**：`app::cli::current_binary_name()`——argv[0] 文件名（`.exe` 后缀
+  剥除、空缺回退 `grok`），加 `display_name_from_argv0` 纯函数 5 断言单测。
+- **session_title_resolve**：多会话同名匹配报错里的
+  `Resume by session id instead: grok --resume <session-id>` 改用 helper。
+- **startup_failure**：启动失败屏 `NextStep::RestartSharedLeader` 的
+  `grok leader kill` 改用 helper（`command()` 返回 `Option<String>`）。
+- **遗留（open，见 issues/2026-10-17-binary-name-in-command-hints.md）**：
+  diagnostics/fix.rs 的 `grok doctor fix` / `grok wrap ssh` 面板文案与 doctor
+  写入 shell 配置的 alias 常量——别名参与幂等检测与配置产物，需「写入名 +
+  检测容忍历史名」一起换算，单独立项（P3）。
+
+**验证**：cargo check -p xai-grok-pager --all-targets 0 error；
+ctest pager lib `display_name_from_argv0` 1/1。
