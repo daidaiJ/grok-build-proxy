@@ -3150,3 +3150,34 @@ per-crate AGENTS.md 缺席）——三者均 Linux CI 验证。
 `create_test_actor` 内部 `spawn_local` 需 LocalSet 上下文，`decision_for` 包
 `tokio::task::LocalSet::run_until` 修复（`4a2ddbf`）；二轮起全绿。族W/X 本机
 跳过项经 Linux CI 验证绿。
+
+## 四十五期：`/stats` 压缩标签页换月度统计——4 时间窗（5h/day/week/近一月）（2026-10-17，分支 feat/local-stats-month-tab）
+
+**需求**：用户口述「/stats 面板的压缩换成月度统计」——工具输出压缩账本标签页
+退场，第 4 标签页改为月度用量统计。恢复 df81acf 原始月窗（滚动 30 天，
+`WINDOW_MONTH_MS`；2e35532 面板化时按需求移除），`RETAIN_MS=35` 天本就是为
+月窗预留的剪裁窗口（比月窗长 5 天，窗沿不因剪裁抖动丢数据）。压缩账本数据面
+不动：headless `grok stats --json` 的 `tool_output_compression` 字段与
+`stats_cmd/display.rs` 渲染保留（独立机器面）。
+
+- **model_usage_ledger**：`Window` 加 `Month`（arg `month`、label `Last month`、
+  `WINDOW_MONTH_MS = 30 天`滚动窗）；`ALL` 3→4；月窗边界聚合用例 + 保留窗口
+  覆盖断言补齐。
+- **stats_modal**：删 `StatsTab` 包装枚举（Compression 退场后唯一使命消失），
+  `active_tab` 直用 `Window`；`StatsModalState` 丢 `compression` 字段；
+  页脚 `a all models` 快捷键恒显（原 Compression 页不折叠才隐藏）；月窗与其它
+  时间窗共用同一套卡片/合计渲染。
+- **dispatch_show_stats**：不再物化压缩账本行，`StatsModalState::new(tab, samples)`
+  双参。
+- **slash/commands/stats.rs**：usage 与未知参数报错改 `[5h|day|week|month]`；
+  参数补全加 month（`Last 30 days`/近 30 天）；极简文本报表 = 全 4 窗去压缩段；
+  命令描述去「压缩收益」（`Show model usage stats`/查看模型用量统计）。
+- **i18n**：+`Last month`/近一月、+`Last 30 days`/近 30 天；描述词条改写；
+  −`Compression` 词条（唯一消费方已删）。
+- **README**：/stats 交互节加「月」档；本地命令列表去「压缩收益」。
+
+**验证**：cargo check -p xai-grok-pager --all-targets 0 error 0 warning；
+GATE_FORCE `ctest.sh -p xai-grok-tools --lib model_usage_ledger` 13/13；
+门控 `ctest.sh -p xai-grok-pager --lib stats` 38/38（stats_modal 17 +
+slash::commands::stats 8 + stats_cmd 9 + 同名杂项 4）；i18n 扫描 exit 0
+（报告 i18n-sweep-classified-2026-10-17.txt）。

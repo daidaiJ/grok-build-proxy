@@ -187,6 +187,9 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   22 文件接线、豁免台账在案，扫描器 `scripts-local/i18n_sweep.py`；已 rebase 到
   10-02 main 重验证）。待办 = 活回合 `/lang zh` 抽查（发版后在新客户端看）。
   文档内含现状锚点、改动点、验收标准与纪律要求。
+  **2026-10-17 变更**：压缩账本标签页退场，第 4 标签页改月度统计（滚动 30 天，
+  `/stats month`，恢复 df81acf 月窗；`StatsTab` 枚举删除，`Window` 直驱 4 窗），
+  PATCHES 四十五期随 v1.0.61。
 - [`docs-local/webdav-sync-todo.md`](docs-local/webdav-sync-todo.md) — WebDAV 同步（用量 +
   主机无关配置，服务端按机器分子目录）+ `/sync` 选择恢复/同步。**评估完成、未开工**；分期
   T1 传输层+假服务夹具 → T2 白名单/合并内核+`grok2 sync` CLI → T3 `/sync` TUI → T4 加密与凭据。

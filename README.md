@@ -121,7 +121,7 @@ preferred_method = "api_key"
 - **国产模型思考回传**：DeepSeek / GLM / Kimi 等 OpenAI 兼容推理模型的 `reasoning_content`（含 `reasoning` / `reasoning_text` 别名字段）会作为思考块进入对话，并在状态行计入 `reasoning_tokens`；跨 chunk 拆分的 `</think>` / `</thinking>` 标记由流式状态机剥离，不会泄漏进正文。
 - **网关健壮性**：未知 `finish_reason` 不再打断整条流；DeepSeek 的扁平缓存命中字段（`prompt_cache_hit_tokens`）计入缓存统计；网关不发工具调用 id 时自动合成 `call_{index}`，保证结果可配对。
 - **失败模型调用计数**：每次终态失败记入会话账本，状态行以 `✗ n` 呈现（网关限流/5xx/超时的第一手信号）。
-- **`/stats` 用量聚合**：按 5 小时 / 日 / 周 × 模型聚合输入、输出、缓存读写 token 与缓存命中率，以及 TTFT、TPS 的 p50/p90；账本落在 `grok_home/cache/model-usage.jsonl`（只覆盖主循环推理，subagent 调用暂不计入）。CLI 形态：`grok2 stats --days 7 --model deepseek`。
+- **`/stats` 用量聚合**：按 5 小时 / 日 / 周 / 近一月（滚动 30 天）× 模型聚合输入、输出、缓存读写 token 与缓存命中率，以及 TTFT、TPS 的 p50/p90；账本落在 `grok_home/cache/model-usage.jsonl`（只覆盖主循环推理，subagent 调用暂不计入）。CLI 形态：`grok2 stats --days 7 --model deepseek`。
 - **`/auth` 供应商配置面板**：五步向导（协议 → base URL → SK → 模型目录勾选 → 确认写回），`toml_edit` 定点写回 `[model.<id>]`，注释与手工字段保留、id 冲突拒绝整批；目录回填 `context_window` / `max_completion_tokens`（与新建兜底相同才省略），目录标注支持思考的模型自动带 `supports_reasoning_effort = true`；写回后显式重载模型目录，免重启生效。
 - **`/usage` 供应商套餐用量**：当前模型属于「同一把 SK 可查套餐用量」的供应商时（首批：OpenCode Go / Command Code / 智谱 GLM / Kimi / MiniMax），Usage limit 面板显示该供应商套餐余量并标注来源，替代 SuperGrok 块；按模型 `base_url` host 自动判定，缓存 `[provider_usage] cache_minutes`（缺省 5 分钟），TTL 到期先显旧值再后台刷新。
 
@@ -181,7 +181,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 - **workflow 可见面编辑**：spawn prompt 可经 `replace_visible(seq, digest)` / `hide_visible(seq)` 对早前子代理的可见输出做原位替换 / 隐藏（journal 直记、重放确定），迭代式 workflow 不再把历史全文反复塞进 prompt。
 - **workflow 子代理工具面白名单**：`AgentOpts.tools` 按子代理角色显式裁剪声明面（canonical tool id，支持裸名），与 capability 过滤叠加只减不增；fan-out 场景省掉"每 agent × 全量工具面"的重复 token。deferred 延迟发现（`defer_tools` / `search_tools`）为后续切片。
 - **headless 审批降级续跑**：无人值守回合遇权限审批阻塞默认终止；`--non-interactive-denial continue` 把阻塞审批转成 PolicyDeny 失败工具结果，agent 带着拒绝原因换路续跑。
-- **本地命令**：`/auth`（供应商配置面板）、`/usage`（供应商套餐用量）、`/stats`（用量、成本与压缩收益）、`/lang`（中英切换）、`/style`（极简风格）、`/lsp`（LSP 工具启停与状态）、`/grok`（Grok 账号登录，原 `/login`）、以及 `grok2 stats` 独立子命令。
+- **本地命令**：`/auth`（供应商配置面板）、`/usage`（供应商套餐用量）、`/stats`（用量与成本，5h/day/week/month 四时间窗）、`/lang`（中英切换）、`/style`（极简风格）、`/lsp`（LSP 工具启停与状态）、`/grok`（Grok 账号登录，原 `/login`）、以及 `grok2 stats` 独立子命令。
 
 ## 配置速查
 

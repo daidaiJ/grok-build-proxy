@@ -1,5 +1,11 @@
 # `/stats` 窗口化 + 时间窗 option + TUI 英文残留 i18n（TODO）
 
+> **变更（2026-10-17）**：压缩账本标签页按用户需求退场，第 4 标签页改为
+> **月度统计**——恢复 df81acf 月窗（滚动 30 天，`/stats month`，`WINDOW_MONTH_MS`
+> 回归，`RETAIN_MS=35d` 本为其预留）。标签页现为 **5h / day / week / month**
+> 四个时间窗，`StatsTab` 包装枚举删除、`Window` 直驱；压缩账本仍可从 headless
+> `grok stats --json` 读取。实现记录 PATCHES.md 四十五期，随 v1.0.61。
+>
 > **状态（2026-10-02 收口）**：T1、T2 已按本文施工完成并提交（`feat/local-stats-modal-i18n`）。
 > **月窗按需求移除**，时间窗改为 **5h / day / week** 三档（正好对齐用量面板的三档），
 > 模态窗口共 4 个标签页（三个窗口 + 压缩账本）。压缩账本没有丢：独占第 4 个标签页。

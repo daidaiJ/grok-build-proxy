@@ -784,3 +784,13 @@
   [`docs-local/model-picker-catalog-details-todo.md`](model-picker-catalog-details-todo.md)
   （数据源盘点：CatalogMatch 四字段全就位；设计草案 + 4 拍板点 + T1/T2 分期，
   估 1–2 人天）。
+
+### 2026-10-17 /stats 压缩标签页换月度统计（feat/local-stats-month-tab）——4 时间窗收口
+
+- **状态**：用户需求「/stats 面板的压缩换成月度统计」落地：工具输出压缩账本
+  标签页退场，第 4 标签页改为月度用量统计——恢复 df81acf 原始月窗（滚动
+  30 天，`WINDOW_MONTH_MS`，`RETAIN_MS=35d` 本为其预留）。`StatsTab` 包装枚举
+  删除，`Window` 直驱 4 标签页（5h/day/week/近一月）。压缩账本数据面不动
+  （headless `grok stats --json` 照旧）。PATCHES 四十五期；随 v1.0.61 发版。
+- **遗留**：活体 TUI 抽查（新客户端 /stats 看 4 标签页 + `/stats month`
+  直跳 + 极简文本报表月窗段）；自然月（本月 1 号起）口径如需再立项。
