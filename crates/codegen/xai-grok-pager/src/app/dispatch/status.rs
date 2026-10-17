@@ -202,12 +202,12 @@ pub(super) fn dispatch_show_stats(
 ) -> Vec<Effect> {
     use crate::app::model_catalog_store;
     use crate::views::modal::ActiveModal;
-    use crate::views::stats_modal::{StatsModalState, StatsTab};
+    use crate::views::stats_modal::StatsModalState;
 
     let ActiveView::Agent(id) = app.active_view else {
         return vec![];
     };
-    let tab = window.map_or(StatsTab::ALL[0], StatsTab::from_window);
+    let tab = window.unwrap_or(xai_grok_tools::model_usage_ledger::Window::FiveHours);
     let Some(agent) = app.agents.get_mut(&id) else {
         return vec![];
     };
@@ -217,19 +217,11 @@ pub(super) fn dispatch_show_stats(
     }
     let home = xai_grok_config::grok_home();
     let samples = xai_grok_tools::model_usage_ledger::load_samples(Some(&home));
-    let stats = xai_grok_tools::implementations::output_compression::stats_for_display(Some(&home));
-    let compression = xai_grok_tools::implementations::output_compression::format_stats_report(
-        &stats,
-        xai_grok_tools::implementations::output_compression::is_enabled(),
-    )
-    .lines()
-    .map(str::to_string)
-    .collect();
     // 成本列取数目标：账本里出现过的全部 model id（跨窗口去重）。
     let mut ids: Vec<String> = samples.iter().map(|s| s.model_id.clone()).collect();
     ids.sort();
     ids.dedup();
-    let mut state = StatsModalState::new(tab, samples, compression);
+    let mut state = StatsModalState::new(tab, samples);
     state.pricing = model_catalog_store::snapshot();
     agent.active_modal = Some(ActiveModal::StatsInfo {
         state: Box::new(state),

@@ -1,4 +1,4 @@
-//! LOCAL: 按调用粒度的模型用量/性能账本，`/stats` 的 5h/天/周聚合数据源。
+//! LOCAL: 按调用粒度的模型用量/性能账本，`/stats` 的 5h/天/周/月聚合数据源。
 //!
 //! shell 每次成功推理追加一条 JSONL（时间戳、model_id、输入/输出/缓存 token、
 //! ttft、tps）；`/stats` 读取后按时间窗 × model 聚合出累计 token、平均缓存命中率
@@ -11,12 +11,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-/// 聚合窗口：5 小时 / 一天 / 一周（毫秒）。
+/// 聚合窗口：5 小时 / 一天 / 一周 / 近一月（滚动 30 天，毫秒）。
 pub const WINDOW_5H_MS: u64 = 5 * 60 * 60 * 1000;
 pub const WINDOW_DAY_MS: u64 = 24 * 60 * 60 * 1000;
 pub const WINDOW_WEEK_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+pub const WINDOW_MONTH_MS: u64 = 30 * 24 * 60 * 60 * 1000;
 
 /// 样本保留窗口：独立于报表窗口，只在文件体积超限触发剪裁时生效，避免账本无界增长。
+/// 比月窗长 5 天，窗沿抖动不丢数据。
 const RETAIN_MS: u64 = 35 * 24 * 60 * 60 * 1000;
 
 /// `/stats` 报表时间窗，同时充当模态窗口的标签页身份。
@@ -25,11 +27,12 @@ pub enum Window {
     FiveHours,
     Day,
     Week,
+    Month,
 }
 
 impl Window {
     /// 全部窗口，按显示顺序（也是标签页顺序）。
-    pub const ALL: [Window; 3] = [Window::FiveHours, Window::Day, Window::Week];
+    pub const ALL: [Window; 4] = [Window::FiveHours, Window::Day, Window::Week, Window::Month];
 
     /// 窗口长度（毫秒）。
     pub fn len_ms(self) -> u64 {
@@ -37,6 +40,7 @@ impl Window {
             Window::FiveHours => WINDOW_5H_MS,
             Window::Day => WINDOW_DAY_MS,
             Window::Week => WINDOW_WEEK_MS,
+            Window::Month => WINDOW_MONTH_MS,
         }
     }
 
@@ -46,6 +50,7 @@ impl Window {
             Window::FiveHours => "5h",
             Window::Day => "day",
             Window::Week => "week",
+            Window::Month => "month",
         }
     }
 
@@ -61,6 +66,7 @@ impl Window {
             Window::FiveHours => "Last 5h",
             Window::Day => "Last day",
             Window::Week => "Last week",
+            Window::Month => "Last month",
         }
     }
 
@@ -430,10 +436,12 @@ mod tests {
         assert_eq!(Window::from_arg("5h"), Some(Window::FiveHours));
         assert_eq!(Window::from_arg("day"), Some(Window::Day));
         assert_eq!(Window::from_arg("week"), Some(Window::Week));
+        assert_eq!(Window::from_arg("month"), Some(Window::Month));
         assert_eq!(Window::from_arg("  DAY  "), Some(Window::Day));
-        assert_eq!(Window::from_arg("month"), None);
+        assert_eq!(Window::from_arg("  MONTH  "), Some(Window::Month));
+        assert_eq!(Window::from_arg("year"), None);
         assert_eq!(Window::from_arg(""), None);
-        assert_eq!(Window::ALL.map(Window::arg), ["5h", "day", "week"]);
+        assert_eq!(Window::ALL.map(Window::arg), ["5h", "day", "week", "month"]);
     }
 
     #[test]
@@ -450,6 +458,25 @@ mod tests {
         let now = 1_000_000_000_000;
         let samples = vec![sample(now - WINDOW_WEEK_MS - 1, "m-a", 1, 0, 1, 1.0)];
         assert!(aggregate(&samples, WINDOW_WEEK_MS, now).is_empty());
+    }
+
+    /// 月窗（滚动 30 天）覆盖周窗外的样本；`RETAIN_MS` 比月窗长 5 天，
+    /// 窗沿不因剪裁抖动丢数据。
+    #[test]
+    fn aggregate_month_window_covers_beyond_week_and_respects_cutoff() {
+        let now = 1_000_000_000_000;
+        let samples = vec![
+            sample(now - WINDOW_WEEK_MS - 1000, "m-between", 1, 0, 1, 1.0),
+            sample(now - WINDOW_MONTH_MS + 1, "m-in", 1, 0, 1, 1.0),
+            sample(now - WINDOW_MONTH_MS - 1, "m-out", 1, 0, 1, 1.0),
+        ];
+        let rows = aggregate(&samples, WINDOW_MONTH_MS, now);
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        let ids: Vec<&str> = rows.iter().map(|r| r.model_id.as_str()).collect();
+        assert!(ids.contains(&"m-between"));
+        assert!(ids.contains(&"m-in"));
+        assert!(!ids.contains(&"m-out"));
+        assert!(WINDOW_MONTH_MS < RETAIN_MS);
     }
 
     #[test]

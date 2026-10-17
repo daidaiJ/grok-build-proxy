@@ -1,7 +1,7 @@
 //! LOCAL: `/stats` 的模态窗口——按时间窗 × model 聚合的用量/性能报表。
 //!
 //! 视觉与交互对齐 [`crate::views::usage_modal`]（同一 `modal_window` 框架：边框、
-//! 标签栏、页脚快捷键、滚动），标签页即时间窗（5h / 一天 / 一周）+ 工具输出压缩账本。
+//! 标签栏、页脚快捷键、滚动），标签页即时间窗（5h / 一天 / 一周 / 近一月）。
 //! 数据是本地同步读取的 JSONL 账本，不需要 usage modal 那套异步 fetch。
 //!
 //! 折叠规则：时间窗标签页内每个 model 一个卡片块，超过 [`MAX_CARDS`] 张的其余部分
@@ -41,14 +41,12 @@ const PERF_COLS: usize = 2;
 /// 模态窗口持有的数据：打开时同步读取账本，之后不再变化（本地文件，无异步刷新）。
 pub struct StatsModalState {
     pub window: ModalWindowState,
-    pub active_tab: StatsTab,
+    pub active_tab: Window,
     pub scroll: u16,
     /// 账本采样（聚合在每个标签页渲染时按窗口筛选）。
     pub samples: Vec<ModelCallSample>,
     /// 打开时刻，所有窗口共用同一基准，避免逐帧漂移。
     pub now_unix_ms: u64,
-    /// 工具输出压缩账本段（`format_stats_report` 原文，逐行）。
-    pub compression: Vec<String>,
     /// 时间窗标签页是否展开全部 model 卡片。
     pub expanded: bool,
     /// 模型目录价（进程级 store 的克隆；打开时种子化，回包后由 dispatch 刷新）。
@@ -58,21 +56,20 @@ pub struct StatsModalState {
 }
 
 impl StatsModalState {
-    pub fn new(tab: StatsTab, samples: Vec<ModelCallSample>, compression: Vec<String>) -> Self {
+    pub fn new(tab: Window, samples: Vec<ModelCallSample>) -> Self {
         Self {
-            window: ModalWindowState::with_tabs(StatsTab::ALL.len()),
+            window: ModalWindowState::with_tabs(Window::ALL.len()),
             active_tab: tab,
             scroll: 0,
             samples,
             now_unix_ms: ModelCallSample::now_unix_ms(),
-            compression,
             expanded: false,
             pricing: CatalogPrices::new(),
             content_rect: Rect::default(),
         }
     }
 
-    pub fn set_tab(&mut self, tab: StatsTab) {
+    pub fn set_tab(&mut self, tab: Window) {
         if self.active_tab != tab {
             self.active_tab = tab;
             self.scroll = 0;
@@ -80,14 +77,14 @@ impl StatsModalState {
     }
 
     fn step_tab(&mut self, forward: bool) {
-        let n = StatsTab::ALL.len();
+        let n = Window::ALL.len();
         let i = self.active_tab.index();
         let next = if forward {
             (i + 1) % n
         } else {
             (i + n - 1) % n
         };
-        self.set_tab(StatsTab::ALL[next]);
+        self.set_tab(Window::ALL[next]);
     }
 
     fn scroll_to(&mut self, offset: u16) {
@@ -112,23 +109,18 @@ impl StatsModalState {
     /// 整份报表的可复制文本（与窗口内显示同源，仅去掉左右对齐空格）。
     pub fn copy_all(&self) -> String {
         let mut out = Vec::new();
-        for tab in StatsTab::ALL {
-            out.push(format!("== {} ==", tab.label()));
-            match tab {
-                StatsTab::Compression => out.extend(self.compression.iter().cloned()),
-                _ => {
-                    let rows = self.rows_for(tab.window());
-                    if rows.is_empty() {
-                        out.push(tr("no calls in this window").to_string());
-                    } else {
-                        for row in &rows {
-                            out.push(model_card_text(row, &self.pricing));
-                        }
-                        let summary = cost_summary_text(&rows, &self.pricing);
-                        if !summary.is_empty() {
-                            out.push(summary);
-                        }
-                    }
+        for window in Window::ALL {
+            out.push(format!("== {} ==", window.label()));
+            let rows = self.rows_for(window);
+            if rows.is_empty() {
+                out.push(tr("no calls in this window").to_string());
+            } else {
+                for row in &rows {
+                    out.push(model_card_text(row, &self.pricing));
+                }
+                let summary = cost_summary_text(&rows, &self.pricing);
+                if !summary.is_empty() {
+                    out.push(summary);
                 }
             }
         }
@@ -137,49 +129,6 @@ impl StatsModalState {
 
     fn rows_for(&self, window: Window) -> Vec<ModelUsageAggregate> {
         model_usage_ledger::aggregate(&self.samples, window.len_ms(), self.now_unix_ms)
-    }
-}
-
-/// `/stats` 窗口的标签页：三个时间窗 + 工具输出压缩账本。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StatsTab {
-    Window(Window),
-    Compression,
-}
-
-impl StatsTab {
-    pub const ALL: [StatsTab; 4] = [
-        StatsTab::Window(Window::FiveHours),
-        StatsTab::Window(Window::Day),
-        StatsTab::Window(Window::Week),
-        StatsTab::Compression,
-    ];
-
-    pub fn window(self) -> Window {
-        match self {
-            StatsTab::Window(w) => w,
-            StatsTab::Compression => Window::FiveHours,
-        }
-    }
-
-    pub fn from_window(w: Window) -> Self {
-        StatsTab::Window(w)
-    }
-
-    /// 标签文案 = 时间窗标签（`5h`/`day`/`week`）+ 压缩段标题，都走 i18n 表。
-    pub fn label(self) -> &'static str {
-        match self {
-            StatsTab::Window(w) => w.label(),
-            StatsTab::Compression => "Compression",
-        }
-    }
-
-    pub fn index(self) -> usize {
-        Self::ALL.iter().position(|t| *t == self).unwrap_or(0)
-    }
-
-    pub fn from_index(i: usize) -> Self {
-        *Self::ALL.get(i).unwrap_or(&Self::ALL[0])
     }
 }
 
@@ -231,7 +180,7 @@ pub fn route_stats_modal_mouse(
     match mw::handle_modal_mouse(&mut state.window, kind, column, row) {
         mw::ModalWindowOutcome::CloseRequested => StatsModalOutcome::Close,
         mw::ModalWindowOutcome::TabChanged(idx) => {
-            state.set_tab(StatsTab::from_index(idx));
+            state.set_tab(Window::from_index(idx));
             StatsModalOutcome::Changed
         }
         mw::ModalWindowOutcome::ShortcutActivated(id) => {
@@ -269,7 +218,7 @@ fn handle_stats_modal_key(state: &mut StatsModalState, key: &KeyEvent) -> StatsM
             StatsModalOutcome::Changed
         }
         KeyCode::Char(c @ '1'..='4') => {
-            state.set_tab(StatsTab::from_index(c as usize - '1' as usize));
+            state.set_tab(Window::from_index(c as usize - '1' as usize));
             StatsModalOutcome::Changed
         }
         KeyCode::Up | KeyCode::Char('k') => {
@@ -328,7 +277,7 @@ pub fn render_stats_modal(
     state: &mut StatsModalState,
     theme: &Theme,
 ) {
-    let labels: Vec<&str> = StatsTab::ALL.iter().map(|t| t.label()).collect();
+    let labels: Vec<&str> = Window::ALL.iter().map(|w| w.label()).collect();
     state.window.active_tab = state.active_tab.index();
 
     let mut shortcuts: Vec<Shortcut> = vec![
@@ -342,14 +291,12 @@ pub fn render_stats_modal(
             clickable: false,
             id: 0,
         },
-    ];
-    if state.active_tab != StatsTab::Compression {
-        shortcuts.push(Shortcut {
+        Shortcut {
             label: EXPAND_TOGGLE_LABEL,
             clickable: false,
             id: 0,
-        });
-    }
+        },
+    ];
     shortcuts.push(Shortcut {
         label: "y copy",
         clickable: true,
@@ -399,47 +346,38 @@ pub fn render_stats_modal(
 }
 
 fn tab_lines(state: &StatsModalState, theme: &Theme, width: u16) -> Vec<Line<'static>> {
-    match state.active_tab {
-        StatsTab::Compression => state
-            .compression
-            .iter()
-            .map(|l| plain(theme, l.clone()))
-            .collect(),
-        StatsTab::Window(window) => {
-            let rows = state.rows_for(window);
-            if rows.is_empty() {
-                return vec![muted_line(theme, tr("no calls in this window"))];
-            }
-            let shown = if state.expanded {
-                rows.len()
-            } else {
-                rows.len().min(MAX_CARDS)
-            };
-            let mut lines: Vec<Line<'static>> = Vec::new();
-            for (i, row) in rows.iter().take(shown).enumerate() {
-                if i > 0 {
-                    lines.push(Line::default());
-                }
-                lines.extend(model_card_lines(row, theme, width, &state.pricing));
-            }
-            if shown < rows.len() {
-                lines.push(Line::default());
-                // 整句成键（计数运行时插值），与 P2/P3 的计数模板一致
-                let template = tr("\u{2026} +{n} more (press a to show all)");
-                lines.push(muted_line(
-                    theme,
-                    template.replace("{n}", &(rows.len() - shown).to_string()),
-                ));
-            }
-            // 合计行（拍板：无价模型从合计剔除、标注条数）
-            let summary = cost_summary_text(&rows, &state.pricing);
-            if !summary.is_empty() {
-                lines.push(Line::default());
-                lines.push(muted_line(theme, summary));
-            }
-            lines
-        }
+    let rows = state.rows_for(state.active_tab);
+    if rows.is_empty() {
+        return vec![muted_line(theme, tr("no calls in this window"))];
     }
+    let shown = if state.expanded {
+        rows.len()
+    } else {
+        rows.len().min(MAX_CARDS)
+    };
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    for (i, row) in rows.iter().take(shown).enumerate() {
+        if i > 0 {
+            lines.push(Line::default());
+        }
+        lines.extend(model_card_lines(row, theme, width, &state.pricing));
+    }
+    if shown < rows.len() {
+        lines.push(Line::default());
+        // 整句成键（计数运行时插值），与 P2/P3 的计数模板一致
+        let template = tr("\u{2026} +{n} more (press a to show all)");
+        lines.push(muted_line(
+            theme,
+            template.replace("{n}", &(rows.len() - shown).to_string()),
+        ));
+    }
+    // 合计行（拍板：无价模型从合计剔除、标注条数）
+    let summary = cost_summary_text(&rows, &state.pricing);
+    if !summary.is_empty() {
+        lines.push(Line::default());
+        lines.push(muted_line(theme, summary));
+    }
+    lines
 }
 
 /// 合计行的纯文本（渲染与复制共用；无行数据返回空串）。
@@ -473,10 +411,6 @@ fn cost_summary_text(rows: &[ModelUsageAggregate], pricing: &CatalogPrices) -> S
         parts.push(format!("{} {}", tr("unpriced"), unpriced));
     }
     parts.join(" · ")
-}
-
-fn plain(theme: &Theme, s: impl Into<String>) -> Line<'static> {
-    Line::styled(s.into(), Style::default().fg(theme.text_primary))
 }
 
 fn muted_line(theme: &Theme, s: impl Into<String>) -> Line<'static> {
@@ -654,7 +588,9 @@ fn model_card_text(row: &ModelUsageAggregate, pricing: &CatalogPrices) -> String
 mod tests {
     use super::*;
     use crossterm::event::{KeyEventKind, KeyEventState};
-    use xai_grok_tools::model_usage_ledger::{WINDOW_5H_MS, WINDOW_DAY_MS, WINDOW_WEEK_MS};
+    use xai_grok_tools::model_usage_ledger::{
+        WINDOW_5H_MS, WINDOW_DAY_MS, WINDOW_MONTH_MS, WINDOW_WEEK_MS,
+    };
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent {
@@ -683,7 +619,7 @@ mod tests {
     fn state_with_samples() -> StatsModalState {
         let now = 1_000_000_000_000;
         let mut state = StatsModalState::new(
-            StatsTab::Window(Window::FiveHours),
+            Window::FiveHours,
             vec![
                 sample(now - 1000, "m-a", 1000, 800),
                 sample(now - 2000, "m-a", 500, 500),
@@ -691,10 +627,11 @@ mod tests {
                 sample(now - WINDOW_5H_MS - 1000, "m-b", 777, 0),
                 // 日窗外、周窗内
                 sample(now - WINDOW_DAY_MS - 1000, "m-c", 55, 0),
-                // 周窗外
+                // 周窗外、月窗内
                 sample(now - WINDOW_WEEK_MS - 1000, "m-d", 1, 0),
+                // 月窗外
+                sample(now - WINDOW_MONTH_MS - 1000, "m-e", 1, 0),
             ],
-            vec!["Tool-output compression (experimental)".to_string()],
         );
         state.now_unix_ms = now;
         state
@@ -720,11 +657,11 @@ mod tests {
     }
 
     #[test]
-    fn tabs_are_three_windows_plus_compression_in_order() {
-        let labels: Vec<&str> = StatsTab::ALL.iter().map(|t| t.label()).collect();
-        assert_eq!(labels, ["Last 5h", "Last day", "Last week", "Compression"]);
-        assert_eq!(StatsTab::Window(Window::Day).index(), 1);
-        assert_eq!(StatsTab::from_index(3), StatsTab::Compression);
+    fn tabs_are_four_windows_in_order() {
+        let labels: Vec<&str> = Window::ALL.iter().map(|w| w.label()).collect();
+        assert_eq!(labels, ["Last 5h", "Last day", "Last week", "Last month"]);
+        assert_eq!(Window::Day.index(), 1);
+        assert_eq!(Window::from_index(3), Window::Month);
     }
 
     #[test]
@@ -735,27 +672,27 @@ mod tests {
             handle_stats_modal_key(&mut state, &key(KeyCode::Tab)),
             StatsModalOutcome::Changed
         );
-        assert_eq!(state.active_tab, StatsTab::Window(Window::Day));
+        assert_eq!(state.active_tab, Window::Day);
         assert_eq!(state.scroll, 0, "切标签重置滚动");
         for _ in 0..3 {
             handle_stats_modal_key(&mut state, &key(KeyCode::Tab));
         }
         assert_eq!(
             state.active_tab,
-            StatsTab::Window(Window::FiveHours),
+            Window::FiveHours,
             "循环"
         );
         handle_stats_modal_key(&mut state, &key(KeyCode::BackTab));
-        assert_eq!(state.active_tab, StatsTab::Compression, "反向循环");
+        assert_eq!(state.active_tab, Window::Month, "反向循环");
     }
 
     #[test]
     fn digit_keys_jump_to_tabs() {
         let mut state = state_with_samples();
         handle_stats_modal_key(&mut state, &key(KeyCode::Char('3')));
-        assert_eq!(state.active_tab, StatsTab::Window(Window::Week));
+        assert_eq!(state.active_tab, Window::Week);
         handle_stats_modal_key(&mut state, &key(KeyCode::Char('4')));
-        assert_eq!(state.active_tab, StatsTab::Compression);
+        assert_eq!(state.active_tab, Window::Month);
     }
 
     #[test]
@@ -780,23 +717,27 @@ mod tests {
     #[test]
     fn window_tab_filters_samples_by_its_own_window() {
         let state = state_with_samples();
-        let five_h = tab_text(&state, StatsTab::Window(Window::FiveHours));
+        let five_h = tab_text(&state, Window::FiveHours);
         assert!(five_h.contains("m-a"), "{five_h}");
         assert!(!five_h.contains("m-b"), "5h 窗不该含 5h 外的样本: {five_h}");
 
-        let day = tab_text(&state, StatsTab::Window(Window::Day));
+        let day = tab_text(&state, Window::Day);
         assert!(day.contains("m-a") && day.contains("m-b"), "{day}");
         assert!(!day.contains("m-c"), "日窗不该含日窗外的样本: {day}");
 
-        let week = tab_text(&state, StatsTab::Window(Window::Week));
+        let week = tab_text(&state, Window::Week);
         assert!(week.contains("m-c"), "{week}");
         assert!(!week.contains("m-d"), "周窗不该含周窗外的样本: {week}");
+
+        let month = tab_text(&state, Window::Month);
+        assert!(month.contains("m-d"), "月窗覆盖周窗外的样本: {month}");
+        assert!(!month.contains("m-e"), "月窗不该含月窗外的样本: {month}");
     }
 
     /// 渲染指定标签页的内容文本。必须显式切换 `active_tab`——`tab_lines` 读的是
     /// 状态里的当前标签页，只传参数不改状态会一直渲染同一个标签页。
-    fn tab_text(state: &StatsModalState, tab: StatsTab) -> String {
-        let mut view = StatsModalState::new(tab, state.samples.clone(), state.compression.clone());
+    fn tab_text(state: &StatsModalState, tab: Window) -> String {
+        let mut view = StatsModalState::new(tab, state.samples.clone());
         view.now_unix_ms = state.now_unix_ms;
         view.expanded = state.expanded;
         tab_lines(&view, &Theme::current(), 80)
@@ -808,10 +749,9 @@ mod tests {
 
     #[test]
     fn empty_window_shows_placeholder() {
-        let mut state =
-            StatsModalState::new(StatsTab::Window(Window::Week), Vec::new(), Vec::new());
+        let mut state = StatsModalState::new(Window::Week, Vec::new());
         state.now_unix_ms = 1_000_000_000_000;
-        let text = tab_text(&state, StatsTab::Window(Window::Week));
+        let text = tab_text(&state, Window::Week);
         assert!(text.contains("no calls in this window"), "{text}");
     }
 
@@ -821,16 +761,15 @@ mod tests {
         let samples: Vec<ModelCallSample> = (0..MAX_CARDS + 3)
             .map(|i| sample(now - 1000, &format!("m-{i}"), 1000 - i as u64, 0))
             .collect();
-        let mut state =
-            StatsModalState::new(StatsTab::Window(Window::FiveHours), samples, Vec::new());
+        let mut state = StatsModalState::new(Window::FiveHours, samples);
         state.now_unix_ms = now;
-        let text = tab_text(&state, StatsTab::Window(Window::FiveHours));
+        let text = tab_text(&state, Window::FiveHours);
         assert!(text.contains("+3 more"), "{text}");
 
         let mut expanded_state = state;
         handle_stats_modal_key(&mut expanded_state, &key(KeyCode::Char('a')));
         assert!(expanded_state.expanded);
-        let text = tab_text(&expanded_state, StatsTab::Window(Window::FiveHours));
+        let text = tab_text(&expanded_state, Window::FiveHours);
         assert!(!text.contains("more"), "展开后不该再有折叠提示: {text}");
     }
 
@@ -960,23 +899,22 @@ mod tests {
         );
 
         let mut state = StatsModalState::new(
-            StatsTab::Window(Window::FiveHours),
+            Window::FiveHours,
             vec![sample(1_000_000_000_000, "m-solo", 1000, 0)],
-            Vec::new(),
         );
         state.now_unix_ms = 1_000_000_000_000;
         assert!(state.copy_all().contains("cache hit n/a"), "{}", state.copy_all());
     }
 
+    /// 月窗标签页与其它时间窗同一套卡片渲染，只是窗口更长。
+    /// （卡片头是 `id  N calls` 两空格形；`id · N calls` 是 copy_all 的纯文本形。）
     #[test]
-    fn compression_tab_renders_passthrough_lines() {
+    fn month_tab_renders_the_same_card_layout() {
         let state = state_with_samples();
-        let text = tab_text(&state, StatsTab::Compression);
-        assert!(
-            text.contains("Tool-output compression (experimental)"),
-            "{text}"
-        );
-        assert!(!text.contains("m-a"), "压缩标签页不该混入用量卡片: {text}");
+        let text = tab_text(&state, Window::Month);
+        assert!(text.contains("m-a  2 calls"), "{text}");
+        assert!(text.contains("m-d  1 calls"), "{text}");
+        assert!(!text.contains("m-e"), "月窗不该含月窗外的样本: {text}");
     }
 
     #[test]
@@ -986,7 +924,7 @@ mod tests {
         assert!(text.contains("== Last 5h =="), "{text}");
         assert!(text.contains("== Last day =="), "{text}");
         assert!(text.contains("== Last week =="), "{text}");
-        assert!(text.contains("== Compression =="), "{text}");
+        assert!(text.contains("== Last month =="), "{text}");
         assert!(text.contains("m-a · 2 calls"), "{text}");
         assert!(text.contains("m-c · 1 calls"), "{text}");
         // 复制文本与卡片同一份数字与 p50/p90 拆分口径
@@ -994,7 +932,7 @@ mod tests {
             text.contains("ttft p50 900 · ttft p90 900 · tps p50 50.0 · tps p90 50.0"),
             "{text}"
         );
-        assert!(!text.contains("m-d"), "周窗外的样本不该进报表: {text}");
+        assert!(!text.contains("m-e"), "月窗外的样本不该进报表: {text}");
     }
 
     #[test]
@@ -1002,7 +940,7 @@ mod tests {
         let mut state = state_with_samples();
         let text = rendered(&mut state);
         assert!(text.contains("Last 5h"), "{text}");
-        assert!(text.contains("Compression"), "{text}");
+        assert!(text.contains("Last month"), "{text}");
         assert!(text.contains("Esc close"), "{text}");
         // 首屏只画可见行，这里只断言卡片与页脚确实绘出（逐行内容由 tab_text 用例覆盖）
         assert!(text.contains("m-a"), "{text}");
@@ -1030,5 +968,6 @@ mod tests {
         assert_eq!(Window::FiveHours.len_ms(), WINDOW_5H_MS);
         assert_eq!(Window::Day.len_ms(), WINDOW_DAY_MS);
         assert_eq!(Window::Week.len_ms(), WINDOW_WEEK_MS);
+        assert_eq!(Window::Month.len_ms(), WINDOW_MONTH_MS);
     }
 }

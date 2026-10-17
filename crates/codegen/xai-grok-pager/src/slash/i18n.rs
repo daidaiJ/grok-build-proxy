@@ -265,10 +265,7 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "善用 Grok Build 的快速技巧",
         ),
         ("View usage", "查看用量"),
-        (
-            "Show model usage stats and compression savings",
-            "查看模型用量统计与压缩收益",
-        ),
+        ("Show model usage stats", "查看模型用量统计"),
         (
             "Model usage (aggregated by model)",
             "模型用量（按 model 聚合）",
@@ -278,10 +275,11 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Last 5h", "近 5 小时"),
         ("Last day", "近一天"),
         ("Last week", "近一周"),
+        ("Last month", "近一月"),
         ("Last 5 hours", "近 5 小时"),
         ("Last 24 hours", "近 24 小时"),
         ("Last 7 days", "近 7 天"),
-        ("Compression", "压缩"),
+        ("Last 30 days", "近 30 天"),
         // 页脚快捷键的说明部分（键位 token 保留英文，见 modal_window::shortcut_label_i18n）
         (" all models", " 全部 model"),
         (" copy", " 复制"),

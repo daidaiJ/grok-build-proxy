@@ -1,11 +1,11 @@
-//! LOCAL: `/stats` — 按模型聚合的用量/性能报表 + 工具输出压缩账本。
+//! LOCAL: `/stats` — 按模型聚合的用量/性能报表。
 //!
 //! 数据源：`grok_home/cache/model-usage.jsonl`（shell 每次成功推理追加一条采样，
 //! 见 [`xai_grok_tools::model_usage_ledger`]）。全屏模式下由
-//! [`crate::views::stats_modal`] 以窗口呈现（时间窗标签页 + 压缩账本标签页），
+//! [`crate::views::stats_modal`] 以窗口呈现（时间窗标签页），
 //! 极简模式保持回滚缓冲里的纯文本输出。
 //!
-//! 参数：`/stats [5h|day|week]` 选择打开时定位的时间窗；不带参数打开第一个窗。
+//! 参数：`/stats [5h|day|week|month]` 选择打开时定位的时间窗；不带参数打开第一个窗。
 //! 文本路径渲染全部窗口（与改造前的「全窗口」输出一致）。
 
 use crate::app::actions::Action;
@@ -14,9 +14,6 @@ use crate::slash::command::{
     AppCtx, ArgItem, CommandExecCtx, CommandResult, SlashCommand, slash_meta,
 };
 use crate::slash::i18n::tr;
-use xai_grok_tools::implementations::output_compression::{
-    format_stats_report, is_enabled, stats_for_display,
-};
 use xai_grok_tools::model_usage_ledger::{
     self, ModelCallSample, ModelUsageAggregate, Window, fmt_cost, fmt_hit_rate, fmt_ms_pair,
     fmt_tokens, fmt_tps_pair,
@@ -27,8 +24,8 @@ pub struct StatsCommand;
 impl SlashCommand for StatsCommand {
     slash_meta! {
         name: "stats",
-        description: "Show model usage stats and compression savings",
-        usage: "/stats [5h|day|week]",
+        description: "Show model usage stats",
+        usage: "/stats [5h|day|week|month]",
         takes_args: true,
     }
 
@@ -44,7 +41,7 @@ impl SlashCommand for StatsCommand {
                 Some(window) => Some(window),
                 None => {
                     return CommandResult::Error(format!(
-                        "Unknown argument: {arg}. Use /stats [5h|day|week]"
+                        "Unknown argument: {arg}. Use /stats [5h|day|week|month]"
                     ));
                 }
             },
@@ -66,6 +63,7 @@ pub(crate) fn window_arg_items() -> Vec<ArgItem> {
                 Window::FiveHours => tr("Last 5 hours"),
                 Window::Day => tr("Last 24 hours"),
                 Window::Week => tr("Last 7 days"),
+                Window::Month => tr("Last 30 days"),
             };
             ArgItem {
                 display: w.arg().into(),
@@ -77,18 +75,14 @@ pub(crate) fn window_arg_items() -> Vec<ArgItem> {
         .collect()
 }
 
-/// 极简模式的文本报表：全部时间窗 + 压缩账本（纯函数，便于测试）。
+/// 极简模式的文本报表：全部时间窗（纯函数，便于测试）。
 /// 成本列读进程级目录价 store（冷 store 显示 `–`，与模态路径同源）。
 pub(crate) fn format_stats_text() -> String {
     let home = xai_grok_config::grok_home();
     let samples = model_usage_ledger::load_samples(Some(&home));
     let now = ModelCallSample::now_unix_ms();
     let pricing = model_catalog_store::snapshot();
-    let mut report = format_usage_report(&samples, now, &Window::ALL, &pricing);
-    report.push('\n');
-    let stats = stats_for_display(Some(&home));
-    report.push_str(&format_stats_report(&stats, is_enabled()));
-    report
+    format_usage_report(&samples, now, &Window::ALL, &pricing)
 }
 
 /// 渲染按时间窗 × model 聚合的用量报表（纯函数，便于测试）。
@@ -164,7 +158,9 @@ mod tests {
     use crate::app::ScreenMode;
     use crate::app::bundle::BundleState;
     use crate::settings::PagerLocalSnapshot;
-    use xai_grok_tools::model_usage_ledger::{WINDOW_5H_MS, WINDOW_DAY_MS, WINDOW_WEEK_MS};
+    use xai_grok_tools::model_usage_ledger::{
+        WINDOW_5H_MS, WINDOW_DAY_MS, WINDOW_MONTH_MS, WINDOW_WEEK_MS,
+    };
 
     static DEFAULT_BUNDLE_STATE: BundleState = BundleState {
         has_cache: false,
@@ -231,6 +227,7 @@ mod tests {
             ("5h", Window::FiveHours),
             ("day", Window::Day),
             ("week", Window::Week),
+            ("month", Window::Month),
             ("  DAY  ", Window::Day),
         ] {
             let mut ctx = exec_ctx(&models, ScreenMode::Fullscreen);
@@ -248,10 +245,10 @@ mod tests {
     fn unknown_argument_is_an_error_without_panicking() {
         let models = ModelState::default();
         let mut ctx = exec_ctx(&models, ScreenMode::Fullscreen);
-        match StatsCommand.run(&mut ctx, "month") {
+        match StatsCommand.run(&mut ctx, "year") {
             CommandResult::Error(msg) => {
-                assert!(msg.contains("Unknown argument: month"), "{msg}");
-                assert!(msg.contains("/stats [5h|day|week]"), "{msg}");
+                assert!(msg.contains("Unknown argument: year"), "{msg}");
+                assert!(msg.contains("/stats [5h|day|week|month]"), "{msg}");
             }
             other => panic!("expected error, got {other:?}"),
         }
@@ -263,7 +260,6 @@ mod tests {
         let mut ctx = exec_ctx(&models, ScreenMode::Minimal);
         match StatsCommand.run(&mut ctx, "") {
             CommandResult::Message(text) => {
-                assert!(text.contains("Tool-output compression"), "{text}");
                 // 不带模块过滤时账本为空，只断言标题段
                 assert!(text.contains("Model usage (aggregated by model)"), "{text}");
             }
@@ -287,7 +283,7 @@ mod tests {
         };
         let items = StatsCommand.suggest_args(&ctx, "").expect("suggestions");
         let inserted: Vec<&str> = items.iter().map(|i| i.insert_text.as_str()).collect();
-        assert_eq!(inserted, ["5h", "day", "week"]);
+        assert_eq!(inserted, ["5h", "day", "week", "month"]);
     }
 
     #[test]
@@ -300,15 +296,17 @@ mod tests {
             sample(now - WINDOW_5H_MS - 1000, "m-b", 777, 0, 100, 99.0),
             // 日窗外、周窗内
             sample(now - WINDOW_DAY_MS - 1000, "m-c", 1, 0, 1, 1.0),
-            // 周窗外
+            // 周窗外、月窗内
             sample(now - WINDOW_WEEK_MS - 1000, "m-d", 1, 0, 1, 1.0),
+            // 月窗外
+            sample(now - WINDOW_MONTH_MS - 1000, "m-e", 1, 0, 1, 1.0),
         ];
         let report = format_usage_report(&samples, now, &Window::ALL, &CatalogPrices::new());
         assert!(report.contains("Model usage (aggregated by model)"));
         assert!(report.contains("Last 5h:"));
         assert!(report.contains("Last day:"));
         assert!(report.contains("Last week:"));
-        assert!(!report.contains("Last month"), "月窗已移除: {report}");
+        assert!(report.contains("Last month:"));
         // 5h 窗只有 m-a 两笔
         assert!(report.contains("m-a · 2 calls"));
         assert!(report.contains("input 1.5k"));
@@ -322,9 +320,11 @@ mod tests {
         assert!(report.contains("cache hit n/a"), "{report}");
         assert!(report.contains("ttft p50/p90 900/1100"));
         assert!(report.contains("tps p50/p90 50.0/60.0"));
-        // 分节定位：5h 窗不含 m-b，日窗含 m-b 不含 m-c，周窗含 m-c 不含 m-d
+        // 分节定位：5h 窗不含 m-b，日窗含 m-b 不含 m-c，周窗含 m-c 不含 m-d，
+        // 月窗含 m-d 不含 m-e
         let day_start = report.find("Last day:").unwrap();
         let week_start = report.find("Last week:").unwrap();
+        let month_start = report.find("Last month:").unwrap();
         assert!(
             !report[..day_start].contains("m-b"),
             "5h 窗不该含 m-b: {report}"
@@ -334,8 +334,13 @@ mod tests {
             !report[day_start..week_start].contains("m-c"),
             "日窗不该含 m-c: {report}"
         );
-        assert!(report[week_start..].contains("m-c"), "{report}");
-        assert!(!report.contains("m-d"), "周窗外的样本不该出现: {report}");
+        assert!(report[week_start..month_start].contains("m-c"), "{report}");
+        assert!(
+            !report[week_start..month_start].contains("m-d"),
+            "周窗不该含 m-d: {report}"
+        );
+        assert!(report[month_start..].contains("m-d"), "{report}");
+        assert!(!report.contains("m-e"), "月窗外的样本不该出现: {report}");
     }
 
     #[test]
@@ -352,7 +357,7 @@ mod tests {
     fn empty_windows_get_a_placeholder_per_window() {
         let now = 1_000_000_000_000;
         let report = format_usage_report(&[], now, &Window::ALL, &CatalogPrices::new());
-        assert_eq!(report.matches("no calls in this window").count(), 3);
+        assert_eq!(report.matches("no calls in this window").count(), 4);
         let single = format_usage_report(&[], now, &[Window::Week], &CatalogPrices::new());
         assert_eq!(single.matches("no calls in this window").count(), 1);
     }
