@@ -22,8 +22,8 @@ use xai_grok_sampler::{
     SamplingErrorKind, SamplingEvent, StripReason,
 };
 use xai_grok_sampling_types::{
-    ConversationItem, ConversationRequest, DoomLoopRecoveryPolicy, INVALID_IMAGE_ERROR_CODE,
-    SyntheticReason, UserItem,
+    ConversationItem, ConversationRequest, DoomLoopRecoveryPolicy, ImageBridgeHook,
+    INVALID_IMAGE_ERROR_CODE, SyntheticReason, UserItem,
 };
 use xai_grok_test_support::{SseEvent, sse};
 
@@ -484,6 +484,102 @@ async fn invalid_image_code_strips_and_retries() {
     assert!(
         !bodies[1].contains(IMAGE_URI),
         "strip-retry must not resend the image"
+    );
+}
+
+/// LOCAL (vision bridge D9 tier-2): a high-confidence "image input not
+/// supported" 400 (no code, message signature only) strips as ServerRejected
+/// and, when the shell attached a bridge hook, the retry carries the
+/// transcription text instead of the bare unavailable placeholder.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn image_unsupported_signature_strips_with_bridge_transcription() {
+    const IMAGE_URI: &str = "data:image/png;base64,cG9pc29uZWQ=";
+    const TRANSCRIPTION: &str = "<image>bridge transcription: a red square</image>";
+    let bodies = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let bodies_handler = Arc::clone(&bodies);
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post(move |body: String| {
+            let bodies = Arc::clone(&bodies_handler);
+            async move {
+                let n = {
+                    let mut b = bodies.lock().unwrap();
+                    b.push(body);
+                    b.len()
+                };
+                if n == 1 {
+                    Err::<Sse<_>, (StatusCode, String)>((
+                        StatusCode::BAD_REQUEST,
+                        json!({
+                            "error": "image input is not supported by this model",
+                        })
+                        .to_string(),
+                    ))
+                } else {
+                    let events = sse::chat_completion_events("recovered", "test-model");
+                    Ok(Sse::new(stream::iter(
+                        events.into_iter().map(Ok::<_, std::convert::Infallible>),
+                    )))
+                }
+            }
+        }),
+    );
+    let server = MockServer::spawn(app).await;
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+    let handle = SamplerActor::spawn(
+        test_config(server.base_url(), "test-model"),
+        RetryPolicy::default(),
+        event_tx,
+    );
+
+    let mut request = user_request("what is in this image?");
+    if let Some(ConversationItem::User(u)) = request.items.first_mut() {
+        u.add_image(IMAGE_URI);
+    }
+    request.image_bridge = Some(ImageBridgeHook::new(move |urls| {
+        Box::pin(async move {
+            urls.into_iter()
+                .map(|url| (url, Some(TRANSCRIPTION.to_string())))
+                .collect()
+        })
+    }));
+    handle.submit(RequestId::from("req-d9-bridge"), request);
+
+    let events = drain_until_terminal(&mut event_rx, Duration::from_secs(15)).await;
+    server.shutdown();
+
+    assert!(
+        events.iter().any(|e| match e {
+            SamplingEvent::ImagesStripped {
+                stripped_urls,
+                reason: StripReason::ServerRejected,
+                ..
+            } => stripped_urls.len() == 1 && stripped_urls[0].as_ref() == IMAGE_URI,
+            _ => false,
+        }),
+        "signature 400 must strip as ServerRejected, got {events:?}"
+    );
+    assert!(
+        matches!(events.last(), Some(SamplingEvent::Completed { .. })),
+        "expected Completed after the bridged strip-retry, got {events:?}"
+    );
+
+    let bodies = bodies.lock().unwrap();
+    assert_eq!(bodies.len(), 2, "one rejection, one bridged retry");
+    assert!(bodies[0].contains(IMAGE_URI), "first attempt sends image");
+    assert!(
+        !bodies[1].contains(IMAGE_URI),
+        "bridged retry must not resend the image"
+    );
+    assert!(
+        bodies[1].contains(TRANSCRIPTION),
+        "bridged retry must carry the transcription, got {}",
+        bodies[1]
+    );
+    assert!(
+        !bodies[1].contains("image removed"),
+        "transcription must replace the unavailable placeholder, got {}",
+        bodies[1]
     );
 }
 

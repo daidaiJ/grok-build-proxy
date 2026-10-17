@@ -407,6 +407,42 @@ impl SamplingError {
         }
     }
 
+    /// The server rejected the request because the model does not accept image
+    /// input at all (capability rejection, distinct from a corrupt image).
+    /// LOCAL (vision bridge D9 tier-2): high-confidence signatures only — a 400
+    /// whose message pairs an image token with an explicit "not supported"
+    /// statement, across the English and Chinese gateway dialects seen in the
+    /// wild. Ambiguous 400s (context length, malformed body, ...) stay false so
+    /// a wrong strip never masks the real problem.
+    pub fn is_image_input_unsupported_error(&self) -> bool {
+        const IMAGE_TOKENS: [&str; 5] = ["image", "multimodal", "多模态", "图片", "图像"];
+        const NOT_SUPPORTED_TOKENS: [&str; 3] = ["not support", "unsupported", "不支持"];
+        match self {
+            SamplingError::Api { status, message, .. }
+                if status.as_u16() == 400 || status.as_u16() == 415 =>
+            {
+                let message = message.to_lowercase();
+                IMAGE_TOKENS.iter().any(|t| message.contains(t))
+                    && NOT_SUPPORTED_TOKENS
+                        .iter()
+                        .any(|t| message.contains(t))
+            }
+            // Explicit so a new variant must state its image classification instead of silently defaulting to false
+            SamplingError::Api { .. }
+            | SamplingError::Auth { .. }
+            | SamplingError::InvalidConfiguration(_)
+            | SamplingError::MtlsConfiguration(_)
+            | SamplingError::Http(_)
+            | SamplingError::Serialization(_)
+            | SamplingError::EventStreamError(_)
+            | SamplingError::IdleTimeout { .. }
+            | SamplingError::EmptyResponse { .. }
+            | SamplingError::MaxTokensTruncation
+            | SamplingError::DoomLoopDetected { .. }
+            | SamplingError::StreamError { .. } => false,
+        }
+    }
+
     pub fn is_retryable(&self) -> bool {
         match self {
             SamplingError::Auth { .. } => false,
@@ -773,6 +809,32 @@ fn message_looks_overloaded(message: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LOCAL (vision bridge D9 tier-2): only an image token paired with an
+    /// explicit "not supported" statement classifies; everything else stays
+    /// false so a wrong strip never masks the real 400 cause.
+    #[test]
+    fn image_input_unsupported_needs_both_image_and_not_supported_tokens() {
+        assert!(api_400("Image input is not supported by this model.").is_image_input_unsupported_error());
+        assert!(api_400("Images are NOT SUPPORTED here").is_image_input_unsupported_error());
+        assert!(api_400("该模型不支持图片输入").is_image_input_unsupported_error());
+        assert!(api_400("multimodal input is unsupported for this model").is_image_input_unsupported_error());
+        // Ambiguous / unrelated 400s must not classify.
+        assert!(!api_400("context length exceeded").is_image_input_unsupported_error());
+        assert!(!api_400("Could not process image: bad PNG").is_image_input_unsupported_error());
+        assert!(!api_400("invalid json body").is_image_input_unsupported_error());
+        assert!(!api_400("model does not support tool calls").is_image_input_unsupported_error());
+        // Non-400/415 statuses stay false even with a matching message.
+        let api_500 = SamplingError::Api {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: "image input is not supported".into(),
+            model_metadata: None,
+            retry_after_secs: None,
+            should_retry: None,
+            error_code: None,
+        };
+        assert!(!api_500.is_image_input_unsupported_error());
+    }
 
     #[test]
     fn overloaded_detects_stream_and_api_shapes() {

@@ -128,6 +128,11 @@ theme::color_support::tests::standalone_color_uses_stderr_terminal_not_stdout
 # 环境族，与模型组改动无关（model_switch/conversation_group 代码未触碰）。
 session::acp_session::auth_error_no_retry_tests::
 
+# 族W（2026-10-17，D9 反应式测试的 strip_reason 过滤词首跑暴露）：同族N根因
+# （create_test_actor 夹具写死 /tmp，support.rs:287 AbsPathBuf NotAbsolute panic）。
+# 环境族，与视觉桥改动无关（recap/side_call 代码未触碰）；行为验证走 Linux CI。
+session::acp_session::recap_display_only_tests::
+
 # 族W（2026-10-15，GATE_FORCE xai-grok-shell --lib vision_bridge 首跑暴露）：同族N/S/V
 # 根因——create_test_actor 夹具写死 /tmp（support.rs:287 AbsPathBuf NotAbsolute panic）。
 # 视觉桥决策矩阵测试走同一夹具；环境族，与桥改动无关（Linux CI 验证）。

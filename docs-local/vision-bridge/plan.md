@@ -167,6 +167,43 @@ D1 的 `accepts_images` 不必全靠手写。模型目录缓存（`xai-grok-mode
 （见 [subagent-model-group-todo](../subagent-model-group-todo.md) G1/G5）：视觉组条目须
 `accepts_images == true`，跨供应商降级语义同组定义。
 
+#### D9 tier-2 施工记录（2026-10-17，PATCHES 四十七期）
+
+二级反应式已落地。与设计稿的差异与实现要点：
+
+- **签名归一在采样器层**：`SamplingError::is_image_input_unsupported_error()`
+  （sampling-types）= Api 400/415 且消息同时命中图像 token
+  （image/multimodal/多模态/图片/图像）与不支持 token（not support/unsupported/
+  不支持）；`classify_error` 把它接到既有 `RetryWithImageStrip` 决策，
+  `strip_reason_for_image_error` 归 `ServerRejected`（服务器确认级）。
+  **置信不足的 400 一律不动**（上下文超限、坏 body 等照旧走原分类）。
+- **转写钩子挂在请求上**：`ConversationRequest.image_bridge: Option<ImageBridgeHook>`
+  （sampling-types 新类型，`Arc<dyn Fn(urls) -> BoxFuture<notes>>`）。shell 主回合
+  构建请求时（`turn.rs`，每个采样循环迭代）用
+  `resolve_reactive_image_bridge()` 装配；chat-state 的 `request_builder` 恒置 None。
+- **eligibility 与前置门同构**：只挂 `accepts_images == true`（前置判定放行了像素的
+  模型）+ D3 授权（显式 pin 或非 BYOK）+ 描述模型自身识图。Bridge/Blocked 模型
+  永不挂——前者的像素出站前已转写，后者按 D3 绝不烧描述请求。
+- **hook 执行体**（shell `vision_bridge.rs`）：data URL 解码 → 共享
+  `ImageDescribeCache::get_or_describe`（`UserAttachment` 命名空间，front/reactive
+  同图共享缓存）→ `render_image_description_block` 同款 D5 envelope。返回
+  per-URL `Option<text>`；`None`（解码失败/描述失败）保持采样器通用 unavailable
+  占位（D4 原样适用）。成功后发 transient `VisionBridgeNotice`
+  （「rejected → transcribed with {model} ({host})」）+ unified 日志
+  `shell.vision_bridge.reactive`（described/failed/total）。
+- **采样器重试臂**：`RetryWithImageStrip` + ServerRejected 时先取
+  `image_urls()` → 调 hook（`tokio::select!` 与取消令牌互斥，取消即
+  `handle_cancellation`）→ `strip_images_with_transcriptions`（sampling-types 新
+  函数：user 图原位换 envelope/占位，tool 图丢弃、envelope 追加进 tool 文本）
+  → 重发。PayloadHeuristic（413/连接重置）路径维持纯剥图。
+- **持久化语义不变**：ServerRejected 在 Completed 后仍从存储历史剥图 +
+  既有用户提示——转写文本只进**本回合重试请求**（D9 设计稿「重发本回合」字面
+  范围），存储历史不留转写（与 tier-1 envelope 不同，属已知取舍：历史留像素会
+  让后续每请求重吃 400）。
+- **测试**：sampling-types（签名表 12 断言 + strip/notes 两用例）、sampler
+  （classify/reason 归类 + `test_actor` 假服务器全链路：签名 400 → hook 转写 →
+  重试体含 envelope 不含像素）、shell（reactive eligibility 四态 + decode_data_url）。
+
 ---
 
 ## T1：能力位 + 用户图转写

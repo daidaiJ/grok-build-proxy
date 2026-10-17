@@ -98,6 +98,9 @@ impl ChatStateActor {
             prompt_cache_key: None,
             reasoning_effort: self.state.sampling_config.reasoning_effort,
             json_schema: None,
+            // LOCAL (vision bridge D9): the shell attaches the reactive
+            // transcription hook after this build; chat-state never sets one.
+            image_bridge: None,
             // Execute completed tool calls on a Length-truncated turn instead
             // of failing it; text-only salvage stays behind `CompletePartial`.
             length_policy: xai_grok_sampling_types::LengthPolicy::CompleteToolCalls,
