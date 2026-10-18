@@ -31,3 +31,16 @@
 
 - 同类已修：`app/session_title_resolve.rs`（`grok --resume <session-id>`）、
   `app/startup_failure/render.rs`（`grok leader kill`）。
+
+## 2026-10-18 追认：退出族两处已修（同修复分支）
+
+用户实测报告：退出会话时的 resume 提示仍显示 `grok --resume <id>`。定位为四十八期
+漏网的两处（同一退出提示族），已在 `fix/local-exit-hint-bin-name` 分支修复：
+
+- `app/mod.rs` `print_exit_resume_hint`——普通退出后的「Resume this session with:」
+  两行（minimal / 默认），改 `cli::current_binary_name()`。
+- `app/screen_mode_relaunch.rs` `screen_mode_relaunch_resume_hint`——screen-mode
+  relaunch 失败兜底的 pasteable 命令（`GROK_SCREEN_MODE=… grok … --resume`）。
+
+测试同步改动态二进制名断言（测试进程 argv[0] 非确定，期望串按同一函数现算）。
+`doctor fix.rs` 别名常量族维持 open（修法方向见上节）。
