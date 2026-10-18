@@ -112,6 +112,63 @@ search API（`WebSearchConfig` 带会话凭据），DeepSeek-only 用户没有�
 
 「web_search 仅 v4-pro 执行」自此为**文档 + 实测双源确认**，非文档孤证。
 
+## 宿主实现对照（2026-10-18，Codex `openai/codex` × dsh `deepseek-ai/deepseek-harness`）
+
+**Codex ——「声明内嵌主请求」派**（codex-rs，本机 clone）：
+
+- 模型能力位：`ModelInfo.web_search_tool_type`（models.json / models API 下发；
+  DeepSeek 官方 models.json 给 flash/pro 都写 `"text"`）→ 决定
+  `search_content_types`（text vs text+image），`core/src/tools/hosted_spec.rs`。
+- 用户门控：`[tools] web_search`（布尔或 `{filters,user_location,search_context_size}`）
+  + `web_search` 模式 Cached/Indexed/Live/Disabled（默认 Cached），
+  `core/src/config/mod.rs:2736-2760`。
+- 线上形态：`ToolSpec::WebSearch` → `{"type":"web_search", external_web_access?,
+  indexed_web_access?, filters?, user_location?, search_context_size?,
+  search_content_types?}`（`tools/src/tool_spec.rs:39-53`），与 function 工具同列
+  进主请求 tools 数组。
+- 呈现：`ResponseItem::WebSearchCall` → `TurnItem::WebSearch{query,action}` →
+  `WebSearchBegin/End` 事件（`core/src/event_mapping.rs:243`）；**结果不出端点**
+  （`results: None`），模型直接引用，客户端只见 query/action。历史回放存事件。
+
+**dsh ——「旁路辅助调用」派**（`packages/web/web-search-deepseek`）：
+
+- 主请求里 server tool 不存在：模型面是普通 function 工具 `web_search`
+  （args `{queries[]}` 一次 ≤4 条，结果文本化 + 来源清单 + 引用要求；
+  `packages/web/tool-web/src/search.ts` 只管 schema/校验/格式化）。
+- 执行 = 每次搜索单独发一个 **Anthropic Messages 调用**：默认
+  `https://api.deepseek.com/anthropic/v1/messages`（`$DEEPSEEK_SEARCH_BASE_URL`
+  覆写），body 声明 `tools:[{type:"web_search_20250305", name:"web_search",
+  max_uses:5}]` + `thinking:{type:"disabled"}` + `max_tokens:4096`，默认辅助模型
+  **`deepseek-v4-flash`**（`provider.ts:31-47`）。
+- 结果归一化：`web_search_tool_result` 块抽 `web_search_result`（url/title/
+  page_age），snippet 取自 text 块 `citations[]` 的 `cited_text`（url→首现映射），
+  按 url 去重 → `{sources}`；**无结果块 = 显式 `WEB_PROVIDER_ERROR`**（拒绝 prose
+  兜底）。凭据 = API key 或 account token（`x-dsh-auth-token`）；派发前记脱敏
+  `web/deepseek-search-llm-request` 事件；`redirect:'error'`；401 分
+  account/api-key 两种话术。GH discussion 408 抱怨的「固定官方端点 + 托管凭据」
+  即此文件。
+
+**对照结论**：
+
+| 维度 | Codex | dsh | fork 现状 |
+| --- | --- | --- | --- |
+| server 工具进主请求 | 是（tools 内嵌） | 否（旁路辅助调用） | 是（raw JSON splice，已通） |
+| 结果回传形态 | 无（results 不出端点） | 结构化 sources+snippet 进对话 | 无（result=item JSON） |
+| 模型面 | server tool + 模式位 | 普通 function 工具 | server tool（xAI 同构） |
+| 门控 | 模型元数据 tool type + 模式 | provider available()（凭据/URL） | supports_backend_search（默认关） |
+| flash 可用性 | 官方 models.json 声明 text，服务端忽略 | **可用**（anthropic 通道 flash 执行 web_search_20250305，dsh 默认即此组合） | responses 通道忽略（实测） |
+
+dsh 派的两个战略信息：① **Anthropic 通道对 flash 开放 server 端搜索**（dsh 默认
+配置 = flash + `web_search_20250305`，若忽略则默认 provider 永远
+WEB_PROVIDER_ERROR，不可能作为出厂默认）——与 responses 通道「flash 忽略」互补，
+正面解释官方计费节「Harness/Claude Code/Codex 已通过 Server 端工具调用访问」。②
+fork 的 `ApiBackend` 本就有 Anthropic Messages 变体（`stream/messages.rs`）——
+在 messages 请求声明 `web_search_20250305` + 解析 `server_tool_use` /
+`web_search_tool_result` 块，flash 即可在**主会话内**用官方搜索，属 dsh 派的
+「主请求内嵌版」；代价是 messages 后端工具面扩展（server tool 块解析）。
+成本面：dsh 每次搜索 = 独立小回合（thinking disabled、4096 上限）；Codex/fork
+内嵌派 = 结果直入主回合上下文（v4-pro 实测单回合 +59.5k input tokens）。
+
 ## 若立项「自动适配」（拍板点前置，净开发小）
 
 - **D1 供应商判定**：hosted tools 组装按 `credentials.base_url` host 分流
