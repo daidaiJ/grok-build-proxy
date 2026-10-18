@@ -78,6 +78,14 @@ search API（`WebSearchConfig` 带会话凭据），DeepSeek-only 用户没有�
 - 更新日志 2026-10-17：「开放自研搜索 API」+ V4.1-Flash-1017 快照（API 调用方式与价格
   不变，仍用 `deepseek-flash`）+ 针对 DeepSeek Harness/CodeBuddy/WorkBuddy 优化
   （升级 Harness ≥0.2.1-rc.1）。
+- **v4-pro 的存续风险（2026-10-18 追查）**：官方曾于 2026-09-10 邮件通知 V4 Pro API
+  服务 09-14 下线，09-11 因用户反弹**撤回决定**承诺继续服务（PANews/科创板日报、
+  Reddit r/SillyTavernAI）；HF 权重也走过「下架→重新上架」一遭。今日价格页 v4-pro
+  仍在售（V4-Pro-0813，并发档 500 vs flash 2500），但「唯一支持内置 web_search 的
+  模型 = 经历过下线惊魂的旗舰档」这一事实，把**独立 Search/Fetch REST 集成**（与模型
+  无关、flash 可用、计费透明）推向更稳的主路径；responses 内置 web_search 定位为
+  v4-pro 专属增强。若官方后续把 web_search 下放到 flash（或 v4-pro 真退役），
+  本评估的 D1/D2 方案不受影响（门控放行逻辑不变，只是受益面变化）。
 - 待核清零：Search/Fetch 独立 REST 计费 = 上述 5 元/1000 次成功请求（官方原文，此前仅
   X 帖口径）。
 
