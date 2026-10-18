@@ -53,6 +53,35 @@
 
 估计净开发 1–2 人天（纯 pager 面 + 既有数据源，无 shell 改动）。
 
+## 追加需求（2026-10-18 口述，未施工）：按目录思考位回填模型条目
+
+> 需求原话：以后通过 /model 切模型时，根据模型是否支持思考，来看要不要给配置文件
+> 里面补这个（`supports_reasoning_effort`）。动机即发票：手配的 glm-5.3-flash 条目
+> 没开思考位，`/effort` 菜单空挂，而目录里 `z-ai/glm-5.3-flash` 明明 `reasoning: true`。
+
+**设计草案**：目录命中（复用 v1.0.51 匹配索引）`reasoning == Some(true)` 且用户
+config 条目未显式开 `supports_reasoning_effort` → toml_edit 定点写回 `true`。
+写回通道复用 /auth T2/T3 的 `write_model_entries`（flock + 全批原子 + 注释保留）。
+
+**拍板点**：
+1. **触发点两案**：a) 挂 `/model` 切换生效时（本需求原话）；b) **挂启动预热**——
+   视觉桥 D8 已有「启动预热 toml_edit 回填 accepts_images」同机制、同通道、同幂等
+   语义，把 `supports_reasoning_effort` 并进同一次回填遍历，改动面最小且覆盖全部
+   目录命中条目（不等用户切到才修）。建议 b，a 作为补充（切换时 store 必温、
+   覆盖启动后新取数场景）。
+2. **热生效**：写回后 ModelInfo 需重载才亮 `/effort`——同回合 hot-set（model_switch
+   路径合并目录补丁）还是提示「重启生效」（embedded 无 watcher，v1.0.51 reload_models
+   先例可沿）。
+3. **不降级**：目录 `reasoning` 非 true 时不写也不删用户手写值；恒只升不降。
+4. **档位列表不代写**：目录只有布尔 `reasoning`，没有档位值；GLM 系只吃
+   low/high/max（medium 会被端点拒），回填擅自造 `reasoning_efforts` 有风险——
+   只回填布尔位，档位仍由用户钉（必要时 /effort 菜单对未知档位 400 做容错提示）。
+5. `accepts_images`（D8 已做）与思考位回填的幂等日志是否统一落 unified.jsonl
+   （`model catalog: backfilled` 一类，可观测）。
+
+估计净开发 ≈0.5 人天（b 案：D8 遍历加一键 + shell 测试；a 案另接 model_switch
+触发点）。施工时先对照本档「数据源」表与 D8 落点。
+
 ## 施工实况（2026-10-17，T1 落地）
 
 四个拍板点按用户本次口述 + 文档建议值落地：

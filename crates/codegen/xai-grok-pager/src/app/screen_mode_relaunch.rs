@@ -183,7 +183,9 @@ pub(crate) fn screen_mode_relaunch_resume_hint(session_id: &str, want_minimal: b
     } else {
         "--fullscreen"
     };
-    format!("{GROK_SCREEN_MODE_ENV}={mode} grok {flag} --resume {session_id}")
+    // LOCAL: 命令示例跟随实际二进制名（发行名 grok2 / 用户任意改名）
+    let bin = super::cli::current_binary_name();
+    format!("{GROK_SCREEN_MODE_ENV}={mode} {bin} {flag} --resume {session_id}")
 }
 
 /// Replace the current process with a relaunch into the requested screen mode.
@@ -739,13 +741,14 @@ mod tests {
     fn failed_relaunch_hint_includes_screen_mode_env() {
         // Recovery command must carry GROK_SCREEN_MODE so following the hint after a failed `/fullscreen` does not reopen minimal/inline
         // The explicit flag keeps the resume in the right mode if the env is dropped
+        let bin = crate::app::cli::current_binary_name();
         assert_eq!(
             screen_mode_relaunch_resume_hint("abc-sid", false),
-            "GROK_SCREEN_MODE=fullscreen grok --fullscreen --resume abc-sid"
+            format!("GROK_SCREEN_MODE=fullscreen {bin} --fullscreen --resume abc-sid")
         );
         assert_eq!(
             screen_mode_relaunch_resume_hint("abc-sid", true),
-            "GROK_SCREEN_MODE=minimal grok --minimal --resume abc-sid"
+            format!("GROK_SCREEN_MODE=minimal {bin} --minimal --resume abc-sid")
         );
     }
 
