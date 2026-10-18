@@ -122,6 +122,12 @@ context_window = 200000
 
 Check the provider's current docs for the exact model id and context window before writing these blocks. Pair these models with the `api-calls` and `perf` status-line items — gateway failures and throughput regressions are the two things most likely to need diagnosis on third-party endpoints.
 
+## Capability backfill & DeepSeek server-side search
+
+**Capability backfill.** At startup, when the model catalog is fetched, missing keys in your existing `[model.*]` entries are backfilled from the matched catalog entry: `accepts_images` (vision bridge D8) and, for models the directory marks as reasoning-capable, `supports_reasoning_effort = true` plus `reasoning_efforts = [...]` taken from the directory's effort levels (OpenRouter `reasoning.supported_efforts` / models.dev `reasoning_options`; GLM-5.3 family gets `["low","high","max"]`). Keys you wrote explicitly — including `false` and an empty list — are never overwritten. Takes effect on the next launch. Details: `11-custom-models.md` → Capability Backfill.
+
+**DeepSeek server-side search.** On models whose `base_url` points at `api.deepseek.com`, setting `supports_backend_search = true` sends DeepSeek's server-side `web_search` tool (executed on `deepseek-v4-pro`; silently ignored on `deepseek-flash`) and suppresses the xAI-only `x_search` declaration. xAI endpoints keep the historical `web_search` + `x_search` pair. Details: `11-custom-models.md` and the `26-config-reference.md` `supports_backend_search` row.
+
 ## Minimal mode (concise agent)
 
 **What it does:** the built-in `grok-build-concise` agent becomes a true minimal

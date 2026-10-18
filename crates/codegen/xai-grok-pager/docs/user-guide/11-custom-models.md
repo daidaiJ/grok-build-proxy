@@ -117,6 +117,25 @@ notice, so nothing is ever spent on xAI silently). Tool-returned images
 (`read_file`, PDF pages, MCP screenshots) go through the same bridge with a
 per-turn budget of 4 images.
 
+### Capability Backfill (LOCAL)
+
+At startup, when the model catalog is fetched, Grok backfills **missing** keys in
+your existing `[model.*]` entries from the matched catalog entry (OpenRouter /
+models.dev). Two fields participate:
+
+- `accepts_images` — filled from the catalog's modality when your entry does not
+  set it (entries matching a built-in catalog id default to `true`, others to
+  `false`; the backfill only writes when the catalog disagrees with that default).
+- `supports_reasoning_effort = true` and `reasoning_efforts = [...]` — filled
+  when the catalog entry says the model supports reasoning, using the directory's
+  effort levels (for example GLM-5.3 family gets `["low","high","max"]`; the
+  endpoint rejects `medium`).
+
+Keys you wrote explicitly are **never overwritten** — an explicit `false`, an
+empty `reasoning_efforts = []`, or a hand-picked level list always wins, and a
+value that only upgrades an absent key is written. Backfilled values take effect
+on the next launch (the running session keeps its loaded model info).
+
 ### Credential Resolution
 
 Grok resolves the API key in this order:
@@ -397,7 +416,7 @@ Or via environment variable:
 export GROK_WEB_SEARCH_MODEL="grok-4.5"
 ```
 
-If you point web search at a custom model, you also need a `[model.*]` entry so Grok can reach it. Server-side ("backend") web search runs only when the model sets `supports_backend_search = true` (and the build enables backend search); it does not depend on `api_backend`:
+If you point web search at a custom model, you also need a `[model.*]` entry so Grok can reach it. Server-side ("backend") web search runs only when the model sets `supports_backend_search = true` (and the build enables backend search); it does not depend on `api_backend`. When the model's `base_url` points at DeepSeek's official API (`api.deepseek.com`), enabling this bit sends DeepSeek's server-side `web_search` tool instead of the xAI-only `x_search` — note DeepSeek executes it only on `deepseek-v4-pro` and silently ignores it on `deepseek-flash`:
 
 ```toml
 [models]

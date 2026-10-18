@@ -123,7 +123,9 @@ preferred_method = "api_key"
 - **失败模型调用计数**：每次终态失败记入会话账本，状态行以 `✗ n` 呈现（网关限流/5xx/超时的第一手信号）。
 - **`/stats` 用量聚合**：按 5 小时 / 日 / 周 / 近一月（滚动 30 天）× 模型聚合输入、输出、缓存读写 token 与缓存命中率，以及 TTFT、TPS 的 p50/p90；账本落在 `grok_home/cache/model-usage.jsonl`（只覆盖主循环推理，subagent 调用暂不计入）。CLI 形态：`grok2 stats --days 7 --model deepseek`。
 - **`/auth` 供应商配置面板**：五步向导（协议 → base URL → SK → 模型目录勾选 → 确认写回），`toml_edit` 定点写回 `[model.<id>]`，注释与手工字段保留、id 冲突拒绝整批；目录回填 `context_window` / `max_completion_tokens`（与新建兜底相同才省略），目录标注支持思考的模型自动带 `supports_reasoning_effort = true`；写回后显式重载模型目录，免重启生效。
-- **`/usage` 供应商套餐用量**：当前模型属于「同一把 SK 可查套餐用量」的供应商时（首批：OpenCode Go / Command Code / 智谱 GLM / Kimi / MiniMax），Usage limit 面板显示该供应商套餐余量并标注来源，替代 SuperGrok 块；按模型 `base_url` host 自动判定，缓存 `[provider_usage] cache_minutes`（缺省 5 分钟），TTL 到期先显旧值再后台刷新。
+- **`/usage` 供应商套餐用量**：当前模型属于「同一把 SK 可查套餐用量」的供应商时（首批：OpenCode Go / Command Code / 智谱 GLM / Kimi / MiniMax），Usage limit 面板显示该供应商套餐余量并标注来源，替代 SuperGrok 块；第六家 DeepSeek 官方 API（`base_url` 命中 `api.deepseek.com`）显示官方余额——每币种一条，金额进备注（`granted_balance>0` 附赠金标记，不可用余额标 `unavailable`）。按模型 `base_url` host 自动判定，缓存 `[provider_usage] cache_minutes`（缺省 5 分钟），TTL 到期先显旧值再后台刷新。
+- **DeepSeek 服务端搜索（hosted-search 供应商分流）**：`base_url` 指向 `api.deepseek.com` 的模型配 `supports_backend_search = true` 后，请求改发 DeepSeek 服务端 `web_search` 工具，并剥掉 xAI 专有的 `x_search` 声明；官方仅 `deepseek-v4-pro` 执行搜索（`deepseek-flash` 下静默忽略）。启用位语义不变——用户显式开启，不自动；xAI 端点维持 `web_search` + `x_search` 双发。sampler / 渲染层零改动（复用 xAI backend search 的呈现管线）。
+- **模型能力自动回填**：启动取到模型目录后，对 config 里**缺键**的 `[model.*]` 条目回填目录判定的能力位——`accepts_images`（视觉桥）与思考位 `supports_reasoning_effort = true` + 档位 `reasoning_efforts`（取目录给的端点方言，如 GLM-5.3 系 `["low","high","max"]`；OpenRouter `reasoning.supported_efforts` / models.dev `reasoning_options`）。显式写的值（含 `false`、空表、手选档位）永远不碰，写回在下次启动生效。
 
 ### 网络与代理
 
@@ -192,6 +194,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 | `[model.<id>] use_proxy` | 单模型显式走进程出口代理（默认 false 恒直连） |
 | `[model_catalog] cache_minutes` | 模型目录价格缓存时长（缺省 1440 = 一天；缓存文件 `~/.grok/cache/prices.cache`） |
 | `[provider_usage] cache_minutes` | `/usage` 供应商套餐用量缓存（缺省 5 分钟） |
+| `[model.<id>] supports_backend_search` / `reasoning_efforts` | 服务端搜索启用位（`api.deepseek.com` 模型 = DeepSeek 服务端 `web_search`）/ 思考档位列表；键缺失时启动按模型目录自动回填（显式值永远赢） |
 | `[features] lsp_tools` | `lsp` 工具总开关（默认开；`GROK_LSP_TOOLS` 等价，`/lsp` 可按工作区覆盖） |
 | `[network] proxy` / `proxy_hosts` | 出口代理与 host 白名单（默认 `x.ai`、`grok.com`） |
 | `[shell] backend` | `pwsh` \| `powershell` \| `bash`(Git Bash) \| `cmd`（仅 Windows；优先于 `GROK_SHELL`，改完需重启） |
@@ -221,7 +224,7 @@ items = ["model", "api-calls", "tokens", "cache", "think", "perf"]
 
 - **TUI 内文档**：`/docs`（或直接读 `<grok_home>/docs/user-guide/`）。其中 [`29-local-enhancements.md`](crates/codegen/xai-grok-pager/docs/user-guide/29-local-enhancements.md) 是本地增强总表（含"信号 → 该配什么"对照表），[`11-custom-models.md`](crates/codegen/xai-grok-pager/docs/user-guide/11-custom-models.md) 是第三方模型全量说明。
 - **skill `third-party-models`**：把"用第三方模型替代 grok 登录"的完整流程（机制、最小配置、常见坑速查、验证命令、本 fork 的额外能力）写成可被 agent 自动加载的 skill。放在 `~/.grok/skills/third-party-models/SKILL.md`，之后：`/third-party-models` 手动调用，或在你说"接自己的模型 / 不用 grok 账号 / 配 deepseek"时自动触发。
-- **仓库内开发资料**：`docs-local/PATCHES.md`（本地补丁账本，上游同步后按表重放）、`docs-local/WIN-TEST-GATE.md`（Windows 测试门控与分诊流水线）、`docs-local/provider-onboarding-api-cost-todo.md`（`/auth` 面板 + `/stats` 成本列 + 模型目录价格的设计与拍板账本）、`docs-local/model-picker-catalog-details-todo.md`（模型选择器右侧显示模态/思考/上下文长度/美元价格——立项待拍板）、`docs-local/ui-i18n-plan.md`、`docs-local/tool-output-compression-plan.md`、`docs-local/agent-cli-tracking/`（同类 agent CLI 的调研笔记）、`docs-local/agent-memory-design/`（agent 软件记忆模块的专题调研：七家落地对照、工程取舍、优化点与演进方向，含 Reddit / HN 社区风评）、`docs-local/startup-perf/`（grok2 启动耗时专题：span 画像 + ptyctl 驱动的复测流程、冷/热缓存实测，主因 `fetch_models_blocking` 与缓解选项）、`docs-local/usage/`（供应商套餐用量专题：各家 Coding Plan 用量接口与凭据调研 + `/usage` 面板显示供应商套餐量的施工方案）。
+- **仓库内开发资料**：`docs-local/PATCHES.md`（本地补丁账本，上游同步后按表重放）、`docs-local/WIN-TEST-GATE.md`（Windows 测试门控与分诊流水线）、`docs-local/provider-onboarding-api-cost-todo.md`（`/auth` 面板 + `/stats` 成本列 + 模型目录价格的设计与拍板账本）、`docs-local/model-picker-catalog-details-todo.md`（模型选择器右侧目录详情列 + 目录思考位/档位自动回填——已收口）、`docs-local/ui-i18n-plan.md`、`docs-local/tool-output-compression-plan.md`、`docs-local/agent-cli-tracking/`（同类 agent CLI 的调研笔记）、`docs-local/agent-memory-design/`（agent 软件记忆模块的专题调研：七家落地对照、工程取舍、优化点与演进方向，含 Reddit / HN 社区风评）、`docs-local/startup-perf/`（grok2 启动耗时专题：span 画像 + ptyctl 驱动的复测流程、冷/热缓存实测，主因 `fetch_models_blocking` 与缓解选项）、`docs-local/usage/`（供应商套餐用量专题：各家 Coding Plan 用量接口与凭据调研 + `/usage` 面板显示供应商套餐量的施工方案）。
 
 ## 从源码构建
 
