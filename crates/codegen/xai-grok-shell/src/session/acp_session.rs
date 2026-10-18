@@ -805,6 +805,10 @@ pub(crate) struct SessionActor {
     /// Resolved at spawn as `is_telemetry_enabled() && !is_zdr()`; ZDR teams always have this false.
     pub(crate) telemetry_enabled: bool,
     pub(crate) supports_backend_search: std::cell::Cell<bool>,
+    /// LOCAL（DeepSeek hosted search D1）：hosted 搜索工具的供应商档位，spawn 时按
+    /// 推理 `base_url` host 判定、模型切换随采样配置更新；Deepseek 档在
+    /// `resolve_hosted` 里剥掉 xAI 专有的 `XSearch` 声明（见 `sampler_turn.rs`）。
+    pub(crate) hosted_search_vendor: std::cell::Cell<HostedSearchVendor>,
     /// Per-turn override, set at promotion. Not persisted; a reload reverts to the definition seed.
     pub(crate) tool_overrides: std::cell::RefCell<Option<xai_grok_sampling_types::ToolOverrides>>,
     pub(crate) resolved_tool_overrides:

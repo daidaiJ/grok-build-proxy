@@ -42,6 +42,10 @@ impl SessionActor {
             .set(auto_compact_threshold_percent);
         self.supports_backend_search
             .set(sampling_config.supports_backend_search);
+        self.hosted_search_vendor
+            .set(super::sampler_turn::hosted_search_vendor_for(
+                &sampling_config.base_url,
+            ));
         self.compactions_remaining
             .set(sampling_config.compactions_remaining);
         self.compaction_at_tokens
@@ -53,6 +57,7 @@ impl SessionActor {
                 "new_model": &sampling_config.model,
                 "api_backend": format!("{:?}", sampling_config.api_backend),
                 "supports_backend_search": sampling_config.supports_backend_search,
+                "hosted_search_vendor": format!("{:?}", self.hosted_search_vendor.get()),
             })),
         );
         self.chat_state_handle
