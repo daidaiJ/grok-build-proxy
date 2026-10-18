@@ -33,6 +33,18 @@ impl ModelPricing {
     }
 }
 
+/// 归一化目录档位列表：小写、去首尾空白、去空、去重、保源序；全空 → `None`。
+pub fn normalize_effort_levels<'a>(levels: impl Iterator<Item = &'a str>) -> Option<Vec<String>> {
+    let mut out: Vec<String> = Vec::new();
+    for level in levels {
+        let level = level.trim().to_lowercase();
+        if !level.is_empty() && !out.contains(&level) {
+            out.push(level);
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
 /// 一条目录条目。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CatalogEntry {
@@ -48,6 +60,13 @@ pub struct CatalogEntry {
     /// models.dev `reasoning` 布尔）；`None` = 源未给该字段。
     #[serde(default)]
     pub reasoning: Option<bool>,
+    /// LOCAL（目录思考位回填）：目录给的档位列表（OpenRouter
+    /// `reasoning.supported_efforts` / models.dev `reasoning_options` 的 effort
+    /// 条目值）；已归一化小写、去空白、去重、保源序；`None` = 源未给档位数据。
+    /// 取值口径是各端点方言（如 GLM 系 low/high/max、拒 medium），消费方
+    /// （shell 回填）负责再按 `ReasoningEffort` 枚举过滤未知值。
+    #[serde(default)]
+    pub reasoning_efforts: Option<Vec<String>>,
     /// LOCAL（视觉桥 D8）：是否接受图像输入（OpenRouter `architecture.input_modalities`
     /// 含 `image` / models.dev `modalities.input` 含 `image`）；`None` = 源未给/无法判定。
     #[serde(default)]

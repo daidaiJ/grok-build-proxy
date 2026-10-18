@@ -214,7 +214,8 @@ fn completed_entries(
 const DISK_CACHE_FILE: &str = "prices.cache";
 /// v2：条目新增 `reasoning` 位 + 缓存迁入 `cache/`（v1 一律视为过期重新取数）。
 /// v3：条目新增 `accepts_images` 能力位（视觉桥 D8；v2 一律视为过期重新取数）。
-const DISK_CACHE_VERSION: u32 = 3;
+/// v4：条目新增 `reasoning_efforts` 档位列表（目录思考位回填；v3 一律视为过期重新取数）。
+const DISK_CACHE_VERSION: u32 = 4;
 /// 读上限：models.dev 全量原始 JSON 5.4MB，条目化后更小；超限视为损坏。
 const DISK_CACHE_READ_CAP: u64 = 32 * 1024 * 1024;
 /// tmp 残留清扫龄期（write_atomic 的 best-effort 清扫参数）。
@@ -398,21 +399,22 @@ pub fn spawn_startup_prefetch(cache_minutes: Option<u64>, catalog_keys: Vec<Stri
         match fetch_catalog(&client).await {
             Ok((source, catalog, at_ms)) => {
                 install_fetched(&source, &catalog, at_ms, "startup");
-                // LOCAL（视觉桥 D8）：目录取数成功 → 尽力回填 accepts_images；
-                // 失败只记日志，不打扰取数结果。
-                match crate::util::config::backfill_accepts_images(&catalog, &catalog_keys).await
+                // LOCAL（视觉桥 D8 + 目录思考位回填）：目录取数成功 → 尽力回填
+                // accepts_images / 思考位 / 档位；失败只记日志，不打扰取数结果。
+                match crate::util::config::backfill_model_capabilities(&catalog, &catalog_keys)
+                    .await
                 {
                     Ok(0) => {}
                     Ok(n) => {
                         xai_grok_telemetry::unified_log::info(
-                            "model catalog: accepts_images backfilled",
+                            "model catalog: capabilities backfilled",
                             None,
                             Some(serde_json::json!({ "written": n })),
                         );
                     }
                     Err(e) => {
                         xai_grok_telemetry::unified_log::warn(
-                            "model catalog: accepts_images backfill failed",
+                            "model catalog: capability backfill failed",
                             None,
                             Some(serde_json::json!({ "error": e.to_string() })),
                         );
@@ -596,6 +598,7 @@ mod tests {
             name: format!("name-of-{id}"),
             canonical_id: None,
             reasoning: None,
+            reasoning_efforts: None,
             accepts_images: None,
             pricing: ModelPricing {
                 input,

@@ -142,19 +142,23 @@ fn draft_to_item(entry: &ModelEntryDraft) -> toml_edit::Item {
     toml_edit::Item::Table(table)
 }
 
-/// LOCAL（视觉桥 D8）：目录取数成功后，把目录判定的 `accepts_images` 能力位
+/// LOCAL（视觉桥 D8 + 目录思考位回填）：目录取数成功后，把目录判定的能力位
 /// 回填进用户 `config.toml` **已有**的 `[model.<id>]` 条目。
 ///
-/// 规则（plan.md D8）：
+/// 规则：
 /// - 只碰用户文件里已存在的条目（`/auth` 新建语义不在这里发生）；
-/// - 用户已显式写 `accepts_images` 的条目**永不覆盖**（显式字段永远赢）；
-/// - 回填值与「无显式键时的解析缺省」相同则跳过（避免无谓的 config 重写）：
-///   条目 id 在内建/预取目录里（`catalog_keys` 命中）缺省 true，否则（用户新建）
-///   缺省 false；
-/// - 目录未命中或目录未给该字段（`None`）→ 跳过。
+/// - **显式字段永远赢**：条目已写 `accepts_images` / `supports_reasoning_effort` /
+///   `reasoning_efforts` 任一键（含显式 `false` / 空表）时该键跳过，永不覆盖；
+/// - `accepts_images`：回填值与「无显式键时的解析缺省」相同则跳过（避免无谓的
+///   config 重写）：条目 id 在内建/预取目录里（`catalog_keys` 命中）缺省 true，
+///   否则（用户新建）缺省 false；
+/// - `supports_reasoning_effort` / `reasoning_efforts`：目录 `reasoning` 为 true
+///   才写；档位列表先按 `ReasoningEffort` 枚举过滤未知值，全未知不写（档位方言
+///   留给用户钉，如 GLM 系 low/high/max、拒 medium）；
+/// - 目录未命中或目录未给该字段 → 跳过。
 ///
 /// 返回实际写入的条目数；写回失败只记日志（回填是尽力而为的增强，不阻塞取数）。
-pub(crate) async fn backfill_accepts_images(
+pub(crate) async fn backfill_model_capabilities(
     catalog: &xai_grok_model_catalog::ModelCatalog,
     catalog_keys: &[String],
 ) -> Result<usize> {
@@ -163,21 +167,33 @@ pub(crate) async fn backfill_accepts_images(
         catalog_keys.iter().cloned().collect();
     let guard = super::persist::lock_config_writes()
         .await
-        .map_err(|error| anyhow::anyhow!("lock config.toml for vision-capability backfill: {error}"))?;
+        .map_err(|error| anyhow::anyhow!("lock config.toml for capability backfill: {error}"))?;
     guard
-        .run_blocking(move || backfill_accepts_images_locked(&catalog, &catalog_keys))
+        .run_blocking(move || backfill_model_capabilities_locked(&catalog, &catalog_keys))
         .await
-        .map_err(|error| anyhow::anyhow!("vision-capability backfill task failed: {error}"))?
+        .map_err(|error| anyhow::anyhow!("capability backfill task failed: {error}"))?
 }
 
-fn backfill_accepts_images_locked(
+fn backfill_model_capabilities_locked(
     catalog: &xai_grok_model_catalog::ModelCatalog,
     catalog_keys: &std::collections::BTreeSet<String>,
 ) -> Result<usize> {
-    let path = super::mcp::user_config_path();
-    let (destination, content) = super::persist::read_follow_bound(&path).map_err(|error| {
+    backfill_model_capabilities_locked_at(
+        catalog,
+        catalog_keys,
+        &super::mcp::user_config_path(),
+    )
+}
+
+/// 测试与真实路径共用的实现体；`path` 由调用方给定（生产 = 用户 config）。
+fn backfill_model_capabilities_locked_at(
+    catalog: &xai_grok_model_catalog::ModelCatalog,
+    catalog_keys: &std::collections::BTreeSet<String>,
+    path: &std::path::Path,
+) -> Result<usize> {
+    let (destination, content) = super::persist::read_follow_bound(path).map_err(|error| {
         anyhow::anyhow!(
-            "read {} for vision-capability backfill: {error}",
+            "read {} for capability backfill: {error}",
             path.display()
         )
     })?;
@@ -198,39 +214,84 @@ fn backfill_accepts_images_locked(
         else {
             continue;
         };
-        if entry.contains_key("accepts_images") {
-            continue;
+        let matched = xai_grok_model_catalog::match_model(catalog, key);
+        let mut changed = false;
+
+        // accepts_images（视觉桥 D8，语义不变）：显式键永远赢。
+        if !entry.contains_key("accepts_images") {
+            if let Some(capability) = matched.as_ref().and_then(|m| m.entry.accepts_images) {
+                // 无显式键时的解析缺省：覆盖内建/预取条目 → true；用户新建条目 → false。
+                let would_be_default = catalog_keys.contains(key);
+                if capability != would_be_default {
+                    entry.insert("accepts_images", toml_edit::value(capability));
+                    changed = true;
+                    tracing::info!(
+                        model_key = %key,
+                        accepts_images = capability,
+                        "model catalog: accepts_images backfilled from catalog (vision bridge D8)"
+                    );
+                }
+            }
         }
-        let Some(matched) = xai_grok_model_catalog::match_model(catalog, key) else {
-            continue;
-        };
-        let Some(capability) = matched.entry.accepts_images else {
-            continue;
-        };
-        // 无显式键时的解析缺省：覆盖内建/预取条目 → true；用户新建条目 → false。
-        let would_be_default = catalog_keys.contains(key);
-        if capability == would_be_default {
-            continue;
+
+        // 思考位 + 档位（目录思考位回填）：目录 reasoning 为 true 才动；显式键
+        // （含显式 false / 空表）永远赢，档位按枚举过滤未知值、全未知不写。
+        if matched.as_ref().is_some_and(|m| m.entry.reasoning == Some(true)) {
+            if !entry.contains_key("supports_reasoning_effort") {
+                entry.insert("supports_reasoning_effort", toml_edit::value(true));
+                changed = true;
+                tracing::info!(
+                    model_key = %key,
+                    "model catalog: supports_reasoning_effort backfilled from catalog"
+                );
+            }
+            if !entry.contains_key("reasoning_efforts") {
+                let levels = matched
+                    .as_ref()
+                    .and_then(|m| m.entry.reasoning_efforts.as_deref())
+                    .and_then(enum_valid_efforts);
+                if let Some(levels) = levels {
+                    let mut efforts = toml_edit::Array::new();
+                    for level in &levels {
+                        efforts.push(level.as_str());
+                    }
+                    entry.insert("reasoning_efforts", toml_edit::value(efforts));
+                    changed = true;
+                    tracing::info!(
+                        model_key = %key,
+                        efforts = ?levels,
+                        "model catalog: reasoning_efforts backfilled from catalog"
+                    );
+                }
+            }
         }
-        entry.insert("accepts_images", toml_edit::value(capability));
-        written += 1;
-        tracing::info!(
-            model_key = %key,
-            accepts_images = capability,
-            "model catalog: accepts_images backfilled from catalog (vision bridge D8)"
-        );
+
+        if changed {
+            written += 1;
+        }
     }
     if written == 0 {
         return Ok(0);
     }
     let content = doc.to_string();
-    super::persist::atomic_write_follow_bound(&path, &destination, &content).map_err(|error| {
+    super::persist::atomic_write_follow_bound(path, &destination, &content).map_err(|error| {
         anyhow::anyhow!(
-            "write {} for vision-capability backfill: {error}",
+            "write {} for capability backfill: {error}",
             path.display()
         )
     })?;
     Ok(written)
+}
+
+/// 目录档位字符串按 `ReasoningEffort` 枚举过滤（小写归一在解析层已做）；
+/// 全部未知 → `None`（不写空表）。
+fn enum_valid_efforts(levels: &[String]) -> Option<Vec<String>> {
+    let valid: Vec<String> = levels
+        .iter()
+        .filter(|level| level.parse::<xai_grok_sampling_types::ReasoningEffort>().is_ok())
+        .cloned()
+        .collect();
+    (!valid.is_empty()).then_some(valid)
 }
 
 #[cfg(test)]
@@ -384,3 +445,234 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), bad, "file must be untouched");
     }
 }
+
+#[cfg(test)]
+mod backfill_capability_tests {
+    use super::*;
+    use xai_grok_model_catalog::{CatalogEntry, CatalogSource, ModelCatalog, ModelPricing};
+
+    /// 目录条目：id 与用户 config 键按 by_id 精确命中。
+    fn catalog_entry(id: &str, reasoning: Option<bool>, efforts: Option<Vec<&str>>) -> CatalogEntry {
+        CatalogEntry {
+            id: id.to_string(),
+            provider_id: "zai".to_string(),
+            source: CatalogSource::ModelsDev,
+            name: format!("name-of-{id}"),
+            canonical_id: None,
+            reasoning,
+            reasoning_efforts: efforts.map(|levels| levels.into_iter().map(String::from).collect()),
+            accepts_images: None,
+            pricing: ModelPricing::default(),
+            context_length: Some(128_000),
+            max_completion_tokens: None,
+        }
+    }
+
+    fn config_with_entry(id: &str, body: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, body).unwrap();
+        (dir, path)
+    }
+
+    fn model_entry_toml(id: &str, extra: &str) -> String {
+        format!("[model.\"{id}\"]\nmodel = \"{id}\"\napi_key = \"sk-test-secret\"\n{extra}")
+    }
+
+    fn read(path: &std::path::Path) -> toml::Value {
+        toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn reasoning_flag_and_levels_backfilled_when_keys_missing() {
+        let catalog = ModelCatalog::new(vec![catalog_entry(
+            "glm-5.3-flash",
+            Some(true),
+            Some(vec!["max", "high", "low"]),
+        )]);
+        let (_dir, path) = config_with_entry(
+            "glm-5.3-flash",
+            &model_entry_toml("glm-5.3-flash", "context_window = 1048576\n"),
+        );
+        let written = backfill_model_capabilities_locked_at(
+            &catalog,
+            &std::collections::BTreeSet::new(),
+            &path,
+        )
+        .unwrap();
+        assert_eq!(written, 1);
+        let parsed = read(&path);
+        let entry = &parsed["model"]["glm-5.3-flash"];
+        assert_eq!(entry["supports_reasoning_effort"].as_bool(), Some(true));
+        let efforts: Vec<&str> = entry["reasoning_efforts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap())
+            .collect();
+        assert_eq!(efforts, ["max", "high", "low"], "档位保目录源序");
+        assert_eq!(entry["context_window"].as_integer(), Some(1_048_576));
+    }
+
+    #[test]
+    fn explicit_false_and_explicit_levels_are_never_overwritten() {
+        let catalog = ModelCatalog::new(vec![catalog_entry(
+            "glm-5.3-flash",
+            Some(true),
+            Some(vec!["max", "high", "low"]),
+        )]);
+        let (_dir, path) = config_with_entry(
+            "glm-5.3-flash",
+            &model_entry_toml(
+                "glm-5.3-flash",
+                "supports_reasoning_effort = false\nreasoning_efforts = [\"high\"]\n",
+            ),
+        );
+        let written = backfill_model_capabilities_locked_at(
+            &catalog,
+            &std::collections::BTreeSet::new(),
+            &path,
+        )
+        .unwrap();
+        assert_eq!(written, 0, "显式键（含 false / 既有列表）一律不碰");
+        let parsed = read(&path);
+        let entry = &parsed["model"]["glm-5.3-flash"];
+        assert_eq!(entry["supports_reasoning_effort"].as_bool(), Some(false));
+        assert_eq!(
+            entry["reasoning_efforts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap())
+                .collect::<Vec<&str>>(),
+            ["high"]
+        );
+    }
+
+    #[test]
+    fn empty_levels_array_counts_as_explicit_and_is_kept() {
+        let catalog = ModelCatalog::new(vec![catalog_entry(
+            "glm-5.3-flash",
+            Some(true),
+            Some(vec!["max", "high", "low"]),
+        )]);
+        let (_dir, path) = config_with_entry(
+            "glm-5.3-flash",
+            &model_entry_toml("glm-5.3-flash", "reasoning_efforts = []\n"),
+        );
+        let written = backfill_model_capabilities_locked_at(
+            &catalog,
+            &std::collections::BTreeSet::new(),
+            &path,
+        )
+        .unwrap();
+        assert_eq!(written, 1, "布尔位缺失仍回填 true");
+        let parsed = read(&path);
+        let entry = &parsed["model"]["glm-5.3-flash"];
+        assert_eq!(entry["supports_reasoning_effort"].as_bool(), Some(true));
+        assert_eq!(
+            entry["reasoning_efforts"].as_array().unwrap().len(),
+            0,
+            "显式空表 = 用户意图，不代写档位"
+        );
+    }
+
+    #[test]
+    fn catalog_without_reasoning_writes_nothing() {
+        let catalog = ModelCatalog::new(vec![catalog_entry("glm-5.3-flash", Some(false), None)]);
+        let (_dir, path) =
+            config_with_entry("glm-5.3-flash", &model_entry_toml("glm-5.3-flash", ""));
+        let written = backfill_model_capabilities_locked_at(
+            &catalog,
+            &std::collections::BTreeSet::new(),
+            &path,
+        )
+        .unwrap();
+        assert_eq!(written, 0);
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert!(!body.contains("supports_reasoning_effort"));
+        assert!(!body.contains("reasoning_efforts"));
+    }
+
+    #[test]
+    fn unknown_level_values_are_filtered_and_all_unknown_skips_write() {
+        let catalog = ModelCatalog::new(vec![catalog_entry(
+            "glm-5.3-flash",
+            Some(true),
+            Some(vec!["bogus", "nope"]),
+        )]);
+        let (_dir, path) =
+            config_with_entry("glm-5.3-flash", &model_entry_toml("glm-5.3-flash", ""));
+        let written = backfill_model_capabilities_locked_at(
+            &catalog,
+            &std::collections::BTreeSet::new(),
+            &path,
+        )
+        .unwrap();
+        assert_eq!(written, 1, "布尔位照常回填");
+        let parsed = read(&path);
+        let entry = &parsed["model"]["glm-5.3-flash"];
+        assert_eq!(entry["supports_reasoning_effort"].as_bool(), Some(true));
+        assert!(
+            entry.get("reasoning_efforts").is_none(),
+            "全未知档位不写空表"
+        );
+    }
+
+    #[test]
+    fn backfill_is_idempotent() {
+        let catalog = ModelCatalog::new(vec![catalog_entry(
+            "glm-5.3-flash",
+            Some(true),
+            Some(vec!["low", "high", "max"]),
+        )]);
+        let (_dir, path) =
+            config_with_entry("glm-5.3-flash", &model_entry_toml("glm-5.3-flash", ""));
+        let keys = std::collections::BTreeSet::new();
+        assert_eq!(
+            backfill_model_capabilities_locked_at(&catalog, &keys, &path).unwrap(),
+            1
+        );
+        assert_eq!(
+            backfill_model_capabilities_locked_at(&catalog, &keys, &path).unwrap(),
+            0,
+            "第二轮全部命中显式键，零写入"
+        );
+        let body = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(body.matches("supports_reasoning_effort").count(), 1);
+        assert_eq!(body.matches("reasoning_efforts").count(), 1);
+    }
+
+    #[test]
+    fn accepts_images_semantics_unchanged_explicit_wins_and_default_skip() {
+        // 本用例只验 accepts_images 语义；目录 reasoning 置 None 让思考位分支保持静默。
+        let mut entry = catalog_entry("glm-5.3-flash", None, None);
+        entry.accepts_images = Some(true);
+        let catalog = ModelCatalog::new(vec![entry]);
+        // 用户新建条目（不在 catalog_keys）：显式 false 保留。
+        let (_dir, path) = config_with_entry(
+            "glm-5.3-flash",
+            &model_entry_toml("glm-5.3-flash", "accepts_images = false\n"),
+        );
+        let keys = std::collections::BTreeSet::new();
+        assert_eq!(
+            backfill_model_capabilities_locked_at(&catalog, &keys, &path).unwrap(),
+            0
+        );
+        assert_eq!(
+            read(&path)["model"]["glm-5.3-flash"]["accepts_images"].as_bool(),
+            Some(false)
+        );
+        // 缺键且缺省相等（catalog_keys 命中 → 缺省 true = 目录 true）：跳过。
+        let (_dir2, path2) =
+            config_with_entry("glm-5.3-flash", &model_entry_toml("glm-5.3-flash", ""));
+        let mut keys = std::collections::BTreeSet::new();
+        keys.insert("glm-5.3-flash".to_string());
+        assert_eq!(
+            backfill_model_capabilities_locked_at(&catalog, &keys, &path2).unwrap(),
+            0
+        );
+        assert!(read(&path2)["model"]["glm-5.3-flash"].get("accepts_images").is_none());
+    }
+}
+
