@@ -345,6 +345,49 @@ fn revoked_sampling_info() -> xai_grok_sampler::SamplingErrorInfo {
     }
 }
 
+/// LOCAL（DeepSeek hosted search D1）：hosted 搜索工具的供应商档位。
+///
+/// builder 对 backend search 一向同时组装 `WebSearch` 与 `XSearch`（xAI 专有
+/// 类型）；DeepSeek 官方 responses `tools` 表对未知类型按「忽略」处理，`x_search`
+/// 属脏声明。官方文档+实测双源确认 responses 内置 `web_search` 仅 `deepseek-v4-pro`
+/// 执行（flash 静默忽略）——本分流的职责是让声明面与供应商对齐，启用仍由用户
+/// 显式开 `supports_backend_search`（评估文档 `deepseek-responses-builtin-tools-eval.md`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum HostedSearchVendor {
+    /// xAI / 未识别 host：维持 builder 组装结果（`web_search` + `x_search`）。
+    #[default]
+    Xai,
+    /// 推理 `base_url` 指向 `api.deepseek.com`：只声明 `web_search`。
+    Deepseek,
+}
+
+/// 按推理 `base_url` 判定 hosted 搜索供应商；host 匹配复用四十九期
+/// provider-usage 的 `provider_for_base_url` 先例（DeepSeek = host `api.deepseek.com`）。
+pub(crate) fn hosted_search_vendor_for(base_url: &str) -> HostedSearchVendor {
+    if xai_grok_provider_usage::provider_for_base_url(base_url)
+        == Some(xai_grok_provider_usage::UsageProviderId::DeepSeek)
+    {
+        HostedSearchVendor::Deepseek
+    } else {
+        HostedSearchVendor::Xai
+    }
+}
+
+/// Deepseek 档剥掉 `XSearch` 声明，其余档位原样返回。
+fn vendor_filtered_hosted_tools(
+    tools: Vec<xai_grok_sampling_types::HostedTool>,
+    vendor: HostedSearchVendor,
+) -> Vec<xai_grok_sampling_types::HostedTool> {
+    if vendor == HostedSearchVendor::Deepseek {
+        tools
+            .into_iter()
+            .filter(|tool| !matches!(tool, xai_grok_sampling_types::HostedTool::XSearch { .. }))
+            .collect()
+    } else {
+        tools
+    }
+}
+
 impl SessionActor {
     pub(super) async fn prepare_tool_definitions_timed(&self) -> (Vec<ToolDefinition>, u64) {
         let prep_span = region::Region::from_span(tracing::info_span!(
@@ -395,13 +438,17 @@ impl SessionActor {
     }
 
     /// Hosted tools with overrides applied, plus the applied overrides to echo, in one pass.
+    /// DeepSeek 官方 API 的模型在此剥掉 `XSearch`（供应商分流，见 [`HostedSearchVendor`]）。
     fn resolve_hosted(
         &self,
     ) -> (
         Vec<xai_grok_sampling_types::HostedTool>,
         xai_grok_sampling_types::ToolOverrides,
     ) {
-        let mut tools = self.agent.borrow().hosted_tools().to_vec();
+        let mut tools = vendor_filtered_hosted_tools(
+            self.agent.borrow().hosted_tools().to_vec(),
+            self.hosted_search_vendor.get(),
+        );
         let applied = xai_grok_sampling_types::apply_tool_overrides(
             &mut tools,
             self.tool_overrides.borrow().as_ref(),
@@ -2399,5 +2446,65 @@ mod stream_drain_tests {
             "sampling result revoked by turn cancellation or rewind"
         );
         assert!(!result.is_retryable);
+    }
+}
+
+#[cfg(test)]
+mod hosted_search_vendor_tests {
+    use super::{hosted_search_vendor_for, vendor_filtered_hosted_tools, HostedSearchVendor};
+    use xai_grok_sampling_types::HostedTool;
+
+    #[test]
+    fn deepseek_official_host_maps_to_deepseek_vendor() {
+        assert_eq!(
+            hosted_search_vendor_for("https://api.deepseek.com"),
+            HostedSearchVendor::Deepseek
+        );
+        assert_eq!(
+            hosted_search_vendor_for("https://api.deepseek.com/v1"),
+            HostedSearchVendor::Deepseek
+        );
+        assert_eq!(
+            hosted_search_vendor_for("https://API.DEEPSEEK.com/v1"),
+            HostedSearchVendor::Deepseek
+        );
+    }
+
+    #[test]
+    fn non_deepseek_hosts_stay_on_xai_vendor() {
+        assert_eq!(
+            hosted_search_vendor_for("https://api.x.ai/v1"),
+            HostedSearchVendor::Xai
+        );
+        assert_eq!(
+            hosted_search_vendor_for("https://ark.cn-beijing.volces.com/api/coding/v3"),
+            HostedSearchVendor::Xai
+        );
+        assert_eq!(
+            hosted_search_vendor_for("https://api.cline.bot/api/v1"),
+            HostedSearchVendor::Xai
+        );
+        assert_eq!(hosted_search_vendor_for(""), HostedSearchVendor::Xai);
+    }
+
+    #[test]
+    fn deepseek_vendor_strips_x_search_keeps_web_search() {
+        let tools = vec![
+            HostedTool::WebSearch { options: None },
+            HostedTool::XSearch { options: None },
+        ];
+        let filtered = vendor_filtered_hosted_tools(tools, HostedSearchVendor::Deepseek);
+        assert_eq!(filtered.len(), 1);
+        assert!(matches!(filtered[0], HostedTool::WebSearch { .. }));
+    }
+
+    #[test]
+    fn xai_vendor_keeps_builder_assembly() {
+        let tools = vec![
+            HostedTool::WebSearch { options: None },
+            HostedTool::XSearch { options: None },
+        ];
+        let kept = vendor_filtered_hosted_tools(tools, HostedSearchVendor::Xai);
+        assert_eq!(kept.len(), 2);
     }
 }
