@@ -868,3 +868,36 @@
   回归 SuperGrok 块零变化。merge `25fa7be`。
 - **遗留**：随下次发版；`grants`/`unavailable` 标记活体未采到（本机余额无赠金），
   夹具单测覆盖。PATCHES 四十九期。
+
+### 2026-10-18 DeepSeek hosted-search 供应商分流（feat/local-deepseek-hosted-search-gate）——收口
+
+- **内容**：handoff 任务单 ② responses 通道（用户拍板「分期」，anthropic 通道
+  另立项排队）。`SessionActor.hosted_search_vendor` 档位（spawn 按 base_url
+  host 判定、模型切换同 `supports_backend_search` 更新点随采样配置更新），
+  `resolve_hosted` 在 Deepseek 档剥 xAI 专有 `XSearch` 声明；漏斗唯一性核实
+  （turn/side_call/recap/compaction 全走 `hosted_tools_for_turn`），sampler /
+  sampling-types / agent / pager 零改动。host 判定复用 provider-usage
+  `provider_for_base_url` 先例。启用仍由用户显式 `supports_backend_search = true`；
+  user-guide 26/11 随更。merge `60ab08a`，commit `dd29bde`。
+- **验证**：cargo check shell --lib 0 error；ctest（GATE_FORCE）
+  `hosted_search_vendor` 4/4；测试夹具 SessionActor 直构 11 处补缺字段；
+  合并树三 crate check 0 error。
+- **遗留**：活体验证（v4-pro 条目 + `supports_backend_search = true` 全链路，
+  看 x_search 不再出现在请求）随新客户端；anthropic 通道（flash 可用，
+  messages 流 `server_tool_use` 块解析）另立项。PATCHES 五十期。
+
+### 2026-10-18 目录思考位回填 reasoning_efforts（feat/local-catalog-reasoning-backfill）——收口
+
+- **内容**：handoff 任务单 ③。施工前现场重抓双源载荷推翻「目录无档位」旧
+  dump 结论（OpenRouter `reasoning.supported_efforts` / models.dev
+  `reasoning_options` 原厂条目均带档位），按用户指示升级目录驱动零手写、
+  静态表方案作废。`CatalogEntry.reasoning_efforts`（归一化解析）+
+  `backfill_model_capabilities` 单遍历三字段 + `prices.cache` v4；红线 = 只在
+  键缺失时回填、显式键（含 false/空表）永远赢、目录 reasoning=true 才写、
+  档位按枚举过滤全未知不写；幂等 + 逐字段 unified 日志。用户本机 glm-5.3-flash
+  （Ark）已手工补两行，另两条 glm 条目随特性自动补。D8「backfill 无单测」
+  遗留补齐（`_at(path)` 参数化 + 7 用例）。merge `1fbc991`，commit `7a740c0`。
+- **验证**：model-catalog lib 43/43（+2）；ctest（GATE_FORCE）
+  `backfill_capability` 7/7；合并树三 crate check 0 error。
+- **遗留**：活体验证（删测试条目思考位 → 启动看回填日志与 /effort 菜单）
+  随新客户端；hot 生效语义沿 D8（下次启动）。PATCHES 五十一期。

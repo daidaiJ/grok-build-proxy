@@ -380,22 +380,35 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### DeepSeek 内置 web_search 接线 + 退出提示二进制名修复 — 调研/修复完成，交接待实施（2026-10-18）
+### DeepSeek hosted-search 分流 + 目录思考位回填 + 退出提示二进制名 — 已合 main，随 v1.0.63 发版（2026-10-18）
 
-- **当前状态：** 分支 `fix/local-exit-hint-bin-name`（4 commits，测试绿）待合 main
-  发版；三件实现面均未开工——① 退出提示二进制名（已修待发版）② 内置 web_search
-  宿主门控放行（responses/anthropic 通道二选一，先拍板）③ 目录思考位回填
-  `supports_reasoning_effort`（设计定稿待拍板）。
-- **关键证据：** responses web_search 仅 v4-pro 执行（官方 API 实测双源确认）；
-  fork 管线已通（splice/事件/呈现），缺门控；dsh 默认即 flash + anthropic 通道
-  `web_search_20250305`（flash 可用通路）。
-- **验收标准：** 见 handoff 任务单 §4（发版 + 通道拍板施工 + 回填施工 + 活体验证）。
+- **当前状态：** 交接任务单四件全部收口：① 退出提示二进制名（四十八期追认两处
+  `print_exit_resume_hint` / `screen_mode_relaunch_resume_hint`，merge `86c3c43`，
+  CI run `39092557797` success）② DeepSeek hosted-search 供应商分流（PATCHES
+  五十期，merge `60ab08a`：`SessionActor.hosted_search_vendor` 档位 + 
+  `resolve_hosted` 剥 XSearch，api.deepseek.com 模型 + 用户显式
+  `supports_backend_search = true` 即发 DeepSeek 服务端 `web_search`——仅
+  v4-pro 执行，flash 静默忽略；sampler/agent/pager 零改动）③ 目录思考位回填
+  （PATCHES 五十一期，merge `1fbc991`：OpenRouter `reasoning.supported_efforts` /
+  models.dev `reasoning_options` 解析 + 启动预热回填 `supports_reasoning_effort`
+  与 `reasoning_efforts`，**只在键缺失时写、显式键永远赢**、prices.cache v4）。
+  用户本机 glm-5.3-flash（Ark）已按拍板手工补两行，另两条 glm 条目随回填自动补。
+  ④ anthropic 通道（flash 可用，messages 流 server_tool_use 块解析，估 2–3
+  人天）另立项排队。
+- **验证：** ctest（GATE_FORCE）`hosted_search_vendor` 4/4、
+  `backfill_capability` 7/7；model-catalog lib 43/43（+2）；合并树
+  shell/model-catalog/pager check 0 error；CI build run `39097429149`
+  （双特性合并树）。发版补记（run IDs + 部署）随发版记录 commit。
+- **未验证事项：**
+  - [ ] 退出提示二进制名活体（grok2 退出显示 `grok2 --resume <id>`，随新客户端）
+  - [ ] v4-pro 试法（config 条目 + supports_backend_search=true；分流后请求
+        应无 `x_search`、搜索块 ACP 呈现）
+  - [ ] 思考位回填活体（unified `model catalog: capabilities backfilled` 日志 +
+        glm-5.3-flash `/effort` 菜单 low/high/max 无 medium）
+  - [ ] anthropic 通道 flash + `web_search_20250305` 直测（立项后）
 - **详情指针：** [`.handoff/deepseek-websearch-wiring.md`](.handoff/deepseek-websearch-wiring.md)
-
-### 未验证事项
-- [ ] 退出提示二进制名活体（grok2 退出显示，随新客户端）
-- [ ] v4-pro 零代码试法（config 条目 + supports_backend_search=true）
-- [ ] anthropic 通道 flash + web_search_20250305 直测
+  （任务单全文，已收口）；PATCHES 五十/五十一期；roadmap §6 当日两条目；
+  评估文档 `docs-local/deepseek-responses-builtin-tools-eval.md` 施工记录节。
 
 ### DeepSeek 官方 API 余额上 /usage 面板 — 已随 v1.0.62 发版（2026-10-17）
 

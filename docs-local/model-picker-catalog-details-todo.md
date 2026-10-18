@@ -53,7 +53,7 @@
 
 估计净开发 1–2 人天（纯 pager 面 + 既有数据源，无 shell 改动）。
 
-## 追加需求（2026-10-18 口述，未施工）：按目录思考位回填模型条目
+## 追加需求（2026-10-18 口述，已施工随 v1.0.63）：按目录思考位回填模型条目
 
 > 需求原话：以后通过 /model 切模型时，根据模型是否支持思考，来看要不要给配置文件
 > 里面补这个（`supports_reasoning_effort`）。动机即发票：手配的 glm-5.3-flash 条目
@@ -62,6 +62,21 @@
 **设计草案**：目录命中（复用 v1.0.51 匹配索引）`reasoning == Some(true)` 且用户
 config 条目未显式开 `supports_reasoning_effort` → toml_edit 定点写回 `true`。
 写回通道复用 /auth T2/T3 的 `write_model_entries`（flock + 全批原子 + 注释保留）。
+
+**施工实况（2026-10-18，PATCHES 五十一期，分支 feat/local-catalog-reasoning-backfill）**：
+施工前现场重抓双源原始载荷推翻「目录只有布尔位、无档位列表」的 dump 结论——
+OpenRouter `reasoning.supported_efforts`（`z-ai/glm-5.3-flash` →
+`['max','high','low']`，与端点实测方言一致）与 models.dev `reasoning_options`
+（原厂条目 glm-5.3 系 → `['low','high','max']`）都带档位数据。按用户指示升级
+**目录驱动零手写**，原拍板点 4「档位不代写」修订为：目录档位在键缺失时随布尔位
+一并写回（按 `ReasoningEffort` 枚举过滤未知值、全未知不写），显式键（含 false /
+空表）永远赢。拍板点 1 落 b 案（启动预热同点遍历，与 D8 合并为单遍历三字段
+`backfill_model_capabilities`）；拍板点 3/5 按原设计落地；拍板点 2 沿 D8 语义
+（config 写回，下次启动生效）。`prices.cache` v4；D8「backfill 无单测」遗留
+补齐（`_at(path)` 参数化 + 7 用例）。拍板点 4 的「host→档位静态表」（handoff
+可选项）作废——目录即数据源，避免自维护漂移。
+
+**原拍板点存档**：
 
 **拍板点**：
 1. **触发点两案**：a) 挂 `/model` 切换生效时（本需求原话）；b) **挂启动预热**——

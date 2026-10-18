@@ -44,3 +44,8 @@
 
 测试同步改动态二进制名断言（测试进程 argv[0] 非确定，期望串按同一函数现算）。
 `doctor fix.rs` 别名常量族维持 open（修法方向见上节）。
+
+**2026-10-18 收口**：修复分支 `fix/local-exit-hint-bin-name`（merge `86c3c43`）
+合入 main，随 tag `v1.0.63` 发版（CI build run `39097429149`）；退出提示活体
+抽查项（grok2 退出显示 `grok2 --resume <id>`）随新客户端。本 issue 剩余 open
+面 = `doctor fix.rs` 别名常量族（P3）。

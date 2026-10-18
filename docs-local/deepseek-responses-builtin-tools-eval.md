@@ -200,3 +200,25 @@ fork 的 `ApiBackend` 本就有 Anthropic Messages 变体（`stream/messages.rs`
       服务端渲染/反爬穿透），随需求另议。
 - ~~Search/Fetch 独立计费~~已核：官方计费节 5 元/1000 次成功请求；宿主 server 端工具调用
   2026-11-01 起同价计费（见「官方文档要点」）。
+
+## 施工记录（2026-10-18，随 v1.0.63）
+
+「若立项」节的 D1/D2a 已落地（用户拍板：分期，本轮 responses 通道，anthropic
+通道另立项排队）：
+
+- **D1 供应商分流**：`SessionActor.hosted_search_vendor`（Xai 缺省 | Deepseek），
+  spawn 按 `sampling_config.base_url` host 判定（复用四十九期
+  `provider_for_base_url` 先例）、模型切换随采样配置更新；`resolve_hosted`
+  在 Deepseek 档剥 `XSearch`。全部上线路径唯一漏斗已核实（turn / side_call /
+  recap / compaction 均经 `hosted_tools_for_turn`），子代理会话各自过滤。
+  PATCHES 五十期；roadmap §6 当日条目。
+- **D2a 能力位**：`supports_backend_search = true` 即启用（语义文档化进
+  user-guide 26/11）；不自动开。
+- **零代码试法（§零代码试法）仍有效**：v4-pro 条目手工配置即可实测；分流后
+  请求不再携带 `x_search` 脏声明。
+- **flash 披露**：user-guide 注明 responses 内置 web_search 仅 v4-pro 执行、
+  flash 静默忽略。
+- **未做（另立项）**：anthropic 通道（`web_search_20250305`，flash 可用）——
+  messages 请求声明 + 流侧解析 `server_tool_use` / `web_search_tool_result`
+  块，估 2–3 人天；独立 Search/Fetch REST 集成（与模型无关、成本透明）仍是
+  flash 联网搜索的更稳主路径。

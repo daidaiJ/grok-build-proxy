@@ -3324,3 +3324,74 @@ bin 核对 exe mtime）**：/model 切官方 1017 → /usage 面板「余额 —
 `39030472409` 双 job success、4 资产非草稿；本机部署
 `grok 1.0.62 (6d6161809c5c)`（D:\tool-cli\grok2，rename-aside 替换），回滚点
 `grok2.exe.1.0.61-acc31ae.bak`。
+
+## 五十期：DeepSeek hosted-search 供应商分流——api.deepseek.com 模型剥 x_search（2026-10-18，分支 feat/local-deepseek-hosted-search-gate）
+
+**需求**：DeepSeek 内置 web_search 接线 handoff 任务单 ②（responses 通道，用户
+拍板「分期：本轮 responses，anthropic 另立项」）。评估文档
+`docs-local/deepseek-responses-builtin-tools-eval.md` D1/D2a 落地：builder 对
+backend search 一向供应商盲双发 `WebSearch`+`XSearch`（`x_search` 是 xAI 专有
+类型，DeepSeek 官方 tools 表对未知类型「忽略」——无害但脏），把声明面按供应商
+对齐；启用位 `supports_backend_search` 语义保持「用户显式开启」，不自动。
+
+- **落点（sampler / sampling-types / agent / pager 全零改动）**：
+  `SessionActor` 增 `hosted_search_vendor: Cell<HostedSearchVendor>`
+  （`Xai`（缺省，维持双发）｜`Deepseek`）；spawn 按 `sampling_config.base_url`
+  host 判定、模型切换在 `supports_backend_search` 同点随采样配置更新（unified
+  日志 `backend_search: model switch` 加 `hosted_search_vendor` 字段）；
+  `resolve_hosted` 在 Deepseek 档剥 `XSearch`——该函数是全部上线路径的唯一漏斗
+  （turn / side_call / recap / compaction 均经 `hosted_tools_for_turn`），
+  主会话与子代理会话各自按自己的 base_url 过滤，天然模型切换正确。
+- **host 判定复用先例**：`xai_grok_provider_usage::provider_for_base_url`
+  == `Some(DeepSeek)`（四十九期 host 匹配，`api.deepseek.com`，大小写不敏感），
+  单一事实源。
+- **D2a**：不新增配置键；`supports_backend_search = true` 在 DeepSeek 模型上
+  即「发 DeepSeek 服务端 web_search」。user-guide 26-config-reference 行 +
+  11-custom-models 段随更（注明 responses 内置 web_search 仅 v4-pro 执行、
+  flash 静默忽略）。
+
+**验证**：cargo check shell --lib 0 error；ctest（GATE_FORCE）过滤
+`hosted_search_vendor` 4/4（host 判定三方言 + Deepseek 剥 XSearch 保 WebSearch +
+Xai 保持双发）；测试夹具 SessionActor 直构 11 处补 `hosted_search_vendor:
+Default::default()`；合并树（双特性同 main）cargo check shell/model-catalog/pager
+--lib 0 error。发版后活体验证项：v4-pro 条目 + `supports_backend_search = true`
+实测全链路（搜索块呈现 + x_search 不再出现在请求）。
+
+## 五十一期：目录思考位回填——reasoning_efforts 档位随目录自动补齐（2026-10-18，分支 feat/local-catalog-reasoning-backfill）
+
+**需求**：handoff 任务单 ③。原设计（`model-picker-catalog-details-todo.md`
+追加节）断言「目录只有思考布尔位、无档位列表」，静态档位表为可选项；施工前
+现场重抓双源原始载荷推翻该结论——**OpenRouter `reasoning.supported_efforts`**
+（`z-ai/glm-5.3-flash` → `['max','high','low']`，与端点实测方言一致）与
+**models.dev `reasoning_options`**（原厂白名单条目，zai/deepseek 的 glm-5.3 系
+→ `['low','high','max']`）都带档位数据。按用户指示升级为目录驱动零手写，
+静态表方案作废。
+
+- **model-catalog**：`CatalogEntry` 增 `reasoning_efforts: Option<Vec<String>>`
+  （serde default，旧缓存兼容）；OpenRouter 解析 `reasoning` 对象（宽容布尔型，
+  取 `supported_efforts`），models.dev 解析 `reasoning_options` 首个 effort 型
+  条目 values；归一化 = 小写/去空白/去空/去重/保源序（`normalize_effort_levels`），
+  未知值留给消费方按枚举过滤。`prices.cache` v3→v4（旧缓存视为过期重取）。
+- **shell 回填**：`backfill_accepts_images` 泛化为 `backfill_model_capabilities`
+  单遍历三字段（D8 accepts_images 语义逐字不变）。新字段红线（用户拍板）：
+  **只在键缺失时回填**——条目已显式写 `supports_reasoning_effort`（含 false）或
+  `reasoning_efforts`（含空表）一律不碰；目录 `reasoning == Some(true)` 才动；
+  档位按 `ReasoningEffort` FromStr 过滤未知值，全未知不写。幂等（第二轮零写入），
+  逐字段 tracing::info（`model catalog: supports_reasoning_effort/reasoning_efforts
+  backfilled from catalog`），启动预热统一出口改记
+  `model catalog: capabilities backfilled`。
+- **hot 语义**：沿 D8 先例——回填写的是 config，会话内已加载的 ModelInfo 到
+  下次启动生效（嵌入式无 watcher）；用户本机 glm-5.3-flash（Ark 条目）已按
+  拍板手工补两行（`supports_reasoning_effort = true` +
+  `reasoning_efforts = ["low","high","max"]`），另两条 glm 条目（cline-pass
+  默认档 / z-ai 网关）随本特性下次启动自动补齐。
+- **既有遗留补齐**：D8 「backfill 无单测」本期限定补齐——locked 实现参数化
+  `_at(path)`（生产传用户 config 路径，测试传 tempdir）+ 7 用例
+  （双写/显式 false 与既有列表不碰/显式空表保留/目录无 reasoning 不写/未知档位
+  过滤与全未知跳写/幂等/accepts_images 语义回归）。
+
+**验证**：cargo check model-catalog/shell --lib 0 error；model-catalog lib
+43/43（新增 2：OpenRouter 归一化与布尔容忍 / models.dev effort 条目与 toggle
+缺席）；ctest（GATE_FORCE）过滤 `backfill_capability` 7/7；合并树三 crate
+--lib check 0 error。发版后活体验证项：删除测试条目的思考位后启动看回填日志
+（unified `model catalog: capabilities backfilled`）与 /effort 菜单。
