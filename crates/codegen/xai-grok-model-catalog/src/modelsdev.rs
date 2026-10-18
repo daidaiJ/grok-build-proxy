@@ -30,6 +30,10 @@ struct ModelsDevModel {
     canonical_model_id: Option<String>,
     #[serde(default)]
     reasoning: Option<bool>,
+    /// LOCAL（目录思考位回填）：`reasoning_options` 里的 effort 条目带档位方言
+    /// （如 zai 原厂 glm-5.3 系 → low/high/max）；缺席/无 effort 条目 = None。
+    #[serde(default)]
+    reasoning_options: Vec<DevReasoningOption>,
     /// LOCAL（视觉桥 D8）：`modalities.input`（缺席 = 源未给，`None`）。
     #[serde(default)]
     modalities: Option<DevModalities>,
@@ -37,6 +41,14 @@ struct ModelsDevModel {
     limit: DevLimit,
     #[serde(default)]
     cost: DevCost,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct DevReasoningOption {
+    #[serde(default, rename = "type")]
+    kind: String,
+    #[serde(default)]
+    values: Vec<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -98,6 +110,14 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
                 (Some(0.0), Some(0.0)) => (None, None, None, None),
                 (i, o) => (i, o, sane(model.cost.cache_read), sane(model.cost.cache_write)),
             };
+            // LOCAL（目录思考位回填）：首个 effort 型 reasoning_option 的 values。
+            let reasoning_efforts = model
+                .reasoning_options
+                .iter()
+                .find(|option| option.kind == "effort" && !option.values.is_empty())
+                .and_then(|option| {
+                    crate::types::normalize_effort_levels(option.values.iter().map(String::as_str))
+                });
             entries.push(CatalogEntry {
                 id: model_key,
                 provider_id: provider_id.clone(),
@@ -105,6 +125,7 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
                 name: model.name,
                 canonical_id: model.canonical_model_id.filter(|s| !s.is_empty()),
                 reasoning: model.reasoning,
+                reasoning_efforts,
                 // LOCAL（视觉桥 D8）：modalities.input 列出 "image" 即识图；缺席 = None。
                 accepts_images: model.modalities.and_then(|mo| {
                     (!mo.input.is_empty()).then(|| mo.input.iter().any(|m| m == "image"))
@@ -229,6 +250,47 @@ mod tests {
         assert!(bare.pricing.is_unpriced());
         assert_eq!(bare.context_length, None);
         assert_eq!(bare.max_completion_tokens, None);
+    }
+
+    #[test]
+    fn reasoning_options_effort_values_become_levels() {
+        let cat = parse(models_dev_fixture()).expect("fixture parses");
+        let glm = cat
+            .entries
+            .iter()
+            .find(|e| e.id == "glm-5.3-flash" && e.provider_id == "zai")
+            .expect("zai glm entry");
+        assert_eq!(
+            glm.reasoning_efforts,
+            Some(vec!["low".to_owned(), "high".to_owned(), "max".to_owned()])
+        );
+        // toggle 型条目与缺席都不给档位。
+        let claude = cat
+            .entries
+            .iter()
+            .find(|e| e.id == "claude-sonnet-4-5")
+            .expect("anthropic entry");
+        assert_eq!(claude.reasoning_efforts, None);
+        let body = r#"{
+          "zai": { "id": "zai", "models": {
+            "only-toggle": { "name": "T", "reasoning": true, "reasoning_options": [{ "type": "toggle" }] },
+            "dirty-effort": { "name": "D", "reasoning_options": [{ "type": "effort", "values": ["High", "bogus-value"] }] }
+          } }
+        }"#;
+        let cat = parse(body).expect("parse");
+        assert_eq!(
+            cat.entries.iter().find(|e| e.id == "only-toggle").unwrap().reasoning_efforts,
+            None
+        );
+        assert_eq!(
+            cat.entries
+                .iter()
+                .find(|e| e.id == "dirty-effort")
+                .unwrap()
+                .reasoning_efforts,
+            Some(vec!["high".to_owned(), "bogus-value".to_owned()]),
+            "未知值留给消费方按枚举过滤，解析层只归一化"
+        );
     }
 
     #[test]

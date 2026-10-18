@@ -319,6 +319,7 @@ mod tests {
             name: format!("name-of-{id}"),
             canonical_id: None,
             reasoning: None,
+            reasoning_efforts: None,
             accepts_images: None,
             pricing: crate::types::ModelPricing {
                 input: Some(input),
@@ -340,6 +341,7 @@ mod tests {
             name: format!("name-of-{id}"),
             canonical_id: None,
             reasoning: None,
+            reasoning_efforts: None,
             accepts_images: None,
             pricing: crate::types::ModelPricing {
                 input: Some(input),

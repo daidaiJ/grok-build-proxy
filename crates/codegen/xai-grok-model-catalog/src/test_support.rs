@@ -60,6 +60,8 @@ pub fn openrouter_fixture() -> &'static str {
       "id": "zai/glm-5.3-flash",
       "name": "GLM-5.3-Flash",
       "context_length": 128000,
+      "supported_parameters": ["reasoning", "reasoning_effort", "temperature"],
+      "reasoning": { "mandatory": true, "default_enabled": true, "supported_efforts": ["max", "high", "low"], "default_effort": "max" },
       "pricing": {
         "prompt": "0.00000015",
         "completion": "0.0000025",
@@ -83,6 +85,7 @@ pub fn models_dev_fixture() -> &'static str {
       "glm-5.3-flash": {
         "name": "GLM-5.3-Flash",
         "reasoning": true,
+        "reasoning_options": [{ "type": "toggle" }, { "type": "effort", "values": ["low", "high", "max"] }],
         "modalities": { "input": ["text"] },
         "limit": { "context": 128000, "output": 96000 },
         "cost": { "input": 0.15, "output": 2.5, "cache_read": 0.02 }

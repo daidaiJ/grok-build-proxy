@@ -52,6 +52,10 @@ struct OpenRouterModel {
     /// `reasoning` 是否在支持参数表里（缺席 = 源未给，`None`）。
     #[serde(default)]
     supported_parameters: Vec<String>,
+    /// LOCAL（目录思考位回填）：`reasoning` 能力对象（2026-10 起部分条目携带
+    /// `supported_efforts` / `default_effort`）；旧载荷可能是布尔，按 Value 宽容取。
+    #[serde(default)]
+    reasoning: Option<serde_json::Value>,
     /// LOCAL（视觉桥 D8）：`architecture.input_modalities`（缺席 = 源未给，`None`）。
     #[serde(default)]
     architecture: Option<OpenRouterArchitecture>,
@@ -102,6 +106,17 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
             let get = |key: &str| pricing.get(key).cloned().unwrap_or(serde_json::Value::Null);
             let reasoning = (!m.supported_parameters.is_empty())
                 .then(|| m.supported_parameters.iter().any(|p| p == "reasoning"));
+            // LOCAL（目录思考位回填）：`reasoning.supported_efforts` 是该模型的
+            // 档位方言（如 z-ai/glm-5.3-flash → max/high/low）；对象缺席或数组
+            // 缺席 = 源未给（None）。
+            let reasoning_efforts = m
+                .reasoning
+                .as_ref()
+                .and_then(|v| v.get("supported_efforts"))
+                .and_then(|v| v.as_array())
+                .and_then(|levels| {
+                    crate::types::normalize_effort_levels(levels.iter().filter_map(|v| v.as_str()))
+                });
             // LOCAL（视觉桥 D8）：input_modalities 列出 "image" 即识图；空列表 = 源未给（None）。
             let accepts_images = m.architecture.and_then(|a| {
                 (!a.input_modalities.is_empty())
@@ -114,6 +129,7 @@ pub fn parse(body: &str) -> Result<ModelCatalog, CatalogError> {
                 name: m.name,
                 canonical_id: m.canonical_slug.filter(|s| !s.is_empty()),
                 reasoning,
+                reasoning_efforts,
                 accepts_images,
                 pricing: ModelPricing {
                     input: price_from(get("prompt")).map(per_million),
@@ -206,6 +222,43 @@ mod tests {
         let e = &cat.entries[0];
         assert_eq!(e.pricing.input, Some(2.0));
         assert_eq!(e.pricing.output, Some(8.0));
+    }
+
+    #[test]
+    fn reasoning_object_efforts_are_normalized() {
+        let cat = parse(openrouter_fixture()).expect("fixture parses");
+        let glm = cat
+            .entries
+            .iter()
+            .find(|e| e.id == "zai/glm-5.3-flash")
+            .expect("glm entry");
+        // supported_efforts 原样 [max, high, low]，保源序。
+        assert_eq!(
+            glm.reasoning_efforts,
+            Some(vec!["max".to_owned(), "high".to_owned(), "low".to_owned()])
+        );
+
+        // 大小写/空白归一 + 去重；布尔型 reasoning 容忍为无档位。
+        let body = r#"{"data":[
+            {"id":"a/b","reasoning":{"supported_efforts":[" High ","max","MAX",""]}},
+            {"id":"c/d","reasoning":true},
+            {"id":"e/f","reasoning":{"mandatory":false}}
+        ]}"#;
+        let cat = parse(body).expect("parses");
+        assert_eq!(
+            cat.entries.iter().find(|e| e.id == "a/b").unwrap().reasoning_efforts,
+            Some(vec!["high".to_owned(), "max".to_owned()])
+        );
+        assert_eq!(
+            cat.entries.iter().find(|e| e.id == "c/d").unwrap().reasoning_efforts,
+            None,
+            "布尔 reasoning 无档位信息"
+        );
+        assert_eq!(
+            cat.entries.iter().find(|e| e.id == "e/f").unwrap().reasoning_efforts,
+            None,
+            "对象无 supported_efforts = 源未给"
+        );
     }
 
     #[test]
