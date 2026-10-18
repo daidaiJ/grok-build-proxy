@@ -145,3 +145,56 @@ auth.json 凭据没有第二使用方，必要时改密重登。
 - [ ] 若确认是他机 agentic 会话：评估在那台设备上把默认模型切第三方，或给
   usage-quota-estimate 的 T1 采样落盘提前排期（每台设备都有采样后，此类排查
   退化为一次脚本运行）。
+
+## 8. 2026-10-16 追补：本机隐藏 xAI 消耗面实锤（web_search 默认路由 + 标题生成）
+
+> 触发：2026-10-15 周期重置后用户零主动使用，`/usage` 仍显示 1%。本案是 §2
+> 「本机贡献 = 0」推断的第一个反例：**消耗确实来自本机，但整类调用绕过
+> model-usage.jsonl**。待优化点见 §8.4。
+
+### 8.1 实测证据
+
+- model-usage.jsonl 10-15 起共 904 条调用，全部第三方（`glm-5.3-flash` ×903 +
+  子代理 `deepseek/deepseek-v4.1-flash` ×1），xAI 模型 **0 条**——账本口径本机「清白」；
+- unified.jsonl 同窗口有 **4 次 `web_search` 工具成功执行**（10-15 15:18–15:24 UTC，
+  单次 43–103 s）——内置 Live Search；
+- 重置后窗口内 9 个会话的 `summary.json.generated_title` 全部生成（含中文长标题，
+  title refresh 会再加次数）——标题调用走独立 SummaryGenerator 客户端，
+  model-usage.jsonl 里 0 痕迹；
+- 4 次搜索 + ≥9 次标题 ≈ 1% 量级，与观测吻合。
+
+### 8.2 代码根因（fork 内可定位）
+
+| 内部面 | 未 pin 时的默认路由 | 证据 |
+| --- | --- | --- |
+| 内置 `web_search` | `default_web_search_model()` = grok-4.6 → `resolve_hidden_default_web_search_sampling_config`：xAI endpoints + **登录态 session token** + Responses API | `agent/config_tests.rs::hidden_default_web_search_resolution_is_explicit_and_responses_only`（测试钉死） |
+| `session_summary`（标题） | `default_models.json` 烤死 grok-4.6；`ModelOverrideConfig::resolve` 未 pin → 编译默认 | SummaryGenerator 独立客户端：账本 0 痕迹但标题照常生成 |
+| `image_description` | 同上 grok-4.6 默认 | 仅贴图触发 |
+| `prompt_suggestion` | 复用会话 sampling config 换 model id（`reconstruct_full_config`）→ 走会话供应商（BYOK） | `recap.rs::handle_suggest_prompt`——不碰 xAI |
+
+§6 取证坑再加一条：**内部模型调用（标题/搜索合成）整类绕过 model-usage.jsonl**，
+§2/§4 的「xAI 直连调用为 0」对这类调用是系统性盲区；`scripts-local/quota_audit.py`
+的 XAI-DIRECT 行同样看不见。`usage-quota-estimate-todo.md` 的「本机对 pct 贡献 = 0」
+推断需带同样保留。
+
+### 8.3 已落缓解（2026-10-16，用户 config.toml）
+
+- 根级 `disable_web_search = true`（config-reference「disable_web_search」，等价
+  `--disable-web-search`）：进程内整体移除 web_search 工具，子代理继承；headless
+  冒烟验证 tool_definitions 已无 web_search。搜索改走用户自建 MCP websearch 服务器。
+- 生效边界：仅新进程生效（运行中会话持有启动时加载的工具集）。
+
+### 8.4 待优化点（fork 侧）
+
+1. **隐藏默认路由披露**：BYOK 为主、无第一方 api_key 的环境里，web_search /
+   session_summary / image_description 静默解析到第一方模型 + session token；
+   宜在启动或首次调用时给一条 warn/披露（现状仅 web_search 无 key 才 warn）。
+2. **内部模型默认跟随**：session_summary（起标题）是纯文本小任务，默认钉 grok-4.6
+   对 BYOK 用户 = 隐形 SuperGrok 燃烧；候选方案 = 未 pin 时跟随会话模型（与
+   prompt_suggestion 同构）或文档显著标注。需设计拍板（改动面：SummaryGenerator
+   装配 + 模型目录守卫）。
+3. **内部调用入账**：标题生成/搜索合成类调用进 model-usage.jsonl（或伴生账本），
+   让 quota_audit.py 与 `/stats` 能看见这类 xAI 消耗，修掉 §8.2 审计盲区。
+4. **quota_audit.py 增强（低成本，可先行）**：把 unified.jsonl 的 web_search
+   exec_done 事件计数并入 XAI-DIRECT 侧推断；标题调用可在 SummaryGenerator
+   完成处补一条本地事件。
