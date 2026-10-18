@@ -380,6 +380,23 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### DeepSeek 内置 web_search 接线 + 退出提示二进制名修复 — 调研/修复完成，交接待实施（2026-10-18）
+
+- **当前状态：** 分支 `fix/local-exit-hint-bin-name`（4 commits，测试绿）待合 main
+  发版；三件实现面均未开工——① 退出提示二进制名（已修待发版）② 内置 web_search
+  宿主门控放行（responses/anthropic 通道二选一，先拍板）③ 目录思考位回填
+  `supports_reasoning_effort`（设计定稿待拍板）。
+- **关键证据：** responses web_search 仅 v4-pro 执行（官方 API 实测双源确认）；
+  fork 管线已通（splice/事件/呈现），缺门控；dsh 默认即 flash + anthropic 通道
+  `web_search_20250305`（flash 可用通路）。
+- **验收标准：** 见 handoff 任务单 §4（发版 + 通道拍板施工 + 回填施工 + 活体验证）。
+- **详情指针：** [`.handoff/deepseek-websearch-wiring.md`](.handoff/deepseek-websearch-wiring.md)
+
+### 未验证事项
+- [ ] 退出提示二进制名活体（grok2 退出显示，随新客户端）
+- [ ] v4-pro 零代码试法（config 条目 + supports_backend_search=true）
+- [ ] anthropic 通道 flash + web_search_20250305 直测
+
 ### DeepSeek 官方 API 余额上 /usage 面板 — 已随 v1.0.62 发版（2026-10-17）
 
 - **当前状态：** 供应商套餐用量第六家（PATCHES 四十九期，分支
