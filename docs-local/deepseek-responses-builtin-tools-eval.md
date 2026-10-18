@@ -89,6 +89,29 @@ search API（`WebSearchConfig` 带会话凭据），DeepSeek-only 用户没有�
 - 待核清零：Search/Fetch 独立 REST 计费 = 上述 5 元/1000 次成功请求（官方原文，此前仅
   X 帖口径）。
 
+## 实测验证（2026-10-18 10:41，官方 API 直打）
+
+用本机官方 key 对 `https://api.deepseek.com/responses` 发真实请求
+（`tools:[{"type":"web_search"}]` + 「联网搜索 2026-10-17 更新日志」prompt，
+非流式，`max_output_tokens=1200`）：
+
+| 模型 | output item 序列 | 判定 |
+| --- | --- | --- |
+| `deepseek-flash`（=本机 V4.1-Flash-1017 的 wire 名） | `reasoning, message`——模型回复「抱歉，这次我不能可靠地完成联网搜索…」 | **声明被收下但忽略，未执行** |
+| `deepseek-v4-pro` | 19 个 item 含 **10 个 `web_search_call`**（`status=completed`，`action={type:"search",queries:[…]}`），message 按搜索结果总结更新日志 | **服务端真实执行** |
+
+两个副产品：
+
+- **item 形状**：`{type,id,status,action:{type,queries}}` 与 OpenAI Responses
+  `web_search_call` 同构（无 results 数组——结果由服务端注入上下文），async-openai
+  `OutputItem::WebSearchCall` 可直接反序列化，fork 管线兼容面再次确认。
+- **成本**：v4-pro 单回合搜索把 input 顶到 **59,548 tokens**（本次高峰时段计费
+  ≈0.54 元 input + 0.06 元 output，探针总耗 ≈0.6 元）——搜索结果整包注入上下文，
+  pro 档单价下每搜索回合成本显著；flash（0.02–2 元/M input）+ 独立 Search/Fetch API
+  的组合在成本结构上占优。
+
+「web_search 仅 v4-pro 执行」自此为**文档 + 实测双源确认**，非文档孤证。
+
 ## 若立项「自动适配」（拍板点前置，净开发小）
 
 - **D1 供应商判定**：hosted tools 组装按 `credentials.base_url` host 分流
