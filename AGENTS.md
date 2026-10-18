@@ -398,7 +398,11 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 - **验证：** ctest（GATE_FORCE）`hosted_search_vendor` 4/4、
   `backfill_capability` 7/7；model-catalog lib 43/43（+2）；合并树
   shell/model-catalog/pager check 0 error；CI build run `39097429149`
-  （双特性合并树）。发版补记（run IDs + 部署）随发版记录 commit。
+  （双特性合并树）双 job success。
+- **发版：** tag `v1.0.63`（commit `c2e7e1b`，docs 收口批次之上）release run
+  `39098793930` 双 job success、4 资产非草稿；本机部署
+  `grok 1.0.63 (c2e7e1ba8a9c)`（D:\tool-cli\grok2，rename-aside 替换），回滚点
+  `grok2.exe.1.0.62-6d61618.bak`。
 - **未验证事项：**
   - [ ] 退出提示二进制名活体（grok2 退出显示 `grok2 --resume <id>`，随新客户端）
   - [ ] v4-pro 试法（config 条目 + supports_backend_search=true；分流后请求
