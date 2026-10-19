@@ -1307,7 +1307,7 @@ dependencies = [
  "quote",
  "regex",
  "rustc-hash 2.1.1",
- "shlex",
+ "shlex 1.3.0",
  "syn 2.0.117",
 ]
 
@@ -1653,14 +1653,14 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.48"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c481bdbf0ed3b892f6f806287d72acd515b352a4ec27a208489b8c1bc839633a"
+checksum = "877bf67ac8e52449eb2f9e98a344ea163beb70dd1f9eebe3cc5357dcfeaee4df"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
  "libc",
- "shlex",
+ "shlex 2.0.1",
 ]
 
 [[package]]
@@ -3425,9 +3425,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.13"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef25905e51abafe4dcea6c15fec58c57b601cdbd0ee53d22ea1d3016c587d39b"
+checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "findshlibs"
@@ -9940,6 +9940,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
+name = "shlex"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
 name = "signal-hook"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13867,6 +13873,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "webpki-roots 0.26.11",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -14194,6 +14201,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "xai-grok-model-catalog"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "xai-grok-models"
 version = "0.1.0"
 dependencies = [
@@ -14268,7 +14284,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "shellexpand",
- "shlex",
+ "shlex 1.3.0",
  "signal-hook 0.3.18",
  "similar",
  "strip-ansi-escapes",
@@ -14314,10 +14330,12 @@ dependencies = [
  "xai-grok-login",
  "xai-grok-markdown",
  "xai-grok-mermaid",
+ "xai-grok-model-catalog",
  "xai-grok-otel",
  "xai-grok-pager-diff",
  "xai-grok-pager-render",
  "xai-grok-plugin-marketplace",
+ "xai-grok-provider-usage",
  "xai-grok-sampling-types",
  "xai-grok-sandbox",
  "xai-grok-shell",
@@ -14558,6 +14576,16 @@ dependencies = [
  "xai-grok-config",
  "xai-hooks-plugins-types",
  "xai-tty-utils",
+]
+
+[[package]]
+name = "xai-grok-provider-usage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -14822,10 +14850,12 @@ dependencies = [
  "xai-grok-login",
  "xai-grok-mcp",
  "xai-grok-memory",
+ "xai-grok-model-catalog",
  "xai-grok-models",
  "xai-grok-otel",
  "xai-grok-paths",
  "xai-grok-plugin-marketplace",
+ "xai-grok-provider-usage",
  "xai-grok-sampler",
  "xai-grok-sampling-types",
  "xai-grok-sandbox",
@@ -14915,7 +14945,7 @@ dependencies = [
  "process-wrap",
  "serde",
  "serde_json",
- "shlex",
+ "shlex 1.3.0",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -15063,6 +15093,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "base64 0.22.1",
+ "blake3",
  "bstr",
  "chrono",
  "command-fds",

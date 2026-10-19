@@ -313,7 +313,7 @@ async fn narration_signed_thinking_block_reemits_on_narration_channel() {
     events.push(Ok(MessageStreamEvent::MessageStop));
 
     let raw = stream::iter(events).boxed();
-    let evs = collect(stream_messages(raw, None, rid(), Duration::from_secs(60))).await;
+    let evs = collect(stream_messages(raw, None, rid(), Duration::from_secs(60), Instant::now())).await;
 
     let narration_tokens = channel_tokens(&evs, SamplingChannel::Narration);
     assert_eq!(
@@ -384,7 +384,7 @@ async fn start_seeded_signature_is_replaced_then_deltas_append() {
         Ok(MessageStreamEvent::MessageStop),
     ];
     let raw = stream::iter(events).boxed();
-    let evs = collect(stream_messages(raw, None, rid(), Duration::from_secs(60))).await;
+    let evs = collect(stream_messages(raw, None, rid(), Duration::from_secs(60), Instant::now())).await;
 
     let sigs: Vec<&str> = evs
         .iter()

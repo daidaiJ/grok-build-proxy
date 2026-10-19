@@ -369,6 +369,8 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    // LOCAL: the fixture writes a `#!/bin/sh` stub and chmods it, both POSIX-only.
+    #[cfg(unix)]
     #[test]
     fn matching_feature_stamp_still_asks_cargo() {
         let dir = std::env::temp_dir().join(format!("shipped-pager-cargo-{}", std::process::id()));
