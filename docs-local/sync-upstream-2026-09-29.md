@@ -1,10 +1,14 @@
 # 上游同步记录：2026-09-23 … 2026-09-29（2 个快照）
 
-> **状态：合并与验证完成，未合入 `main`**（分支 `sync/upstream-2026-09-29`，2026-10-19）。
-> 合并提交 `a6bd1a8`（merge）+ 7 个收尾修复提交（`55d89e2` … `b102f90`）。
+> **状态：已合入 `main` 并随 tag `v1.0.64` 发布**（2026-10-19）。
+> 合并提交 `a6bd1a8`（merge）+ 8 个收尾修复提交；`main` 快进至 `d5a79f2`。
 > 基线 `main` = `d567c07`（v1.0.63 文档收口态）；上游标记分支 `upstream` 已快进到
 > `2bdd1d6a`（2026-09-29）。上游来源 = 公开镜像 `github.com/xai-org/grok-build`
 > `main`，一次性 `git fetch`（未配置 remote）。
+> CI：PR build `39290738700` 双 job success；main build `39296136719` success；
+> release run `39301089756` 双 job success、4 资产非草稿。本机部署
+> `grok 1.0.64 (d5a79f291f08)`（`D:\tool-cli\grok2`），回滚点
+> `grok2.exe.1.0.63-c2e7e1b.bak`。
 
 ## 合并范围
 
@@ -119,7 +123,8 @@ find-msvc-tools 0.1.15**（上次同步用的 1.5.1，本次随 crates.io 最新
 | `GATE_FORCE=1 ctest.sh -p xai-grok-hooks --lib` | 274 passed（2 win-skip 环境族） |
 | `GATE_FORCE=1 ctest.sh -p xai-grok-agent --lib tool_list` | 9 passed |
 | i18n 扫描 | 通过（重复键已清；新扫描快照为上游新增界面文案基线，见下） |
-| Linux CI | 待跑（合并分支推送后 build.yml 双 job） |
+| Linux CI（build.yml） | PR `39290738700` 双 job success；main `39296136719` success |
+| release（release.yml） | run `39301089756` 双 job success、4 资产非草稿 |
 
 ## i18n 待补（上游重写站点，非本轮回归）
 
@@ -133,7 +138,6 @@ find-msvc-tools 0.1.15**（上次同步用的 1.5.1，本次随 crates.io 最新
 
 ## 遗留
 
-- [ ] 合入 `main` + 推 CI（build.yml 双 job）后才算收口。
 - [ ] 发版后活回合验证：合并触及的视觉桥（`acceptsImages` meta）、rewind 分支树、
       `/lsp` 面板、hooks `updated_messages` 路径。
 - [ ] 本机仿真的上游新特性（cloud-config 搬迁、tool allowlist 原生实现）行为

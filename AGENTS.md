@@ -118,14 +118,15 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   会话历史 journal。基线：2026-10-02 `main`。
 
 - [`docs-local/sync-upstream-2026-09-29.md`](docs-local/sync-upstream-2026-09-29.md) —
-  **上游两快照（`97f190f`/`2bdd1d6a`，09-29，991 文件 +129,569/−27,951）已合并**
-  （分支 `sync/upstream-2026-09-29`，merge `a6bd1a8`；用户拍板一次合终态）：36 文件
-  冲突一轮裁定，结构以上游为准。上游这轮做了大搬家（`cloud-config` / `permission-rules`
-  / `EndpointsConfig`→`xai-grok-config` / `cache_file` 公开化）并原生实现了工具
-  allowlist 与 pager `acceptsImages` 消费——LOCAL 只剩 CCR `expand_output` 一条
-  条件需重放。本地锁文件偏离 `cc 1.9.0`；重放点清单见 PATCHES 五十二期。
-  验证：workspace check 0 error；sampler 294 / pager 10182 / hooks 274 等全绿。
-  **待办：Linux CI 双 job + 合 main + tag**。
+  **上游两快照（`97f190f`/`2bdd1d6a`，09-29，991 文件 +129,569/−27,951）已合并并随
+  `v1.0.64` 发版**（2026-10-19，分支 `sync/upstream-2026-09-29`，merge `a6bd1a8`，
+  main `d5a79f2`；用户拍板一次合终态）：36 文件冲突一轮裁定，结构以上游为准。上游这轮
+  做了大搬家（`cloud-config` / `permission-rules` / `EndpointsConfig`→`xai-grok-config`
+  / `cache_file` 公开化）并原生实现了工具 allowlist 与 pager `acceptsImages` 消费——
+  LOCAL 只剩 CCR `expand_output` 一条条件需重放。本地锁文件偏离 `cc 1.9.0`；重放点
+  清单见 PATCHES 五十二期。验证：workspace check 0 error；sampler 294 / pager 10182 /
+  hooks 274 等全绿；CI PR `39290738700`、main `39296136719`、release `39301089756`
+  全绿。**待办：活回合抽查（视觉桥 meta / rewind / `/lsp` / hooks updated_messages）。**
 
 - [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) —
   **上游 5 快照合并已完成**：分支 `sync/upstream-2026-09-23`（快照合并 `e43381a7` + 收尾
@@ -389,6 +390,29 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   sandbox×leader 互斥、`x.ai/*` 无稳定契约、Windows 侧未实测。
 
 ## 🔄 Handoff 摘要
+
+### 上游同步 2bdd1d6a（2026-09-29 两快照）— 已合 main，随 v1.0.64 发版（2026-10-19）
+
+- **当前状态：** 上游 `f0e3be1` → `2bdd1d6a`（991 文件 +129,569/−27,951）一次合并
+  终态（用户拍板），36 文件冲突一轮裁定完成：merge `a6bd1a8` + 8 个修复提交，
+  main `d5a79f2`，标记分支 `upstream` 已前移。上游结构性搬家（`cloud-config` /
+  `permission-rules` / `EndpointsConfig` → `xai-grok-config` / `cache_file` 公开化
+  + `CacheFileMode`）全部按上游落地；工具 allowlist 与 pager `acceptsImages` 上游
+  原生实现，LOCAL 仅剩 CCR `expand_output` 一条条件重放（`tool_list.rs`）。
+- **CI 与发版：** PR build `39290738700` 双 job success；main build `39296136719`
+  success；release run `39301089756` 双 job success、4 资产非草稿；本机部署
+  `grok 1.0.64 (d5a79f291f08)`（`D:\tool-cli\grok2`），回滚点
+  `grok2.exe.1.0.63-c2e7e1b.bak`。
+- **验证：** workspace `cargo check --all-targets` 0 error（Windows 独有 25 条
+  上游新测试 warning）；sampler 294 / pager 10182 / hooks 274 / agent tool_list 9 /
+  sampling-types 314 / chat-state 399 / extra-ca 15 / status-line 18 /
+  compaction-transcript 9 / provider-usage 63 / model-catalog 43 全绿；两处新
+  win-skip 族Z（hooks 命令用例的 Windows Git Bash 环境族）。
+- **遗留：** ① 活回合抽查（视觉桥 `acceptsImages` meta / rewind 分支树 / `/lsp` /
+  hooks `updated_messages`）；② 上游新界面文案的 i18n 分类收尾（`PermissionLabel`
+  与 `status_blocks` 用量行等，见同步文档末节）。
+- **详情指针：** [`docs-local/sync-upstream-2026-09-29.md`](docs-local/sync-upstream-2026-09-29.md)；
+  PATCHES.md 五十二期。
 
 ### DeepSeek hosted-search 分流 + 目录思考位回填 + 退出提示二进制名 — 已合 main，随 v1.0.63 发版（2026-10-18）
 
