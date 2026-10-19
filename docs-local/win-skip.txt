@@ -148,3 +148,12 @@ session::image_describe::tests::persist_and_prepend_image_files_writes_assets_an
 # 硬依赖上游 per-crate AGENTS.md（crates/codegen/xai-grok-shell/AGENTS.md），fork 无此文件。
 # 上游环境缺口；同模块校验 user-guide 行的 registered/unmirrored_features_have_rows 本机绿。
 config_docs::tests::page_is_the_user_facing_field_list
+
+# 族Z（2026-10-19，上游 2bdd1d6a 同步后 GATE_FORCE -p xai-grok-hooks 首跑暴露）：
+# 上游 hook 命令用例在 Windows 的 Git Bash 下不成立——参数展开用例把
+# TMP=D:\cargo-tmp 的盘符冒号喂给 ${VAR:-...} 默认值（bash 解析为命令名），
+# CLAUDE_PROJECT_DIR 用例则撞 Git Bash 的路径转换。POSIX shell 环境族，
+# Linux CI 通过；与同步裁定的 dispatcher updated_messages 改动无关
+# （两用例只走 runner::command 的命令拼装路径）。
+runner::command::tests::parameter_expansion_default_is_not_refused
+runner::command::tests::project_dir_env_is_exported_to_the_child

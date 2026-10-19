@@ -130,6 +130,16 @@ fn store() -> &'static Mutex<Option<Inner>> {
 
 static LOADING: AtomicBool = AtomicBool::new(false);
 
+/// 清空进程级 store 与在途标志（仅测试；其他用例的 Effect 不一定执行，
+/// 可能把 LOADING 留在 true，使冷态断言随机失败）。
+#[cfg(test)]
+pub(crate) fn reset_for_tests() {
+    if let Ok(mut guard) = store().lock() {
+        *guard = None;
+    }
+    LOADING.store(false, Ordering::SeqCst);
+}
+
 /// 是否已有取数在途（面板打开路径的单发守卫）。
 pub fn is_loading() -> bool {
     LOADING.load(Ordering::SeqCst)
@@ -254,6 +264,7 @@ mod tests {
     /// 不依赖其他用例留下的状态。
     #[test]
     fn install_get_and_fetch_trigger_lifecycle() {
+        reset_for_tests();
         // 时间戳用「相对当前时刻」的新鲜值：staleness 判定以真实墙钟为基准
         let now = now_unix_ms();
         let at1 = now - 120_000;

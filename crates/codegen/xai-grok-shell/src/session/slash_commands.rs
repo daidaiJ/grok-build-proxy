@@ -512,6 +512,8 @@ pub const PAGER_COMMAND_KEYS: &[&str] = &[
     "logout",
     "log",
     "loop",
+    // LOCAL (/lsp): pager LSP 面板命令，防止同名 skill 影子化
+    "lsp",
     "m",
     "marketplace",
     "mcps",

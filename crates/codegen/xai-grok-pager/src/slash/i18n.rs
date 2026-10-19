@@ -2210,7 +2210,6 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("not started", "未启动"),
         ("starting", "启动中"),
         ("failed", "失败"),
-        ("enable/disable", "启用/关闭"),
         ("No active session or no LSP backend in this session.", "当前无活动会话或本会话未装配 LSP 后端。"),
         // LOCAL /lsp select 遗留键（面板化后仅存档）
         ("LSP servers", "LSP 语言服务器"),
