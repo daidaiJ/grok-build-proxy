@@ -3395,3 +3395,45 @@ Default::default()`；合并树（双特性同 main）cargo check shell/model-ca
 缺席）；ctest（GATE_FORCE）过滤 `backfill_capability` 7/7；合并树三 crate
 --lib check 0 error。发版后活体验证项：删除测试条目的思考位后启动看回填日志
 （unified `model catalog: capabilities backfilled`）与 /effort 菜单。
+
+## 五十二期：上游 2bdd1d6a 同步裁定（2026-10-19，分支 sync/upstream-2026-09-29）
+
+两个同日快照（`97f190f`、`2bdd1d6a`，991 文件 +129,569/−27,951）一次合并。完整
+裁定表与验证记录见 [`sync-upstream-2026-09-29.md`](sync-upstream-2026-09-29.md)。
+本期只记**同步后必须重放的 LOCAL 补丁点**与本地锁文件偏离：
+
+1. `xai-grok-agent/src/tool_list.rs`：上游原生 allowlist（`ListedTools`）吸收 fork
+   T1 的 `SearchTool`/`UseTool` 保底、Task 依赖与 unknown 回退；仅缺 CCR 条件——
+   retain 增 `ccr_is_enabled() && id.ends_with(":expand_output")`（LOCAL）。
+2. `xai-grok-tools/src/permission_access.rs`：`ToolInput::ExpandOutput(_)` 归
+   `AccessKind::Read(None)`（上游把 `AccessKind` impl 从 workspace/permission/types.rs
+   搬到这里）。
+3. `xai-grok-shell/src/agent/config.rs`：六个 LOCAL 配置节（network / provider_usage /
+   model_catalog / model_groups / shell / notifications）整段保留；
+   `acp_model_meta()` 内保留 `acceptsImages` 恒显；`ExperimentalSamplingOptions`
+   import 保留；上游迁走 `EndpointsConfig` 后删除本地副本。
+4. `xai-grok-shell/.../acp_session_tests/support.rs`：`test_compaction_config()` 补
+   LOCAL `idle_compact_in_flight`（上游把测试夹具收成 helper）。
+5. `xai-grok-pager/src/app/effects/mod.rs`：`parse_rewind_points_response` 补
+   `abandoned: r.abandoned_branches`（上游 helper 漏掉 fork 分支树字段）。
+6. `xai-grok-shell/src/extensions/model_catalog.rs`：磁盘缓存原语改指
+   `xai_grok_config::cache_file`；`write_atomic` 按上游新签名传
+   `CacheFileMode::Default` 并记失败日志（原 `pub(crate)` 提级补丁已被上游公开 API 取代）。
+7. Windows 编译门：`xai-grok-test-support/src/env.rs` 上游新用例
+   `matching_feature_stamp_still_asks_cargo` 与 `xai-grok-workspace/src/sandbox/tests.rs`
+   的 managed-config symlink 用例加 `#[cfg(unix)]`（POSIX-only）。
+8. `docs-local/win-skip.txt` 族Z：上游 hooks `parameter_expansion_default_is_not_refused` /
+   `project_dir_env_is_exported_to_the_child` 在 Windows Git Bash 环境族失败。
+9. i18n：合并产生的重复键 `enable/disable` / `running` / `failed` 去重；
+   `PAGER_COMMAND_KEYS` 补 `"lsp"`。
+
+**本地锁文件偏离**：上游锁 `cc 1.2.48` 在 rustc 1.94 + Windows 编译失败（
+`find_msvc_tools::windows_sys::FILE_ATTRIBUTE_TEMPORARY` u32/i32 不匹配），
+`cargo update -p cc` 取 **cc 1.9.0 + find-msvc-tools 0.1.15**；上游下次同步若带回
+旧组合需重跑同一命令（上次同步记的是 cc 1.5.1）。
+
+**验证**：`cargo check --workspace --all-targets` 0 error（Windows 独有 27 条上游
+测试文件 warning）；sampler 294 / pager 10182 / hooks 274 / agent tool_list 9 /
+sampling-types 314 / chat-state 399 / extra-ca 15 / status-line 18 /
+compaction-transcript 9 / provider-usage 63 / model-catalog 43 全绿；
+两个新 win-skip 环境族已登记。
