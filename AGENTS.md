@@ -117,6 +117,16 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   其 §3/§5。**教训背景：kimicode-port 曾误判 steer「无」、误把 sqlite-journal 当
   会话历史 journal。基线：2026-10-02 `main`。
 
+- [`docs-local/sync-upstream-2026-09-29.md`](docs-local/sync-upstream-2026-09-29.md) —
+  **上游两快照（`97f190f`/`2bdd1d6a`，09-29，991 文件 +129,569/−27,951）已合并**
+  （分支 `sync/upstream-2026-09-29`，merge `a6bd1a8`；用户拍板一次合终态）：36 文件
+  冲突一轮裁定，结构以上游为准。上游这轮做了大搬家（`cloud-config` / `permission-rules`
+  / `EndpointsConfig`→`xai-grok-config` / `cache_file` 公开化）并原生实现了工具
+  allowlist 与 pager `acceptsImages` 消费——LOCAL 只剩 CCR `expand_output` 一条
+  条件需重放。本地锁文件偏离 `cc 1.9.0`；重放点清单见 PATCHES 五十二期。
+  验证：workspace check 0 error；sampler 294 / pager 10182 / hooks 274 等全绿。
+  **待办：Linux CI 双 job + 合 main + tag**。
+
 - [`docs-local/sync-upstream-2026-09-23.md`](docs-local/sync-upstream-2026-09-23.md) —
   **上游 5 快照合并已完成**：分支 `sync/upstream-2026-09-23`（快照合并 `e43381a7` + 收尾
   修复 `c78b45bb`）已快进合入 `main`，随正式 tag **`v1.0.37`** 发布（2026-09-28）。
