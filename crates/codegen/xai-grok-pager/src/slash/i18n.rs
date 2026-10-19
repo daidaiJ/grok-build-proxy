@@ -2419,7 +2419,6 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Idle", "空闲"),
         ("Inactive", "不活跃"),
         ("Failed", "失败"),
-        ("failed", "失败"),
         ("show fewer", "收起"),
         ("show all", "显示全部"),
         ("{n} more", "还有 {n} 项"),
@@ -2648,7 +2647,6 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Tasks", "任务"),
         ("Watchers", "监视器"),
         ("Monitor", "监视器"),
-        ("running", "运行中"),
         // -- P3 tasks_pane: 调度行后缀（前导空格是键的一部分）--
         (" (next in {})", " （{} 后执行）"),
         (" (due now)", " （已到期）"),
