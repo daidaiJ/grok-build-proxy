@@ -10,8 +10,9 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use std::path::PathBuf;
-use xai_grok_shell::claude_import::{ImportPlan, ImportableItem, PathKind, find_project_root};
-use xai_grok_workspace::permission::types::RuleAction;
+use xai_grok_external_agent_migration::{
+    ImportPlan, ImportRuleAction, ImportableItem, PathKind, find_project_root,
+};
 
 use crate::slash::i18n::{tr, tr_str};
 use crate::theme::Theme;
@@ -999,9 +1000,9 @@ fn format_item_label(item: &ImportableItem) -> String {
         ImportableItem::Permission(rule) => {
             // LOCAL: 权限动作词仅作展示（不参与匹配/协议），就地查表
             let action = match rule.action {
-                RuleAction::Allow => tr("allow"),
-                RuleAction::Deny => tr("deny"),
-                RuleAction::Ask => tr("ask"),
+                ImportRuleAction::Allow => tr("allow"),
+                ImportRuleAction::Deny => tr("deny"),
+                ImportRuleAction::Ask => tr("ask"),
             };
             let pattern = rule.pattern.as_deref().unwrap_or("*");
             let tool = format!("{:?}", rule.tool);
@@ -1062,17 +1063,16 @@ fn is_selectable(row: &Row) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xai_grok_shell::claude_import::PathKind;
-    use xai_grok_workspace::permission::types::{PatternMode, PermissionRule, ToolFilter};
+    use xai_grok_external_agent_migration::{ImportPatternMode, ImportPermission, ImportTool};
 
     fn sample_plan() -> ImportPlan {
         ImportPlan {
             global_items: vec![
-                ImportableItem::Permission(PermissionRule {
-                    action: RuleAction::Allow,
-                    tool: ToolFilter::Bash,
+                ImportableItem::Permission(ImportPermission {
+                    action: ImportRuleAction::Allow,
+                    tool: ImportTool::Bash,
                     pattern: Some("cargo test *".into()),
-                    pattern_mode: PatternMode::Glob,
+                    pattern_mode: ImportPatternMode::Glob,
                 }),
                 ImportableItem::EnvVar {
                     key: "RUST_LOG".into(),
@@ -1131,9 +1131,7 @@ mod tests {
     /// De-selecting an MCP server must skip THAT MCP server in `filtered_plan`, not another item sharing the deselected slot's index.
     #[test]
     fn filtered_plan_respects_per_item_selection_after_grouping() {
-        use xai_grok_shell::claude_import::ImportableItem;
         use xai_grok_shell::util::config::{McpServerConfig, McpServerTransportConfig};
-        use xai_grok_workspace::permission::types::{PatternMode, PermissionRule, ToolFilter};
 
         // Mix Permissions, MCP servers, and EnvVars in a non-sorted order so the display order (sorted by ItemKind) differs from the source order
         let mcp = |name: &str| ImportableItem::McpServer {
@@ -1157,11 +1155,11 @@ mod tests {
         let plan = ImportPlan {
             global_items: vec![
                 mcp("alpha"),
-                ImportableItem::Permission(PermissionRule {
-                    action: RuleAction::Allow,
-                    tool: ToolFilter::Bash,
+                ImportableItem::Permission(ImportPermission {
+                    action: ImportRuleAction::Allow,
+                    tool: ImportTool::Bash,
                     pattern: Some("true".into()),
-                    pattern_mode: PatternMode::Glob,
+                    pattern_mode: ImportPatternMode::Glob,
                 }),
                 mcp("beta"),
                 ImportableItem::EnvVar {

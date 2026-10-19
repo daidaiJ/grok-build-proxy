@@ -13,6 +13,7 @@ use super::state::{
     DashboardRowId, DashboardState, DashboardStopAction, Filter, Focusable, Grouping,
     LocationPickerState, RenameDraft, RowState, SectionKey,
 };
+use crate::app::actions::PermissionLabel;
 use crate::app::agent::AgentId;
 use crate::app::agent_view::AgentView;
 // LOCAL(i18n): 仪表盘渲染文案中文化；一次性渲染字面量就地 tr，动态存串出口 tr_str
@@ -2160,12 +2161,12 @@ fn paint_dispatch_config_badge(
             bold: false,
         }),
         DashboardDispatchMode::Auto => flags.push(PromptFlag {
-            text: tr("auto"),
+            text: PermissionLabel::Auto.display_name(),
             color: Some(theme.accent_system),
             bold: false,
         }),
         DashboardDispatchMode::AlwaysApprove => flags.push(PromptFlag {
-            text: tr("always-approve"),
+            text: PermissionLabel::AlwaysApprove.display_name(),
             color: None,
             bold: false,
         }),

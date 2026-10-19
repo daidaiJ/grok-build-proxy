@@ -247,7 +247,7 @@ fn remove_legacy_disk_cache() {
 
 /// 读取磁盘缓存；版本不符 / 解析失败一律按缺失处理。
 fn disk_cache_load(path: &Path) -> Option<(ModelCatalog, u64)> {
-    let bytes = crate::agent::remote_config::cache_file::read_capped(path, DISK_CACHE_READ_CAP)?;
+    let bytes = xai_grok_config::cache_file::read_capped(path, DISK_CACHE_READ_CAP)?;
     match serde_json::from_slice::<DiskCache>(&bytes) {
         Ok(parsed) if parsed.version == DISK_CACHE_VERSION => {
             Some((parsed.catalog, parsed.fetched_at_ms))
@@ -272,11 +272,11 @@ fn disk_cache_store(path: &Path, catalog: &ModelCatalog, at_ms: u64) {
     };
     match serde_json::to_vec(&payload) {
         Ok(bytes) => {
-            crate::agent::remote_config::cache_file::write_atomic(
+            xai_grok_config::cache_file::write_atomic(
                 path,
                 DISK_TMP_SWEEP_TTL,
                 &bytes,
-                false,
+                xai_grok_config::cache_file::CacheFileMode::Default,
             );
         }
         Err(e) => {

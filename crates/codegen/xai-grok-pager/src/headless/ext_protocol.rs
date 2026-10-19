@@ -299,6 +299,9 @@ fn decode_session_notification(method: &str, params: &str) -> ExtEvent {
             #[serde(default)]
             stop_sequence: Option<String>,
         },
+        TurnUsage {
+            usage: xai_grok_shell::extensions::notification::ResponseUsage,
+        },
         #[serde(other)]
         Other,
     }
@@ -420,6 +423,9 @@ fn decode_session_notification(method: &str, params: &str) -> ExtEvent {
             signature,
             stop_sequence,
         })),
+        XaiUpdate::TurnUsage { usage } => {
+            ExtEvent::Stream(Box::new(StreamEvent::TurnUsage { usage }))
+        }
         // A task_backgrounded or task_completed tag arriving here belongs on its dedicated method; log loudly
         // Any other unknown tag stays a clean ignore
         XaiUpdate::Other => {
