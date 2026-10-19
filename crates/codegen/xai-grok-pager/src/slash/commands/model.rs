@@ -685,8 +685,6 @@ mod tests {
         assert_eq!(unlisted_row.as_deref(), Some("Grok 4.5 256k "));
     }
 
-    #[test]
-
     /// LOCAL: build_model_items carries the catalog detail tokens in the
     /// description column — detail first, original description after a `·`,
     /// cold store falls back to the plain description. Uses a unique model id;
