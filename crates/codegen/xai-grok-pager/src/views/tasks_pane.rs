@@ -11,6 +11,7 @@ use crate::app::agent::{BgTaskState, BgTaskStatus, ScheduledTaskInfo};
 use crate::app::subagent::{SubagentInfo, format_context_badge, format_subagent_label};
 use crate::appearance::LayoutConfig;
 use crate::scrollback::layout::HorizontalLayout;
+use crate::slash::i18n::tr;
 use crate::syntax::get_syntect;
 use crate::theme::{Theme, ThemeKind};
 use crate::util::format_duration;
@@ -25,20 +26,6 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::time::{Instant, SystemTime};
 use unicode_width::UnicodeWidthStr;
-
-use crate::app::agent::{BgTaskState, BgTaskStatus, ScheduledTaskInfo};
-use crate::app::subagent::{SubagentInfo, format_context_badge, format_subagent_label};
-use crate::appearance::LayoutConfig;
-use crate::scrollback::layout::HorizontalLayout;
-use crate::slash::i18n::tr;
-use crate::syntax::get_syntect;
-use crate::theme::{Theme, ThemeKind};
-use crate::util::format_duration;
-
-use super::list_pane::{
-    ListItem, ListPane, ListPaneConfig, ListPaneState, ListPaneStyle, WrapMode,
-};
-use super::overlay::OverlayState;
 
 const SPINNER_DIVISOR: u64 = 4;
 /// Highlight a shell command string into styled spans. Uses syntect with the best available grammar

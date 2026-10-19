@@ -272,12 +272,14 @@ fn disk_cache_store(path: &Path, catalog: &ModelCatalog, at_ms: u64) {
     };
     match serde_json::to_vec(&payload) {
         Ok(bytes) => {
-            xai_grok_config::cache_file::write_atomic(
+            if let Err(e) = xai_grok_config::cache_file::write_atomic(
                 path,
                 DISK_TMP_SWEEP_TTL,
                 &bytes,
                 xai_grok_config::cache_file::CacheFileMode::Default,
-            );
+            ) {
+                tracing::debug!(path = %path.display(), error = %e, "model catalog: disk cache write failed");
+            }
         }
         Err(e) => {
             tracing::debug!(error = %e, "model catalog: disk cache serialize failed");

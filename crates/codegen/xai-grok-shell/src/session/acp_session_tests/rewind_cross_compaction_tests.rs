@@ -231,6 +231,7 @@ async fn run_two_unanswered_prompts_rewind() {
             target_prompt_index: 1,
             force: true,
             mode: RewindMode::ConversationOnly,
+            to_branch: None,
         })
         .await
         .expect("handle_rewind ok");
