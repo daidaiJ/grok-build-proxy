@@ -2224,7 +2224,6 @@ mod tests {
         assert!(matches!(result.results[0], HookRunResult::Success { .. }));
     }
 
-=======
     #[test]
     fn stop_feedback_lists_blocks_then_appends_context() {
         let cases: [(&[&str], &[&str], &str); 3] = [
