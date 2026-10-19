@@ -3,23 +3,6 @@
 use super::*;
 use crate::session::helpers::rewind_preview::rewind_prompt_preview;
 
-/// First non-empty line of the prompt, truncated to 60 chars — the picker preview.
-fn preview_of(text: &str) -> Option<String> {
-    let clean_text = extract_user_query(text);
-    let first_line = clean_text
-        .lines()
-        .map(|l| l.trim())
-        .find(|l| !l.is_empty())
-        .unwrap_or("");
-
-    if first_line.is_empty() {
-        None
-    } else if first_line.chars().count() > 60 {
-        Some(format!("{}...", crate::util::truncate(first_line, 57)))
-    } else {
-        Some(first_line.to_string())
-    }
-}
 
 impl SessionActor {
     pub(super) async fn close_rewind_window(&self) {
@@ -153,7 +136,7 @@ impl SessionActor {
                         created_at: String::new(),
                         num_file_snapshots: 0,
                         has_file_changes: false,
-                        prompt_preview: node.prompts.get(own).and_then(|t| preview_of(t)),
+                        prompt_preview: node.prompts.get(own).and_then(|t| rewind_prompt_preview(t)),
                         branch: b as u64,
                         boundary: None,
                     })

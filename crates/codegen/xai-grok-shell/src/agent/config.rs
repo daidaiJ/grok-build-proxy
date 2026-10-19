@@ -16,7 +16,8 @@ use xai_grok_config::{Capability, Distribution};
 use xai_grok_login::{AuthManager, GrokComConfig};
 use xai_grok_sampler::{AuthScheme, SamplerConfig};
 use xai_grok_sampling_types::{
-    CONTEXT_WINDOWS_META_KEY, CompactionAtTokens, CompactionsRemaining, MODEL_NOTICE_META_KEY,
+    CONTEXT_WINDOWS_META_KEY, CompactionAtTokens, CompactionsRemaining, ExperimentalSamplingOptions,
+    MODEL_NOTICE_META_KEY,
     ModelNotice, REASONING_EFFORT_META_KEY, REASONING_EFFORTS_META_KEY, ReasoningEffort,
     ReasoningEffortOption, ReasoningSummary, context_windows_meta_value,
     reasoning_effort_meta_value, reasoning_efforts_meta_value,
@@ -237,102 +238,6 @@ fn is_zero(value: &u64) -> bool {
     *value == 0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct EndpointsConfig {
-    /// cli chat proxy base URL.
-    /// `None` means unset (resolvers apply the default); `Some` means explicitly configured.
-    /// Tracking explicitness (vs comparing to the default value) lets an org pin the proxy to the default on purpose.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cli_chat_proxy_base_url: Option<String>,
-    /// Base URL for the public xAI API.
-    pub xai_api_base_url: String,
-    /// Optional extra access-header value (applied only with the optional non-production feature, and only for matching first-party hosts).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub alpha_test_key: Option<String>,
-    /// Env: `GROK_MODELS_BASE_URL`. Enables custom endpoint mode.
-    /// List URL defaults to `{models_base_url}/models`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub models_base_url: Option<String>,
-    /// Env: `GROK_MODELS_LIST_URL`. Overrides the default `{base}/models` list URL.
-    #[serde(alias = "models_endpoint", skip_serializing_if = "Option::is_none")]
-    pub models_list_url: Option<String>,
-    /// Env: `GROK_FEEDBACK_BASE_URL`. Where feedback submissions go.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub feedback_base_url: Option<String>,
-    /// Env: `GROK_TRACE_UPLOAD_URL`. Where trace uploads go.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub trace_upload_url: Option<String>,
-    /// Env: `GROK_TRACE_UPLOAD_BUCKET`. Direct bucket (`gs://` or `s3://`), bypasses proxy.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub trace_upload_bucket: Option<String>,
-    /// Env: `GROK_TRACE_UPLOAD_REGION`. AWS region (S3 only).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub trace_upload_region: Option<String>,
-    /// Env: `GROK_TRACE_UPLOAD_CREDENTIALS_FILE`. Path to GCS SA key or AWS credentials file.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub trace_upload_credentials_file: Option<String>,
-    /// Inline credentials (JSON/INI). Takes precedence over `credentials_file`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub trace_upload_credentials: Option<String>,
-    /// Env: `GROK_TRACE_UPLOAD_ENDPOINT_URL`. Custom S3-compatible endpoint.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub trace_upload_endpoint_url: Option<String>,
-    /// Env: `GROK_DEPLOYMENT_KEY`. Management API key for enterprise deployments.
-    /// Sent on telemetry and service requests for deployment-level attribution.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub deployment_key: Option<String>,
-    /// Env: `GROK_MANAGED_CONFIG_URL`. Override the managed config endpoint.
-    /// Defaults to `{proxy_url()}/deployment/config`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub managed_config_url: Option<String>,
-    /// Env: `OTEL_EXPORTER_OTLP_ENDPOINT`. OTLP collector base; `/v1/traces` is appended.
-    /// Legacy repoint of the INTERNAL trace pipeline, deprecated in favor of `GROK_INTERNAL_OTLP_TRACES_ENDPOINT`.
-    /// Ignored by the internal pipeline when `GROK_EXTERNAL_OTEL` is set (the standard `OTEL_*` vars then route the external stream only).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub otel_exporter_otlp_endpoint: Option<String>,
-    /// Env: `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`.
-    /// Full traces endpoint, used verbatim; overrides `otel_exporter_otlp_endpoint`.
-    /// Same legacy/deprecation semantics as `otel_exporter_otlp_endpoint`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub otel_exporter_otlp_traces_endpoint: Option<String>,
-    /// Env: `OTEL_EXPORTER_OTLP_HEADERS`. `k=v,k2=v2`; merged onto export headers.
-    /// Same legacy/deprecation semantics as `otel_exporter_otlp_endpoint`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub otel_exporter_otlp_headers: Option<String>,
-    /// Env: `GROK_INTERNAL_OTLP_TRACES_ENDPOINT`. Full INTERNAL traces endpoint, used verbatim.
-    /// Dev/debug repoint of the internal span firehose (replaces the legacy `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` behavior).
-    /// Used by local-ic-testing / internal dev flows. Wins over the legacy `OTEL_*` vars.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub grok_internal_otlp_traces_endpoint: Option<String>,
-    /// Env: `GROK_INTERNAL_OTLP_HEADERS`.
-    /// `k=v,k2=v2` extra headers for the internal export (debug).
-    /// Wins over the legacy `OTEL_EXPORTER_OTLP_HEADERS`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub grok_internal_otlp_headers: Option<String>,
-    /// External-OTEL master switch, captured at construction via [`external_otel_master_switch_resolved`].
-    /// That resolver applies requirement pin > `GROK_EXTERNAL_OTEL` env > `[telemetry].otel_enabled` config, managed layers included. Those are the same layers that activate the external stream.
-    /// When set, the standard `OTEL_EXPORTER_OTLP_*` vars are reserved for the external OTEL stream. The internal trace pipeline then ignores them entirely. An admin who opts in by *any* layer never receives the internally-authed firehose. Held as a field (not re-read in the resolvers) so the resolvers stay pure and testable without env races.
-    #[serde(skip)]
-    pub external_otel_master_switch: bool,
-    /// Env: `OTEL_TRACES_EXPORTER`. `otlp` (default) or `none` to disable spans.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub otel_traces_exporter: Option<String>,
-    /// Env: `OTEL_BSP_SCHEDULE_DELAY` (OTel) or `OTEL_TRACES_EXPORT_INTERVAL` (Claude alias).
-    /// Batch flush interval (ms).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub otel_traces_export_interval: Option<u64>,
-    /// Env: `OTEL_EXPORTER_OTLP_TIMEOUT`. Export HTTP timeout (ms).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub otel_exporter_otlp_timeout: Option<u64>,
-    /// Read by `load_management_api_key_sync()`. Declared for `serde_ignored`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub management_api_key: Option<String>,
-    /// Read by `load_gcs_service_account_key_sync()`. Declared for `serde_ignored`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub gcs_service_account_key: Option<String>,
-
-}
 
 /// The default is `context_window`, else the first listed window; the choices keep list order and include it.
 pub(crate) fn context_window_choices(
