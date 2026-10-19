@@ -631,6 +631,8 @@ async fn a_managed_enforce_or_refusal_on_a_host_without_a_backend_runs_off_and_s
 /// user `off` the folder resolves `enforce`, source
 /// `remote`, `degraded: config_refused` (`off` with no backend: a refusal enforces nothing
 /// there), so a planted or broken managed file cannot fail the mode open.
+// LOCAL: the symlink-refusal cases below are POSIX-only (`std::os::unix::fs::symlink`).
+#[cfg(unix)]
 #[test]
 fn a_managed_config_without_a_mode_adds_no_layer() {
     let fx = Fixture::new();

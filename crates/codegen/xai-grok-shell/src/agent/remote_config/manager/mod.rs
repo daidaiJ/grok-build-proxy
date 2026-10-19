@@ -508,6 +508,8 @@ impl ModelsManager {
     /// from the catalog.
     pub(crate) fn model_has_own_credentials(&self, model_id: &str) -> Option<bool> {
         self.with_catalog_entry(model_id, |e| e.has_own_credentials())
+    }
+
     #[cfg(test)]
     pub(crate) fn settle_first_catalog_for_tests(&self, ready: bool) {
         self.inner.catalog_progress.send_replace(if ready {

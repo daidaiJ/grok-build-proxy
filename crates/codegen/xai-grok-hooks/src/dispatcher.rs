@@ -171,6 +171,7 @@ async fn dispatch_sequential_gate(
                         pending_ask: None,
                         deferring_hook: None,
                         updated_input: None,
+                        updated_messages: None,
                         additional_context: Vec::new(),
                         results: run_results,
                     };
