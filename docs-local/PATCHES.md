@@ -3437,3 +3437,32 @@ Default::default()`；合并树（双特性同 main）cargo check shell/model-ca
 sampling-types 314 / chat-state 399 / extra-ca 15 / status-line 18 /
 compaction-transcript 9 / provider-usage 63 / model-catalog 43 全绿；
 两个新 win-skip 环境族已登记。
+
+## 五十三期：Responses `keepalive` 传输心跳兼容——长推理不再被误判为解析失败（2026-10-21，分支 feat/local-responses-keepalive）
+
+**需求**：`gpt-6-luna`（token-unlimited.com，`api_backend = "responses"`）在
+长推理时稳定报 `unknown variant keepalive`；三次失败均在该次模型调用开始后
+31.6–32.7 秒，短调用正常。`keepalive` 是 OpenAI/Azure Foundry Responses 的
+传输层心跳，不在 `async-openai` 的严格枚举里。
+
+- **落点（只动 sampler）**：
+  `crates/codegen/xai-grok-sampler/src/client.rs`
+  - 新 `RESPONSES_KEEPALIVE_EVENT` 常量 + `is_keepalive_event(event_name, data)`：
+    SSE `event:` 名为 `keepalive`，或 `data` 顶层 `type == "keepalive"` 即命中；
+    正常 delta 正文引用该词不误杀，畸形载荷仍交给严格解析器报错。
+  - Layer-1 `scan` 的 `swallow` 条件先判 keepalive，命中后 `Some(None)` 丢弃，
+    不进入 `deserialize_response_event`。
+  - 不放宽通用未知事件：其他未知 `type` 继续 `SamplingError::Serialization`。
+- **为什么不在 fork 加 variant**：keepalive 无 Response 状态，加进
+  `async-openai` 枚举会让所有消费方都要处理；流层丢弃更小、更贴合传输层语义。
+- **边界**：keepalive 不计入模型产出，Layer-2 `idle_timeout` 语义不变
+  （心跳只证明连接活着，不证明模型在推进）。
+- **测试**：`is_keepalive_event_matches_name_or_payload_type`（事件名 /
+  payload type / 正文引用 / 畸形载荷）；`response_stream_skips_keepalive_heartbeat`
+  （mock SSE keepalive → `response.completed`，断言流不报错）。
+- **文档**：`docs-local/upstream-responses-event-compat.md` 追加 2026-10-21 节。
+
+**验证**：`cargo check -p xai-grok-sampler --all-targets` 0 error；
+`ctest.sh -p xai-grok-sampler --lib` **296 passed / 0 failed**（新增 2 例）；
+`cargo fmt -p xai-grok-sampler -- --check` 新增段无 diff（crate 内既有文件
+仍有历史格式差异，整仓 check 不干净）。

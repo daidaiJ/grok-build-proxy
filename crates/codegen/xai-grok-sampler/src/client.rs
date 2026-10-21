@@ -101,6 +101,29 @@ const RESPONSE_EVENT_DIALECT_ALIASES: &[(&str, &str)] = &[
     ("response.reasoning.delta", "response.reasoning_text.delta"),
 ];
 
+// LOCAL(responses-keepalive): the Responses API emits this transport-level
+// heartbeat during long-running reasoning. It carries no response state and is
+// not part of async-openai's typed event enum, so it is dropped before
+// deserialization instead of widening the strict enum.
+const RESPONSES_KEEPALIVE_EVENT: &str = "keepalive";
+
+/// Returns whether an SSE frame is the Responses API transport keepalive.
+///
+/// Some gateways send it as the SSE `event:` name, others only as
+/// `{"type":"keepalive","sequence_number":N}` in `data:` (Azure AI Foundry's
+/// OpenAI-compatible endpoint does the latter). A normal delta that merely
+/// quotes the word "keepalive" must not match, so payload frames are confirmed
+/// by parsing the top-level `type`.
+fn is_keepalive_event(event_name: &str, data: &str) -> bool {
+    if event_name == RESPONSES_KEEPALIVE_EVENT {
+        return true;
+    }
+    data.contains(RESPONSES_KEEPALIVE_EVENT)
+        && serde_json::from_str::<serde_json::Value>(data).is_ok_and(|v| {
+            v.get("type").and_then(|t| t.as_str()) == Some(RESPONSES_KEEPALIVE_EVENT)
+        })
+}
+
 /// Rewrite a known dialect event `type` in place.
 /// Returns the official name it was rewritten to, or `None` if the `type` is not in the alias table.
 fn rewrite_dialect_event_name(value: &mut serde_json::Value) -> Option<&'static str> {
@@ -1757,13 +1780,16 @@ impl SamplingClient {
                             data = %data,
                         );
 
+                        // LOCAL(responses-keepalive): keepalive is a transport heartbeat,
+                        // not a model event; drop it before typed deserialization.
                         // Intercept the non-standard doom-loop event before typed deserialization
                         // async-openai's event enum does not know it and would fail to parse it
                         // With the check disabled, `is_check_event` still guards against a server emitting it without opt-in (rollout skew)
-                        let swallow = match &doom_loop_for_stream {
-                            Some(collector) => collector.absorb(&event.event, data),
-                            None => is_check_event(&event.event, data),
-                        };
+                        let swallow = is_keepalive_event(&event.event, data)
+                            || match &doom_loop_for_stream {
+                                Some(collector) => collector.absorb(&event.event, data),
+                                None => is_check_event(&event.event, data),
+                            };
                         if swallow {
                             Some(None)
                         } else if let Some(stream_error) = try_parse_stream_error(data) {
@@ -3644,6 +3670,82 @@ mod tests {
             matches!(err, SamplingError::Serialization(_)),
             "expected Serialization error, got {err:?}"
         );
+    }
+
+    /// Responses `keepalive` is a transport heartbeat, not a typed event. It is
+    /// recognized by either the SSE event name or the payload's top-level `type`,
+    /// and is dropped before `deserialize_response_event` sees it.
+    #[test]
+    fn is_keepalive_event_matches_name_or_payload_type() {
+        // Named frame: payload validity is irrelevant.
+        assert!(is_keepalive_event("keepalive", "not json"));
+        // Azure AI Foundry / OpenAI payload-tagged frames.
+        assert!(is_keepalive_event(
+            "message",
+            r#"{"type":"keepalive","sequence_number":5}"#
+        ));
+        assert!(is_keepalive_event("message", r#"{"type":"keepalive"}"#));
+        // A normal delta quoting the word must not be swallowed.
+        assert!(!is_keepalive_event(
+            "message",
+            r#"{"type":"response.output_text.delta","delta":"keepalive"}"#
+        ));
+        // Malformed payloads are forwarded so the strict parser can report them.
+        assert!(!is_keepalive_event("message", "garbage keepalive garbage"));
+        assert!(!is_keepalive_event(
+            "response.output_text.delta",
+            r#"{"type":"response.output_text.delta","delta":"hi"}"#
+        ));
+    }
+
+    #[tokio::test]
+    async fn response_stream_skips_keepalive_heartbeat() {
+        let reply = format!(
+            "data: {{\"type\":\"keepalive\",\"sequence_number\":1}}\n\n\
+             data: {{\"type\":\"response.completed\",\"sequence_number\":2,\"response\":{EMPTY_RESPONSE_JSON}}}\n\n"
+        );
+        let app = Router::new().route(
+            "/v1/responses",
+            post(move || {
+                let reply = reply.clone();
+                async move {
+                    axum::response::Response::builder()
+                        .header("content-type", "text/event-stream")
+                        .body(axum::body::Body::from(reply))
+                        .unwrap()
+                }
+            }),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+        let client = SamplingClient::new(SamplerConfig {
+            base_url: format!("http://{addr}/v1"),
+            api_backend: ApiBackend::Responses,
+            ..minimal_config()
+        })
+        .unwrap();
+        let request = rs::CreateResponse {
+            input: rs::InputParam::Text("hi".to_owned()),
+            ..Default::default()
+        };
+        let (mut stream, _, _) = client
+            .create_response_stream(CreateResponseWrapper::new(request))
+            .await
+            .expect("streaming request should succeed");
+
+        let event = stream
+            .next()
+            .await
+            .expect("completed event should follow the keepalive")
+            .expect("keepalive must not fail the stream");
+        assert!(
+            matches!(event, rs::ResponseStreamEvent::ResponseCompleted(_)),
+            "expected ResponseCompleted, got {event:?}"
+        );
+        server.abort();
     }
 
     #[test]

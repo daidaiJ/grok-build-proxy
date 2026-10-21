@@ -144,13 +144,63 @@ api_backend = "chat_completions"   # 原为 "responses"
 | `deepseek/deepseek-v4.1-flash` | api.commandcode.ai | responses | chat_completions |
 | `deepseek/deepseek-v4-flash` | api.commandcode.ai | responses | chat_completions |
 | `xiaomi/mimo-v2.6-flash` | api.commandcode.ai | responses | chat_completions |
-| `gpt-5.6-luna` | token-unlimited.com | responses | responses（未动，另一网关，未验证是否同病） |
+| `gpt-6-luna`（原记录 `gpt-5.6-luna`） | token-unlimited.com | responses | responses（未动；2026-10-21 实测发 `keepalive`，见下节） |
 
 配置备份：`~/.grok/config.toml.bak-20260922-224106-prebackend`。
 
+## 2026-10-21 追加：`keepalive` 传输心跳（已修）
+
+### 症状
+
+`gpt-6-luna`（`https://token-unlimited.com/v1`，`api_backend = "responses"`）
+在长推理回合稳定失败：
+
+```
+Couldn't read the response: serialization error: unknown variant `keepalive`,
+expected one of `response.created`, `response.in_progress`, ...
+```
+
+三次失败都发生在该次模型调用开始后 31.6–32.7 秒；同一模型 12 秒 / 20 秒的短调用
+正常。`unified.jsonl` 记 `kind = "serialization"`、`is_retryable = false`。
+
+### 根因
+
+`keepalive` 是 Responses API 的**传输层心跳**，不是模型事件，也不在
+`async-openai` 的 `ResponseStreamEvent` 严格枚举里。Azure AI Foundry 的
+OpenAI 兼容 `/openai/v1/responses` 会发
+`{"type":"keepalive","sequence_number":N}`；OpenAI 直连在长推理时也会发。
+OpenAI 官方 Node/Java/PHP SDK 都已把它当 no-op；本仓库此前没有这个分支。
+
+### 修法
+
+在 Layer-1 SSE `scan` 里、`deserialize_response_event` 之前拦截：
+
+- `crates/codegen/xai-grok-sampler/src/client.rs`：
+  `is_keepalive_event(event_name, data)` —— SSE `event:` 名为 `keepalive`，
+  或 `data` 顶层 `type == "keepalive"` 即命中；
+- `swallow` 条件先判 keepalive，再走原有的 doom-loop / check-event 分支；
+  命中后 `Some(None)` 丢弃该帧，不进入类型反序列化；
+- 只放行精确的 `keepalive`，其他未知事件名仍按 `Serialization` 失败
+  （`deserialize_response_event_unknown_event_name_still_fails` 锁定）。
+
+### 边界
+
+- keepalive 不携带 Response 状态，丢弃不影响文本/工具/reasoning 增量。
+- 该帧不计入「模型有产出」，Layer-2 的 `idle_timeout` 语义不变；它只证明
+  HTTP 连接还活着，不证明模型在推进。
+- 若后续出现 `keep_alive` 等变体，按同一白名单方式追加，不做通用放宽。
+
+### 验证
+
+- `is_keepalive_event_matches_name_or_payload_type`：事件名 / payload type /
+  正文引用 / 畸形载荷四种形态。
+- `response_stream_skips_keepalive_heartbeat`：mock SSE 先发 keepalive 再发
+  `response.completed`，断言流拿到 completed 且不报错。
+
 ## 未验证项（后续若要收口）
 
-- `gpt-5.6-luna`（token-unlimited.com）是否也发 `response.reasoning.delta` —— 未抓包。
+- `gpt-5.6-luna`（token-unlimited.com）是否还发 `response.reasoning.delta` ——
+  2026-10-21 只确认了 `keepalive`，reasoning 方言未抓包。
 - Command Code 网关的 `response.reasoning.delta` 是否还伴随其他非标事件名 —— 只抓了首个
   流的前几十行，未穷举。
 - 该网关 Chat Completions 端点对 reasoning 内容的承载方式（实测 `message.reasoning` +
