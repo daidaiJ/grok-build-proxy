@@ -3466,3 +3466,8 @@ compaction-transcript 9 / provider-usage 63 / model-catalog 43 全绿；
 `ctest.sh -p xai-grok-sampler --lib` **296 passed / 0 failed**（新增 2 例）；
 `cargo fmt -p xai-grok-sampler -- --check` 新增段无 diff（crate 内既有文件
 仍有历史格式差异，整仓 check 不干净）。
+
+**发版（2026-10-21）**：合 main merge `6fc83fab`，tag **`v1.0.65`**；
+release run `39556652542` 双 job success（windows 23m23s / linux 28m57s），
+release 页 4 资产非草稿；Windows zip 本机下载 sha256 校验通过，
+`grok2.exe --version` 报 `grok 1.0.65 (6fc83fab32cd)`。

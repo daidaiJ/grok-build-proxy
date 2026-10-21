@@ -391,6 +391,24 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### Responses `keepalive` 兼容 — 已合 main，随 v1.0.65 发版（2026-10-21）
+
+- **当前状态：** `gpt-6-luna`（token-unlimited.com，`api_backend = "responses"`）
+  长推理必现 `unknown variant keepalive`。Layer-1 SSE `scan` 在
+  `deserialize_response_event` 前识别并丢弃 `keepalive`（SSE 事件名或
+  `data.type`），其他未知事件仍严格失败。merge `6fc83fab`，tag `v1.0.65`。
+- **CI 与发版：** release run `39556652542` 双 job success（windows 23m23s /
+  linux 28m57s）、4 资产非草稿；Windows zip sha256 校验通过，
+  `grok2.exe --version` 报 `grok 1.0.65 (6fc83fab32cd)`。
+- **验证：** `cargo check -p xai-grok-sampler --all-targets` 0 error；
+  sampler lib **296 passed / 0 failed**（新增 keepalive helper + mock-SSE 两例）。
+- **遗留：** 未用 v1.0.65 客户端对 token-unlimited 做活回合长推理实测；下次
+  带 reasoning 的请求可直接验 `sse_chunk` 里 keepalive 不再触发
+  `inference_failed`。
+- **详情指针：** PATCHES.md 五十三期；
+  [`docs-local/upstream-responses-event-compat.md`](docs-local/upstream-responses-event-compat.md)
+  2026-10-21 节。
+
 ### 上游同步 2bdd1d6a（2026-09-29 两快照）— 已合 main，随 v1.0.64 发版（2026-10-19）
 
 - **当前状态：** 上游 `f0e3be1` → `2bdd1d6a`（991 文件 +129,569/−27,951）一次合并
