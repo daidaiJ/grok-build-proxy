@@ -192,6 +192,21 @@
 | opencode v2 TUI：diff 呈现面（per-turn 改动文件 + `/diff` 停靠）、worktree 管理补全、连续工具调用分组、prompt stash 面板 | 候选清单见 opencode-port（2026-10-17 复核定稿标「移植优选」；通知音频/toast 与键位配置层拍板不立项） | opencode-port/README.md |
 | opencode v2 `/copy`、命令面板、OSC 9;4+tab 标题、通知层（事件/协议/focus 门控）、dashboard 多会话、`/fork --worktree`、块折叠、`/timeline`、草稿单槽 stash、transcript 窗口化渲染、release highlights | ✅ 已有（逐条系统反查复核，锚点见其「复核撤销台账」表；上轮口头推荐误报 6 项由此撤销） | opencode-port/README.md |
 
+### 2026-10-21 zcode 3.16.2 补充（防误报）
+
+| 外部特性 | fork 现状锚点 |
+|---|---|
+| ApplyPatch 多文件补丁 | ✅ `xai-grok-tools/src/implementations/codex/apply_patch/`；注册 `xai-grok-agent/src/config.rs:345`、`xai-grok-tools/src/registry/types.rs:747` |
+| memory dream / 24h 节流 | ✅ `xai-grok-memory/src/dream.rs`、`batch_dream*.rs` + shell `session/acp_session_impl/memory_dream.rs` |
+| bash AST 权限分析 | ✅ `xai-grok-workspace/src/permission/`（tree-sitter 三态 fail-closed） |
+| MCP resources list/read + list_changed | ✅ `xai-grok-mcp/src/servers.rs:2988` + shell `extensions/mcp.rs`；subscribe/updated 未做 |
+| Windows shell 探测（Git Bash/CMD/PowerShell） | ✅ `xai-grok-tools` Bash 实现 + `util/shell_env_policy.rs` |
+| 插件市场 / 安装账本 | ✅ `xai-grok-plugin-marketplace` + pager `/plugin` |
+
+候选缺口（定级见 `docs-local/agent-cli-tracking/ADOPTION.md` §8）：ToolSearch/DeferredToolCall
+（并入 workflow-pi-port P2 T2）、FillWorkflowHole、Bash 图片输出、MCP 资源订阅 + `alwaysLoad`、
+LLM memory selector、superpowers / zcode-guide / skill-creator / plugin-creator 技能包。
+
 ## 5. 已知盲区（「未核实」≠「没有」，后续预研先核再判）
 
 - fork headless 模式遇审批阻塞的现有行为（step-code-port 未核实项 §1）。

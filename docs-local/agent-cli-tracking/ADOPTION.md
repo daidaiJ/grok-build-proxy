@@ -250,3 +250,62 @@ P1/P2 按 §3/§4 表内级别随迭代带入；每项引入后在本文勾选�
   其余用户表态「不太有感知」，维持缓档不主动推进。
 - **不做 / 已有 / 留档（6）**：7.1.3（用户撤回）、7.1.6、7.1.9、7.1.11（不做）；7.1.12（已有）；
   7.1.15（留档）。
+
+---
+
+## 8. zcode 3.16.x 二轮增补（2026-10-21）
+
+> 背景：父目录 zcode 从 v3.14.3（`29628c9`）刷新到 v3.16.2（`3c5b2276`），新增
+> ToolSearch/DeferredToolCall、FillWorkflowHole、官方插件/技能包等。机制细节、路径与许可见
+> [notes/zcode.md](notes/zcode.md) 的「2026-10-21 刷新」节。本轮不改 §7 既有判定，只追加新面与
+> 「已有」防误报。
+
+### 8.1 新候选
+
+| # | 特性 | 来源锚点 | 现状对照 | 落点 | 级别 |
+|---|---|---|---|---|---|
+| 8.1.1 | **ToolSearch / DeferredToolCall**：四模式（off/auto/native/local）、常驻名单 + `shouldDefer`、MCP 默认延迟 + `alwaysLoad`、select/关键词搜索、公告流、compact 后提升、包装执行与冷恢复 | zcode `core/src/tool/search/`、`core/src/tool/deferred-call.ts`、`docs/design/v2/tool/19-tool-search.md` | fork 的 `ToolSearch` 目前只是 allowlist 映射到 `search_tool`（`xai-grok-agent/src/builder.rs:3116` 的 allowlist 测试），无延迟声明；workflow-pi-port P2 T2 已定稿但未开工 | `xai-grok-agent` 工具面 + `xai-grok-mcp` admission + subagent 会话 | **P1（并入 P2 T2，不另立项）** |
+| 8.1.2 | **superpowers 14 技能**：TDD / systematic-debugging / writing-plans / executing-plans / requesting+receiving-code-review / verification-before-completion / subagent-driven-development / dispatching-parallel-agents / using-git-worktrees 等 + SessionStart hook | zcode `packages/superpowers-plugin/skills/`（MIT，Jesse Vincent） | fork 有 skills + hooks + 子 agent，但无这套方法论技能；`using-superpowers` 的强制先读语义需评估 | skills-only 技能包（先不进插件市场） | **P1（先做三件 A/B）** |
+| 8.1.3 | **zcode-guide 6 个自诊断技能**：commands / hooks / mcp / plugins / skills / 配置指南 | zcode `packages/zcode-guide-plugin/skills/`（MIT） | fork 有 `/doctor`、`/mcps`、`/plugin`、`/lsp` 面，但无面向模型的诊断技能；文案/命令需改成 grok | 内置 skills（可随插件包） | 🟢 P2 |
+| 8.1.4 | **skill-creator 评估闭环**：2–3 个真实测试提示、结果与轨迹一起评审、触发描述写法、渐进披露 | zcode `packages/skill-creator-plugin/skills/skill-creator/SKILL.md`（MIT） | fork 已有 `create-skill`，但重点是脚手架，缺评估循环 | bundled skills / `create-skill` 改写 | 🟢 P2 |
+| 8.1.5 | **plugin-creator**：manifest/脚手架/本地测试市场/安装 handoff | zcode `packages/plugin-creator-plugin/`（MIT） | fork 有 `xai-grok-plugin-marketplace` 与 `/plugin`，缺作者向 skill；ZCode 的市场 UI 步骤需改写 | bundled skills | 🟢 P2（改写后） |
+| 8.1.6 | **FillWorkflowHole**：运行中 dynamic-workflow 停在留白，模型补函数体后继续，run id/journal/子 agent 不变；诊断写回 fill 文件 | zcode `core/src/tool/handlers/fill-workflow-hole*.ts`、`contracts/src/tools/fill-workflow-hole.ts` | fork `xai-workflow` 有 journal 重放/双预算/await_user，无运行中脚本修订/留白通道 | `xai-workflow` host call + journal 事件 | 🟢 P2（借交互形态，不搬 TS 编译） |
+| 8.1.7 | **Bash 图片输出**：stdout data URL 经 magic 校验 + 缩放后作为 image block，失败回退文本 | zcode `core/src/tool/handlers/bash-image-output.ts` | fork 视觉桥覆盖 read_file/PDF/MCP/工具图，Bash 输出图片未接 | `xai-grok-tools` Bash 输出 + 视觉桥 | 🟢 P2 |
+| 8.1.8 | **MCP 资源订阅 + `alwaysLoad`**：`(server,uri)` 引用计数、0→1 订阅/1→0 退订、重连重放、`resources/updated`；server/工具级 `alwaysLoad` | zcode `adapters/src/mcp/resource-subscriptions.ts`、`docs/design/v2/tool/19-tool-search.md` | fork 已有 resources list/read + list_changed（`xai-grok-mcp/src/servers.rs:2988`），无 subscribe/updated、无 `alwaysLoad` | `xai-grok-mcp` + deferred exposure | 🟢 P2/P3 |
+| 8.1.9 | **LLM memory recall selector**：每次最多 5 条、粘性会话、对 user/project 画像保守 | zcode `core/src/memory/recall/selector.ts` | fork 记忆走 embedding + MMR + dream（`xai-grok-memory`），无 LLM rerank | `xai-grok-memory` 查询链 | 🟢 P2（先测成本/收益） |
+| 8.1.10 | **官方插件 seed 体系**：13 个新插件包、`requiredSeedPaths` 完整性校验、内容 hash 缓存、`defaultEnabled`、i18n listing、`userConfig` 占位符 | zcode `bootstrap/src/app/official-plugin-definitions.ts`、`bundled-plugins.ts` | fork 已有 marketplace 与安装账本，缺「随包内置 + 缺件拒装 + 默认启用」 | `xai-grok-plugin-marketplace` + bootstrap | 🟢 P3 |
+| 8.1.11 | **`skills-lock.json`**：外部技能 source + computedHash 锁定 | zcode 仓库根 `skills-lock.json` | fork 的 bundled/plugin skills 无锁文件 | 仓库工具链 | 🟢 P3 |
+| 8.1.12 | **Session execution residency lease / protocol v4**：多端共享 runtime、输入准入、canonical intent replay、highspeed metrics | zcode `bootstrap/src/session-execution/residency-lease.ts`、`zcode-protocol-v4/` | fork leader 模式已有同域问题，协议为 ACP；无直接移植面 | — | 🗂 留档 |
+
+### 8.2 不移植增补
+
+- **ReplyToChannel / 飞书渠道**（zcode）：服务端票据 + 渠道身份 + 原生 @ 解析，fork 无同构渠道面。
+- **MCP Apps / UI 插件 / Gen UI / office 查看面板**（zcode）：依赖桌面托管页面与沙箱 UI，
+  终端 TUI 无宿主；技能正文可单独评估（docx/pdf/pptx 已重叠，xlsx 待定）。
+- **visualize 技能**（zcode）：依赖对话内联 HTML surface，不适用。
+- **CUA / Android / iOS 模拟器 / image-search / restore-legacy-sessions**（zcode）：
+  桌面 GUI、平台特化或绑定 zcode 服务端，均不立项。
+- **`bundled-skills/dynamic-workflows` 直接移植**（zcode）：TS API 与 fork Rhai 不同；只借章节
+  结构（拓扑图册 / 留白 / report salvage / 后台 run），不搬正文。
+- **off-peak 票据**：§7.2 已判，维持。
+
+### 8.3 本轮核实的「fork 已有」防误报
+
+| 外部特性 | fork 现状锚点 |
+|---|---|
+| ApplyPatch 多文件补丁 | ✅ `xai-grok-tools/src/implementations/codex/apply_patch/`；注册 `xai-grok-agent/src/config.rs:345`、`xai-grok-tools/src/registry/types.rs:747` |
+| memory dream / 24h 节流 | ✅ `xai-grok-memory/src/dream.rs`、`batch_dream*.rs` + shell `session/acp_session_impl/memory_dream.rs` |
+| bash AST 权限分析 | ✅ `xai-grok-workspace/src/permission/`（tree-sitter 三态 fail-closed） |
+| MCP resources list/read + list_changed | ✅ `xai-grok-mcp/src/servers.rs:2988` + shell `extensions/mcp.rs`；subscribe/updated 未做 |
+| Windows shell 探测（Git Bash/CMD/PowerShell） | ✅ `xai-grok-tools` Bash 实现 + `util/shell_env_policy.rs` |
+| 插件市场 / 安装账本 | ✅ `xai-grok-plugin-marketplace` + pager `/plugin` |
+| 前缀缓存 / 流空闲超时 / 空补全重试 | ✅ §2.1、§7.3 既有条目，本轮无变化 |
+
+### 8.4 落地顺序建议
+
+1. 8.1.1 只作为 P2 T2 的设计输入，随该专题开工，不单独立项。
+2. 8.1.2 先挑 `test-driven-development`、`systematic-debugging`、`verification-before-completion`
+   三件做 skills-only A/B（对比现有 `/code-review`、`/verify` 流程），再决定是否整包引入。
+3. 8.1.3 / 8.1.4 / 8.1.5 作为技能包在 P2 T2 之后随 TUI 轮评估。
+4. 8.1.6 / 8.1.7 / 8.1.8 / 8.1.9 各挂触发信号：workflow 运行中修订需求、Bash 截图场景、
+   MCP 资源变更需求、记忆命中率下降反馈。

@@ -901,3 +901,17 @@
   `backfill_capability` 7/7；合并树三 crate check 0 error。
 - **遗留**：活体验证（删测试条目思考位 → 启动看回填日志与 /effort 菜单）
   随新客户端；hot 生效语义沿 D8（下次启动）。PATCHES 五十一期。
+
+### 2026-10-21 zcode 3.16.2 CLI 刷新（调研入库，ToolSearch 参照）
+
+- **内容**：父目录 zcode 从 v3.14.3（`29628c9`）拉到 v3.16.2（`3c5b2276`，3 个提交）。旗舰 =
+  ToolSearch/DeferredToolCall（`off/auto/native/local` 四模式、常驻名单 + `shouldDefer` +
+  MCP `alwaysLoad`、select/关键词搜索、公告流、compact 后提升、包装执行与冷恢复），已作为
+  workflow-pi-port P2 T2 第四参照写入
+  [`deferred-tool-exposure.md`](workflow-pi-port/deferred-tool-exposure.md) §2.3；其余 CLI 改进
+  与内置 skill/plugin 清单（superpowers 14 / zcode-guide 6 / skill-creator / plugin-creator /
+  office 四件）见 [`agent-cli-tracking/notes/zcode.md`](agent-cli-tracking/notes/zcode.md)，
+  移植定级见 [`agent-cli-tracking/ADOPTION.md`](agent-cli-tracking/ADOPTION.md) §8。
+- **验证**：纯文档；`notes/zcode.md` 的路径与行号均在本机 zcode 3.16.2 源码实读；未改 fork 代码。
+- **遗留**：ToolSearch 的 Windows/Linux 与真实缓存命中 zcode 自报未验；superpowers 三件技能
+  A/B 未做；FillWorkflowHole / Bash 图片输出 / MCP 资源订阅 / LLM selector 待触发信号。

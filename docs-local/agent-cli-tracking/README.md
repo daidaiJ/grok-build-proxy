@@ -15,7 +15,7 @@
 | kimi-code | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) | `D:/CODE/ai/kimi-code` | `02d829e1` 2026-09-19 | 自研（pi TUI + agent-core-v2/kosong） |
 | crush | [charmbracelet/crush](https://github.com/charmbracelet/crush) | `D:/CODE/ai/crush` | `5e3fe4b` 2026-10-03 | Charm 官方自研（Go，fantasy/catwalk） |
 | goose | [aaif-goose/goose](https://github.com/aaif-goose/goose)（原 block/goose） | `D:/CODE/ai/goose` | `3bd8520` 2026-10-09 | Block 出品自研（Rust，AAIF 基金会治理） |
-| zcode | ZCode（Z.ai/智谱官方） | `D:/CODE/ai/zcode` | `29628c9` 2026-09-24（v3.14.3 快照） | Z.ai 官方自研（TS，Claude Code 同构概念体系） |
+| zcode | ZCode（Z.ai/智谱官方） | `D:/CODE/ai/zcode` | `3c5b2276` 2026-10-20（v3.16.2） | Z.ai 官方自研（TS，Claude Code 同构概念体系） |
 
 > 口碑注记（2026-10-11，用户口径）：opencode 与 MiMo-Code 社区口碑下降，其设计仅作机制参照，不再作为对齐对象。
 
@@ -85,9 +85,23 @@
 | 扩展 | MCP 三传输 + Hooks（仅 PreToolUse）+ skills 兼容扫描 | Open Plugins hooks + skills + recipe + 恶意软件检查 | 插件商店（CDN sha256）+ hooks 七事件 + workspace hook 信任摘要 |
 | 独有 | Channels / crushrc=Bash 配置 / 多客户端 workspace | ACP 反向 provider / handoff memo / sigstore 自更新 / P2P roaming | dynamic-workflow / amend-workflow / formal-proof / 跨生态会话导入 |
 
+## 2026-10-21 刷新（zcode v3.14.3 → v3.16.2）
+
+- 旗舰变化 = **ToolSearch / DeferredToolCall**：`off/auto/native/local` 四模式、常驻工具白名单 +
+  `shouldDefer` 元数据、MCP 默认延迟 + `alwaysLoad` 覆盖、按名/关键词搜索、公告流、compact 后
+  提升、包装执行与冷恢复。直接作为 workflow-pi-port P2 T2 的第四参照（详见
+  [notes/zcode.md](notes/zcode.md) 的「2026-10-21 刷新」节与
+  [workflow-pi-port/deferred-tool-exposure.md](../workflow-pi-port/deferred-tool-exposure.md) §2.3）。
+- 随 CLI / 官方市场提供的技能与插件：superpowers 14 技能（MIT，市场分发）、zcode-guide 6 个
+  诊断技能、skill-creator、plugin-creator、docx/pdf/pptx/xlsx 生产技能；逐项移植判定见
+  [notes/zcode.md](notes/zcode.md)「内置技能与官方插件」。
+- 工具面候选：FillWorkflowHole、Bash 图片输出、MCP 资源订阅、LLM memory selector；ApplyPatch 与
+  memory dream 在 fork 已有，不重复立项。
+- 引入定级与负面清单见 [ADOPTION.md](ADOPTION.md) §8。
+
 ## 追踪更新方法
 
-五个克隆都是 `--depth 1` 浅克隆，刷新到最新：
+首批五家克隆是 `--depth 1` 浅克隆，刷新到最新：
 
 ```bash
 for r in opencode MiMo-Code qwen-code minimax-code kimi-code; do
@@ -95,6 +109,13 @@ for r in opencode MiMo-Code qwen-code minimax-code kimi-code; do
   git -C "D:/CODE/ai/$r" fetch --depth 1 origin '+HEAD:refs/remotes/origin/HEAD' 2>/dev/null
 done
 # 然后逐仓 git -C <path> checkout -B <默认分支> origin/<默认分支>（opencode 默认分支是 dev）
+```
+
+zcode 是持续同步的完整仓（不是浅克隆），单独拉：
+
+```bash
+git -C "D:/CODE/ai/zcode" fetch --all --tags
+git -C "D:/CODE/ai/zcode" pull --ff-only origin main
 ```
 
 更新后重跑"侦察 + 深挖"流程即可刷新本文各节；每次刷新在对象表更新基准 commit。

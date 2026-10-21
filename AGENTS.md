@@ -39,6 +39,15 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   四十四/四十七期；定案与 D9 施工记录
   [`docs-local/vision-bridge/plan.md`](docs-local/vision-bridge/plan.md)。
 
+- **zcode 3.16.2 CLI 刷新（2026-10-21 调研入库）** — 父目录 zcode 拉到 v3.16.2
+  （`3c5b2276`）；旗舰 ToolSearch/DeferredToolCall 已作为 workflow-pi-port
+  P2 T2 第四参照（[`deferred-tool-exposure.md`](docs-local/workflow-pi-port/deferred-tool-exposure.md)
+  §2.3）；内置技能/插件清单（superpowers 14 / zcode-guide 6 / skill-creator /
+  plugin-creator / office 四件）与移植定级见
+  [`agent-cli-tracking/notes/zcode.md`](docs-local/agent-cli-tracking/notes/zcode.md)
+  + [`ADOPTION.md`](docs-local/agent-cli-tracking/ADOPTION.md) §8。P1 候选 =
+  ToolSearch 参照 + superpowers 三件技能 A/B；无代码改动。
+
 - **模型选择器目录详情展示（已落地合 main，2026-10-17；发版待用户拍板）** — 用户需求：
   /model 选模型时行右侧空白列显示模态/上下文长度/是否支持思考/美元价格。行
   `right_label` 改显目录四字段 token 串（`文本 256k reasoning $3/$15`），本地
