@@ -155,6 +155,36 @@ pub struct ProviderUsageConfig {
     pub cache_minutes: Option<u64>,
 }
 
+/// LOCAL: `[api_dump]` — 异常 LLM API 响应落盘（`~/.grok/dump/`）。用于离线归纳
+/// 不同供应商的兼容性错误（非 429/限流）并回查原始请求。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ApiDumpConfig {
+    /// 总开关；缺省 true。`GROK_API_DUMP=0` 可强制关闭。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    /// 单个 dump 文件保留的请求/响应体字节上限（缺省 2 MiB）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_body_bytes: Option<u64>,
+    /// 流式失败时保留的 SSE 前缀字节上限（缺省 256 KiB）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_stream_bytes: Option<u64>,
+    /// 每日文件上限（缺省 200，0 = 不限）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_files_per_day: Option<u32>,
+}
+
+impl Default for ApiDumpConfig {
+    fn default() -> Self {
+        Self {
+            enabled: Some(true),
+            max_body_bytes: None,
+            max_stream_bytes: None,
+            max_files_per_day: None,
+        }
+    }
+}
+
 /// LOCAL: `[model_catalog]` — 模型目录取数（价格/上下文上限；`/stats` 成本列与
 /// `/auth` 目录回填共用）。OpenRouter 主、models.dev 兜底，只留官方价格。
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -973,6 +1003,9 @@ pub struct Config {
     /// LOCAL: `[model_catalog]` 模型目录取数设置.
     #[serde(default, skip_serializing)]
     pub model_catalog: ModelCatalogConfig,
+    /// LOCAL: `[api_dump]` 异常 LLM API 响应落盘设置.
+    #[serde(default, skip_serializing)]
+    pub api_dump: ApiDumpConfig,
     /// LOCAL: `[model_groups.<name>]` 模型组（跨供应商降级链）定义表.
     #[serde(default, skip_serializing)]
     pub model_groups: std::collections::HashMap<String, ModelGroupConfig>,
@@ -1274,6 +1307,7 @@ impl Default for Config {
             network: NetworkConfig::default(),
             provider_usage: ProviderUsageConfig::default(),
             model_catalog: ModelCatalogConfig::default(),
+            api_dump: ApiDumpConfig::default(),
             model_groups: std::collections::HashMap::new(),
             shell: ShellBackendConfig::default(),
             notification_settings: NotificationsConfig::default(),
@@ -1849,6 +1883,28 @@ impl Config {
             self.network.proxy.clone(),
             self.network.proxy_hosts.clone(),
         );
+        // LOCAL: `[api_dump]` abnormal-response capture, read by the sampler.
+        {
+            let defaults = xai_grok_sampler::api_dump::Settings::default();
+            xai_grok_sampler::api_dump::configure(xai_grok_sampler::api_dump::Settings {
+                enabled: self.api_dump.enabled.unwrap_or(true),
+                dir: crate::util::grok_home::grok_home().join("dump"),
+                max_body_bytes: self
+                    .api_dump
+                    .max_body_bytes
+                    .map(|v| usize::try_from(v).unwrap_or(usize::MAX))
+                    .unwrap_or(defaults.max_body_bytes),
+                max_stream_bytes: self
+                    .api_dump
+                    .max_stream_bytes
+                    .map(|v| usize::try_from(v).unwrap_or(usize::MAX))
+                    .unwrap_or(defaults.max_stream_bytes),
+                max_files_per_day: self
+                    .api_dump
+                    .max_files_per_day
+                    .unwrap_or(defaults.max_files_per_day),
+            });
+        }
         // LOCAL: config `[shell] backend` override for the Windows shell cascade
         // (pwsh | powershell | bash | cmd); wins over the GROK_SHELL env var.
         #[cfg(windows)]

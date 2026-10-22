@@ -35,6 +35,7 @@ use xai_grok_sampling_types::{
     messages, rs,
 };
 
+use crate::api_dump::CallDump;
 use crate::config::{AuthScheme, OriginClientInfo, RequestCompression, SamplerConfig};
 use crate::events::SamplingErrorInfo;
 use crate::request_compression::{compress_body, should_compress};
@@ -988,13 +989,16 @@ impl SamplingClient {
 
     /// `sent_bearer` is the fragment [`Self::post`] captured for the request that produced `response` (401 attribution).
     /// `probe` carries the limit-probe identity so the error body and usage land next to the matching "req" line.
+    /// `dump` records an abnormal response under `~/.grok/dump/`.
     async fn handle_response(
         &self,
         response: reqwest::Response,
         sent_bearer: Option<&str>,
         probe: Option<&crate::limit_probe::CallNote>,
+        dump: Option<&CallDump>,
     ) -> Result<ChatCompletionResponse> {
         let status = response.status();
+        let response_headers = response.headers().clone();
         let model_metadata = extract_model_metadata(response.headers());
         let retry_after_secs = extract_retry_after(response.headers());
         let should_retry = extract_should_retry(response.headers());
@@ -1007,23 +1011,39 @@ impl SamplingClient {
                     sent_bearer,
                 );
                 let server_message = user_facing_api_error_message(status, bytes.as_ref());
-                return Err(auth_rejected(
-                    format!("Unauthorized (401): {server_message}"),
-                    sent_bearer,
-                ));
+                let err =
+                    auth_rejected(format!("Unauthorized (401): {server_message}"), sent_bearer);
+                if let Some(dump) = dump {
+                    dump.note_failure(
+                        Some(status.as_u16()),
+                        Some(&response_headers),
+                        Some(bytes.as_ref()),
+                        &err,
+                    );
+                }
+                return Err(err);
             }
             let message = user_facing_api_error_message(status, bytes.as_ref());
             if let Some(note) = probe {
                 crate::limit_probe::note_error_body(note, status.as_u16(), bytes.as_ref());
             }
-            return Err(SamplingError::Api {
+            let err = SamplingError::Api {
                 status,
                 message,
                 model_metadata,
                 retry_after_secs,
                 should_retry,
                 error_code: parse_error_code(bytes.as_ref()),
-            });
+            };
+            if let Some(dump) = dump {
+                dump.note_failure(
+                    Some(status.as_u16()),
+                    Some(&response_headers),
+                    Some(bytes.as_ref()),
+                    &err,
+                );
+            }
+            return Err(err);
         }
 
         let completion = serde_json::from_slice::<ChatCompletionResponse>(&bytes).map_err(|e| {
@@ -1033,7 +1053,16 @@ impl SamplingClient {
                 raw_body = %raw_body,
                 "Failed to deserialize ChatCompletionResponse"
             );
-            SamplingError::Serialization(e)
+            let err = SamplingError::Serialization(e);
+            if let Some(dump) = dump {
+                dump.note_failure(
+                    Some(status.as_u16()),
+                    Some(&response_headers),
+                    Some(bytes.as_ref()),
+                    &err,
+                );
+            }
+            err
         })?;
         if let (Some(note), Some(usage)) = (probe, completion.usage.as_ref()) {
             let (prompt, cached, completion_tokens, reasoning) =
@@ -1093,10 +1122,27 @@ impl SamplingClient {
             builder,
             sent_bearer,
         } = self.post(self.endpoint("chat/completions"));
-        let built_request = self
+        let (built_request, dump_body) = self
             .build_json_request(grok_headers.apply(builder), &payload)
             .await?;
-        let response = self.send(built_request).await?;
+        let dump = self.make_dump(
+            &built_request,
+            dump_body.as_deref(),
+            "chat_completions",
+            "nonstream",
+            &model_id,
+            payload.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+        );
+        let response = match self.send(built_request).await {
+            Ok(response) => response,
+            Err(err) => {
+                if let Some(dump) = &dump {
+                    dump.note_failure(None, None, None, &err);
+                }
+                return Err(err);
+            }
+        };
 
         let status = response.status();
         request_region
@@ -1107,22 +1153,32 @@ impl SamplingClient {
             crate::limit_probe::note_response(note, status.as_u16(), response.headers());
         }
 
-        self.handle_response(response, sent_bearer.as_deref(), probe.as_ref())
-            .await
+        self.handle_response(
+            response,
+            sent_bearer.as_deref(),
+            probe.as_ref(),
+            dump.as_ref(),
+        )
+        .await
     }
 
     /// Serialize `payload` onto `builder` the way `RequestBuilder::json` does
     /// (a caller-set `Content-Type` wins), zstd-compressing large bodies when
     /// the shell marked this endpoint as accepting it.
+    ///
+    /// Returns the uncompressed JSON alongside the request while the diagnostic
+    /// dump is enabled, so a failing call can be persisted without serializing
+    /// the payload a second time.
     async fn build_json_request<T: Serialize + ?Sized>(
         &self,
         builder: reqwest::RequestBuilder,
         payload: &T,
-    ) -> Result<reqwest::Request> {
+    ) -> Result<(reqwest::Request, Option<Vec<u8>>)> {
         let json = serde_json::to_vec(payload).map_err(|e| {
             tracing::error!("Failed to serialize request body: {}", e);
             SamplingError::Serialization(e)
         })?;
+        let dump_body = crate::api_dump::enabled().then(|| json.clone());
         let mut request = builder.build().map_err(|e| {
             tracing::error!("Failed to build HTTP request: {}", e);
             SamplingError::Http(e)
@@ -1146,7 +1202,33 @@ impl SamplingClient {
             json
         };
         *request.body_mut() = Some(reqwest::Body::from(body));
-        Ok(request)
+        Ok((request, dump_body))
+    }
+
+    /// Build the dump handle for one call site; `None` while dumping is off.
+    #[allow(clippy::too_many_arguments)]
+    fn make_dump(
+        &self,
+        request: &reqwest::Request,
+        body: Option<&[u8]>,
+        backend: &'static str,
+        mode: &'static str,
+        model: &str,
+        session_id: &str,
+        req_id: &str,
+    ) -> Option<CallDump> {
+        let body = body?;
+        let capture = crate::api_dump::capture_request(request, body)?;
+        Some(CallDump::new(
+            capture,
+            crate::api_dump::CallContext {
+                backend,
+                mode,
+                model: model.to_owned(),
+                session_id: session_id.to_owned(),
+                req_id: req_id.to_owned(),
+            },
+        ))
     }
 
     async fn send(&self, request: reqwest::Request) -> Result<reqwest::Response> {
@@ -1246,9 +1328,18 @@ impl SamplingClient {
         let http_request = grok_headers
             .apply(builder)
             .header(ACCEPT, HeaderValue::from_static("text/event-stream"));
-        let built_request = self
+        let (built_request, dump_body) = self
             .build_json_request(http_request, &streaming_request)
             .await?;
+        let dump = self.make_dump(
+            &built_request,
+            dump_body.as_deref(),
+            "chat_completions",
+            "stream",
+            &model_id,
+            payload.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+        );
 
         tracing::debug!(
             url = %built_request.url(),
@@ -1256,11 +1347,21 @@ impl SamplingClient {
             "Sending chat/completions request"
         );
         Self::log_request_headers(&built_request, "chat/completions");
-        let response = self
+        let response = match self
             .execute_stream_request(built_request, &mut span_timing)
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                if let Some(dump) = &dump {
+                    dump.note_failure(None, None, None, &err);
+                }
+                return Err(err);
+            }
+        };
 
         let status = response.status();
+        let response_headers = response.headers().clone();
         span_timing
             .span()
             .record(STATUS_CODE, status.as_u16() as i64);
@@ -1281,10 +1382,19 @@ impl SamplingClient {
                 let endpoint = self.endpoint("chat/completions");
                 let body = response.bytes().await.unwrap_or_default();
                 let server_message = user_facing_api_error_message(status, body.as_ref());
-                return Err(auth_rejected(
+                let err = auth_rejected(
                     format!("Unauthorized (401) from {endpoint}: {server_message}"),
                     sent_bearer.as_deref(),
-                ));
+                );
+                if let Some(dump) = &dump {
+                    dump.note_failure(
+                        Some(status.as_u16()),
+                        Some(&response_headers),
+                        Some(body.as_ref()),
+                        &err,
+                    );
+                }
+                return Err(err);
             }
 
             let bytes = response.bytes().await?;
@@ -1300,14 +1410,23 @@ impl SamplingClient {
                 model_id = %model_id,
                 "chat/completions API error"
             );
-            return Err(SamplingError::Api {
+            let err = SamplingError::Api {
                 status,
                 message,
                 model_metadata,
                 retry_after_secs,
                 should_retry,
                 error_code: parse_error_code(bytes.as_ref()),
-            });
+            };
+            if let Some(dump) = &dump {
+                dump.note_failure(
+                    Some(status.as_u16()),
+                    Some(&response_headers),
+                    Some(bytes.as_ref()),
+                    &err,
+                );
+            }
+            return Err(err);
         }
 
         // Strip UTF-8 BOM if present: eventsource-stream 0.2.3 incorrectly slices BOM at byte 1 instead of 3.
@@ -1331,8 +1450,12 @@ impl SamplingClient {
         // Uses `scan` so that `[DONE]` and transport errors both terminate the stream (`None`)
         // The first transport error is emitted to the consumer, then subsequent polls return `None`
         let usage_probe = probe.clone();
+        let recorder = dump.as_ref().map(CallDump::stream_recorder);
+        let scan_recorder = recorder.clone();
+        let scan_dump = dump.clone();
+        let scan_headers = response_headers.clone();
         let chunks = event_stream
-            .scan(false, |had_transport_error, event_res| {
+            .scan(false, move |had_transport_error, event_res| {
                 if *had_transport_error {
                     return std::future::ready(None);
                 }
@@ -1349,8 +1472,19 @@ impl SamplingClient {
                             backend = "chat_completions",
                             data = %data,
                         );
+                        if let Some(recorder) = &scan_recorder {
+                            recorder.push_frame(&event.event, data);
+                        }
 
                         if let Some(stream_error) = try_parse_stream_error(data) {
+                            if let (Some(dump), Some(recorder)) = (&scan_dump, &scan_recorder) {
+                                dump.note_stream_failure(
+                                    Some(status.as_u16()),
+                                    Some(&scan_headers),
+                                    recorder,
+                                    &stream_error,
+                                );
+                            }
                             Some(Err(stream_error))
                         } else {
                             Some(
@@ -1360,14 +1494,34 @@ impl SamplingClient {
                                         raw_data = %data,
                                         "Failed to deserialize ChatCompletionChunk from stream"
                                     );
-                                    SamplingError::Serialization(e)
+                                    let err = SamplingError::Serialization(e);
+                                    if let (Some(dump), Some(recorder)) =
+                                        (&scan_dump, &scan_recorder)
+                                    {
+                                        dump.note_stream_failure(
+                                            Some(status.as_u16()),
+                                            Some(&scan_headers),
+                                            recorder,
+                                            &err,
+                                        );
+                                    }
+                                    err
                                 }),
                             )
                         }
                     }
                     Err(e) => {
                         *had_transport_error = true;
-                        Some(Err(SamplingError::EventStreamError(e.to_string())))
+                        let err = SamplingError::EventStreamError(e.to_string());
+                        if let (Some(dump), Some(recorder)) = (&scan_dump, &scan_recorder) {
+                            dump.note_stream_failure(
+                                Some(status.as_u16()),
+                                Some(&scan_headers),
+                                recorder,
+                                &err,
+                            );
+                        }
+                        Some(Err(err))
                     }
                 };
                 std::future::ready(item)
@@ -1501,12 +1655,30 @@ impl SamplingClient {
             builder,
             sent_bearer,
         } = self.post(self.endpoint("responses"));
-        let built_request = self
+        let (built_request, dump_body) = self
             .build_json_request(grok_headers.apply(builder), &request_body)
             .await?;
-        let response = self.send(built_request).await?;
+        let dump = self.make_dump(
+            &built_request,
+            dump_body.as_deref(),
+            "responses",
+            "nonstream",
+            &model_id,
+            request.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+        );
+        let response = match self.send(built_request).await {
+            Ok(response) => response,
+            Err(err) => {
+                if let Some(dump) = &dump {
+                    dump.note_failure(None, None, None, &err);
+                }
+                return Err(err);
+            }
+        };
 
         let status = response.status();
+        let response_headers = response.headers().clone();
         request_region
             .span()
             .record("status_code", status.as_u16() as i64);
@@ -1527,10 +1699,19 @@ impl SamplingClient {
                 );
                 let endpoint = self.endpoint("responses");
                 let server_message = user_facing_api_error_message(status, bytes.as_ref());
-                return Err(auth_rejected(
+                let err = auth_rejected(
                     format!("Unauthorized (401) from {endpoint}: {server_message}"),
                     sent_bearer.as_deref(),
-                ));
+                );
+                if let Some(dump) = &dump {
+                    dump.note_failure(
+                        Some(status.as_u16()),
+                        Some(&response_headers),
+                        Some(bytes.as_ref()),
+                        &err,
+                    );
+                }
+                return Err(err);
             }
 
             let message = user_facing_api_error_message(status, bytes.as_ref());
@@ -1544,14 +1725,23 @@ impl SamplingClient {
                 model_id = %model_id,
                 "responses API error"
             );
-            return Err(SamplingError::Api {
+            let err = SamplingError::Api {
                 status,
                 message,
                 model_metadata,
                 retry_after_secs,
                 should_retry,
                 error_code: parse_error_code(bytes.as_ref()),
-            });
+            };
+            if let Some(dump) = &dump {
+                dump.note_failure(
+                    Some(status.as_u16()),
+                    Some(&response_headers),
+                    Some(bytes.as_ref()),
+                    &err,
+                );
+            }
+            return Err(err);
         }
 
         let response_obj = serde_json::from_slice::<rs::Response>(&bytes).map_err(|e| {
@@ -1561,7 +1751,16 @@ impl SamplingClient {
                 raw_body = %raw_body,
                 "Failed to deserialize rs::Response"
             );
-            SamplingError::Serialization(e)
+            let err = SamplingError::Serialization(e);
+            if let Some(dump) = &dump {
+                dump.note_failure(
+                    Some(status.as_u16()),
+                    Some(&response_headers),
+                    Some(bytes.as_ref()),
+                    &err,
+                );
+            }
+            err
         })?;
         Ok(response_obj)
     }
@@ -1676,7 +1875,17 @@ impl SamplingClient {
                     DEFAULT_EXACT_REPETITION_MIN_TOKENS.to_string(),
                 );
         }
-        let built_request = self.build_json_request(http_request, &request_body).await?;
+        let (built_request, dump_body) =
+            self.build_json_request(http_request, &request_body).await?;
+        let dump = self.make_dump(
+            &built_request,
+            dump_body.as_deref(),
+            "responses",
+            "stream",
+            &model_id,
+            request.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+        );
 
         tracing::debug!(
             url = %built_request.url(),
@@ -1684,11 +1893,21 @@ impl SamplingClient {
             "Sending responses API stream request"
         );
         Self::log_request_headers(&built_request, "responses");
-        let response = self
+        let response = match self
             .execute_stream_request(built_request, &mut span_timing)
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                if let Some(dump) = &dump {
+                    dump.note_failure(None, None, None, &err);
+                }
+                return Err(err);
+            }
+        };
 
         let status = response.status();
+        let response_headers = response.headers().clone();
         span_timing
             .span()
             .record(STATUS_CODE, status.as_u16() as i64);
@@ -1706,10 +1925,19 @@ impl SamplingClient {
                 let endpoint = self.endpoint("responses");
                 let body = response.bytes().await.unwrap_or_default();
                 let server_message = user_facing_api_error_message(status, body.as_ref());
-                return Err(auth_rejected(
+                let err = auth_rejected(
                     format!("Unauthorized (401) from {endpoint}: {server_message}"),
                     sent_bearer.as_deref(),
-                ));
+                );
+                if let Some(dump) = &dump {
+                    dump.note_failure(
+                        Some(status.as_u16()),
+                        Some(&response_headers),
+                        Some(body.as_ref()),
+                        &err,
+                    );
+                }
+                return Err(err);
             }
             let model_metadata = extract_model_metadata(response.headers());
             let retry_after_secs = extract_retry_after(response.headers());
@@ -1727,14 +1955,23 @@ impl SamplingClient {
                 model_id = %model_id,
                 "responses API error"
             );
-            return Err(SamplingError::Api {
+            let err = SamplingError::Api {
                 status,
                 message,
                 model_metadata,
                 retry_after_secs,
                 should_retry,
                 error_code: parse_error_code(bytes.as_ref()),
-            });
+            };
+            if let Some(dump) = &dump {
+                dump.note_failure(
+                    Some(status.as_u16()),
+                    Some(&response_headers),
+                    Some(bytes.as_ref()),
+                    &err,
+                );
+            }
+            return Err(err);
         }
 
         let model_metadata = extract_model_metadata(response.headers());
@@ -1758,6 +1995,10 @@ impl SamplingClient {
 
         let doom_loop_for_stream = doom_loop.clone();
         let usage_probe = probe.clone();
+        let scan_recorder = dump.as_ref().map(CallDump::stream_recorder);
+        let scan_dump = dump.clone();
+        let scan_headers = response_headers.clone();
+        let scan_status = status;
 
         // The scan item is an `Option`: `Some(None)` skips an absorbed doom-loop event without terminating the stream (`filter_map` below)
         // An outer `None` still ends the stream
@@ -1779,6 +2020,9 @@ impl SamplingClient {
                             backend = "responses",
                             data = %data,
                         );
+                        if let Some(recorder) = &scan_recorder {
+                            recorder.push_frame(&event.event, data);
+                        }
 
                         // LOCAL(responses-keepalive): keepalive is a transport heartbeat,
                         // not a model event; drop it before typed deserialization.
@@ -1793,9 +2037,27 @@ impl SamplingClient {
                         if swallow {
                             Some(None)
                         } else if let Some(stream_error) = try_parse_stream_error(data) {
+                            if let (Some(dump), Some(recorder)) = (&scan_dump, &scan_recorder) {
+                                dump.note_stream_failure(
+                                    Some(scan_status.as_u16()),
+                                    Some(&scan_headers),
+                                    recorder,
+                                    &stream_error,
+                                );
+                            }
                             Some(Some(Err(stream_error)))
                         } else {
                             let event = deserialize_response_event(data);
+                            if let (Some(dump), Some(recorder), Err(err)) =
+                                (&scan_dump, &scan_recorder, &event)
+                            {
+                                dump.note_stream_failure(
+                                    Some(scan_status.as_u16()),
+                                    Some(&scan_headers),
+                                    recorder,
+                                    err,
+                                );
+                            }
                             if let Some(note) = &usage_probe {
                                 let usage = match &event {
                                     Ok(rs::ResponseStreamEvent::ResponseCompleted(done)) => {
@@ -1821,7 +2083,16 @@ impl SamplingClient {
                     }
                     Err(e) => {
                         *had_transport_error = true;
-                        Some(Some(Err(SamplingError::EventStreamError(e.to_string()))))
+                        let err = SamplingError::EventStreamError(e.to_string());
+                        if let (Some(dump), Some(recorder)) = (&scan_dump, &scan_recorder) {
+                            dump.note_stream_failure(
+                                Some(scan_status.as_u16()),
+                                Some(&scan_headers),
+                                recorder,
+                                &err,
+                            );
+                        }
+                        Some(Some(Err(err)))
                     }
                 };
                 std::future::ready(item)
@@ -1911,12 +2182,30 @@ impl SamplingClient {
             builder,
             sent_bearer,
         } = self.post(self.endpoint("messages"));
-        let built_request = self
+        let (built_request, dump_body) = self
             .build_json_request(grok_headers.apply(builder), &request.inner)
             .await?;
-        let response = self.send(built_request).await?;
+        let dump = self.make_dump(
+            &built_request,
+            dump_body.as_deref(),
+            "messages",
+            "nonstream",
+            &model_id,
+            request.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+        );
+        let response = match self.send(built_request).await {
+            Ok(response) => response,
+            Err(err) => {
+                if let Some(dump) = &dump {
+                    dump.note_failure(None, None, None, &err);
+                }
+                return Err(err);
+            }
+        };
 
         let status = response.status();
+        let response_headers = response.headers().clone();
         request_region
             .span()
             .record("status_code", status.as_u16() as i64);
@@ -1937,10 +2226,19 @@ impl SamplingClient {
                 );
                 let endpoint = self.endpoint("messages");
                 let server_message = user_facing_api_error_message(status, bytes.as_ref());
-                return Err(auth_rejected(
+                let err = auth_rejected(
                     format!("Unauthorized (401) from {endpoint}: {server_message}"),
                     sent_bearer.as_deref(),
-                ));
+                );
+                if let Some(dump) = &dump {
+                    dump.note_failure(
+                        Some(status.as_u16()),
+                        Some(&response_headers),
+                        Some(bytes.as_ref()),
+                        &err,
+                    );
+                }
+                return Err(err);
             }
 
             let message = user_facing_api_error_message(status, bytes.as_ref());
@@ -1954,14 +2252,23 @@ impl SamplingClient {
                 model_id = %model_id,
                 "messages API error"
             );
-            return Err(SamplingError::Api {
+            let err = SamplingError::Api {
                 status,
                 message,
                 model_metadata,
                 retry_after_secs,
                 should_retry,
                 error_code: parse_error_code(bytes.as_ref()),
-            });
+            };
+            if let Some(dump) = &dump {
+                dump.note_failure(
+                    Some(status.as_u16()),
+                    Some(&response_headers),
+                    Some(bytes.as_ref()),
+                    &err,
+                );
+            }
+            return Err(err);
         }
 
         let response_obj =
@@ -1972,7 +2279,16 @@ impl SamplingClient {
                     raw_body = %raw_body,
                     "Failed to deserialize MessagesResponse"
                 );
-                SamplingError::Serialization(e)
+                let err = SamplingError::Serialization(e);
+                if let Some(dump) = &dump {
+                    dump.note_failure(
+                        Some(status.as_u16()),
+                        Some(&response_headers),
+                        Some(bytes.as_ref()),
+                        &err,
+                    );
+                }
+                err
             })?;
         Ok(response_obj)
     }
@@ -2054,9 +2370,18 @@ impl SamplingClient {
         let http_request = grok_headers
             .apply(builder)
             .header(ACCEPT, HeaderValue::from_static("text/event-stream"));
-        let built_request = self
+        let (built_request, dump_body) = self
             .build_json_request(http_request, &request.inner)
             .await?;
+        let dump = self.make_dump(
+            &built_request,
+            dump_body.as_deref(),
+            "messages",
+            "stream",
+            &model_id,
+            request.x_grok_session_id.as_deref().unwrap_or_default(),
+            x_grok_req_id,
+        );
 
         tracing::debug!(
             url = %built_request.url(),
@@ -2064,11 +2389,21 @@ impl SamplingClient {
             "Sending messages API stream request"
         );
         Self::log_request_headers(&built_request, "messages");
-        let response = self
+        let response = match self
             .execute_stream_request(built_request, &mut span_timing)
-            .await?;
+            .await
+        {
+            Ok(response) => response,
+            Err(err) => {
+                if let Some(dump) = &dump {
+                    dump.note_failure(None, None, None, &err);
+                }
+                return Err(err);
+            }
+        };
 
         let status = response.status();
+        let response_headers = response.headers().clone();
         span_timing
             .span()
             .record(STATUS_CODE, status.as_u16() as i64);
@@ -2086,10 +2421,19 @@ impl SamplingClient {
                 let endpoint = self.endpoint("messages");
                 let body = response.bytes().await.unwrap_or_default();
                 let server_message = user_facing_api_error_message(status, body.as_ref());
-                return Err(auth_rejected(
+                let err = auth_rejected(
                     format!("Unauthorized (401) from {endpoint}: {server_message}"),
                     sent_bearer.as_deref(),
-                ));
+                );
+                if let Some(dump) = &dump {
+                    dump.note_failure(
+                        Some(status.as_u16()),
+                        Some(&response_headers),
+                        Some(body.as_ref()),
+                        &err,
+                    );
+                }
+                return Err(err);
             }
             let model_metadata = extract_model_metadata(response.headers());
             let retry_after_secs = extract_retry_after(response.headers());
@@ -2107,14 +2451,23 @@ impl SamplingClient {
                 model_id = %model_id,
                 "messages API error"
             );
-            return Err(SamplingError::Api {
+            let err = SamplingError::Api {
                 status,
                 message,
                 model_metadata,
                 retry_after_secs,
                 should_retry,
                 error_code: parse_error_code(bytes.as_ref()),
-            });
+            };
+            if let Some(dump) = &dump {
+                dump.note_failure(
+                    Some(status.as_u16()),
+                    Some(&response_headers),
+                    Some(bytes.as_ref()),
+                    &err,
+                );
+            }
+            return Err(err);
         }
 
         let model_metadata = extract_model_metadata(response.headers());
@@ -2138,8 +2491,12 @@ impl SamplingClient {
 
         // Map SSE events into MessageStreamEvent.
         // Uses `scan` so transport errors terminate the stream after the first error (same pattern as `chat_completion_stream`)
+        let scan_recorder = dump.as_ref().map(CallDump::stream_recorder);
+        let scan_dump = dump.clone();
+        let scan_headers = response_headers.clone();
+        let scan_status = status;
         let events = event_stream
-            .scan(false, |had_transport_error, event_res| {
+            .scan(false, move |had_transport_error, event_res| {
                 if *had_transport_error {
                     return std::future::ready(None);
                 }
@@ -2156,8 +2513,19 @@ impl SamplingClient {
                             backend = "messages",
                             data = %data,
                         );
+                        if let Some(recorder) = &scan_recorder {
+                            recorder.push_frame(&event.event, data);
+                        }
 
                         if let Some(stream_error) = try_parse_stream_error(data) {
+                            if let (Some(dump), Some(recorder)) = (&scan_dump, &scan_recorder) {
+                                dump.note_stream_failure(
+                                    Some(scan_status.as_u16()),
+                                    Some(&scan_headers),
+                                    recorder,
+                                    &stream_error,
+                                );
+                            }
                             Some(Err(stream_error))
                         } else {
                             Some(
@@ -2168,7 +2536,18 @@ impl SamplingClient {
                                             raw_data = %data,
                                             "Failed to deserialize MessageStreamEvent from stream"
                                         );
-                                        SamplingError::Serialization(e)
+                                        let err = SamplingError::Serialization(e);
+                                        if let (Some(dump), Some(recorder)) =
+                                            (&scan_dump, &scan_recorder)
+                                        {
+                                            dump.note_stream_failure(
+                                                Some(scan_status.as_u16()),
+                                                Some(&scan_headers),
+                                                recorder,
+                                                &err,
+                                            );
+                                        }
+                                        err
                                     },
                                 ),
                             )
@@ -2176,7 +2555,16 @@ impl SamplingClient {
                     }
                     Err(e) => {
                         *had_transport_error = true;
-                        Some(Err(SamplingError::EventStreamError(e.to_string())))
+                        let err = SamplingError::EventStreamError(e.to_string());
+                        if let (Some(dump), Some(recorder)) = (&scan_dump, &scan_recorder) {
+                            dump.note_stream_failure(
+                                Some(scan_status.as_u16()),
+                                Some(&scan_headers),
+                                recorder,
+                                &err,
+                            );
+                        }
+                        Some(Err(err))
                     }
                 };
                 std::future::ready(item)
@@ -3746,6 +4134,72 @@ mod tests {
             "expected ResponseCompleted, got {event:?}"
         );
         server.abort();
+    }
+
+    /// A 400 from the endpoint lands in `~/.grok/dump/` with the request that
+    /// produced it; a 429 does not, because rate limiting is provider policy
+    /// rather than a compatibility defect.
+    #[tokio::test]
+    async fn api_dump_records_bad_request_but_not_rate_limit() {
+        let dir = std::env::temp_dir().join(format!("grok-dump-wire-{}", uuid::Uuid::new_v4()));
+        crate::api_dump::configure_for_test(crate::api_dump::Settings {
+            enabled: true,
+            dir: dir.clone(),
+            ..Default::default()
+        });
+
+        for (status, expected) in [(400u16, 1usize), (429, 1)] {
+            let app = Router::new().route(
+                "/v1/chat/completions",
+                post(move || async move {
+                    (
+                        axum::http::StatusCode::from_u16(status).unwrap(),
+                        r#"{"error":{"message":"invalid_request_error: bad tool pairing"}}"#,
+                    )
+                }),
+            );
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let server = tokio::spawn(async move {
+                let _ = axum::serve(listener, app).await;
+            });
+            let client = SamplingClient::new(SamplerConfig {
+                base_url: format!("http://{addr}/v1"),
+                ..minimal_config()
+            })
+            .unwrap();
+            let request =
+                ChatCompletionRequest::new("test-model", vec![ChatRequestMessage::user("hi")]);
+            let err = client
+                .chat_completion(request)
+                .await
+                .expect_err("must fail");
+            assert!(
+                matches!(err, SamplingError::Api { .. }),
+                "expected Api error, got {err:?}"
+            );
+
+            let mut count = 0usize;
+            if let Ok(days) = std::fs::read_dir(&dir) {
+                for day in days.filter_map(std::result::Result::ok) {
+                    if day.file_name() == "index.ndjson" {
+                        continue;
+                    }
+                    if let Ok(files) = std::fs::read_dir(day.path()) {
+                        count += files.count();
+                    }
+                }
+            }
+            assert_eq!(count, expected, "status {status}: dump file count");
+            server.abort();
+        }
+
+        let index = std::fs::read_to_string(dir.join("index.ndjson")).unwrap();
+        assert_eq!(index.lines().count(), 1, "{index}");
+        assert!(index.contains("\"status\":400"), "{index}");
+
+        crate::api_dump::reset_for_test();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

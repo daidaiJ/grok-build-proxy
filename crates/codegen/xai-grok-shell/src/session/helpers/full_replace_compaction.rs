@@ -37,6 +37,9 @@ use crate::session::helpers::session_compact::{
 struct SamplerState {
     last_success: Option<CompactOutput>,
     last_attempted_items: Option<Vec<ConversationItem>>,
+    /// The most recent transport attempt failed on the connection (not on the
+    /// payload), so the caller may retry with a freshly built client.
+    last_failure_transport: bool,
 }
 
 impl SamplerState {
@@ -54,7 +57,10 @@ pub(crate) struct ShellCompactionSampler {
     tools: Vec<ToolSpec>,
     hosted_tools: Vec<HostedTool>,
     compaction_tool_tokens: u64,
-    client: OaiCompatClient,
+    /// Rebuilt with `force_http1` after a transport-class failure, mirroring the
+    /// turn path's `RetryWithClientRebuild`; a poisoned HTTP/2 pool otherwise
+    /// keeps failing every compaction attempt.
+    client: Mutex<OaiCompatClient>,
     session_id: acp::SessionId,
     sampling_config: SamplingConfig,
     /// Per-chunk idle timeout forwarded to `generate_session_compact`.
@@ -89,7 +95,7 @@ impl ShellCompactionSampler {
             tools,
             hosted_tools,
             compaction_tool_tokens,
-            client,
+            client: Mutex::new(client),
             session_id,
             sampling_config,
             idle_timeout,
@@ -107,6 +113,21 @@ impl ShellCompactionSampler {
     /// Take the exact image-budgeted items from the latest transport attempt.
     pub(crate) fn take_last_attempted_items(&self) -> Option<Vec<ConversationItem>> {
         self.state.lock().unwrap().last_attempted_items.take()
+    }
+
+    /// Swap in a fresh HTTP/1.1 client after a transport-class failure.
+    /// The turn path rebuilds the same way on its first retry; compaction keeps
+    /// one client for all attempts, so a poisoned HTTP/2 pool would otherwise
+    /// fail every attempt identically.
+    fn rebuild_client_for_retry(&self) {
+        let mut config = self.sampling_config.clone();
+        config.force_http1 = true;
+        match OaiCompatClient::new(config) {
+            Ok(client) => *self.client.lock().unwrap() = client,
+            Err(error) => {
+                tracing::warn!(error = %error, "compaction: HTTP/1.1 client rebuild failed");
+            }
+        }
     }
 }
 
@@ -130,13 +151,23 @@ impl CompactionSampler for ShellCompactionSampler {
             self.compaction_tool_tokens,
         );
         self.state.lock().unwrap().record_attempt(&chat_history);
+        // The previous attempt died on the connection: retry on a fresh HTTP/1.1
+        // client instead of reusing the poisoned pool.
+        let transport_retry = {
+            let mut state = self.state.lock().unwrap();
+            std::mem::take(&mut state.last_failure_transport)
+        };
+        if transport_retry {
+            self.rebuild_client_for_retry();
+        }
+        let client = self.client.lock().unwrap().clone();
 
         match generate_session_compact(
             chat_history,
             self.compaction_tool_tokens,
             self.tools.clone(),
             self.hosted_tools.clone(),
-            self.client.clone(),
+            client,
             self.session_id.clone(),
             &self.sampling_config,
             self.idle_timeout,
@@ -148,13 +179,19 @@ impl CompactionSampler for ShellCompactionSampler {
         {
             Ok(output) => {
                 let response = output.content.clone();
-                self.state.lock().unwrap().last_success = Some(output);
+                let mut state = self.state.lock().unwrap();
+                state.last_failure_transport = false;
+                state.last_success = Some(output);
                 Ok(LlmCompactionOutput {
                     response,
                     thinking: String::new(),
                 })
             }
-            Err(failure) => Err(compact_failure_to_sample_error(failure)),
+            Err(failure) => {
+                self.state.lock().unwrap().last_failure_transport =
+                    crate::session::helpers::session_compact::is_transport_failure(&failure);
+                Err(compact_failure_to_sample_error(failure))
+            }
         }
     }
 }

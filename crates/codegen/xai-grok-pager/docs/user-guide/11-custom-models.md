@@ -517,3 +517,14 @@ tail -f /tmp/grok.log
 ```
 
 Look for log entries containing `model` or `sampling` to trace model selection and API calls.
+
+### Provider Rejects a Request
+
+When a custom endpoint answers 400/5xx, breaks the stream, or fails to decode, the failed exchange is archived under `~/.grok/dump/` (one JSON file per failure plus `index.ndjson`; rate-limit 429 responses are excluded). Each file holds the exact outbound request body and the response or SSE prefix, with credential headers redacted, so a schema mismatch can be compared against the provider's documentation directly.
+
+```bash
+jq -c 'select(.provider == "api.example.com")' ~/.grok/dump/index.ndjson | tail -5
+jq '.request.body, .response.body' ~/.grok/dump/2026-10-22/<name>.json
+```
+
+Control it with `[api_dump]` (`enabled`, `max_body_bytes`, `max_stream_bytes`, `max_files_per_day`) or `GROK_API_DUMP=0`. See `29-local-enhancements.md` → API failure dumps for the field list and more query recipes.

@@ -8702,3 +8702,28 @@ fn test_model_entry(
         api_base_url: api_base_url.map(|s| s.to_string()),
     }
 }
+
+#[test]
+fn parses_api_dump_table_and_defaults_to_enabled() {
+    let defaults = Config::new_from_toml_cfg(&toml::from_str("").unwrap()).expect("empty config");
+    assert_eq!(defaults.api_dump.enabled, Some(true));
+    assert_eq!(defaults.api_dump.max_body_bytes, None);
+    assert_eq!(defaults.api_dump.max_stream_bytes, None);
+    assert_eq!(defaults.api_dump.max_files_per_day, None);
+
+    let raw: toml::Value = toml::from_str(
+        r#"
+            [api_dump]
+            enabled = false
+            max_body_bytes = 4096
+            max_stream_bytes = 1024
+            max_files_per_day = 7
+            "#,
+    )
+    .unwrap();
+    let cfg = Config::new_from_toml_cfg(&raw).expect("config should parse");
+    assert_eq!(cfg.api_dump.enabled, Some(false));
+    assert_eq!(cfg.api_dump.max_body_bytes, Some(4096));
+    assert_eq!(cfg.api_dump.max_stream_bytes, Some(1024));
+    assert_eq!(cfg.api_dump.max_files_per_day, Some(7));
+}

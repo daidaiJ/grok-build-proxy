@@ -47,6 +47,15 @@ User-level configuration lives in `$GROK_HOME/config.toml` (default `~/.grok/con
 | --- | --- | --- | --- | --- |
 | `announcements` | `array of tables` | `—` | `user` | Remote announcement payloads consumed at load. Not a user-authored table. |
 
+### `api_dump`
+
+| Key | Type / Values | Requirements | Managed | Details |
+| --- | --- | --- | --- | --- |
+| `api_dump.enabled` | `boolean` | `yes` | `user` | Write abnormal LLM API exchanges (HTTP errors other than 429, transport failures, stream decode failures) under `$GROK_HOME/dump/<date>/`, one JSON file per failure plus `index.ndjson`. Default `true`. Also GROK_API_DUMP (`0` disables). |
+| `api_dump.max_body_bytes` | `integer` | `yes` | `user` | Cap on the request and response body kept per dump (default 2097152). |
+| `api_dump.max_stream_bytes` | `integer` | `yes` | `user` | Cap on the SSE prefix kept for a streaming failure (default 262144). |
+| `api_dump.max_files_per_day` | `integer` | `yes` | `user` | Daily dump-file cap; `0` disables the cap (default 200). |
+
 ### `auth`
 
 | Key | Type / Values | Requirements | Managed | Details |
@@ -213,7 +222,7 @@ User-level configuration lives in `$GROK_HOME/config.toml` (default `~/.grok/con
 | `features.image_edit_model_override` | `string` | `yes` | `user` | Imagine model id for image_edit. |
 | `features.image_gen` | `boolean` | `pin` | `user` | Enable image_gen / `/imagine`. |
 | `features.image_gen_model_override` | `string` | `yes` | `user` | Imagine model id for image_gen. Empty defers to the remotely configured default. |
-| `features.idle_auto_compact` | `boolean` | `—` | `—` | LOCAL experimental: auto-compact the main context while the session is idle (after a successful turn, before your next prompt) instead of only inline at the next model call. Default false. Also `GROK_IDLE_AUTO_COMPACT`. Read per turn; takes effect without a restart. |
+| `features.idle_auto_compact` | `boolean` | `—` | `user` | LOCAL experimental: auto-compact the main context while the session is idle (after a successful turn, before your next prompt) instead of only inline at the next model call. Default false. Also `GROK_IDLE_AUTO_COMPACT`. Read per turn; takes effect without a restart. |
 | `features.lsp_tools` | `boolean` | `pin` | `user` | Enable or disable `lsp_tools`. Default true. Also `GROK_LSP_TOOLS`. |
 | `features.managed_config` | `boolean` | `yes` | `user` | Fetch managed_config.toml and requirements.toml from the deployment. |
 | `features.mcp_auto_restart` | `boolean` | `yes` | `user` | Auto-restart stdio MCP servers after transport failure. Also GROK_MCP_AUTO_RESTART. |
