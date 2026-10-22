@@ -988,7 +988,11 @@ impl SessionActor {
             None,
         )
         .await;
-        let max_retries = 3u32;
+        // Retry ladder for transient sampler failures. The first retry after a
+        // transport failure rebuilds the client on HTTP/1.1 (see
+        // `ShellCompactionSampler`), mirroring the turn path's rebuild; the
+        // extra attempts cover a gateway that is briefly unreachable.
+        let max_retries = 5u32;
         let retry_delay_secs = 3u64;
         let (conv_len, system_message, full_conversation) = tokio::join!(
             self.chat_state_handle.get_conversation_len(),

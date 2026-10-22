@@ -3471,3 +3471,58 @@ compaction-transcript 9 / provider-usage 63 / model-catalog 43 全绿；
 release run `39556652542` 双 job success（windows 23m23s / linux 28m57s），
 release 页 4 资产非草稿；Windows zip 本机下载 sha256 校验通过，
 `grok2.exe --version` 报 `grok 1.0.65 (6fc83fab32cd)`。
+
+## 五十四期：异常 LLM API 响应落盘 + 索引（`[api_dump]`）+ 压缩传输重试对齐（2026-10-22，分支 feat/local-llm-api-dump）
+
+**需求**：把非 429 的异常响应按日期落到 `~/.grok/dump/`，供脚本归纳不同供应商的
+兼容性错误并回查原始请求/响应；429 与限流是供应商策略，明确排除。同时把压缩路径
+的传输类重试对齐到主回合（此前压缩 3 次重试复用同一客户端，HTTP/2 连接池中毒后
+每次都同样失败）。
+
+- **新模块 `crates/codegen/xai-grok-sampler/src/api_dump.rs`**（纯函数层 + 进程级
+  设置）：
+  - `Settings { enabled, dir, max_body_bytes(2 MiB), max_stream_bytes(256 KiB),
+    max_files_per_day(200, 0=不限) }`；`configure()` 安装，env 覆盖：
+    `GROK_API_DUMP=0|false|off` 强制关、`GROK_API_DUMP_DIR` 换目录。
+  - 文件：`<dir>/<YYYY-MM-DD>/<YYYYMMDDTHHMMSS.mmmZ>-<kind>-<backend>-<mode>-<model>-<req>.json`；
+    索引：`<dir>/index.ndjson`（16 MiB 轮转为 `index.ndjson.1`）。每日文件数上限
+    进程内计数（跨日期自动重置）。
+  - `kind` ∈ `http_error` / `transport` / `decode` / `stream_error` / `idle_timeout` /
+    `auth`；`backend` ∈ `chat_completions` / `responses` / `messages`；`mode` ∈
+    `stream` / `nonstream`。
+  - 索引行字段：`ts, kind, status, backend, mode, model, provider(URL host),
+    session_id, req_id, error_type, error_code, message(≤400), file(相对路径),
+    request_bytes, stream_truncated`；文件内另含完整 `error`、`request`（method/url/
+    headers/body/body_bytes/body_truncated）、`response`、流式失败的 `stream`
+    （frames/frame_count/truncated）。
+  - 脱敏：`authorization` / `api-key` / `api_key` / `apikey` / `token` / `secret` /
+    `cookie` / `key` / `*_key` / `*-key` 头与敏感 query 参数写 `[REDACTED]`；
+    URL 在 capture 与写盘两处各脱敏一次。正文按 UTF-8 边界截断。
+  - `StreamRecorder::push_frame` 保留非 `message` 的 SSE `event:` 名（方言信号），
+    达上限后置 `truncated` 继续计数帧数。
+- **采样器接线 `client.rs`**：六个发送点（chat/responses/messages × stream/nonstream）
+  全部接线。`build_json_request` 返回未压缩 JSON 副本（仅在 dump 开启时克隆，关闭时
+  零额外序列化）；`handle_response` 增 `dump` 参数，401 / 非成功状态 / 反序列化失败
+  三处落盘；流扫描闭包在 `try_parse_stream_error`、`Serialization`、
+  `EventStreamError` 与 responses 的 `deserialize_response_event` 失败处落盘。
+- **配置面 `agent/config.rs`**：新 `[api_dump]`（`enabled` 缺省 true、
+  `max_body_bytes`、`max_stream_bytes`、`max_files_per_day`），
+  `resolve_runtime_fields` 解析为 sampler 设置（目录 `$GROK_HOME/dump`）。
+- **压缩重试对齐**：`session/helpers/session_compact.rs` 增 `is_transport_failure`
+  （`Transient` 且 detail 含 `reqwest error stream: ` 或 `request error: `）；
+  `ShellCompactionSampler` 客户端改 `Mutex<OaiCompatClient>`，首字节前传输失败后
+  下一次尝试换 `force_http1 = true` 的新客户端（对齐主回合
+  `RetryWithClientRebuild`）；`session/compaction.rs` 重试 3→5。
+- **测试**：`api_dump` 模块 4 例（400 落盘 + 429 跳过 + 流帧 + 脱敏；流截断；
+  正文 UTF-8 截断；索引/文件形状）；`client.rs` 线测
+  `api_dump_records_bad_request_but_not_rate_limit`（mock axum 400 → 1 文件 + 1 索引行，
+  429 → 不增）；`session_compact_classify_tests.rs` 新增
+  `transport_failures_are_distinguished_from_other_transient_ones`；
+  `config_tests.rs` 新增 `parses_api_dump_table_and_defaults_to_enabled`。
+- **顺带修复**：`26-config-reference.md` 的 `features.idle_auto_compact` 行
+  Managed 列由 `—` 改 `user`——`config_docs::managed_column_matches_resolver_metadata`
+  在 `--features config-docs` 下一直红（既有缺口，非本次引入）。
+- **文档**：`26-config-reference.md` 增 `api_dump` 表；
+  `29-local-enhancements.md` 增「API failure dumps」节（布局、索引字段、jq 检索、
+  脱敏与边界）+ 引导信号表一行；`11-custom-models.md` Troubleshooting 增
+  「Provider Rejects a Request」。

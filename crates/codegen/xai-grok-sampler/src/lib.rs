@@ -12,6 +12,7 @@
 #![deny(clippy::indexing_slicing)]
 
 pub mod actor;
+pub mod api_dump;
 pub mod attribution;
 pub mod client;
 pub mod commands;

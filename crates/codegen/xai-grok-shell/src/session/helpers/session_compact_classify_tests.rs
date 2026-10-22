@@ -20,6 +20,26 @@ fn api_error(status: StatusCode, message: &str) -> SamplingError {
 }
 
 #[test]
+fn transport_failures_are_distinguished_from_other_transient_ones() {
+    // A poisoned HTTP/2 pool surfaces as a body-decode/keep-alive failure and
+    // only a rebuilt client clears it; an idle timeout or an empty response is
+    // transient for other reasons and must not trigger a rebuild.
+    assert!(is_transport_failure(&classify_sampling_error(
+        SamplingError::EventStreamError("Transport error: error decoding response body".into())
+    )));
+    assert!(is_transport_failure(&classify_sampling_error(
+        SamplingError::EventStreamError("connection reset by peer".into())
+    )));
+    assert!(!is_transport_failure(&CompactFailure::Transient(
+        acp::Error::internal_error().data("compact failed: stream idle timeout after 120s")
+    )));
+    assert!(!is_transport_failure(&classify_sampling_error(api_error(
+        StatusCode::BAD_REQUEST,
+        "invalid tool schema"
+    ))));
+}
+
+#[test]
 fn sampling_api_4xx_is_deterministic_except_408_and_429() {
     let det = |s: StatusCode| is_det(&classify_sampling_error(api_error(s, "test")));
     assert!(det(StatusCode::BAD_REQUEST));

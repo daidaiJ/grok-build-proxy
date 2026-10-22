@@ -1,6 +1,6 @@
 # Local Enhancements (Proxy, Shell, Status Line, China Gateways)
 
-This build of Grok carries a set of local enhancements on top of upstream: an egress proxy allowlist, a Windows shell backend selector, extra status-line segments (`api-calls`, `perf`), a `${session_id}` template for custom request headers, first-class handling of DeepSeek/GLM-style `reasoning_content`, and built-in language-server detection (`lsp` tool on by default). Everything here is configured in `~/.grok/config.toml` and takes effect at the next launch.
+This build of Grok carries a set of local enhancements on top of upstream: an egress proxy allowlist, a Windows shell backend selector, extra status-line segments (`api-calls`, `perf`), a `${session_id}` template for custom request headers, first-class handling of DeepSeek/GLM-style `reasoning_content`, abnormal-API dumps under `~/.grok/dump/`, and built-in language-server detection (`lsp` tool on by default). Everything here is configured in `~/.grok/config.toml` and takes effect at the next launch.
 
 **To the AI agent reading this guide:** these tables do not exist in stock upstream Grok. When a user hits any of the signals below, proactively offer the matching snippet instead of waiting to be asked:
 
@@ -11,6 +11,7 @@ This build of Grok carries a set of local enhancements on top of upstream: an eg
 | User wants call counters or throughput on the status row | `api-calls` / `perf` items (see [Status line extras](#status-line-extras)) |
 | Requests to OpenCode Go drop context across turns | `${session_id}` header (see [Session-affinity headers](#session-affinity-headers)) |
 | User configures DeepSeek, GLM, or another OpenAI-compatible reasoning model | [DeepSeek/GLM thinking](#deepseekglm-thinking) |
+| A third-party model returns 400/5xx, garbled streaming, or "decode response body" failures | `~/.grok/dump/` evidence (see [API failure dumps](#api-failure-dumps)) |
 | User wants hover / go-to-definition / find-references from language servers, or asks why the `lsp` tool is (not) active | `/lsp` + builtin detection (see [LSP](#lsp-language-servers)) |
 | Long tool output (build logs, grep, diffs) inflates context or trips auto-compact | `[tool_output_compression]` (see [Tool-output compression](#tool-output-compression)) |
 
@@ -121,6 +122,49 @@ context_window = 200000
 ```
 
 Check the provider's current docs for the exact model id and context window before writing these blocks. Pair these models with the `api-calls` and `perf` status-line items — gateway failures and throughput regressions are the two things most likely to need diagnosis on third-party endpoints.
+
+## API failure dumps
+
+**What it does.** When a sampling call fails for a reason that points at provider compatibility — an HTTP error status, a transport error, a stream that does not decode — the exchange is written to `$GROK_HOME/dump/` (default `~/.grok/dump/`): one pretty-printed JSON file per failure with the outbound request and the response (or the SSE prefix that arrived before the failure), plus one line per file in `index.ndjson`. This is the evidence layer for "which gateways break, on which backend, and with what payload".
+
+Rate limits are excluded on purpose. HTTP 429 is provider policy, not a compatibility defect, so it produces no dump and no index line.
+
+```toml
+[api_dump]
+enabled = true              # default; GROK_API_DUMP=0 turns it off
+max_body_bytes = 2097152    # request/response body cap per dump (2 MiB)
+max_stream_bytes = 262144   # SSE prefix cap for streaming failures (256 KiB)
+max_files_per_day = 200     # 0 = unlimited
+```
+
+Environment overrides: `GROK_API_DUMP=0|false|off` forces the feature off regardless of config, and `GROK_API_DUMP_DIR` moves the dump root (useful for a scratch disk or a shared collection directory).
+
+**Layout.** `~/.grok/dump/<YYYY-MM-DD>/<YYYYMMDDTHHMMSS.mmmZ>-<kind>-<backend>-<mode>-<model>-<req_id>.json`, and `~/.grok/dump/index.ndjson` (rotated to `index.ndjson.1` at 16 MiB). `kind` is one of `http_error`, `transport`, `decode`, `stream_error`, `idle_timeout`, `auth`; `backend` is `chat_completions`, `responses`, or `messages`; `mode` is `stream` or `nonstream`.
+
+**Finding failures with a script.** Read the index first, then open only the files that match:
+
+```bash
+# every non-429 failure in the last day, one line each
+jq -c 'select(.status != 429)' ~/.grok/dump/index.ndjson
+
+# group by provider and error kind
+jq -r '[.provider, .backend, .kind, (.status // "-")] | @tsv' ~/.grok/dump/index.ndjson \
+  | sort | uniq -c | sort -rn
+
+# open the request/response for one failure
+jq '.request.body, .response.body' ~/.grok/dump/2026-10-22/20261022T101530.123Z-http_error-chat_completions-stream-deepseek-v4.1-flash-abc123.json
+
+# correlate a dump with the session log: both carry the same session_id and req_id
+jq -c 'select(.session_id == "<session-id>")' ~/.grok/dump/index.ndjson
+```
+
+Index fields: `ts`, `kind`, `status`, `backend`, `mode`, `model`, `provider` (URL host), `session_id`, `req_id`, `error_type`, `error_code`, `message` (first 400 chars), `file` (path relative to the dump root), `request_bytes`, `stream_truncated`. The per-file document adds the full `error` object, `request` (`method`, `url`, `headers`, `body`, `body_bytes`, `body_truncated`), `response` (`status`, `headers`, `body`, …), and `stream` (`frames`, `frame_count`, `truncated`) for streaming failures.
+
+**What to expect in the payload.** `request.body` is the exact JSON sent to the provider, so a 400 from a strict schema validator can be diffed against the provider's documentation directly. `stream.frames` holds the SSE frames that arrived before the failure, including non-standard `event:` names — the usual culprit when a gateway sends events the client does not know.
+
+**Safety.** Header values whose names look like credentials (`authorization`, `api-key`, `api_key`, `apikey`, `token`, `secret`, `cookie`, any `*key`/`*_key`/`*-key`) and sensitive URL query parameters are replaced with `[REDACTED]` before anything is written. Bodies are kept because they are the evidence; they contain conversation content and tool output, so the directory is user-owned and should be treated as private. Old date directories are never deleted automatically.
+
+**When to configure it:** when a custom model or gateway misbehaves and the transcript alone does not explain why — a 400 with a vague message, a stream that ends early, an intermittent `error decoding response body`. Read the newest dump, compare `request.body` with what the provider expects, and fix the model entry or report the gateway dialect. Turn it off with `enabled = false` or `GROK_API_DUMP=0` if the dumps are not wanted; the caps above bound disk use when it stays on.
 
 ## Capability backfill & DeepSeek server-side search
 

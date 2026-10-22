@@ -160,6 +160,22 @@ pub(crate) async fn retain_session_asset_files(
     (kept, dropped)
 }
 
+/// `true` for failures the transport can plausibly explain: a connect/upload
+/// error (`SamplingError::Http`) or a body-decode/keep-alive failure mid-stream
+/// (`SamplingError::EventStreamError`). A poisoned HTTP/2 connection pool
+/// surfaces as the latter, and only a fresh client clears it.
+pub(crate) fn is_transport_failure(failure: &CompactFailure) -> bool {
+    let CompactFailure::Transient(err) = failure else {
+        return false;
+    };
+    let detail = err
+        .data
+        .as_ref()
+        .and_then(|d| d.as_str())
+        .unwrap_or_default();
+    detail.contains("reqwest error stream: ") || detail.contains("request error: ")
+}
+
 /// Classify an upstream `SamplingError` for the compaction retry loop.
 /// Size overflows (HTTP 413 by status, or size-worded error text) classify as [`CompactFailure::Overflow`] so the caller's input ladder engages.
 /// Re-issuing the same request cannot change the outcome: auth state, config, payload shape, and stuck-model conditions all persist.
