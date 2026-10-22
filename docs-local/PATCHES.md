@@ -3546,3 +3546,8 @@ release 页 4 资产非草稿；Windows zip sha256 `cda253a9…` 与本机下载
 `grok2.exe --version` = `grok 1.0.66 (6054081530b1)`；已部署
 `D:\tool-cli\grok2`，回滚点 `grok2.exe.1.0.65-6fc83fa.bak`；
 用户 config 增 `[api_dump] enabled = true`（备份 `config.toml.bak-api-dump-*`）。
+
+**根因记录（2026-10-22 补）**：压缩失败的两起独立故障（09-23 的半答 tool_calls 400、
+10-19 的传输中断）已合并整理到
+[`docs-local/compaction-failure-rca.md`](compaction-failure-rca.md)，含现场工件字段、
+重试阶梯对照与遗留清单。本节只记「压缩重试对齐」的施工面，根因与取证细节看该文。

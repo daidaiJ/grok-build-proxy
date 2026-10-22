@@ -938,3 +938,18 @@
 - **遗留**：dump 无自动清理（按日目录只增不减，需人工或后续加保留策略）；
   `index.ndjson` 轮转只保留一代；`stream.frames` 上限内保留原始 SSE 文本，
   大 payload 场景磁盘占用需按 `max_files_per_day` 兜底。PATCHES 五十四期。
+
+### 2026-10-22 压缩失败根因收口（docs：compaction-failure-rca.md）
+
+- **内容**：把两起压缩失败（09-23 半答并行 `tool_calls` 400 → `b40cb95`；10-19
+  Command Code 链路抖动 + 压缩「3 次重试 + 单客户端」→ `fc0e899`）合并成一份根因
+  记录 [`compaction-failure-rca.md`](compaction-failure-rca.md)：现场工件字段、
+  上游严格度对照（DeepSeek 400 / MiMo 200）、67 次传输重试的精确拆分、
+  `unified.jsonl` 覆盖起点坑、取证 playbook、四条遗留。归档文
+  `archive/compaction-dangling-toolcall-400.md` 按约定追加「后记」指向新文；
+  PATCHES 五十四期与 AGENTS.md 待办索引同步加链。
+- **验证**：纯文档；文中 file:line 锚点与两起会话工件的数值均在本机实读复核
+  （09-23：439 条 / 26 工具 / attempts=1；10-19：176 条 / attempts=3 /
+  dangling=0；retry_state 68 条 = 67 传输 + 1 条 429）。
+- **遗留**：见文末四条（压缩重试参数未对齐主回合 15 次指数退避、two-pass 单次尝试、
+  孤儿 `ToolResult` 未在压缩 prep 兜底、400 诊断文案仍显示成 sampler build failed）。

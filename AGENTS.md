@@ -118,6 +118,15 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   与 `11-custom-models.md` Troubleshooting，启动时抽取到
   `~/.grok/docs/user-guide/`。PATCHES 五十四期。**遗留**：dump 无自动清理。
 
+- [`docs-local/compaction-failure-rca.md`](docs-local/compaction-failure-rca.md) —
+  **压缩失败根因专题（两起独立故障，均已修）**：09-23 的 400 = 半答并行
+  `tool_calls` 未回填（`b40cb95`，`v1.0.37-preview.5`）；10-19 的
+  `error decoding response body` = Command Code 链路整晚抖动（67 次传输重试）
+  被压缩「3 次重试 + 单客户端」放大（`fc0e899`，`v1.0.66`：传输类失败换
+  `force_http1` 客户端、重试 3→5）。含现场工件字段、`unified.jsonl` 覆盖起点坑、
+  取证 playbook 与四条遗留（重试参数未对齐主回合 15 次指数退避、two-pass 无重试、
+  孤儿 `ToolResult` 未兜底、400 诊断文案误导）。
+
 - [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) — **移植路线图
   （四特性施工合 main，2026-10-03 随 v1.0.41 统一发版）**：三个移植预研专题
   （workflow-pi-port / kimicode-port / step-code-port）候选特性按「coding+agent

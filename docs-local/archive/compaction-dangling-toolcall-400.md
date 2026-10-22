@@ -85,3 +85,11 @@
   `scripts-local/ctest.sh -p xai-chat-state --lib compaction_utils`（153 passed）。
 - 未用真实 439 条工件回放（约 28 万 input token 的实盘花费）；等价性由「最小复现探针 +
   真实工件形状核对 + 单测」三点支撑。
+
+## 后记（2026-10-22）
+
+本文只覆盖 09-23 的 400。同期还有一起**不是 400** 的压缩失败（2026-10-19，
+`reqwest error stream: Transport error: error decoding response body`，三次尝试
+复用同一 HTTP/2 连接池），根因与修法都不同，已随 `v1.0.66` 修复。两起的合并根因
+记录、取证方法与遗留清单见
+[`../compaction-failure-rca.md`](../compaction-failure-rca.md)。
