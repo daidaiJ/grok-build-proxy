@@ -106,6 +106,18 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   已恢复发布）。历史备注：`v1.0.38` release 实为草稿状态留在 release 页（昨天
   的正式发布是 v1.0.39），tag 已恢复原指向 `5667ea0`。
 
+- **LLM API 异常响应落盘（`[api_dump]`，已落地，随 `v1.0.66` 发版 2026-10-22）** —
+  非 429 采样失败按日期写 `$GROK_HOME/dump/<date>/`（一失败一 JSON：出站请求 +
+  响应或 SSE 前缀），`index.ndjson` 一行一文件供 `jq`/grep 归纳不同供应商的
+  兼容性错误；凭据头与敏感 query 脱敏，正文/流前缀三上限截断，每日 200 文件封顶
+  （0 = 不限），`index.ndjson` 16 MiB 轮转。配置 `[api_dump]`（`enabled` 缺省
+  true），env `GROK_API_DUMP=0` / `GROK_API_DUMP_DIR`。落点：新模块
+  `xai-grok-sampler/src/api_dump.rs` + `client.rs` 六发送点接线 + shell
+  `agent/config.rs` 解析；同批压缩路径传输失败后换 `force_http1` 客户端、重试
+  3→5（对齐主回合）。引导文档在 `29-local-enhancements.md`「API failure dumps」
+  与 `11-custom-models.md` Troubleshooting，启动时抽取到
+  `~/.grok/docs/user-guide/`。PATCHES 五十四期。**遗留**：dump 无自动清理。
+
 - [`docs-local/port-roadmap.md`](docs-local/port-roadmap.md) — **移植路线图
   （四特性施工合 main，2026-10-03 随 v1.0.41 统一发版）**：三个移植预研专题
   （workflow-pi-port / kimicode-port / step-code-port）候选特性按「coding+agent
@@ -399,6 +411,30 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   sandbox×leader 互斥、`x.ai/*` 无稳定契约、Windows 侧未实测。
 
 ## 🔄 Handoff 摘要
+
+### LLM API 异常响应落盘（`[api_dump]`）+ 压缩传输重试对齐 — 已合 main，随 v1.0.66 发版（2026-10-22）
+
+- **当前状态：** 非 429 采样失败按日期写 `$GROK_HOME/dump/<date>/`（一失败一 JSON，
+  含出站请求 + 响应或 SSE 前缀），`index.ndjson` 一文件一行供脚本检索；凭据头与
+  敏感 query 脱敏，正文/流前缀按 `[api_dump]` 三个上限截断，每日文件数封顶 200。
+  六个发送点（chat/responses/messages × stream/nonstream）全接线。同批把压缩
+  路径的传输类重试对齐主回合：`is_transport_failure` 命中后下一次尝试换
+  `force_http1` 新客户端，重试 3→5。merge `6054081`（PR #2），tag `v1.0.66`。
+- **验证：** sampler lib 300/300；shell `session_compact` 49 passed/1 ignored；
+  `--features config-docs` `config_docs` 10/10（顺带修既有
+  `features.idle_auto_compact` Managed 列）；pager `docs::` 19/19；三 crate
+  check 0 error 0 warning。活体（release 产物 + 本机 mock 端点）：400 落盘且
+  `authorization` = `[REDACTED]`、429 无记录、`enabled=false` 与 `GROK_API_DUMP=0`
+  均不建目录、`GROK_API_DUMP_DIR` 换点生效。
+- **发版与部署：** release run `39702900602` 双 job success、4 资产非草稿；
+  Windows zip sha256 `cda253a9…` 核对一致，本机部署 `grok 1.0.66 (6054081530b1)`，
+  回滚点 `grok2.exe.1.0.65-6fc83fa.bak`；用户 `config.toml` 已启用 `[api_dump]`
+  （备份 `config.toml.bak-api-dump-*`）。
+- **遗留：** dump 无自动清理（按日目录只增不减）；`index.ndjson` 只留一代轮转；
+  文档落在 `29-local-enhancements.md`「API failure dumps」与
+  `11-custom-models.md` Troubleshooting，随 pager 启动抽取到
+  `~/.grok/docs/user-guide/` 供引导 agent 读取。PATCHES 五十四期；
+  roadmap §6 台账 2026-10-22 条目。
 
 ### Responses `keepalive` 兼容 — 已合 main，随 v1.0.65 发版（2026-10-21）
 
