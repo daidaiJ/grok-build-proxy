@@ -915,3 +915,26 @@
 - **验证**：纯文档；`notes/zcode.md` 的路径与行号均在本机 zcode 3.16.2 源码实读；未改 fork 代码。
 - **遗留**：ToolSearch 的 Windows/Linux 与真实缓存命中 zcode 自报未验；superpowers 三件技能
   A/B 未做；FillWorkflowHole / Bash 图片输出 / MCP 资源订阅 / LLM selector 待触发信号。
+
+### 2026-10-22 LLM API 异常响应落盘（`[api_dump]`）+ 压缩传输重试对齐
+
+- **内容**：`feat/local-llm-api-dump`。新 `xai-grok-sampler/src/api_dump.rs`：
+  非 429 采样失败按日期写 `$GROK_HOME/dump/<date>/<ts>-<kind>-<backend>-<mode>-<model>-<req>.json`
+  + `index.ndjson` 一行（16 MiB 轮转、每日 200 文件上限、凭据头/敏感 query 脱敏、
+  正文与 SSE 前缀按配置截断）；六个发送点（chat/responses/messages × stream/nonstream）
+  全部接线。压缩路径对齐主回合：`is_transport_failure` 判 `Transient` 且 detail 含
+  `reqwest error stream: ` / `request error: `，`ShellCompactionSampler` 客户端改
+  `Mutex<OaiCompatClient>` 并在传输失败后的下一次尝试换 `force_http1` 新客户端，
+  重试 3→5。配置 `[api_dump]`（`enabled` 缺省 true、三个上限）；env
+  `GROK_API_DUMP=0` / `GROK_API_DUMP_DIR`。
+- **验证**：sampler lib 300/300；shell `session_compact` 49 passed/1 ignored；
+  `--features config-docs` `config_docs` 10/10；pager `docs::` 19/19；三 crate
+  check 0 error 0 warning。活体（release 产物 + 本机 mock）：400 落盘且
+  `authorization` = `[REDACTED]`、429 无记录、`enabled=false` 与 `GROK_API_DUMP=0`
+  均不建目录、`GROK_API_DUMP_DIR` 换点生效。
+- **发版**：PR #2，merge `6054081`，tag `v1.0.66`；release run `39702900602`
+  双 job success、4 资产非草稿；本机部署 `grok 1.0.66 (6054081530b1)`，
+  回滚点 `grok2.exe.1.0.65-6fc83fa.bak`；用户 config 已启用 `[api_dump]`。
+- **遗留**：dump 无自动清理（按日目录只增不减，需人工或后续加保留策略）；
+  `index.ndjson` 轮转只保留一代；`stream.frames` 上限内保留原始 SSE 文本，
+  大 payload 场景磁盘占用需按 `max_files_per_day` 兜底。PATCHES 五十四期。
