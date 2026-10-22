@@ -3525,4 +3525,24 @@ release 页 4 资产非草稿；Windows zip 本机下载 sha256 校验通过，
 - **文档**：`26-config-reference.md` 增 `api_dump` 表；
   `29-local-enhancements.md` 增「API failure dumps」节（布局、索引字段、jq 检索、
   脱敏与边界）+ 引导信号表一行；`11-custom-models.md` Troubleshooting 增
-  「Provider Rejects a Request」。
+  「Provider Rejects a Request」。后者随 pager 启动的 `extract_user_guide_docs`
+  落到 `~/.grok/docs/user-guide/`，引导 agent 按 `<user_guide>` 指令直接读取。
+
+**验证（2026-10-22）**：`cargo check -p xai-grok-sampler --all-targets` /
+`-p xai-grok-shell --lib` / `-p xai-grok-pager --lib` 0 error 0 warning；
+`ctest.sh -p xai-grok-sampler --lib` **300 passed / 0 failed**（含新增 4 例）；
+`GATE_FORCE ctest -p xai-grok-shell --lib session_compact` 49 passed / 1 ignored；
+`GATE_FORCE ctest -p xai-grok-shell --features config-docs --lib config_docs`
+10 passed / 0 failed；`ctest -p xai-grok-pager --lib docs::` 19 passed / 0 failed。
+**活体实测（v1.0.66 release 产物 + 本机 mock 端点，独立 GROK_HOME）**：400 → 落盘
+`dump/<date>/*.json` + `index.ndjson` 一行，`authorization` 为 `[REDACTED]`，
+请求体为实际出站 JSON（含 tools）；429 → 无新文件无索引行；`enabled = false`
+→ 不创建 dump 目录；`GROK_API_DUMP=0` → 同上；`GROK_API_DUMP_DIR` → 落点切换
+且默认目录零新增。
+
+**发版（2026-10-22）**：合 main merge `6054081`（PR #2），tag **`v1.0.66`**；
+PR build `39699522376` 双 job success，release run `39702900602` 双 job success，
+release 页 4 资产非草稿；Windows zip sha256 `cda253a9…` 与本机下载一致，
+`grok2.exe --version` = `grok 1.0.66 (6054081530b1)`；已部署
+`D:\tool-cli\grok2`，回滚点 `grok2.exe.1.0.65-6fc83fa.bak`；
+用户 config 增 `[api_dump] enabled = true`（备份 `config.toml.bak-api-dump-*`）。
