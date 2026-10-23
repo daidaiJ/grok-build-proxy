@@ -1620,6 +1620,52 @@ impl FinalizedToolset {
             .unwrap_or_else(|_| xai_tool_protocol::ToolId::new("unknown").expect("valid"));
         xai_tool_runtime::ToolError::not_found(tid, format!("Tool not found: {tool_name}"))
     }
+    /// A nested subagent whose task tool was stripped at the depth limit can still
+    /// emit `task` calls (stale tool schemas carried in conversation history, or
+    /// third-party gateway models with dispatch habits). A bare "Tool not found"
+    /// gives such models no reason to stop, and they retry in loops that spin the
+    /// subagent turn. When this session is at or past the nesting limit, replace
+    /// the generic miss with terminal guidance; every other miss (unknown name,
+    /// depth-eligible session) keeps the generic error.
+    async fn nested_task_depth_error(
+        &self,
+        tool_name: &str,
+    ) -> Option<xai_tool_runtime::ToolError> {
+        use crate::implementations::grok_build::task::{MAX_SUBAGENT_DEPTH, TASK_TOOL_NAME};
+        use crate::implementations::grok_build::task::types::{MaxSubagentDepth, SubagentDepthCounter};
+        if !tool_name.eq_ignore_ascii_case(TASK_TOOL_NAME) {
+            return None;
+        }
+        let resources = self.resources.lock().await;
+        let depth = resources
+            .get::<SubagentDepthCounter>()
+            .map(|d| d.0)
+            .unwrap_or(0);
+        let max_depth = resources
+            .get::<MaxSubagentDepth>()
+            .map(|d| d.0)
+            .unwrap_or(MAX_SUBAGENT_DEPTH);
+        if depth < max_depth {
+            return None;
+        }
+        tracing::info!(
+            tool_name,
+            depth,
+            max_depth,
+            "nested task call intercepted: task tool is depth-stripped in this subagent"
+        );
+        let tid = xai_tool_protocol::ToolId::new(tool_name)
+            .unwrap_or_else(|_| xai_tool_protocol::ToolId::new("unknown").expect("valid"));
+        Some(xai_tool_runtime::ToolError::not_found(
+            tid,
+            format!(
+                "The task tool is unavailable in this subagent: the subagent nesting \
+                 depth limit is reached (depth {depth} of max {max_depth}), so nested \
+                 dispatch is disabled here. Do not call task again. Continue the work \
+                 yourself and report the results in your final response."
+            ),
+        ))
+    }
     /// Whether a registered target is an MCP tool; absence permits a managed-catalog lookup.
     pub fn is_mcp_target(&self, tool_name: &str) -> Option<bool> {
         self.tools
@@ -1848,6 +1894,10 @@ impl FinalizedToolset {
             ) {
                 Ok(parts) => parts,
                 Err(e) => {
+                    let e = match this.nested_task_depth_error(&tool_name).await {
+                        Some(guidance) => guidance,
+                        None => e,
+                    };
                     yield xai_tool_runtime::ToolStreamItem::Terminal(Err(e));
                     return;
                 }
@@ -5593,5 +5643,58 @@ mod tests {
             "gate ON must produce ≥ 1 Progress frame via workspace dispatch, got {progress_count}",
         );
         assert!(got_terminal, "must observe terminal");
+    }
+
+    async fn empty_toolset_with_depth(depth: u32, max_depth: u32) -> Arc<FinalizedToolset> {
+        let toolset = Arc::new(FinalizedToolset::empty_for_test());
+        toolset
+            .update_resource(
+                crate::implementations::grok_build::task::types::SubagentDepthCounter(depth),
+            )
+            .await;
+        toolset
+            .update_resource(
+                crate::implementations::grok_build::task::types::MaxSubagentDepth(max_depth),
+            )
+            .await;
+        toolset
+    }
+    #[tokio::test]
+    async fn depth_stripped_task_call_gets_terminal_guidance() {
+        let toolset = empty_toolset_with_depth(1, 1).await;
+        let err = toolset
+            .call("task", serde_json::json!({}), "nested-call", None)
+            .await
+            .expect_err("stripped task call must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Do not call task again"),
+            "expected terminal guidance, got: {msg}"
+        );
+        assert!(
+            msg.contains("depth 1 of max 1"),
+            "expected depth context in guidance, got: {msg}"
+        );
+    }
+    #[tokio::test]
+    async fn task_call_at_root_depth_keeps_generic_not_found() {
+        let toolset = empty_toolset_with_depth(0, 1).await;
+        let err = toolset
+            .call("task", serde_json::json!({}), "root-call", None)
+            .await
+            .expect_err("unknown tool call must fail");
+        let msg = err.to_string();
+        assert!(msg.contains("Tool not found"), "got: {msg}");
+        assert!(!msg.contains("Do not call task again"), "got: {msg}");
+    }
+    #[tokio::test]
+    async fn unknown_non_task_name_keeps_generic_not_found_at_depth() {
+        let toolset = empty_toolset_with_depth(1, 1).await;
+        let err = toolset
+            .call("totally_unknown_tool", serde_json::json!({}), "call-x", None)
+            .await
+            .expect_err("unknown tool call must fail");
+        let msg = err.to_string();
+        assert!(msg.contains("Tool not found"), "got: {msg}");
     }
 }
