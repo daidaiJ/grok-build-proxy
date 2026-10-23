@@ -3551,3 +3551,27 @@ release 页 4 资产非草稿；Windows zip sha256 `cda253a9…` 与本机下载
 10-19 的传输中断）已合并整理到
 [`docs-local/compaction-failure-rca.md`](compaction-failure-rca.md)，含现场工件字段、
 重试阶梯对照与遗留清单。本节只记「压缩重试对齐」的施工面，根因与取证细节看该文。
+
+## 五十五期：嵌套派发深度剥离的 task 调用改为终态引导——子 agent 不再被「Tool not found」循环卡死（2026-10-23，分支 fix/local-nested-subagent-task-guidance）
+
+**需求/现场**：主会话（grok 4.6）动态派发绑定第三方网关模型（gpt-6-luna）的 subagent
+后，该 subagent 又尝试派发。默认 `subagents_max_depth = 1`，嵌套 task 调用本应快速
+拒绝，但工具面剥离后的调用走 `Tool not found: task` 裸错误——模型拿不到「为什么被拒」，
+弱模型/第三方网关模型会反复重试，subagent 回合原地打转，用户侧表现为卡死。
+
+- **`xai-grok-tools/src/registry/types.rs`**：`call_streaming_with_context` 的
+  prepare-dispatch 失败臂加拦截——调用名命中 `task`（大小写不敏感）且本会话
+  `SubagentDepthCounter >= MaxSubagentDepth`（与 `apply_child_tool_policy` 的剥离
+  条件同构）时，把通用 not-found 换成终态引导：「task 在本 subagent 不可用（已达
+  深度上限 depth N of max M），不要再次调用 task，自己继续完成工作并在最终回复中
+  汇报结果」。其余情况（未知工具名、深度未到限）保持原 `Tool not found` 不变；
+  成功派发路径零新增开销（拦截只在失败臂）。
+- **`xai-grok-tools/src/implementations/grok_build/task/mod.rs`**：Task 工具自身的
+  深度超限错误（max_depth ≥ 2 显式放开时仍会走到）追加同样的不重试引导文案。
+- **测试**：`registry::types::tests` 新增 3 例（深度剥离命中引导 / 根会话保持
+  not-found / 非任务名不受影响）+ 既有 `depth_limit_exceeded` 回归绿。
+
+**验证**：`cargo check -p xai-grok-tools --all-targets` 0 error（10 条 warning 均为
+既有测试模块旧 import）；新 3 例 + 既有深度限制用例 GATE_FORCE 定向跑全绿。
+两处落点均在上游同步面（registry/types.rs、task/mod.rs 曾被 `Synced from monorepo`
+覆盖），下次上游同步需按本节重放。

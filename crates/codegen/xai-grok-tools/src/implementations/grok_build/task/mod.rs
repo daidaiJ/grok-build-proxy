@@ -426,7 +426,9 @@ impl xai_tool_runtime::Tool for TaskTool {
         if depth >= max_depth {
             return Err(xai_tool_runtime::ToolError::invalid_arguments(format!(
                 "Subagent depth limit exceeded (current depth: {depth}, max: {max_depth}). \
-                 Cannot spawn further nested subagents."
+                 Cannot spawn further nested subagents. \
+                 Do not call task again — continue the work yourself and report the \
+                 results in your final response."
             )));
         }
 
