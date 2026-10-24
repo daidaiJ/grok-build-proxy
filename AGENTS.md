@@ -450,15 +450,23 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### 缓存命中率与稳定性优化 — P1+P2 已落地（分支 feat/local-dsh-in-history），活体 A/B 待验（2026-10-24）
+### 缓存命中率与稳定性优化 — P1+P2 已合 main 随 v1.0.69 发版（2026-10-24）
 
-- **当前状态：** 拍板（建议值）+ 四象限 probe 通过 + P1 in-history 能力位 +
-  P2 append 模式裁剪全链接线（PATCHES 五十九期，`1fbad9c`）；P3/P3' 挂起。
+- **当前状态：** 拍板（建议值）+ 四象限 probe 通过 + P1 `system_prompt_update
+  = "in-history"` + P2 `prune_mode = "append"` 全链接线（PATCHES 五十九期）；
+  PR #4 CI 绿（`reset_title_to_auto…` 既有 flake 重跑过）合 main（merge
+  `e86015c`）随 tag **`v1.0.69`** 发版：release run `40101135537` 双 job
+  success、4 资产非草稿，sha256 `094aede4…` 一致，本机部署
+  `grok 1.0.69 (e86015c19194)`，回滚点 `grok2.exe.1.0.68-9987be0.bak`。
+  P3/P3' 挂起。
 - **关键证据：** probe = DS 官方 cc/resp/messages + Command Code 网关全部
   接受中部 system 且最新快照生效（回填 dsh-port §3.2）；实现踩掉单字段 base
   设计错误（position 0 换字节断崖，改双字段 wire 态）。
-- **验收标准（余）：** limit-probe A/B（触发点后首轮 cached_tokens/prompt_tokens，
-  off ≈0 → on ≈ 稳态）+ CI build/release 绿（按分支纪律发版）。
+- **验收标准（余）：** limit-probe A/B 活体——用户 config 对
+  `deepseek/deepseek-v4.1-flash-1017` 加两行能力位，跑触发密集型长会话，
+  对比触发点后首轮 cached_tokens（off ≈0 → on ≈ 稳态）。
+- **立案建议：** `reset_title_to_auto…` persistence 计时 flake 当日挂 3 次，
+  复发频率到立案线，建议单独立项修。
 - **详情指针：** [`.handoff/cache-hit-optimization.md`](.handoff/cache-hit-optimization.md)
 
 ### 未验证事项

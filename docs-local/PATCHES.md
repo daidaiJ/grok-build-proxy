@@ -3790,3 +3790,12 @@ off ≈0 → on ≈ 稳态）随新客户端（用户 config 已可对
 `deepseek/deepseek-v4.1-flash-1017` 开两能力位实测）；② messages backend
 in-history 需先改折叠转换层再重 probe；③ compaction 后 in-history 基点
 未显式重置（派生逻辑自洽，活体观察）。
+
+**发版记录**：PR #4（CI run `40097306847`，linux 首跑挂既有计时 flake
+`reset_title_to_auto…`〔7172 通过仅此 1 挂，当日第 2 次〕重跑过，双 job
+success）合 main（merge `e86015c`），随 tag **`v1.0.69`** 发版（2026-10-24）：
+release run `40101135537` 双 job success、4 资产非草稿；Windows zip sha256
+`094aede4…` 核对一致，发行产物 `grok 1.0.69 (e86015c19194)`，本机已部署
+（D:\tool-cli\grok2，回滚点 `grok2.exe.1.0.68-9987be0.bak`）。main build
+run `40101077754` 同 flake 再挂（当日第 3 次），重跑中——**该 flake 复发
+频率已到立案线，建议单独立项修 persistence 计时用例**。
