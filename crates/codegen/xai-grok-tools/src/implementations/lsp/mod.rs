@@ -10,6 +10,7 @@ pub mod manager;
 pub mod pending;
 pub mod pull;
 pub mod refresh;
+pub mod rename;
 pub mod restart;
 mod types;
 mod watched_files;

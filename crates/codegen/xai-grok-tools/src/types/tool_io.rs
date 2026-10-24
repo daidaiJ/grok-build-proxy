@@ -91,6 +91,7 @@ pub enum ToolInput {
     SendSubagentMessage(SendSubagentMessageInput),
     SendFeedback(SendFeedbackInput),
     Lsp(LspToolInput),
+    LspRename(crate::implementations::grok_build::lsp_rename::LspRenameInput),
     Monitor(crate::implementations::grok_build::monitor::types::MonitorInput),
     SchedulerCreate(crate::implementations::grok_build::scheduler::create::SchedulerCreateInput),
     SchedulerDelete(crate::implementations::grok_build::scheduler::delete::SchedulerDeleteInput),

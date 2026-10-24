@@ -75,6 +75,21 @@ pub trait LspBackend: Send + Sync + 'static {
     /// diagnostics grouped by file.
     async fn read_diagnostics(&self, paths: &[std::path::PathBuf]) -> Vec<FileDiagnosticEntry>;
 
+    /// Request `textDocument/rename` at the position and return the resulting
+    /// `(path, new_content)` pairs. The caller owns reading current disk text
+    /// (done here) and writing it. `Err` on protocol/apply failure; the
+    /// default rejects, so test doubles without a manager need nothing.
+    async fn rename(
+        &self,
+        path: &std::path::Path,
+        line: u32,
+        character: u32,
+        new_name: &str,
+    ) -> Result<Vec<(std::path::PathBuf, String)>, String> {
+        let _ = (path, line, character, new_name);
+        Err("rename is not supported by this backend".into())
+    }
+
     /// Lifecycle snapshot for status surfaces. The default returns `None` —
     /// test doubles without a real manager have nothing to report.
     async fn status_snapshot(&self) -> Option<LspBackendStatus> {

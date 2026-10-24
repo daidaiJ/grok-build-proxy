@@ -1045,3 +1045,41 @@ while True:
 "#,
     )
 }
+
+/// A server whose `textDocument/rename` returns edits for the target file and
+/// a sibling `renamed_target.rs` in the same directory — the multi-file
+/// WorkspaceEdit shape a real symbol rename produces.
+pub(super) fn write_rename_server() -> (tempfile::TempDir, PathBuf) {
+    write_python_server(
+        "rename_lsp.py",
+        r#"
+def handle(msg, method):
+    if method == "textDocument/rename":
+        uri = msg["params"]["textDocument"]["uri"]
+        new = msg["params"]["newName"]
+        if new == "STALE":
+            reply(msg, {"changes": {uri: [{
+                "range": {"start": {"line": 99, "character": 0}, "end": {"line": 99, "character": 3}},
+                "newText": "boom"}]}})
+            return
+        sibling = uri.rsplit("/", 1)[0] + "/renamed_target.rs"
+        reply(msg, {
+            "changes": {
+                uri: [{
+                    "range": {"start": {"line": 0, "character": 3}, "end": {"line": 0, "character": 7}},
+                    "newText": new
+                }],
+                sibling: [{
+                    "range": {"start": {"line": 1, "character": 4}, "end": {"line": 1, "character": 8}},
+                    "newText": new
+                }]
+            }
+        })
+
+serve({
+    "textDocumentSync": {"openClose": True, "change": 2},
+    "renameProvider": True
+}, handle)
+"#,
+    )
+}

@@ -24,6 +24,7 @@ pub mod init_or_update_app;
 pub mod kill_task;
 pub mod list_dir;
 pub mod lsp;
+pub mod lsp_rename;
 pub mod media_bearer;
 pub mod monitor;
 pub mod read_file;
@@ -56,6 +57,7 @@ pub use init_or_update_app::INIT_OR_UPDATE_APP_TOOL_NAME;
 pub use kill_task::{KillTaskTool, KillTerminalCommandTool};
 pub use list_dir::ListDirTool;
 pub use lsp::LspTool;
+pub use lsp_rename::LspRenameTool;
 pub use monitor::tool::MonitorTool;
 pub use read_file::ReadFileTool;
 pub use scheduler::create::{

@@ -2653,3 +2653,59 @@ async fn e2e_lazy_start_negative_cache() {
         .await;
     assert!(again.is_error);
 }
+
+// ── Rename (PATCHES 五十八期) ────────────────────────────────────────────
+
+/// The multi-file WorkspaceEdit path: the server reports edits for the target
+/// and a sibling; the backend reads each file and returns the full new text.
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_rename_returns_edits_for_all_files() {
+    let (_dir, script_path) = write_rename_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(
+        single_server_manager(&script_path, &workspace).await,
+    ));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    let main = workspace.path().join("main.ts");
+    std::fs::write(&main, "xxxabcdyyy\n").unwrap();
+    let sibling = workspace.path().join("renamed_target.rs");
+    std::fs::write(&sibling, "keep\n    abcdxx\n").unwrap();
+
+    let edited = adapter
+        .rename(&main, 0, 5, "new_name")
+        .await
+        .expect("rename should succeed");
+    let by_path: HashMap<_, _> = edited.into_iter().collect();
+    assert_eq!(by_path.len(), 2);
+    assert_eq!(
+        by_path.get(&main).map(String::as_str),
+        Some("xxxnew_nameyyy\n")
+    );
+    assert_eq!(
+        by_path.get(&sibling).map(String::as_str),
+        Some("keep\n    new_namexx\n")
+    );
+}
+
+/// A stale server answer (offsets past the file we hold) rejects the whole
+/// batch instead of corrupting the file.
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_rename_rejects_stale_offsets() {
+    let (_dir, script_path) = write_rename_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(
+        single_server_manager(&script_path, &workspace).await,
+    ));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    let main = workspace.path().join("main.ts");
+    std::fs::write(&main, "xxxabcdyyy\n").unwrap();
+
+    let result = adapter.rename(&main, 0, 5, "STALE").await;
+    assert!(result.is_err(), "stale offsets must be rejected");
+    assert!(
+        result.err().unwrap().contains("past the end"),
+        "the error should name the staleness"
+    );
+}

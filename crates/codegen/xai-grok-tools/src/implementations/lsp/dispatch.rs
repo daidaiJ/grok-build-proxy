@@ -585,6 +585,63 @@ impl super::LspBackend for LspBackendAdapter {
             .unwrap_or(false)
     }
 
+    async fn rename(
+        &self,
+        path: &std::path::Path,
+        line: u32,
+        character: u32,
+        new_name: &str,
+    ) -> Result<Vec<(std::path::PathBuf, String)>, String> {
+        use async_lsp::lsp_types::RenameParams;
+
+        let owner = {
+            let mgr = self.lsp_manager.lock().await;
+            super::config::resolve_server(&mgr.servers, path)
+                .map(|(name, _)| name)
+                .ok_or_else(|| format!("No LSP server configured for {}", path.display()))?
+        };
+        self.ensure_ready_for_server(&owner).await?;
+
+        // Auto-open the target so the server definitely has it, then rename.
+        let mut socket = {
+            let mut mgr = self.lsp_manager.lock().await;
+            mgr.socket_for_file(path)
+                .await
+                .ok_or_else(|| format!("No LSP server configured for {}", path.display()))?
+        };
+        let params = RenameParams {
+            text_document_position: text_document_position(path, line, character)
+                .map_err(|e| format!("{e}"))?,
+            new_name: new_name.to_string(),
+            work_done_progress_params: Default::default(),
+        };
+        let result = timed_request(socket.rename(params))
+            .await
+            .map_err(|e| format!("{e}"))?;
+        let Some(workspace_edit) = result else {
+            return Err(format!(
+                "Nothing renameable at {}:{line}:{character} — navigate to the symbol first",
+                path.display()
+            ));
+        };
+
+        // 原子预检: read every affected file and apply its edits in memory
+        // before anything is written — one bad offset rejects the whole batch.
+        let file_edits = super::rename::workspace_edit_to_file_edits(workspace_edit)?;
+        let mut out = Vec::with_capacity(file_edits.len());
+        for (uri, text_edits) in file_edits {
+            let file_path = uri
+                .to_file_path()
+                .map_err(|_| format!("non-file uri in rename result: {uri}"))?;
+            let content = tokio::fs::read_to_string(&file_path)
+                .await
+                .map_err(|e| format!("cannot read {}: {e}", file_path.display()))?;
+            let new_content = super::rename::apply_text_edits(&content, &text_edits)?;
+            out.push((file_path, new_content));
+        }
+        Ok(out)
+    }
+
     async fn status_snapshot(&self) -> Option<LspBackendStatus> {
         let states = self.startup.states.lock().await;
         let running_servers = {
