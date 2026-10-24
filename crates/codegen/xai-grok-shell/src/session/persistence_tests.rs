@@ -2034,16 +2034,22 @@ async fn reset_title_to_auto_then_generated_title_is_adopted() {
     actor.stop().await;
 }
 
-/// A title generation from the first chunk is still running when the unpin lands.
-/// Disk is already blank when the stale `GeneratedTitle` arrives, so `set_generated_title_if_absent` adopts it as auto (never re-pins).
+/// An unpin lands while the first chunk's title generation is in flight; the stale `GeneratedTitle` must adopt as auto, never re-pin.
+/// The background task's own message races the disk unpin through the `spawn_blocking` summary lock (it may win the lock while the
+/// manual title is still on disk and be legitimately skipped — the pre-fix CI flake), so the test re-delivers the same stale title
+/// after the unpin barrier: FIFO ordering makes the adopt deterministic, and whichever copy wins, the other is skipped as not-absent.
 #[tokio::test]
 async fn reset_title_to_auto_adopts_in_flight_generation_as_auto() {
     use std::sync::Arc;
 
+    use crate::session::helpers::session_summary::title_fallback_from_user_text;
     use crate::session::persistence::PersistenceContentChunk;
 
     const MANUAL: &str = "Pinned manual";
     const CHUNK: &str = "in flight chunk text for title fallback";
+    // Both delivery paths evaluate this same fallback (the test client's empty base_url fails
+    // the LLM call instantly), so the adopted title is the same string either way.
+    let expected = title_fallback_from_user_text(CHUNK);
 
     let info = Info {
         id: acp::SessionId::new("rename-reset-inflight"),
@@ -2079,20 +2085,20 @@ async fn reset_title_to_auto_adopts_in_flight_generation_as_auto() {
         .unwrap();
     flush_ack(&actor.handle).await.unwrap();
 
+    // Deterministic stale arrival: this rides the FIFO channel strictly after the unpin barrier.
+    // If the background task's `GeneratedTitle` already adopted (same fallback title), this one
+    // is skipped as not-absent — either way the session ends titled and stays auto.
+    actor
+        .handle
+        .tx
+        .send(PersistenceMsg::GeneratedTitle(expected.clone()))
+        .unwrap();
+
     let summary_path = dir.path().join("summary.json");
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(8);
-    let on_disk = loop {
-        let on_disk: crate::session::persistence::Summary =
-            serde_json::from_slice(&std::fs::read(&summary_path).unwrap()).unwrap();
-        if !on_disk.display_title().trim().is_empty() {
-            break on_disk;
-        }
-        if tokio::time::Instant::now() >= deadline {
-            panic!("in-flight GeneratedTitle after unpin never adopted");
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    };
-    assert_ne!(on_disk.display_title(), MANUAL);
+    flush_ack(&actor.handle).await.unwrap();
+    let on_disk: crate::session::persistence::Summary =
+        serde_json::from_slice(&std::fs::read(&summary_path).unwrap()).unwrap();
+    assert_eq!(on_disk.display_title(), expected);
     assert!(
         !on_disk.title_is_manual,
         "in-flight adopt after unpin must stay auto"
