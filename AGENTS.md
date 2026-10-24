@@ -433,6 +433,23 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### LSP 中高价值四项（P0/P1/P2/P4）— 施工完成，三分支待合 main 发版（2026-10-24）
+
+- **当前状态：** 设计定稿顺位里 P0 描述路由 / P1 诊断按需 op / P2 懒启动 /
+  P4 `lsp_rename` 写工具全部落地，PATCHES 五十六/五十七/五十八期；三分支
+  顺序叠放（`feat/local-lsp-diagnostics-op` → `feat/local-lsp-lazy-start` →
+  `feat/local-lsp-rename`），**合并必须按此序**；P3 降级挂触发、P5 维持挂触发。
+- **关键证据：** GATE_FORCE `lsp::` 130/130；tools+shell check 0 error；
+  P1 附带修复 restart.rs Windows `file://` 真 bug（44 挂 → 0 挂）。
+- **验收标准：** 发版活体（诊断主链路 / 懒启动面板 / rename 全量改枚举名），
+  清单见 handoff §12。
+- **详情指针：** [`.handoff/lsp-enhancements.md`](.handoff/lsp-enhancements.md)
+- **未验证事项：**
+  - [ ] 诊断主链路 + workspaceDiagnostics（rust-analyzer 实测）
+  - [ ] 懒启动：spawn 不拉起 / 首触达拉起 / e 键立即拉起 / 负缓存
+  - [ ] rename 全量改枚举名 + 审批面体验
+  - [ ] restart 回放恢复（Windows）
+
 ### 嵌套派发深度剥离 task 调用改终态引导 — 已合 main，随 v1.0.67 发版（2026-10-24）
 
 - **当前状态：** 子 agent 深度达限后 task 工具被剥离，但其再派发调用原先落
