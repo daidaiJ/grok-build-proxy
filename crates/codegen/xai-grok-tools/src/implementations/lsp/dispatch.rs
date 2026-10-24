@@ -18,11 +18,283 @@ use async_lsp::lsp_types::{
 use super::{LspToolInput, LspToolResult, LspBackendStatus, LspStartupState};
 
 use super::config::REQUEST_TIMEOUT;
+use super::diagnostics::DiagnosticsStore;
+use super::documents::Documents;
 use super::format::{
-    flatten_document_symbols, format_locations_labeled, format_symbols, markup_string_to_text,
+    format_diagnostic_entries, format_diagnostic_line, flatten_document_symbols,
+    format_locations_labeled, format_symbols, markup_string_to_text,
 };
 use super::manager::LspManager;
-use super::{LspError, file_uri, text_document_position};
+use super::pull::{PullDiagnostics, PullSupport};
+use super::{DiagnosticEntry, DiagnosticSeverityLevel, LspError, file_uri, text_document_position};
+
+// ── On-demand diagnostics (Diagnostics / WorkspaceDiagnostics ops) ──────
+
+/// How long a single-file diagnostics query waits for the first verdict on a
+/// freshly opened file, matching the wait the reminder path pays after an open.
+const DIAGNOSTICS_FRESH_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+/// Settle window when the store already holds an older verdict: the short gap
+/// that lets a verdict on the latest edit arrive before we answer from the
+/// previous one.
+const DIAGNOSTICS_SETTLE_WAIT: std::time::Duration = std::time::Duration::from_millis(300);
+/// One pull round trip, for servers that only speak when asked. Their
+/// `textDocument/diagnostic` budget is [`super::pull::REQUEST_TIMEOUT`], but a
+/// tool call should not ride a full ten seconds.
+const DIAGNOSTICS_PULL_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Default cap for `workspaceDiagnostics` output, aligned with qwen-code.
+pub const WORKSPACE_DIAGNOSTICS_LIMIT: u32 = 100;
+
+/// The shared handles of the client that owns a file, cloned so the settle
+/// wait runs without holding the manager lock.
+pub(super) struct DiagnosticsHandles {
+    pub server_name: String,
+    pub store: DiagnosticsStore,
+    pub documents: Documents,
+    pub pull: PullDiagnostics,
+}
+
+/// Resolve the owning client for `path`, auto-opening the file so the server
+/// starts analyzing it.
+pub(super) async fn resolve_diagnostics_handles(
+    mgr: &mut LspManager,
+    path: &Path,
+) -> Result<DiagnosticsHandles, String> {
+    let Some((server_name, _)) = super::config::resolve_server(&mgr.servers, path) else {
+        return Err(format!("No LSP server configured for {}", path.display()));
+    };
+    mgr.socket_for_file(path).await;
+    let Some(client) = mgr.clients.get(&server_name) else {
+        return Err(format!("No LSP server configured for {}", path.display()));
+    };
+    Ok(DiagnosticsHandles {
+        server_name,
+        store: client.diagnostics.clone(),
+        documents: client.documents.clone(),
+        pull: client.pull.clone(),
+    })
+}
+
+/// Wait for the server's verdict on the current version of `uri`, up to
+/// `budget`. Returns whether one arrived; an expired budget means the caller
+/// answers with what it has plus a "not settled" note.
+async fn settle_for_verdict(
+    store: &DiagnosticsStore,
+    uri: &str,
+    version: Option<i32>,
+    budget: std::time::Duration,
+) -> bool {
+    let Some(version) = version else {
+        return false;
+    };
+    let deadline = tokio::time::Instant::now() + budget;
+    loop {
+        if store.answered_for(uri, version) {
+            return true;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
+/// Filter a store's items for a uri down to reportable entries, marking each
+/// stale when the verdict predates the version we asked about.
+fn reportable_entries(
+    store: &DiagnosticsStore,
+    uri: &str,
+    current_version: Option<i32>,
+) -> Vec<DiagnosticEntry> {
+    let covers = store.covers(uri);
+    store
+        .items(uri)
+        .into_iter()
+        .filter_map(|d| {
+            let severity = match d.severity {
+                Some(async_lsp::lsp_types::DiagnosticSeverity::ERROR) => {
+                    DiagnosticSeverityLevel::Error
+                }
+                Some(async_lsp::lsp_types::DiagnosticSeverity::WARNING) => {
+                    DiagnosticSeverityLevel::Warning
+                }
+                _ => return None,
+            };
+            Some(DiagnosticEntry {
+                severity,
+                line: d.range.start.line + 1,
+                column: d.range.start.character + 1,
+                message: d.message.clone(),
+                source: d.source.clone(),
+                code: d.code.as_ref().map(|c| match c {
+                    async_lsp::lsp_types::NumberOrString::String(s) => s.clone(),
+                    async_lsp::lsp_types::NumberOrString::Number(n) => n.to_string(),
+                }),
+                is_stale: covers
+                    .zip(current_version)
+                    .is_some_and(|(covers, version)| covers < version),
+            })
+        })
+        .collect()
+}
+
+/// The `diagnostics` op: one file, settle first, pull-once for servers that
+/// never push.
+pub(super) async fn read_file_diagnostics(
+    handles: &DiagnosticsHandles,
+    path: &Path,
+) -> LspToolResult {
+    let Ok(uri) = file_uri(path) else {
+        return err_result(format!("Invalid file path: {}", path.display()));
+    };
+    let uri_str = uri.to_string();
+    let version = handles.documents.version(&uri_str);
+
+    // A server that never pushes only speaks when asked: trigger one pull so
+    // the query is not answered from an empty store. `will_answer` re-checks
+    // the same gate, so a server that started publishing in between is safe.
+    let pulled = !handles.store.server_publishes()
+        && handles.pull.support() == PullSupport::Asking
+        && handles.pull.will_answer(uri.clone());
+
+    let budget = if pulled {
+        DIAGNOSTICS_PULL_WAIT
+    } else if version.is_some() && handles.store.covers(&uri_str).is_none() {
+        DIAGNOSTICS_FRESH_WAIT
+    } else {
+        DIAGNOSTICS_SETTLE_WAIT
+    };
+    let settled = settle_for_verdict(&handles.store, &uri_str, version, budget).await;
+
+    let entries = reportable_entries(&handles.store, &uri_str, version);
+    let covers = handles.store.covers(&uri_str);
+    let mut text = match (entries.is_empty(), covers.is_some()) {
+        (true, true) => format!("clean (server={})", handles.server_name),
+        (true, false) => format!("no diagnostics reported yet (server={})", handles.server_name),
+        (false, _) => format!(
+            "Diagnostics for {} ({}):",
+            path.display(),
+            handles.server_name
+        ),
+    };
+    if !entries.is_empty() {
+        text.push('\n');
+        text.push_str(&format_diagnostic_entries(&entries));
+    }
+    if !settled {
+        text.push_str(
+            "\nNote: the server has not reported for the latest version of this file yet; \
+             results may be out of date — re-query in a moment to confirm.",
+        );
+    }
+    ok_result(text)
+}
+
+/// One server's block of the `workspaceDiagnostics` output. Returns the block
+/// text and the number of entry lines actually shown (budget-bounded).
+fn workspace_server_block(
+    server_name: &str,
+    client: &super::client::LspClient,
+    remaining: usize,
+    total: &mut usize,
+) -> (String, usize) {
+    let mut uris = client.documents.uris();
+    uris.sort();
+    let mut lines: Vec<String> = Vec::new();
+    let mut shown_here = 0usize;
+    let mut any_answered = false;
+    for uri in uris {
+        if client.diagnostics.covers(&uri).is_some() {
+            any_answered = true;
+        }
+        let entries = reportable_entries(&client.diagnostics, &uri, client.documents.version(&uri));
+        if entries.is_empty() {
+            continue;
+        }
+        *total += entries.len();
+        let remaining_budget = remaining.saturating_sub(shown_here);
+        if remaining_budget == 0 {
+            // Budget spent: the file still counts toward `total`, but a bare
+            // path header with nothing under it would be noise.
+            continue;
+        }
+        let path = async_lsp::lsp_types::Url::parse(&uri)
+            .ok()
+            .and_then(|u| u.to_file_path().ok())
+            .map(|p| p.display().to_string())
+            .unwrap_or(uri.clone());
+        lines.push(format!("  {path}"));
+        for entry in entries {
+            if shown_here >= remaining {
+                break;
+            }
+            lines.push(single_entry_line(&entry));
+            shown_here += 1;
+        }
+    }
+    let mut block = format!("== server {server_name} ==");
+    if lines.is_empty() {
+        // Every file's entries are pushed with their path header, so an empty
+        // line list means nothing reportable was found at all.
+        if any_answered {
+            block.push_str(&format!("\n  clean (server={server_name})"));
+        } else {
+            let pull_hint = if !client.diagnostics.server_publishes()
+                && client.pull.support() == PullSupport::Asking
+            {
+                " — pull-only server; query a file with the diagnostics operation"
+            } else {
+                ""
+            };
+            block.push_str(&format!(
+                "\n  no diagnostics reported yet (server={server_name}){pull_hint}"
+            ));
+        }
+    } else {
+        for line in lines {
+            block.push('\n');
+            block.push_str(&line);
+        }
+    }
+    (block, shown_here)
+}
+
+fn single_entry_line(entry: &DiagnosticEntry) -> String {
+    format_diagnostic_line(entry, "    ")
+}
+
+/// The `workspaceDiagnostics` op: aggregate every tracked document across all
+/// servers. Tracked only — no disk sweep — and the empty result says so.
+pub(super) fn read_workspace_diagnostics(mgr: &LspManager, limit: u32) -> LspToolResult {
+    if mgr.clients.is_empty() {
+        return err_result("No LSP servers are running.".into());
+    }
+    let limit = limit.max(1) as usize;
+    let mut total = 0usize;
+    let mut shown = 0usize;
+    let mut blocks: Vec<String> = Vec::new();
+    let mut server_names: Vec<&String> = mgr.clients.keys().collect();
+    server_names.sort();
+    for server_name in server_names {
+        let client = &mgr.clients[server_name];
+        let (block, shown_here) =
+            workspace_server_block(server_name, client, limit.saturating_sub(shown), &mut total);
+        shown += shown_here;
+        blocks.push(block);
+    }
+    let mut text = blocks.join("\n");
+    if total > shown {
+        text.push_str(&format!(
+            "\n\nShowing {shown} of {total} diagnostics (limit {limit}); \
+             pass a larger `limit` parameter to see more."
+        ));
+    }
+    text.push_str(
+        "\nNote: covers only documents tracked by the servers (opened or edited this session); \
+         an empty result is not a whole-workspace verdict.",
+    );
+    ok_result(text)
+}
 
 // ── Public adapter ──────────────────────────────────────────────────────
 
@@ -201,6 +473,32 @@ impl super::LspBackend for LspBackendAdapter {
 
         if let Err(error) = self.ensure_ready().await {
             return err_result(format!("LSP startup failed: {error}"));
+        }
+
+        // The diagnostics ops read the per-server stores rather than dispatch
+        // requests, so they are routed before socket selection. The settle
+        // wait runs on cloned handles, not under the manager lock.
+        match input.operation {
+            LspOperation::Diagnostics => {
+                let Some(ref fp) = input.file_path else {
+                    return err_result("Required: file_path.".into());
+                };
+                let path = PathBuf::from(fp);
+                let handles = {
+                    let mut mgr = self.lsp_manager.lock().await;
+                    match resolve_diagnostics_handles(&mut mgr, &path).await {
+                        Ok(handles) => handles,
+                        Err(msg) => return err_result(msg),
+                    }
+                };
+                return read_file_diagnostics(&handles, &path).await;
+            }
+            LspOperation::WorkspaceDiagnostics => {
+                let limit = input.limit.unwrap_or(WORKSPACE_DIAGNOSTICS_LIMIT);
+                let mgr = self.lsp_manager.lock().await;
+                return read_workspace_diagnostics(&mgr, limit);
+            }
+            _ => {}
         }
 
         // Brief lock: auto-open + clone socket(s). Then drop lock.
@@ -417,6 +715,8 @@ async fn dispatch_on_sockets(input: &LspToolInput, sockets: DispatchSockets) -> 
                 LspOperation::Hover => dispatch_hover(input, &mut socket).await,
                 LspOperation::DocumentSymbol => dispatch_document_symbols(input, &mut socket).await,
                 LspOperation::WorkspaceSymbol => unreachable!(),
+                // Routed to the store readers before socket selection.
+                LspOperation::Diagnostics | LspOperation::WorkspaceDiagnostics => unreachable!(),
             };
             match result {
                 Ok(text) => ok_result(text),

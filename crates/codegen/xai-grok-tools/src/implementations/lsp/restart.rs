@@ -41,9 +41,13 @@ pub(super) fn replay_tracked_documents(
     tracked_docs
         .iter()
         .filter_map(|(uri_str, lang_id)| {
-            let path = uri_str
-                .strip_prefix("file://")
-                .map(PathBuf::from)
+            // `file:///D:/...` (Windows) does not survive a bare
+            // `strip_prefix("file://")` — the result `/D:/...` is not a path.
+            // Parse the URI and let the URL crate do the platform mapping;
+            // non-URI entries fall through as plain paths.
+            let path = Url::parse(uri_str)
+                .ok()
+                .and_then(|uri| uri.to_file_path().ok())
                 .unwrap_or_else(|| PathBuf::from(uri_str));
             let content = std::fs::read_to_string(&path).ok()?;
             let uri = file_uri(&path).ok()?;

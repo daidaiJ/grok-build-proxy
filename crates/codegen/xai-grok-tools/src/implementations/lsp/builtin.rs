@@ -258,6 +258,91 @@ mod tests {
         assert_eq!(probe_command(&dirs, "missing"), None);
     }
 
+    /// Per-language regression locks (CC #16084 planted rust-analyzer detection
+    /// on Windows; one test per builtin slot so a broken candidate cannot slip
+    /// through unnoticed).
+    #[test]
+    fn detects_rust_analyzer_and_maps_rs() {
+        let tmp = tempfile::tempdir().unwrap();
+        probe_named(tmp.path(), "rust-analyzer");
+        let detected = detect_builtin_servers_in(&[tmp.path().to_path_buf()]);
+        let (cfg, _) = detected.get("rust-analyzer").expect("rust slot detected");
+        assert_eq!(cfg.extensions.get(".rs").map(String::as_str), Some("rust"));
+    }
+
+    #[test]
+    fn detects_gopls_and_maps_go() {
+        let tmp = tempfile::tempdir().unwrap();
+        probe_named(tmp.path(), "gopls");
+        let detected = detect_builtin_servers_in(&[tmp.path().to_path_buf()]);
+        let (cfg, _) = detected.get("gopls").expect("go slot detected");
+        assert_eq!(cfg.extensions.get(".go").map(String::as_str), Some("go"));
+    }
+
+    #[test]
+    fn detects_basedpyright_as_python_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        // 只播种第二顺位候选：锁住 python 槽位的降级行为。
+        probe_named(tmp.path(), "basedpyright-langserver");
+        let detected = detect_builtin_servers_in(&[tmp.path().to_path_buf()]);
+        let (cfg, _) = detected.get("basedpyright").expect("python fallback detected");
+        assert_eq!(cfg.extensions.get(".py").map(String::as_str), Some("python"));
+        assert_eq!(cfg.extensions.get(".pyi").map(String::as_str), Some("python"));
+    }
+
+    #[test]
+    fn detects_jdtls_and_maps_java() {
+        let tmp = tempfile::tempdir().unwrap();
+        probe_named(tmp.path(), "jdtls");
+        let detected = detect_builtin_servers_in(&[tmp.path().to_path_buf()]);
+        let (cfg, _) = detected.get("jdtls").expect("java slot detected");
+        assert_eq!(cfg.extensions.get(".java").map(String::as_str), Some("java"));
+    }
+
+    #[test]
+    fn detects_clangd_and_maps_c_family() {
+        let tmp = tempfile::tempdir().unwrap();
+        probe_named(tmp.path(), "clangd");
+        let detected = detect_builtin_servers_in(&[tmp.path().to_path_buf()]);
+        let (cfg, _) = detected.get("clangd").expect("c-family slot detected");
+        assert_eq!(cfg.extensions.get(".c").map(String::as_str), Some("c"));
+        for header in [".h", ".cpp", ".cc", ".hpp"] {
+            assert_eq!(
+                cfg.extensions.get(header).map(String::as_str),
+                Some("cpp"),
+                "{header} maps to cpp"
+            );
+        }
+    }
+
+    /// Windows probes bare commands through PATHEXT-style suffixes
+    /// (CreateProcess semantics): `gopls.exe` is found, an extensionless
+    /// `clangd` is not — mirroring what actually launches. The returned path
+    /// carries PATHEXT's own casing (`.EXE`), and NTFS does not care.
+    #[cfg(windows)]
+    #[test]
+    fn windows_probe_follows_pathext_suffixes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exe = tmp.path().join("gopls.exe");
+        std::fs::write(&exe, b"").unwrap();
+        let dirs = [tmp.path().to_path_buf()];
+        let found = probe_command(&dirs, "gopls").expect("gopls.exe found via PATHEXT");
+        assert!(
+            found.to_string_lossy().eq_ignore_ascii_case(&exe.to_string_lossy()),
+            "found {}, expected {}",
+            found.display(),
+            exe.display()
+        );
+
+        let bare = tmp.path().join("clangd");
+        std::fs::write(&bare, b"").unwrap();
+        assert_eq!(
+            probe_command(&dirs, "clangd"),
+            None,
+            "an extensionless file is not an executable on Windows"
+        );
+    }
+
     #[test]
     fn probe_treats_separated_command_as_path() {
         let tmp = tempfile::tempdir().unwrap();

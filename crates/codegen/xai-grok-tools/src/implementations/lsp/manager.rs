@@ -567,6 +567,28 @@ impl LspManager {
                     Ok(format_symbols(&all_symbols))
                 }
             }
+            LspOperation::Diagnostics | LspOperation::WorkspaceDiagnostics => {
+                // Same store readers the adapter routes to; the settle wait
+                // holds the manager lock here, which is fine for the test path.
+                if input.operation == LspOperation::Diagnostics {
+                    let Some(ref fp) = input.file_path else {
+                        return err("Required: file_path.".into());
+                    };
+                    let path = PathBuf::from(fp);
+                    let handles =
+                        match super::dispatch::resolve_diagnostics_handles(self, &path).await {
+                            Ok(handles) => handles,
+                            Err(msg) => return err(msg),
+                        };
+                    return super::dispatch::read_file_diagnostics(&handles, &path).await;
+                }
+                return super::dispatch::read_workspace_diagnostics(
+                    self,
+                    input
+                        .limit
+                        .unwrap_or(super::dispatch::WORKSPACE_DIAGNOSTICS_LIMIT),
+                );
+            }
         };
 
         match result {

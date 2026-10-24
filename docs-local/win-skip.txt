@@ -157,3 +157,11 @@ config_docs::tests::page_is_the_user_facing_field_list
 # （两用例只走 runner::command 的命令拼装路径）。
 runner::command::tests::parameter_expansion_default_is_not_refused
 runner::command::tests::project_dir_env_is_exported_to_the_child
+
+# 族AA（2026-10-24，T1 诊断 op 施工 GATE_FORCE -p xai-grok-tools 首跑暴露）：
+# watched_files 的 out-of-workspace glob 匹配在 Windows 误命中——baseUri 为
+# 工作区外绝对路径（file:///tmp/...）的 **/*.dll 注册把工作区内 App.dll 也
+# 判为 watched，疑似 baseUri 路径与工作区前缀的比对未做 Windows 归一
+# （分隔符/盘符）。Linux CI 通过；产品影响小（要求 server 注册工作区外
+# 绝对 baseUri glob），修复挂触发（lsp-port 交接账）。
+watched_files::tests::out_of_workspace_globs_never_match

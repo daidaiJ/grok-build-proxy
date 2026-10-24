@@ -127,7 +127,7 @@ pub struct LspBackendStatus {
     pub running_servers: Vec<String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum LspOperation {
     GoToDefinition,
@@ -136,6 +136,8 @@ pub enum LspOperation {
     GoToImplementation,
     DocumentSymbol,
     WorkspaceSymbol,
+    Diagnostics,
+    WorkspaceDiagnostics,
 }
 
 impl std::fmt::Display for LspOperation {
@@ -147,6 +149,8 @@ impl std::fmt::Display for LspOperation {
             Self::GoToImplementation => write!(f, "goToImplementation"),
             Self::DocumentSymbol => write!(f, "documentSymbol"),
             Self::WorkspaceSymbol => write!(f, "workspaceSymbol"),
+            Self::Diagnostics => write!(f, "diagnostics"),
+            Self::WorkspaceDiagnostics => write!(f, "workspaceDiagnostics"),
         }
     }
 }
@@ -167,4 +171,9 @@ pub struct LspToolInput {
     #[schemars(description = "Symbol name or partial name (workspaceSymbol only).")]
     #[serde(default)]
     pub query: Option<String>,
+    #[schemars(
+        description = "Max diagnostics returned (workspaceDiagnostics only, default 100)."
+    )]
+    #[serde(default)]
+    pub limit: Option<u32>,
 }

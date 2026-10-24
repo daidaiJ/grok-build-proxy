@@ -10,6 +10,9 @@ use std::path::PathBuf;
 
 const MOCK_LSP_SERVER: &str = r#"
 import json, sys
+# LSP framing is binary: stop Windows text-mode stdout from turning the
+# header's \r\n into \r\r\n, which no client can parse.
+sys.stdout.reconfigure(newline="\n")
 
 def read_message():
     headers = {}
@@ -150,6 +153,7 @@ pub(super) fn write_mock_server() -> (tempfile::TempDir, PathBuf) {
 pub(super) fn write_delayed_diagnostics_server() -> (tempfile::TempDir, PathBuf) {
     const DELAYED_SERVER: &str = r#"
 import json, sys, time
+sys.stdout.reconfigure(newline="\n")
 
 def read_message():
     headers = {}
@@ -222,6 +226,7 @@ pub(super) fn write_init_failure_server() -> (tempfile::TempDir, PathBuf) {
 pub(super) fn write_slow_init_server(delay_ms: u64) -> (tempfile::TempDir, PathBuf) {
     let script = format!(
         r#"import json, sys, time
+sys.stdout.reconfigure(newline="\n")
 
 def read_message():
     headers = {{}}
@@ -294,6 +299,7 @@ pub(super) fn write_init_failure_server_n_times(
     let init_error_payload = init_error_payload.replace('"', r#"\""#);
     let script = format!(
         r#"import json, os, sys
+sys.stdout.reconfigure(newline="\n")
 
 FAILURES_BEFORE_SUCCESS = {failures_before_success}
 COUNTER_FILE = os.environ["INIT_FAILURE_COUNTER_FILE"]
@@ -369,6 +375,7 @@ while True:
 /// `read_message` / `send_message` / `publish` — the same for every mock.
 const MOCK_PREAMBLE: &str = r#"
 import json, sys
+sys.stdout.reconfigure(newline="\n")
 
 state = {"saves": 0, "pulls": 0}
 
@@ -566,6 +573,8 @@ def handle(msg, method):
         asked_about = state["revisions"]
         if state["pulls"] == 1:
             path = msg["params"]["textDocument"]["uri"][len("file://"):]
+            if os.name == "nt" and path[:1] == "/" and path[2:3] == ":":
+                path = path[1:]  # file:///D:/... → D:/...; "/D:/..." is not a path here
             open(os.path.join(os.path.dirname(path), "first-pull-started"), "w").close()
         time.sleep(0.3)
         reply(msg, {
@@ -608,6 +617,8 @@ def handle(msg, method):
                         "items": one_diagnostic("the problem")})
         elif state["pulls"] == 2:
             path = msg["params"]["textDocument"]["uri"][len("file://"):]
+            if os.name == "nt" and path[:1] == "/" and path[2:3] == ":":
+                path = path[1:]  # file:///D:/... → D:/...; "/D:/..." is not a path here
             open(os.path.join(os.path.dirname(path), "second-pull-started"), "w").close()
             time.sleep(0.3)
             reply(msg, {"kind": "full", "resultId": "clean", "items": []})

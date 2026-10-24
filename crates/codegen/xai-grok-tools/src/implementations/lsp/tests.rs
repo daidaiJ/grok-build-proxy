@@ -890,6 +890,7 @@ async fn e2e_session_tool_dispatch_flow() {
             line: Some(0),
             character: Some(9),
             query: None,
+            limit: None,
         })
         .await;
     assert!(!result.is_error, "should succeed: {}", result.text);
@@ -907,6 +908,7 @@ async fn e2e_session_tool_dispatch_flow() {
             line: Some(0),
             character: Some(9),
             query: None,
+            limit: None,
         })
         .await;
     assert!(!result.is_error);
@@ -923,6 +925,7 @@ async fn e2e_session_tool_dispatch_flow() {
             line: Some(0),
             character: Some(3),
             query: None,
+            limit: None,
         })
         .await;
     assert!(result.is_error);
@@ -940,6 +943,7 @@ async fn e2e_session_tool_dispatch_flow() {
             line: None,
             character: None,
             query: None,
+            limit: None,
         })
         .await;
     assert!(result.is_error);
@@ -1173,6 +1177,7 @@ async fn e2e_first_dispatch_waits_for_background_startup() {
             line: Some(0),
             character: Some(6),
             query: None,
+            limit: None,
         })
         .await;
     assert!(
@@ -2331,4 +2336,159 @@ async fn advertises_and_accepts_file_watch_registration_without_error() {
     );
 
     client.shutdown().await;
+}
+
+// ── On-demand diagnostics ops (T1: diagnostics / workspaceDiagnostics) ──
+
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_diagnostics_op_reports_pushed_diagnostics() {
+    let (_dir, script_path) = write_mock_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(
+        single_server_manager(&script_path, &workspace).await,
+    ));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    let test_file = workspace.path().join("app.ts");
+    let content = "const x = 1;\n";
+    std::fs::write(&test_file, content).unwrap();
+    mgr.lock().await.notify_file_changed(&test_file, content);
+    wait_for_server(&*mgr.lock().await, &test_file, 4000).await;
+
+    let result = adapter
+        .dispatch(&LspToolInput {
+            operation: LspOperation::Diagnostics,
+            file_path: Some(test_file.to_string_lossy().into_owned()),
+            line: None,
+            character: None,
+            query: None,
+            limit: None,
+        })
+        .await;
+    assert!(!result.is_error, "{}", result.text);
+    assert!(
+        result.text.contains("mock error: undeclared variable"),
+        "{}",
+        result.text
+    );
+    assert!(
+        result.text.contains("mock warning: unused import"),
+        "{}",
+        result.text
+    );
+    // 1-based positions and severity prefixes.
+    assert!(result.text.contains("error L1:C6"), "{}", result.text);
+    assert!(result.text.contains("warning L3:C1"), "{}", result.text);
+    assert!(result.text.contains("(mock)"), "{}", result.text);
+    // Settled: no out-of-date note.
+    assert!(!result.text.contains("re-query"), "{}", result.text);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_diagnostics_op_requires_file_path() {
+    let (_dir, script_path) = write_mock_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(
+        single_server_manager(&script_path, &workspace).await,
+    ));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    let result = adapter
+        .dispatch(&LspToolInput {
+            operation: LspOperation::Diagnostics,
+            file_path: None,
+            line: None,
+            character: None,
+            query: None,
+            limit: None,
+        })
+        .await;
+    assert!(result.is_error);
+    assert!(result.text.contains("Required: file_path"), "{}", result.text);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_workspace_diagnostics_aggregates_and_limits() {
+    let (_dir, script_path) = write_mock_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(
+        single_server_manager(&script_path, &workspace).await,
+    ));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    let mut last = None;
+    for name in ["a.ts", "b.ts"] {
+        let file = workspace.path().join(name);
+        let content = "const x = 1;\n";
+        std::fs::write(&file, content).unwrap();
+        mgr.lock().await.notify_file_changed(&file, content);
+        wait_for_server(&*mgr.lock().await, &file, 4000).await;
+        last = Some(file);
+    }
+    let _ = last;
+
+    let result = adapter
+        .dispatch(&LspToolInput {
+            operation: LspOperation::WorkspaceDiagnostics,
+            file_path: None,
+            line: None,
+            character: None,
+            query: None,
+            limit: Some(1),
+        })
+        .await;
+    assert!(!result.is_error, "{}", result.text);
+    assert!(result.text.contains("== server mock-ts =="), "{}", result.text);
+    // Two tracked files, two diagnostics each — all counted, one shown.
+    assert!(
+        result.text.contains("Showing 1 of 4 diagnostics (limit 1)"),
+        "{}",
+        result.text
+    );
+    // Honest boundary note.
+    assert!(
+        result.text.contains("not a whole-workspace verdict"),
+        "{}",
+        result.text
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_workspace_diagnostics_without_tracked_documents_is_not_clean() {
+    let (_dir, script_path) = write_mock_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(
+        single_server_manager(&script_path, &workspace).await,
+    ));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    let result = adapter
+        .dispatch(&LspToolInput {
+            operation: LspOperation::WorkspaceDiagnostics,
+            file_path: None,
+            line: None,
+            character: None,
+            query: None,
+            limit: None,
+        })
+        .await;
+    assert!(!result.is_error, "{}", result.text);
+    assert!(
+        result.text.contains("no diagnostics reported yet (server=mock-ts)"),
+        "an empty store must not read as clean: {}",
+        result.text
+    );
+}
+
+/// The op names on the wire are camelCase, matching how the model writes them.
+#[test]
+fn lsp_operation_serialization_names() {
+    assert_eq!(
+        serde_json::to_string(&LspOperation::Diagnostics).unwrap(),
+        r#""diagnostics""#
+    );
+    assert_eq!(
+        serde_json::to_string(&LspOperation::WorkspaceDiagnostics).unwrap(),
+        r#""workspaceDiagnostics""#
+    );
 }

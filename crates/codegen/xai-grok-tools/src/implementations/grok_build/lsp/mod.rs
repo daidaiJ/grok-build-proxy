@@ -38,8 +38,9 @@ impl crate::types::tool_metadata::ToolMetadata for LspTool {
 
     fn description_template(&self) -> &str {
         r#"Code intelligence via language servers.${%- if tools.by_kind.search and tools.by_kind.read %} Prefer over ${{ tools.by_kind.search }}/${{ tools.by_kind.read }} for understanding code.${%- endif %}
-Operations: goToDefinition (jump to where a symbol is defined), findReferences (all usages of a symbol), hover (type info/docs at a position), goToImplementation (trait/interface implementations), documentSymbol (list all symbols in a file), workspaceSymbol (search symbols by name across the workspace — requires query parameter, not file_path).
-Requires file_path + line + character for position-based operations."#
+Operations: goToDefinition (jump to where a symbol is defined), findReferences (all usages of a symbol), hover (type info/docs at a position), goToImplementation (trait/interface implementations), documentSymbol (list all symbols in a file), workspaceSymbol (search symbols by name across the workspace — requires query parameter, not file_path), diagnostics (errors and warnings for one file as the server currently reports them; re-query after edits), workspaceDiagnostics (errors and warnings across documents already tracked this session; an empty result is not a whole-workspace verdict).
+Requires file_path + line + character for position-based operations.
+Routing: exact-text, literal, or error-message lookups belong to grep — it is faster and does not occupy the server; never use lsp to search for strings. Use lsp when semantic precision matters — all references, call chains, impact analysis, symbol outlines — where grep misses overloads, macros, and aliases. After navigating to a definition, read the target code before editing it; do not edit blind from a name. After changing an interface or signature, verify with the diagnostics operation in the same turn rather than waiting for the next reminder."#
     }
 
     fn emitted_notifications(&self) -> &'static [&'static str] {

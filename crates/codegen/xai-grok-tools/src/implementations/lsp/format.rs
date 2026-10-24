@@ -2,6 +2,33 @@
 
 use async_lsp::lsp_types::{self, Location, SymbolInformation, Url};
 
+use super::{DiagnosticEntry, DiagnosticSeverityLevel};
+
+/// One diagnostic per line: severity prefix, 1-based position, message, source.
+pub fn format_diagnostic_line(entry: &DiagnosticEntry, indent: &str) -> String {
+    let severity = match entry.severity {
+        DiagnosticSeverityLevel::Error => "error",
+        DiagnosticSeverityLevel::Warning => "warning",
+    };
+    let source = entry
+        .source
+        .as_deref()
+        .map(|s| format!(" ({s})"))
+        .unwrap_or_default();
+    format!(
+        "{indent}{severity} L{}:C{}: {}{source}",
+        entry.line, entry.column, entry.message
+    )
+}
+
+pub fn format_diagnostic_entries(entries: &[DiagnosticEntry]) -> String {
+    entries
+        .iter()
+        .map(|entry| format_diagnostic_line(entry, "  "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub fn markup_string_to_text(ms: lsp_types::MarkedString) -> String {
     match ms {
         lsp_types::MarkedString::String(s) => s,
