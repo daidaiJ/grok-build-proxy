@@ -357,9 +357,11 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   `/lsp` 打开统一操作面板（modal_window 公共 chrome：状态显示 + `e` 启用关闭 +
   `c` 清覆盖全量重置 + server 自动发现清单 + 空格勾选 Enter 确认，翻转/重置/
   确认均即时热加载），option 子命令全部移除（面板内完成）。遗留：活体 TUI 验证、
-  eager bootstrap 内存尾部（懒启动挂真实抱怨触发）、T1 诊断按需 op /
-  T2 call hierarchy / T3 rename（[improvements-todo](docs-local/lsp-port/lsp-improvements-todo.md)
-  顺位）。
+  eager bootstrap 内存尾部、T1 诊断按需 op / T2 call hierarchy / T3 rename。
+  **2026-10-24 最终设计定稿待开工**：社区口碑调研（Claude Code 原生 LSP /
+  Serena / zircote-lsp-tools / aider）+ zcode、opencode v2 补充（**v2 已砍
+  LSP 运行时**，原调研对照仅对 v1 成立）整合为 P0–P5 顺位与核心设计，见
+  [`enhancement-final-design.md`](docs-local/lsp-port/enhancement-final-design.md)。
 - **主题目录扩容（社区色板移植 + Codex 品牌主题 + Ayu，2026-10-13/14）** —
   从父目录 opencode 主题库移植 11 套社区好评主题（Catppuccin Mocha/Latte、
   Dracula、Gruvbox Dark、Nord、One Dark、Everforest、Kanagawa、Vesper、

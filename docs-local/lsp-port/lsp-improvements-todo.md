@@ -6,6 +6,12 @@
 > PATCHES 三十四期）。
 > 分支拟：T1 `feat/local-lsp-diagnostics-op` / T2 `feat/local-lsp-call-hierarchy` /
 > T3 `feat/local-lsp-rename`；各期独立发版或合并发版视工期定。
+>
+> **2026-10-24**：开工顺位与 T1 设计以
+> [`enhancement-final-design.md`](enhancement-final-design.md) 为准——新增
+> P0 描述路由指南（随 T1 搭车）与 P2 懒启动（插在 T1 后 T2 前）；T1 在
+> 原案之上加 pull.rs 分流与 settle 两补丁（其 §3.2）。本文 T1/T2/T3 的
+> 改动点与验收清单仍然有效。
 
 ## 0. 顺位总览
 

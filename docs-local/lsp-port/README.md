@@ -7,6 +7,13 @@
 > MiMo-Code（设计不佳）不取参照。
 > **v2（2026-10-13，`feat/local-lsp-builtin-servers`，PATCHES 三十五期）**：默认开 +
 > builtin 五语言检测 + `/lsp status` 数据面 + 零回合热加载，见文末 §8。
+>
+> **⚠️ 2026-10-24 修正**：本文 §1/§2/§7 中 opencode「✅ 成熟」的所有对照**仅对
+> v1 成立**——v2 重写（2026-10-13 发布）砍掉了 LSP 运行时（官方迁移文档：
+> 保留配置但不跑 server、不暴露工具、不产诊断；本地 clone 全仓零
+> `didOpen`，edit/write 仅剩 TODO），详见
+> [`enhancement-final-design.md`](enhancement-final-design.md) §1.2。
+> 后续 LSP 增强的最终设计与开工顺位（P0–P5）以该文为准。
 
 ## 1. 调研范围与结论速览
 

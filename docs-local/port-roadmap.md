@@ -953,3 +953,24 @@
   dangling=0；retry_state 68 条 = 67 传输 + 1 条 429）。
 - **遗留**：见文末四条（压缩重试参数未对齐主回合 15 次指数退避、two-pass 单次尝试、
   孤儿 `ToolResult` 未在压缩 prep 兜底、400 诊断文案仍显示成 sampler build failed）。
+
+### 2026-10-24 LSP 增强最终设计定稿（docs：lsp-port/enhancement-final-design.md）
+
+- **内容**：LSP 增强交接定稿——在前两份调研（lsp-port README 三家对照 +
+  improvements-todo T1/T2/T3 规划）之上补两轮社区口碑检索（Claude Code 原生
+  LSP code intelligence 插件 / Serena / zircote-lsp-tools / aider 反方立场）
+  与 zcode、opencode v2 方案补充，整合为 P0–P5 开工顺位：P0 工具描述路由
+  指南（随 T1 搭车）→ P1 T1 诊断按需 op（加 pull.rs 分流 + settle 两补丁）→
+  P2 懒启动（从「挂触发」上调）→ P3 T2 call hierarchy → P4 T3 rename →
+  P5 挂触发三件（符号体一步取 / Windows 检测回归用例 / hook 执法层）。
+  **重要修正：opencode v2 重写砍掉了 LSP 运行时**（官方迁移文档原话 + 本地
+  clone 全仓零 didOpen 实证），原调研「opencode ✅ 成熟」仅对 v1 成立；
+  zcode 无 LSP 子系统（仅 FileMutationService 通知槽位设计，missing）。
+- **验证**：纯文档；关键断言一手核实——opencode clone `22e771f`（2.0.32）
+  全仓 grep 零 `textDocument/didOpen`、edit/write 工具 TODO 原文实读
+  （`packages/core/src/file-mutation.ts:131`）、官方 migrate-v1 文档与
+  changelog（至 v2.1.2 无 LSP 回归条目）webReader 抓取、opencode #12288
+  经 gh api 核实（2026-02 closed，v1 时代）。
+- **遗留**：P0–P5 全部未开工（设计定稿）；D1–D7 待拍板（均给默认倾向，
+  可默认执行）；fork 侧 lsp crate 现状锚点已复核（`LspOperation` 仍 6 op、
+  `read_diagnostics` 就绪、pull.rs 已存在）。
