@@ -42,7 +42,9 @@ impl Reminder for LspDiagnosticsReminder {
             }
         };
 
-        lsp.ensure_started_background();
+        // Lazy start (PATCHES 五十七期): no eager bootstrap here. Each
+        // notify_file_event below starts the server owning the file —
+        // sessions that never touch a detectable language never pay for one.
 
         // Structured mutations we ourselves made. bash/git have no file list;
         // watching the workspace for those is the OS-watcher leak this path

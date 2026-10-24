@@ -201,60 +201,78 @@ impl LspManager {
         }
         self.initialized = true;
 
-        let configs: Vec<_> = self
-            .servers
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        for (name, server_config) in configs {
-            self.notification_handle
-                .send_lsp_starting(crate::notification::LspServerStarting {
-                    server_name: name.clone(),
-                    command: server_config.command.clone(),
-                });
-            let lifecycle_id = self.alloc_lifecycle_id();
-            match LspClient::start(
-                name.clone(),
-                lifecycle_id,
-                server_config,
-                &self.workspace_root,
-                self.diagnostics_ready.clone(),
-            )
-            .await
-            {
-                Ok(mut client) => {
-                    if !client.enroll(self.process_scope.as_ref()) {
-                        // Session teardown raced this start: the closed scope killed the child at registration. Installing the client would
-                        // advertise a dead server and feed the restart monitor respawn churn, so stop starting servers for this manager
-                        // instead.
-                        tracing::info!(server = %name, "session scope closed during LSP start; discarding server");
-                        self.shutting_down = true;
-                        return;
-                    }
-                    // Same race as the restart path: `kill_all` landing between
-                    // enroll and insert has already SIGKILLed the child.
-                    if self.process_scope.as_ref().is_some_and(|s| s.is_closed()) {
-                        tracing::info!(server = %name, "session scope closed during LSP start; discarding server");
-                        self.shutting_down = true;
-                        return;
-                    }
-                    tracing::info!(server = %name, "LSP server ready");
-                    self.notification_handle
-                        .send_lsp_ready(crate::notification::LspServerReady {
-                            server_name: name.clone(),
-                        });
-                    self.clients.insert(name, client);
+        let names: Vec<String> = self.servers.keys().cloned().collect();
+        for name in names {
+            let _ = self.ensure_server_started(&name).await;
+        }
+    }
+
+    /// Start one server on demand (the lazy-start path). Returns whether the
+    /// freshly started server wants a crash monitor; a no-op (`Ok(false)`)
+    /// when it is already running. The eager path simply calls this for every
+    /// configured server, so both paths share one start sequence.
+    pub async fn ensure_server_started(&mut self, server_name: &str) -> Result<bool, String> {
+        if self.clients.contains_key(server_name) {
+            return Ok(false);
+        }
+        if self.shutting_down {
+            return Err("LSP manager is shutting down".into());
+        }
+        let Some(server_config) = self.servers.get(server_name) else {
+            return Err(format!("No LSP server named {server_name}"));
+        };
+        let server_config = server_config.clone();
+        let restartable = server_config.restart_on_crash();
+        self.notification_handle
+            .send_lsp_starting(crate::notification::LspServerStarting {
+                server_name: server_name.to_string(),
+                command: server_config.command.clone(),
+            });
+        let lifecycle_id = self.alloc_lifecycle_id();
+        match LspClient::start(
+            server_name.to_string(),
+            lifecycle_id,
+            server_config,
+            &self.workspace_root,
+            self.diagnostics_ready.clone(),
+        )
+        .await
+        {
+            Ok(mut client) => {
+                if !client.enroll(self.process_scope.as_ref()) {
+                    // Session teardown raced this start: the closed scope killed the child at registration. Installing the client would
+                    // advertise a dead server and feed the restart monitor respawn churn, so stop starting servers for this manager
+                    // instead.
+                    tracing::info!(server = %server_name, "session scope closed during LSP start; discarding server");
+                    self.shutting_down = true;
+                    return Err("session closed during LSP start".into());
                 }
-                Err(e) => {
-                    tracing::warn!(server = %name, error = %e, "failed to start LSP server, skipping");
-                    self.notification_handle.send_lsp_failed(
-                        crate::notification::LspServerFailed {
-                            server_name: name.clone(),
-                            error: e.to_string(),
-                            attempts: 0,
-                        },
-                    );
+                // Same race as the restart path: `kill_all` landing between
+                // enroll and insert has already SIGKILLed the child.
+                if self.process_scope.as_ref().is_some_and(|s| s.is_closed()) {
+                    tracing::info!(server = %server_name, "session scope closed during LSP start; discarding server");
+                    self.shutting_down = true;
+                    return Err("session closed during LSP start".into());
                 }
+                tracing::info!(server = %server_name, "LSP server ready");
+                self.notification_handle
+                    .send_lsp_ready(crate::notification::LspServerReady {
+                        server_name: server_name.to_string(),
+                    });
+                let restartable_flag = restartable;
+                self.clients.insert(server_name.to_string(), client);
+                Ok(restartable_flag)
+            }
+            Err(e) => {
+                tracing::warn!(server = %server_name, error = %e, "failed to start LSP server, skipping");
+                self.notification_handle.send_lsp_failed(
+                    crate::notification::LspServerFailed {
+                        server_name: server_name.to_string(),
+                        error: e.to_string(),
+                        attempts: 0,
+                    },
+                );
+                Err(e.to_string())
             }
         }
     }

@@ -75,8 +75,9 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     // 零回合重建廉价且保证 harness 与门禁一致；旧 manager 的进程组由
     // process_scope 会话结束时统一回收。
     let backend = if enabled {
+        // 显式启用（面板 e 键 / /lsp on）：跳过懒启动立即拉起，保留用户强制语义。
         match agent
-            .build_lsp_backend(&cwd, handle.tool_context.process_scope.clone())
+            .build_lsp_backend(&cwd, handle.tool_context.process_scope.clone(), true)
             .await
         {
             Some((backend, _names)) => Some(backend),

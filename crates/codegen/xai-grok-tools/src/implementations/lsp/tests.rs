@@ -2492,3 +2492,164 @@ fn lsp_operation_serialization_names() {
         r#""workspaceDiagnostics""#
     );
 }
+
+// ── Lazy start (PATCHES 五十七期) ────────────────────────────────────────
+
+fn two_server_manager(
+    mock_script: &Path,
+    workspace: &tempfile::TempDir,
+) -> LspManager {
+    let mut servers = BTreeMap::new();
+    servers.insert("mock-ts".to_string(), mock_server_config(mock_script));
+    // A server that can never spawn: exercises per-server failure isolation.
+    let mut broken = LspServerConfig {
+        command: "definitely-not-a-real-lsp-server-xyz".to_string(),
+        extensions: HashMap::new(),
+        ..Default::default()
+    };
+    broken.extensions.insert(".rs".to_string(), "rust".to_string());
+    servers.insert("broken-rs".to_string(), broken);
+
+    LspManager::new(
+        servers,
+        workspace.path().to_path_buf(),
+        false,
+        crate::notification::ToolNotificationHandle::noop(),
+    )
+}
+
+/// Lazy default: nothing starts at assembly; the first file-scoped op starts
+/// only the server owning the file, and the broken server stays untouched.
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_lazy_start_starts_only_the_owning_server() {
+    let (_dir, script_path) = write_mock_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(two_server_manager(&script_path, &workspace)));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    // Nothing started at assembly: give any stray eager spawn time to show.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    let status = adapter.status_snapshot().await.expect("snapshot");
+    assert_eq!(status.running_servers, Vec::<String>::new());
+    assert_eq!(status.startup, Some(super::LspStartupState::NotStarted));
+
+    // First file-scoped op starts only the owning server.
+    let test_file = workspace.path().join("app.ts");
+    std::fs::write(&test_file, "const x = 1;\n").unwrap();
+    let result = adapter
+        .dispatch(&LspToolInput {
+            operation: LspOperation::Diagnostics,
+            file_path: Some(test_file.to_string_lossy().into_owned()),
+            line: None,
+            character: None,
+            query: None,
+            limit: None,
+        })
+        .await;
+    assert!(!result.is_error, "{}", result.text);
+    assert!(adapter.is_ready(), "owning server should be ready");
+
+    let status = adapter.status_snapshot().await.expect("snapshot");
+    assert_eq!(status.running_servers, vec!["mock-ts".to_string()]);
+    assert_eq!(status.startup, Some(super::LspStartupState::Ready));
+}
+
+/// The read/write trigger: an edit to a tracked-language file starts its
+/// server without any tool call, and the queued change is replayed so the
+/// server sees the edit that started it.
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_lazy_edit_starts_the_owning_server() {
+    let (_dir, script_path) = write_mock_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(two_server_manager(&script_path, &workspace)));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    let test_file = workspace.path().join("app.ts");
+    let content = "const x = 1;\n";
+    std::fs::write(&test_file, content).unwrap();
+    adapter
+        .notify_file_event(&test_file, Some(content), super::DiskChangeKind::Changed)
+        .await;
+
+    let deadline = tokio::time::Instant::now() + WAIT_TIMEOUT;
+    loop {
+        let ready = adapter
+            .status_snapshot()
+            .await
+            .map(|s| s.startup == Some(super::LspStartupState::Ready))
+            .unwrap_or(false);
+        if ready {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for the owning server to start after the edit"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+
+    let result = adapter
+        .dispatch(&LspToolInput {
+            operation: LspOperation::Diagnostics,
+            file_path: Some(test_file.to_string_lossy().into_owned()),
+            line: None,
+            character: None,
+            query: None,
+            limit: None,
+        })
+        .await;
+    assert!(!result.is_error, "{}", result.text);
+    assert!(
+        result.text.contains("mock error: undeclared variable"),
+        "the edit that started the server must reach it: {}",
+        result.text
+    );
+}
+
+/// A failed spawn is negative-cached: the error surfaces, the server is
+/// marked recently unavailable, and subsequent access does not respawn.
+#[tokio::test(flavor = "current_thread")]
+async fn e2e_lazy_start_negative_cache() {
+    let (_dir, script_path) = write_mock_server();
+    let workspace = tempfile::tempdir().unwrap();
+    let mgr = Arc::new(tokio::sync::Mutex::new(two_server_manager(&script_path, &workspace)));
+    let adapter = LspBackendAdapter::new(mgr.clone());
+
+    let rs_file = workspace.path().join("lib.rs");
+    std::fs::write(&rs_file, "fn main() {}\n").unwrap();
+    let result = adapter
+        .dispatch(&LspToolInput {
+            operation: LspOperation::Diagnostics,
+            file_path: Some(rs_file.to_string_lossy().into_owned()),
+            line: None,
+            character: None,
+            query: None,
+            limit: None,
+        })
+        .await;
+    assert!(result.is_error, "{}", result.text);
+    assert!(
+        result.text.contains("LSP startup failed"),
+        "{}",
+        result.text
+    );
+    assert!(
+        adapter.is_recently_unavailable("broken-rs").await,
+        "the failed spawn must enter the negative cache"
+    );
+    // The healthy server was not dragged into the failure.
+    assert!(!adapter.is_recently_unavailable("mock-ts").await);
+
+    // Second access still errors (inside the TTL) without a fresh spawn.
+    let again = adapter
+        .dispatch(&LspToolInput {
+            operation: LspOperation::Diagnostics,
+            file_path: Some(rs_file.to_string_lossy().into_owned()),
+            line: None,
+            character: None,
+            query: None,
+            limit: None,
+        })
+        .await;
+    assert!(again.is_error);
+}

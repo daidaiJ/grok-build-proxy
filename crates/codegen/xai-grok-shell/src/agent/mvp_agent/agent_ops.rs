@@ -370,10 +370,14 @@ impl MvpAgent {
     /// Returns the backend plus the configured server names (telemetry mirror);
     /// `None` when nothing qualifies. Shared by session spawn and the
     /// `x.ai/lspApply` zero-turn hot reload.
+    /// `eager = false`（缺省，懒启动 PATCHES 五十七期）：server 在首次被
+    /// 触达（工具调用 / 文件读写）时才拉起；`eager = true`（/lsp 面板显式
+    /// 启用后的热加载）跳过懒启动立即拉起，保留用户强制语义。
     pub(crate) async fn build_lsp_backend(
         &self,
         cwd: &std::path::Path,
         process_scope: Option<xai_tty_utils::ProcessScope>,
+        eager: bool,
     ) -> Option<(
         std::sync::Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>,
         Vec<String>,
@@ -440,7 +444,9 @@ impl MvpAgent {
             xai_grok_tools::implementations::lsp::LspBackendAdapter::new(mgr),
         );
         use xai_grok_tools::implementations::lsp::LspBackend as _;
-        adapter.ensure_started_background();
+        if eager {
+            adapter.ensure_started_background();
+        }
         Some((
             adapter as std::sync::Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>,
             server_names,
@@ -4665,7 +4671,7 @@ impl MvpAgent {
             .resolve_lsp_tools_for_cwd(tool_ctx.cwd.as_path());
         if lsp_tools_enabled && tool_ctx.lsp.is_none() {
             if let Some((backend, server_names)) = self
-                .build_lsp_backend(tool_ctx.cwd.as_path(), tool_ctx.process_scope.clone())
+                .build_lsp_backend(tool_ctx.cwd.as_path(), tool_ctx.process_scope.clone(), false)
                 .await
             {
                 tool_ctx.lsp_server_names = server_names;

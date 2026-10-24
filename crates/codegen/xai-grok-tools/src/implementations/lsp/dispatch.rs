@@ -300,17 +300,26 @@ pub(super) fn read_workspace_diagnostics(mgr: &LspManager, limit: u32) -> LspToo
 
 #[derive(Debug, Clone)]
 enum StartupState {
-    NotStarted,
     Starting,
     Ready,
     Failed(String),
 }
+// A server absent from the map has never been asked to start — the lazy
+// default. Only ops that touch its files (or an explicit eager request)
+// move it to `Starting`.
 
 struct StartupCoordinator {
-    state: TokioMutex<StartupState>,
+    states: TokioMutex<HashMap<String, StartupState>>,
     notify: tokio::sync::Notify,
     pre_ready_file_changes: TokioMutex<HashMap<PathBuf, (Option<String>, super::DiskChangeKind)>>,
+    /// Servers whose last spawn attempt failed, with when it failed. Within
+    /// the TTL a failing server is not asked again — otherwise every file of
+    /// that language pays a doomed spawn attempt (crush's recentlyUnavailable).
+    recently_unavailable: TokioMutex<HashMap<String, std::time::Instant>>,
 }
+
+/// How long a failed spawn is left alone before the next file access retries it.
+const RECENTLY_UNAVAILABLE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 
 pub struct LspBackendAdapter {
     lsp_manager: Arc<tokio::sync::Mutex<LspManager>>,
@@ -322,74 +331,210 @@ impl LspBackendAdapter {
         Self {
             lsp_manager,
             startup: Arc::new(StartupCoordinator {
-                state: TokioMutex::new(StartupState::NotStarted),
+                states: TokioMutex::new(HashMap::new()),
                 notify: tokio::sync::Notify::new(),
                 pre_ready_file_changes: TokioMutex::new(HashMap::new()),
+                recently_unavailable: TokioMutex::new(HashMap::new()),
             }),
         }
     }
 
-    fn spawn_bootstrap_task(
+    #[cfg(test)]
+    pub(crate) async fn is_recently_unavailable(&self, server: &str) -> bool {
+        self.startup
+            .recently_unavailable
+            .lock()
+            .await
+            .contains_key(server)
+    }
+
+    fn spawn_server_start(
         lsp_manager: Arc<tokio::sync::Mutex<LspManager>>,
         startup: Arc<StartupCoordinator>,
+        server: String,
     ) {
         tokio::spawn(async move {
-            let result = bootstrap_lsp(lsp_manager, startup.clone()).await;
-            let mut state = startup.state.lock().await;
-            *state = match result {
-                Ok(()) => StartupState::Ready,
-                Err(error) => StartupState::Failed(error),
-            };
-            drop(state);
+            let result = start_server(lsp_manager, startup.clone(), &server).await;
+            {
+                let mut unavailable = startup.recently_unavailable.lock().await;
+                let mut states = startup.states.lock().await;
+                match &result {
+                    Ok(()) => {
+                        states.insert(server.clone(), StartupState::Ready);
+                        unavailable.remove(&server);
+                    }
+                    Err(error) => {
+                        states.insert(server.clone(), StartupState::Failed(error.clone()));
+                        unavailable.insert(server.clone(), std::time::Instant::now());
+                    }
+                }
+            }
             startup.notify.notify_waiters();
         });
     }
 
-    async fn ensure_started_inner(&self) {
-        Self::ensure_started_with_state(self.lsp_manager.clone(), self.startup.clone()).await;
+    /// Trigger one server's start if it is not on its way already. A server
+    /// inside its recently-unavailable TTL is left alone.
+    async fn ensure_started_one(&self, server: &str) {
+        Self::ensure_started_one_with(self.lsp_manager.clone(), self.startup.clone(), server)
+            .await;
     }
 
-    async fn ensure_started_with_state(
+    async fn ensure_started_one_with(
+        lsp_manager: Arc<tokio::sync::Mutex<LspManager>>,
+        startup: Arc<StartupCoordinator>,
+        server: &str,
+    ) {
+        {
+            let unavailable = startup.recently_unavailable.lock().await;
+            if let Some(when) = unavailable.get(server)
+                && when.elapsed() < RECENTLY_UNAVAILABLE_TTL
+            {
+                return;
+            }
+        }
+        {
+            let states = startup.states.lock().await;
+            if matches!(
+                states.get(server),
+                Some(StartupState::Starting | StartupState::Ready)
+            ) {
+                return;
+            }
+        }
+        {
+            let mut states = startup.states.lock().await;
+            states.insert(server.to_string(), StartupState::Starting);
+        }
+        Self::spawn_server_start(lsp_manager, startup, server.to_string());
+    }
+
+    /// Trigger every configured server (the eager contract, on demand).
+    async fn ensure_started_all_with(
         lsp_manager: Arc<tokio::sync::Mutex<LspManager>>,
         startup: Arc<StartupCoordinator>,
     ) {
-        let mut state = startup.state.lock().await;
-        if matches!(&*state, StartupState::NotStarted) {
-            *state = StartupState::Starting;
-            drop(state);
-            LspBackendAdapter::spawn_bootstrap_task(lsp_manager, startup);
+        let names: Vec<String> = {
+            let mgr = lsp_manager.lock().await;
+            mgr.servers.keys().cloned().collect()
+        };
+        for name in names {
+            Self::ensure_started_one_with(lsp_manager.clone(), startup.clone(), &name).await;
         }
+    }
+
+    /// Wait until `server` reaches a terminal state. `Err` on Failed.
+    async fn wait_ready_one(&self, server: &str) -> Result<(), String> {
+        loop {
+            let notified = {
+                let states = self.startup.states.lock().await;
+                match states.get(server) {
+                    Some(StartupState::Ready) => return Ok(()),
+                    Some(StartupState::Failed(error)) => return Err(error.clone()),
+                    // Absent + no task? `ensure_started_one` was already
+                    // called by the caller; treat as still starting.
+                    _ => self.startup.notify.notified(),
+                }
+            };
+            notified.await;
+        }
+    }
+
+    async fn ensure_ready_for_server(&self, server: &str) -> Result<(), String> {
+        self.ensure_started_one(server).await;
+        self.wait_ready_one(server).await
+    }
+
+    /// Ensure the server owning `path` is started and ready. A path no
+    /// server claims is `Ok` — the caller reports "No LSP server configured".
+    async fn ensure_ready_for_file(&self, path: &std::path::Path) -> Result<(), String> {
+        let owner = {
+            let mgr = self.lsp_manager.lock().await;
+            super::config::resolve_server(&mgr.servers, path).map(|(name, _)| name)
+        };
+        match owner {
+            Some(server) => self.ensure_ready_for_server(&server).await,
+            None => Ok(()),
+        }
+    }
+
+    /// Ensure every configured server is started and at least one succeeded —
+    /// the eager contract, on demand (workspace-wide ops, explicit enable).
+    async fn ensure_ready_all(&self) -> Result<(), String> {
+        Self::ensure_started_all_with(self.lsp_manager.clone(), self.startup.clone()).await;
+        loop {
+            let notified = {
+                let states = self.startup.states.lock().await;
+                let pending = states
+                    .values()
+                    .any(|state| matches!(state, StartupState::Starting));
+                if !pending {
+                    let any_ready = states
+                        .values()
+                        .any(|state| matches!(state, StartupState::Ready));
+                    return if any_ready {
+                        Ok(())
+                    } else {
+                        Err("No LSP servers started successfully.".to_string())
+                    };
+                }
+                self.startup.notify.notified()
+            };
+            notified.await;
+        }
+    }
+
+    async fn is_server_ready(&self, server: &str) -> bool {
+        matches!(
+            self.startup.states.lock().await.get(server),
+            Some(StartupState::Ready)
+        )
     }
 }
 
-async fn bootstrap_lsp(
+/// One server's lazy start: start it in the manager, replay the pre-ready
+/// file changes that belong to it (plus ownerless watcher-only events, which
+/// the first server to start consumes), and enroll its crash monitor.
+async fn start_server(
     lsp_manager: Arc<tokio::sync::Mutex<LspManager>>,
     startup: Arc<StartupCoordinator>,
+    server: &str,
 ) -> Result<(), String> {
-    let pending_changes: Vec<(PathBuf, Option<String>, super::DiskChangeKind)> = {
-        let mut pending = startup.pre_ready_file_changes.lock().await;
-        pending
-            .drain()
-            .map(|(path, (content, kind))| (path, content, kind))
-            .collect()
-    };
-
     let restartable = {
         let mut mgr = lsp_manager.lock().await;
-        mgr.ensure_initialized().await;
-        if mgr.clients.is_empty() {
-            return Err("No LSP servers started successfully.".to_string());
-        }
-        for (path, content, kind) in &pending_changes {
+        mgr.ensure_server_started(server).await?;
+        let pending: Vec<(PathBuf, Option<String>, super::DiskChangeKind)> = {
+            let mut queue = startup.pre_ready_file_changes.lock().await;
+            let taken: Vec<PathBuf> = queue
+                .keys()
+                .filter(|path| {
+                    super::config::resolve_server(&mgr.servers, path)
+                        .is_none_or(|(name, _)| name == server)
+                })
+                .cloned()
+                .collect();
+            taken
+                .iter()
+                .filter_map(|path| {
+                    queue
+                        .remove(path)
+                        .map(|(content, kind)| (path.clone(), content, kind))
+                })
+                .collect()
+        };
+        for (path, content, kind) in &pending {
             mgr.notify_file_event(path, content.as_deref(), *kind);
         }
-        mgr.restartable_servers()
+        mgr.restartable_servers().contains(&server.to_string())
     };
-    for name in restartable {
+    if restartable {
         // Hand the monitor a `Weak` so it never keeps the manager (and its
         // language-server children) alive past the owning session.
         let mgr_weak = Arc::downgrade(&lsp_manager);
-        tokio::spawn(crate::implementations::lsp::restart_monitor(mgr_weak, name));
+        tokio::spawn(crate::implementations::lsp::restart_monitor(
+            mgr_weak,
+            server.to_string(),
+        ));
     }
     Ok(())
 }
@@ -420,48 +565,52 @@ impl super::LspBackend for LspBackendAdapter {
             return;
         };
         handle.spawn(async move {
-            LspBackendAdapter::ensure_started_with_state(lsp_manager, startup).await;
+            LspBackendAdapter::ensure_started_all_with(lsp_manager, startup).await;
         });
     }
 
     async fn ensure_ready(&self) -> Result<(), String> {
-        self.ensure_started_inner().await;
-        loop {
-            let notified = {
-                let state = self.startup.state.lock().await;
-                match &*state {
-                    StartupState::Ready => return Ok(()),
-                    StartupState::Failed(error) => return Err(error.clone()),
-                    StartupState::NotStarted => continue,
-                    StartupState::Starting => self.startup.notify.notified(),
-                }
-            };
-            notified.await;
-        }
+        self.ensure_ready_all().await
     }
 
     fn is_ready(&self) -> bool {
         self.startup
-            .state
+            .states
             .try_lock()
-            .map(|state| matches!(&*state, StartupState::Ready))
+            .map(|states| {
+                states
+                    .values()
+                    .any(|state| matches!(state, StartupState::Ready))
+            })
             .unwrap_or(false)
     }
 
     async fn status_snapshot(&self) -> Option<LspBackendStatus> {
-        let startup = {
-            let state = self.startup.state.lock().await;
-            match &*state {
-                StartupState::NotStarted => LspStartupState::NotStarted,
-                StartupState::Starting => LspStartupState::Starting,
-                StartupState::Ready => LspStartupState::Ready,
-                StartupState::Failed(error) => LspStartupState::Failed(error.clone()),
-            }
-        };
+        let states = self.startup.states.lock().await;
         let running_servers = {
             let mgr = self.lsp_manager.lock().await;
             mgr.clients.keys().cloned().collect()
         };
+        // Aggregate: any Starting dominates (something is on its way); else
+        // any Failed speaks for itself; a server that never started simply
+        // does not appear — its configured name still shows in the /lsp
+        // status panel as not running (lazy: started on first access).
+        let startup = if states.is_empty() {
+            LspStartupState::NotStarted
+        } else if states
+            .values()
+            .any(|state| matches!(state, StartupState::Starting))
+        {
+            LspStartupState::Starting
+        } else if let Some(StartupState::Failed(error)) = states
+            .values()
+            .find(|state| matches!(state, StartupState::Failed(_)))
+        {
+            LspStartupState::Failed(error.clone())
+        } else {
+            LspStartupState::Ready
+        };
+        drop(states);
         Some(LspBackendStatus {
             startup: Some(startup),
             running_servers,
@@ -471,19 +620,28 @@ impl super::LspBackend for LspBackendAdapter {
     async fn dispatch(&self, input: &LspToolInput) -> LspToolResult {
         use super::LspOperation;
 
-        if let Err(error) = self.ensure_ready().await {
-            return err_result(format!("LSP startup failed: {error}"));
-        }
-
         // The diagnostics ops read the per-server stores rather than dispatch
         // requests, so they are routed before socket selection. The settle
         // wait runs on cloned handles, not under the manager lock.
+        // Lazy start: a file-scoped op starts only the server owning the
+        // file; workspace-scoped ops start everything (they asked for it).
         match input.operation {
+            LspOperation::WorkspaceDiagnostics => {
+                if let Err(error) = self.ensure_ready_all().await {
+                    return err_result(format!("LSP startup failed: {error}"));
+                }
+                let limit = input.limit.unwrap_or(WORKSPACE_DIAGNOSTICS_LIMIT);
+                let mgr = self.lsp_manager.lock().await;
+                return read_workspace_diagnostics(&mgr, limit);
+            }
             LspOperation::Diagnostics => {
                 let Some(ref fp) = input.file_path else {
                     return err_result("Required: file_path.".into());
                 };
                 let path = PathBuf::from(fp);
+                if let Err(error) = self.ensure_ready_for_file(&path).await {
+                    return err_result(format!("LSP startup failed: {error}"));
+                }
                 let handles = {
                     let mut mgr = self.lsp_manager.lock().await;
                     match resolve_diagnostics_handles(&mut mgr, &path).await {
@@ -493,12 +651,36 @@ impl super::LspBackend for LspBackendAdapter {
                 };
                 return read_file_diagnostics(&handles, &path).await;
             }
-            LspOperation::WorkspaceDiagnostics => {
-                let limit = input.limit.unwrap_or(WORKSPACE_DIAGNOSTICS_LIMIT);
-                let mgr = self.lsp_manager.lock().await;
-                return read_workspace_diagnostics(&mgr, limit);
-            }
             _ => {}
+        }
+
+        // Socket ops: start only what the op needs, before taking the
+        // manager lock for socket selection.
+        match input.operation {
+            LspOperation::WorkspaceSymbol => {
+                if let Err(error) = self.ensure_ready_all().await {
+                    return err_result(format!("LSP startup failed: {error}"));
+                }
+            }
+            _ => {
+                let Some(fp) = input.file_path.as_deref() else {
+                    return err_result("Required: file_path.".into());
+                };
+                let path = PathBuf::from(fp);
+                let owner = {
+                    let mgr = self.lsp_manager.lock().await;
+                    super::config::resolve_server(&mgr.servers, &path).map(|(name, _)| name)
+                };
+                let Some(server) = owner else {
+                    return err_result(format!(
+                        "No LSP server configured for {}",
+                        path.display()
+                    ));
+                };
+                if let Err(error) = self.ensure_ready_for_server(&server).await {
+                    return err_result(format!("LSP startup failed: {error}"));
+                }
+            }
         }
 
         // Brief lock: auto-open + clone socket(s). Then drop lock.
@@ -512,10 +694,7 @@ impl super::LspBackend for LspBackendAdapter {
                     DispatchSockets::All(mgr.all_sockets())
                 }
                 _ => {
-                    let path = match input.file_path.as_deref() {
-                        Some(fp) => PathBuf::from(fp),
-                        None => return err_result("Required: file_path.".into()),
-                    };
+                    let path = PathBuf::from(input.file_path.as_deref().expect("checked above"));
                     match mgr.socket_for_file(&path).await {
                         Some(s) => DispatchSockets::One(s),
                         None => {
@@ -553,17 +732,32 @@ impl super::LspBackend for LspBackendAdapter {
         content: Option<&str>,
         kind: super::DiskChangeKind,
     ) {
-        if self.is_ready() {
+        let owner = {
+            let mgr = self.lsp_manager.lock().await;
+            super::config::resolve_server(&mgr.servers, path).map(|(name, _)| name)
+        };
+        let owner_ready = match &owner {
+            Some(server) => self.is_server_ready(server).await,
+            None => false,
+        };
+        if owner_ready {
             self.lsp_manager
                 .lock()
                 .await
                 .notify_file_event(path, content, kind);
         } else {
+            // Queue first, so the start task's drain cannot overtake the
+            // insert, then make sure the owning server is on its way — the
+            // read/write lazy trigger (crush's canAutoStart). Ownerless paths
+            // (watcher-only extensions) just queue for the next start.
             self.startup
                 .pre_ready_file_changes
                 .lock()
                 .await
                 .insert(path.to_path_buf(), (content.map(str::to_string), kind));
+            if let Some(server) = owner {
+                self.ensure_started_one(&server).await;
+            }
         }
     }
 
