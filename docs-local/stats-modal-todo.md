@@ -1,5 +1,12 @@
 # `/stats` 窗口化 + 时间窗 option + TUI 英文残留 i18n（TODO）
 
+> **变更（2026-10-25）**：用户报告两问题已修（分支
+> `fix/local-stats-modal-copy-select`，PATCHES 六十一期）：① `y`/页脚按钮
+> 由「整份四窗拼接」改为**只复制当前标签页**（段头 `== <label> ==` 保留）；
+> ② /stats 面板期间**释放鼠标捕获**（并入 auth 原始 URL 面板的原生选择面
+> 机制 `sync_native_selection_mouse`），终端可拖选面板内容部分复制——
+> 代价是面板打开期间滚轮/标签点击让位，键盘仍全覆盖。活体验证随新客户端。
+>
 > **变更（2026-10-17）**：压缩账本标签页按用户需求退场，第 4 标签页改为
 > **月度统计**——恢复 df81acf 月窗（滚动 30 天，`/stats month`，`WINDOW_MONTH_MS`
 > 回归，`RETAIN_MS=35d` 本为其预留）。标签页现为 **5h / day / week / month**
