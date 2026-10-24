@@ -48,6 +48,23 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   + [`ADOPTION.md`](docs-local/agent-cli-tracking/ADOPTION.md) §8。P1 候选 =
   ToolSearch 参照 + superpowers 三件技能 A/B；无代码改动。
 
+- **缓存策略优化移植专题（P1+P2 已落地 2026-10-24，分支待合；活体 A/B 待验）** — 回答三问：① zcode
+  开源版对 DS v4.1 缓存命中率高于 opencode v2 的结构性原因（稳定/动态分层 +
+  动态内容冻结进 append-only 历史 + 工具说明不镜像 system + 主/子代理共享稳定头
+  + sidecar 串行 vs opencode 头部内嵌工具派生内容/子代理独立 system/title 并发）；
+  ② grok2 上下文占用 100–300k 突降 = 工具结果裁剪（>50% 窗口，静默，
+  `request_builder.rs:131`）+ auto-compact（85%）——**裁剪原地改写请求 =
+  DS 前缀缓存断崖**，fork 独有变量（zcode/opencode 无历史中途改写）；
+  ③ dsh 缓存设计源码全部验证（in-history / addition-only / thinking 签名 /
+  Files 确定性图片 / 归因头，绑定 Anthropic 兼容端点），官方 clone 落
+  `D:\CODE\ai\deepseek-harness-upstream`。移植候选：P1 = dsh-port 既有 in-history
+  能力位；P2 = 追加式裁剪改写（新增）；P3 = sidecar 串行化/共享头。拍板与
+  施工实况见 [`docs-local/cache-strategy-port/README.md`](docs-local/cache-strategy-port/README.md) §5 +
+  PATCHES 五十九期（分支 `feat/local-dsh-in-history`：`system_prompt_update`
+  /`prune_mode` 两能力位全链接线，四象限 probe 通过——DS 官方三 backend +
+  Command Code 网关，cc/resp 放行、messages 暂不放行；chat-state 407/407 等
+  全绿；limit-probe A/B 活体待用户开 flag 实测）。
+
 - **模型选择器目录详情展示（已落地合 main，2026-10-17；发版待用户拍板）** — 用户需求：
   /model 选模型时行右侧空白列显示模态/上下文长度/是否支持思考/美元价格。行
   `right_label` 改显目录四字段 token 串（`文本 256k reasoning $3/$15`），本地
@@ -432,6 +449,22 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   sandbox×leader 互斥、`x.ai/*` 无稳定契约、Windows 侧未实测。
 
 ## 🔄 Handoff 摘要
+
+### 缓存命中率与稳定性优化 — P1+P2 已落地（分支 feat/local-dsh-in-history），活体 A/B 待验（2026-10-24）
+
+- **当前状态：** 拍板（建议值）+ 四象限 probe 通过 + P1 in-history 能力位 +
+  P2 append 模式裁剪全链接线（PATCHES 五十九期，`1fbad9c`）；P3/P3' 挂起。
+- **关键证据：** probe = DS 官方 cc/resp/messages + Command Code 网关全部
+  接受中部 system 且最新快照生效（回填 dsh-port §3.2）；实现踩掉单字段 base
+  设计错误（position 0 换字节断崖，改双字段 wire 态）。
+- **验收标准（余）：** limit-probe A/B（触发点后首轮 cached_tokens/prompt_tokens，
+  off ≈0 → on ≈ 稳态）+ CI build/release 绿（按分支纪律发版）。
+- **详情指针：** [`.handoff/cache-hit-optimization.md`](.handoff/cache-hit-optimization.md)
+
+### 未验证事项
+
+- [ ] in-history 端点语义 probe（chat_completions / responses / messages）
+- [ ] limit-probe 取证"占用骤降轮"缓存断崖现场
 
 ### LSP 中高价值四项（P0/P1/P2/P4）— 已合 main，随 v1.0.68 发版（2026-10-24）
 

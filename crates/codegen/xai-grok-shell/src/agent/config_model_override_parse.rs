@@ -774,6 +774,8 @@ mod tests {
             stream_tool_calls: Some(false),
             reasoning_summary: Some(ReasoningSummary::None),
             use_proxy: Some(true),
+            system_prompt_update: Some(xai_grok_sampling_types::SystemPromptUpdate::InHistory),
+            prune_mode: Some(xai_grok_sampling_types::PruneMode::Append),
             accepts_images: Some(true),
         }
     }

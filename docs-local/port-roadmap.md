@@ -1027,3 +1027,26 @@
 - **遗留（活体随新客户端）**：诊断主链路 / workspaceDiagnostics、懒启动
   （spawn 不拉起 / 首触达拉起 / e 键 / 负缓存）、rename 全量改枚举名 +
   审批面、restart 回放恢复（Windows）——清单见交接卡 §12；P3/P5 挂触发不变。
+
+### 2026-10-24 缓存命中率与稳定性优化（cache-strategy-port）开工——拍板 + probe 门通过 + P1/P2 施工
+
+- **内容**：交接卡 `.handoff/cache-hit-optimization.md` 接手。拍板 D-a…D-d 按
+  建议值落档（P2 做 / 复用 `[compaction.pruning]` enabled + per-model 能力位 /
+  P3·P3' 随批顺带 / 顺位本条目）。**probe 门通过（硬前置）**：四象限两连发
+  实验（DeepSeek 官方 chat_completions / responses / messages + Command Code
+  网关主通道）全部接受中部 system 且最新快照生效；放行矩阵 = cc/resp 放行、
+  messages 暂不放行（fork 折叠转换层 + 端点降级双原因），结果回填
+  dsh-port context-engineering-design.md §3.2。施工 = P1 in-history 能力位
+  （`system_prompt_update`）+ P2 追加式裁剪改写（`prune_mode = "append"`，
+  失效标记块替代原地改写），分支 `feat/local-dsh-in-history`。
+- **验证**：probe 零成本（53–92 prompt tokens/请求）；代码验证随分支提交补记。
+- **施工实况（同日补记）**：P1+P2 已落地（PATCHES 五十九期，分支
+  `feat/local-dsh-in-history` 提交 `1fbad9c`）——能力位
+  `system_prompt_update`/`prune_mode` 全链接线（use_proxy 先例 6 构造点 +
+  4 派生点）、in-history 双字段 wire 态（head 冻结 + last_snapshot 追加判定，
+  修复单字段设计 position 0 换字节的断崖错误）、append 裁剪标记 call-id 键控
+  类别无关。验证：chat-state 407/407 / sampler 300 / sampling-types 314 /
+  pager docs 19 / shell override 15 全绿，shell --all-targets check 0 error。
+- **遗留**：limit-probe A/B 活体（触发点后首轮 cached_tokens 比对）随新客户端；
+  messages backend in-history 需先改折叠转换层；P3 sidecar 串行化 + 归因头
+  probe 视批次余量。

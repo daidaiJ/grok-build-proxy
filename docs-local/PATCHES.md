@@ -3733,3 +3733,60 @@ rename）随发版活体；② 非 YOLO 模式的审批面（多文件改动的�
 `grok2.exe.1.0.67-8019d08.bak`）。活体验证清单见
 `.handoff/lsp-enhancements.md` §12（诊断主链路 / 懒启动 / rename 全量改
 枚举名 / restart 回放）。
+
+## 五十九期：dsh in-history 系统提示放置 + append 模式工具结果裁剪——per-model 缓存友好能力位（2026-10-24，分支 feat/local-dsh-in-history）
+
+> 背景：cache-strategy-port 专题（调研 `docs-local/cache-strategy-port/README.md`）
+> ——fork 独有的「历史中途改写」（工具结果裁剪原地替换 + 系统提示原地改写）是
+> DeepSeek 前缀缓存断崖的结构性来源。拍板 D-a…D-d 按建议值落地；probe 门
+> （硬前置）四象限通过后开工，probe 结果回填
+> `docs-local/dsh-port/context-engineering-design.md` §3.2。
+
+### 能力位（对齐 use_proxy 二十三期先例）
+- `xai-grok-sampling-types/src/types.rs`：`SamplingConfig` 尾部追加
+  `system_prompt_update: SystemPromptUpdate`（off/in-history，默认 off）+
+  `prune_mode: PruneMode`（rewrite/append，默认 rewrite），全 `#[serde(default)]`
+- `xai-grok-sampler/src/config.rs`：`SamplerConfig` 同名透传字段（sampler 本体
+  不读，仅为到达 spawn/model_switch/sampler_turn/subagent 的 SamplingConfig 派生点）
+- `xai-grok-shell/src/agent/config.rs`：`ModelEntryConfig`（TOML，`#[serde(default,
+  skip_serializing_if = ...)]` + is_default_* 辅助）、`ModelInfo`（默认值 +
+  from_config 拷贝）、`ConfigModelOverride`（Option 覆盖 + apply 显式值赢）
+- 构造点补齐 6 处（config.rs ×3 / sampler_turn / remote/client / tools/config）+
+  测试穷尽字面量（config_model_override_parse roundtrip guard）
+- 派生点拷贝 4 处：spawn.rs / model_switch.rs / sampler_turn.rs / subagent/mod.rs
+
+### P1 in-history 放置（`xai-chat-state/src/actor/`）
+- `state.rs`：`InHistoryWireState { head, last_snapshot }` wire 层派生态
+  （head = 冻结在 messages[0] 的字节，永不改写；last_snapshot = 最近追加快照）
+- `request_builder.rs`：`apply_in_history_system_placement`（api_backend ==
+  Messages 代码级拒绝——折叠转换层语义不符，dsh-port §3.2 放行矩阵）+
+  纯函数 `apply_in_history_placement`：变更时恢复冻结头 + 新快照追加历史尾，
+  此前追加的快照原位保留（wire 跨轮 append-only；中途踩过「base 单字段在
+  变更后更新导致 position 0 换字节」的设计错误，测试逼出后改为双字段）
+- `actor/mod.rs`：`UpdateSamplingConfig`（model switch）重置 wire 态
+  （新模型 = 新缓存命名空间）；compaction/replace_system_head 不重置
+  （派生逻辑自洽：前者整段重写本就断前缀，后者正是要保护的场景）
+
+### P2 append 模式裁剪（`xai-chat-state/src/actor/request_builder.rs`）
+- `prune_conversation_append`：标记文本 call-id 键控且**与裁剪类别无关**
+  （软裁→硬清深化时标记不变，杜绝中途改写 wire 字节）；标记集只增不减
+- `prune_items_for_turn_request` 分流 + `mutations.rs::prune_retained_conversation`
+  append 模式跳过（保留会话层必须留原字节，否则标记失去指向对象）
+- `updates.jsonl` 语义不动（两条路径均为 wire/派生层）
+
+### 文档
+- `xai-grok-pager/docs/user-guide/26-config-reference.md`：`model.<id>.
+  system_prompt_update` / `model.<id>.prune_mode` 两行
+
+验证：ctest 门控 chat-state lib **407/407**（新增 10 例：in-history 5 +
+append 5，含「三轮连续变更 wire 逐字节 append-only」「标记文本与类别无关」
+「turn-1 wire 是 turn-2 wire 的字节前缀」三个核心断言）；sampler **300/300**；
+sampling-types **314/314**；pager docs **19/19**（config reference 行格式门）；
+GATE_FORCE shell `config_model_override` **15/15**；shell `--all-targets`
+check 0 error。
+
+遗留：① limit-probe A/B 活体（触发点后首轮 cached_tokens/prompt_tokens，
+off ≈0 → on ≈ 稳态）随新客户端（用户 config 已可对
+`deepseek/deepseek-v4.1-flash-1017` 开两能力位实测）；② messages backend
+in-history 需先改折叠转换层再重 probe；③ compaction 后 in-history 基点
+未显式重置（派生逻辑自洽，活体观察）。

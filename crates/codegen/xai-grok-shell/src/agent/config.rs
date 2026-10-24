@@ -18,8 +18,8 @@ use xai_grok_sampler::{AuthScheme, SamplerConfig};
 use xai_grok_sampling_types::{
     CONTEXT_WINDOWS_META_KEY, CompactionAtTokens, CompactionsRemaining, ExperimentalSamplingOptions,
     MODEL_NOTICE_META_KEY,
-    ModelNotice, REASONING_EFFORT_META_KEY, REASONING_EFFORTS_META_KEY, ReasoningEffort,
-    ReasoningEffortOption, ReasoningSummary, context_windows_meta_value,
+    ModelNotice, PruneMode, REASONING_EFFORT_META_KEY, REASONING_EFFORTS_META_KEY, ReasoningEffort,
+    ReasoningEffortOption, ReasoningSummary, SystemPromptUpdate, context_windows_meta_value,
     reasoning_effort_meta_value, reasoning_efforts_meta_value,
 };
 use xai_grok_tools::types::compat::{CompatConfig, CompatConfigToml};
@@ -3546,6 +3546,8 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 stream_tool_calls: None,
                 reasoning_summary: None,
                 use_proxy: false,
+                system_prompt_update: SystemPromptUpdate::Off,
+                prune_mode: PruneMode::Rewrite,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
                 experimental: None,
                 // LOCAL (vision bridge): the built-in grok family defaults to
@@ -3694,6 +3696,19 @@ pub struct ModelEntryConfig {
     /// direct, even when a process proxy is configured.
     #[serde(default, skip_serializing_if = "is_false")]
     pub use_proxy: bool,
+    /// LOCAL(cache-port): dsh-style in-history system prompt placement for
+    /// mid-session prompt changes. Default `off` rewrites `messages[0]` in
+    /// place (historical behavior). Probe gate (dsh-port §3.2): pass through
+    /// the `chat_completions` / `responses` backends only — the messages
+    /// backend folds System items into the top-level `system` param.
+    #[serde(default, skip_serializing_if = "is_default_system_prompt_update")]
+    pub system_prompt_update: SystemPromptUpdate,
+    /// LOCAL(cache-port): tool-result pruning style. Default `rewrite` trims
+    /// old results in place; `append` keeps original bytes and appends stable
+    /// invalidation markers, preserving the prefix cache past the 50% context
+    /// line. Shares the `[compaction.pruning] enabled` gate.
+    #[serde(default, skip_serializing_if = "is_default_prune_mode")]
+    pub prune_mode: PruneMode,
     /// Per-model Layer-3 LazinessDetector configuration.
     /// Defaults to the all-disabled state via `#[serde(default)]`.
     #[serde(default, skip_serializing_if = "is_default_laziness_detector")]
@@ -3752,6 +3767,8 @@ impl Default for ModelEntryConfig {
             stream_tool_calls: None,
             reasoning_summary: None,
             use_proxy: false,
+            system_prompt_update: SystemPromptUpdate::Off,
+            prune_mode: PruneMode::Rewrite,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
             // LOCAL(experimental): 本地实验特性集合默认未设
             experimental: None,
@@ -3834,6 +3851,14 @@ pub struct ConfigModelOverride {
     /// LOCAL: per-model egress-proxy opt-in (`use_proxy = true` in `[model.<id>]`);
     /// `None` keeps the default direct connection.
     pub use_proxy: Option<bool>,
+    /// LOCAL(cache-port): in-history system prompt placement override;
+    /// `None` keeps the base entry's value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_prompt_update: Option<SystemPromptUpdate>,
+    /// LOCAL(cache-port): tool-result pruning style override;
+    /// `None` keeps the base entry's value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prune_mode: Option<PruneMode>,
     /// LOCAL (vision bridge): explicit image-input capability from
     /// `[model.<id>] accepts_images`; `None` inherits the base entry's
     /// concretized value (user-new models fall back to `false`).
@@ -3972,6 +3997,13 @@ impl ConfigModelOverride {
         if let Some(v) = self.use_proxy {
             entry.info.use_proxy = v;
         }
+        // LOCAL(cache-port): explicit user value wins; `None` inherits the base entry.
+        if self.system_prompt_update.is_some() {
+            entry.info.system_prompt_update = self.system_prompt_update.unwrap();
+        }
+        if self.prune_mode.is_some() {
+            entry.info.prune_mode = self.prune_mode.unwrap();
+        }
         // LOCAL (vision bridge): explicit user value wins; `None` inherits the
         // base entry (builtin/prefetched concretized, user-new fallback `false`).
         if self.accepts_images.is_some() {
@@ -4088,6 +4120,13 @@ pub struct ModelInfo {
     /// default (false) always goes direct. See [`ModelEntryConfig::use_proxy`].
     #[serde(default, skip_serializing_if = "is_false")]
     pub use_proxy: bool,
+    /// LOCAL(cache-port): dsh-style in-history system prompt placement.
+    /// See [`ModelEntryConfig::system_prompt_update`].
+    #[serde(default, skip_serializing_if = "is_default_system_prompt_update")]
+    pub system_prompt_update: SystemPromptUpdate,
+    /// LOCAL(cache-port): tool-result pruning style. See [`ModelEntryConfig::prune_mode`].
+    #[serde(default, skip_serializing_if = "is_default_prune_mode")]
+    pub prune_mode: PruneMode,
     /// Per-model Layer-3 LazinessDetector configuration. Defaults to the all-disabled state.
     /// The feature is per-model opt-in, with a second-step `max_nudges_per_session > 0` opt-in for actually injecting nudges.
     /// See [`LazinessDetectorPerModelConfig`].
@@ -4154,6 +4193,8 @@ impl ModelInfo {
             stream_tool_calls: None,
             reasoning_summary: None,
             use_proxy: false,
+            system_prompt_update: SystemPromptUpdate::Off,
+            prune_mode: PruneMode::Rewrite,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
             // LOCAL (vision bridge): unknown slugs are assumed text-only; the
             // user must declare `accepts_images = true` (or the catalog backfill
@@ -4204,6 +4245,8 @@ impl ModelInfo {
             stream_tool_calls: entry.stream_tool_calls,
             reasoning_summary: entry.reasoning_summary,
             use_proxy: entry.use_proxy,
+            system_prompt_update: entry.system_prompt_update,
+            prune_mode: entry.prune_mode,
             laziness_detector: entry.laziness_detector.clone(),
             accepts_images: entry.accepts_images,
         }
@@ -4353,6 +4396,12 @@ impl std::ops::Deref for ModelEntry {
 }
 fn is_false(v: &bool) -> bool {
     !v
+}
+fn is_default_system_prompt_update(v: &SystemPromptUpdate) -> bool {
+    *v == SystemPromptUpdate::Off
+}
+fn is_default_prune_mode(v: &PruneMode) -> bool {
+    *v == PruneMode::Rewrite
 }
 fn default_true() -> bool {
     true
@@ -4931,6 +4980,8 @@ pub(crate) fn resolve_aux_model_sampling_config(
                 stream_tool_calls: None,
                 reasoning_summary: None,
                 use_proxy: false,
+                system_prompt_update: SystemPromptUpdate::Off,
+                prune_mode: PruneMode::Rewrite,
                 laziness_detector: LazinessDetectorPerModelConfig::default(),
                 // LOCAL (vision bridge): internal xAI-bearer proxy entries are
                 // vision-capable plumbing (grok-4.6 lineage).
@@ -5082,6 +5133,8 @@ pub(crate) fn sampling_config_for_model(
         reasoning_summary: info.reasoning_summary,
         force_http1: false,
         use_proxy: info.use_proxy,
+        system_prompt_update: info.system_prompt_update,
+        prune_mode: info.prune_mode,
         max_retries: info.max_retries,
         rate_limit_retry_threshold: info.rate_limit_retry_threshold,
         stream_tool_calls: info.stream_tool_calls.unwrap_or(false),
@@ -5173,6 +5226,8 @@ fn resolve_hidden_default_web_search_sampling_config(
             stream_tool_calls: None,
             reasoning_summary: None,
             use_proxy: false,
+            system_prompt_update: SystemPromptUpdate::Off,
+            prune_mode: PruneMode::Rewrite,
             laziness_detector: LazinessDetectorPerModelConfig::default(),
             // LOCAL (vision bridge): synthetic catalog-entry twin; silent reads
             // as vision-capable (unchanged historical behavior).

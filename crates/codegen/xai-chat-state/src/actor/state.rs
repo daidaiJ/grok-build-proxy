@@ -180,6 +180,22 @@ pub(crate) struct ChatState {
     /// Uploaded as sibling `turn_{N}` artifacts so orchestrators can discover harness subagents.
     /// Drained by `TakeHarnessTraceTurns` at the end of the user-facing turn.
     pub(super) harness_trace_turns: Vec<Vec<ConversationItem>>,
+    /// LOCAL(cache-port): in-history system placement wire state under
+    /// `system_prompt_update = in-history`. Wire-layer derived state — never
+    /// journaled. `None` freezes the next build's head; reset on compaction
+    /// reseed and model switch (both rewrite the cached namespace).
+    pub(super) in_history_wire: Option<InHistoryWireState>,
+}
+
+/// LOCAL(cache-port): the two wire coordinates in-history placement must keep
+/// apart. `head` is the system prompt frozen at `messages[0]` — byte-stable
+/// for the whole namespace so the cached prefix never breaks at position 0.
+/// `last_snapshot` is the latest appended snapshot; a build appends only when
+/// the journal system diverges from it, so previously appended snapshots stay
+/// in place (append-only history).
+pub(super) struct InHistoryWireState {
+    pub head: std::sync::Arc<str>,
+    pub last_snapshot: std::sync::Arc<str>,
 }
 
 /// Tracks which conversation items belong to the current turn without cloning each push.
@@ -238,6 +254,7 @@ impl ChatState {
             last_echoed_model: None,
             turn_capture: None,
             harness_trace_buffer: Vec::new(),
+            in_history_wire: None,
             harness_trace_turns: Vec::new(),
         }
     }

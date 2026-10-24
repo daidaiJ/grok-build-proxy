@@ -84,6 +84,15 @@ pub struct SamplerConfig {
     /// (`[network]` / `GROK_PROXY`); default false goes direct.
     #[serde(default)]
     pub use_proxy: bool,
+    /// LOCAL(cache-port): pass-through request-assembly capabilities for the
+    /// chat-state actor (in-history system placement / append-mode pruning).
+    /// The sampler itself never reads these; they ride the config so spawn,
+    /// model switch and subagent paths can copy them into the chat-state
+    /// `SamplingConfig`.
+    #[serde(default)]
+    pub system_prompt_update: xai_grok_sampling_types::SystemPromptUpdate,
+    #[serde(default)]
+    pub prune_mode: xai_grok_sampling_types::PruneMode,
 
     // Reasoning effort
     pub reasoning_effort: Option<ReasoningEffort>,
@@ -159,6 +168,8 @@ impl Default for SamplerConfig {
             idle_timeout_secs: None,
             experimental: xai_grok_sampling_types::ExperimentalSamplingOptions::default(),
             use_proxy: false,
+            system_prompt_update: xai_grok_sampling_types::SystemPromptUpdate::Off,
+            prune_mode: xai_grok_sampling_types::PruneMode::Rewrite,
             reasoning_effort: None,
             reasoning_summary: None,
             origin_client: None,

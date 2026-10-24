@@ -339,6 +339,13 @@ impl ChatStateActor {
         if !self.pruning_config.enabled {
             return 0;
         }
+        // LOCAL(cache-port): under `prune_mode = "append"` the retained
+        // conversation must keep original tool-result bytes — the request-layer
+        // markers reference them, so any in-place clear here would defeat the
+        // mode (and `updates.jsonl` semantics stay untouched either way).
+        if self.state.sampling_config.prune_mode == xai_grok_sampling_types::PruneMode::Append {
+            return 0;
+        }
         // Fast exit: not enough turns have elapsed for any hard-clear to apply.
         if self.state.prompt_index < self.pruning_config.hard_clear_age_turns {
             return 0;
