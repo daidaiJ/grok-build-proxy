@@ -395,6 +395,49 @@ pub(crate) fn test_app_with_agent() -> AppView {
     );
     app
 }
+/// LOCAL: /stats 面板算原生选择面——面板打开期间 [`AppView::sync_native_selection_mouse`]
+/// 据此释放鼠标捕获，终端才能接管拖选（谓词纯查状态、无转义副作用，转义舞步随活体验证）。
+#[test]
+fn stats_modal_counts_as_native_select_surface() {
+    let mut app = test_app_with_agent();
+    let ActiveView::Agent(id) = app.active_view else {
+        panic!("test_app_with_agent must focus an agent tab");
+    };
+    assert!(!app.stats_modal_open(), "无模态时不是原生选择面");
+    let Some(agent) = app.agents.get_mut(&id) else {
+        panic!("agent tab missing");
+    };
+    agent.active_modal = Some(crate::views::modal::ActiveModal::StatsInfo {
+        state: Box::new(crate::views::stats_modal::StatsModalState::new(
+            xai_grok_tools::model_usage_ledger::Window::FiveHours,
+            Vec::new(),
+        )),
+    });
+    assert!(
+        app.stats_modal_open(),
+        "stats 面板打开期间必须算原生选择面"
+    );
+    let Some(agent) = app.agents.get_mut(&id) else {
+        panic!("agent tab missing");
+    };
+    agent.active_modal = None;
+    assert!(!app.stats_modal_open(), "面板关闭后不再是原生选择面");
+    // dashboard 视角看不见 agent 的 stats 面板，不该触发释放
+    app.active_view = ActiveView::AgentDashboard;
+    let Some(agent) = app.agents.get_mut(&id) else {
+        panic!("agent tab missing");
+    };
+    agent.active_modal = Some(crate::views::modal::ActiveModal::StatsInfo {
+        state: Box::new(crate::views::stats_modal::StatsModalState::new(
+            xai_grok_tools::model_usage_ledger::Window::FiveHours,
+            Vec::new(),
+        )),
+    });
+    assert!(
+        !app.stats_modal_open(),
+        "非 agent 视角下 active_agent 为 None，谓词必须闭口"
+    );
+}
 #[test]
 fn dashboard_x11_primary_provenance_bypasses_unrelated_clipboard_image() {
     const PRIMARY: &str = "PRIMARY selection text";

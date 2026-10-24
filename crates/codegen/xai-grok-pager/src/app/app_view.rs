@@ -1836,6 +1836,18 @@ impl AppView {
             ActiveView::Welcome | ActiveView::AgentDashboard => None,
         }
     }
+    /// LOCAL: /stats 面板是原生选择面（auth 原始 URL 面板的同一机制）：面板里的
+    /// 用量数字是用户要摘录的内容，打开期间释放鼠标捕获、让终端自己接管拖选复制。
+    /// 代价是这期间滚轮滚动/标签点击让位给终端，键盘（Tab/1-4/hl/jk/a/y/Esc）
+    /// 仍覆盖全部操作。
+    fn stats_modal_open(&self) -> bool {
+        self.active_agent().is_some_and(|agent| {
+            matches!(
+                agent.active_modal,
+                Some(crate::views::modal::ActiveModal::StatsInfo { .. })
+            )
+        })
+    }
     /// Unused optimistic session kept behind Welcome. Not the session the user left.
     pub fn home_session(&self) -> Option<&AgentView> {
         self.home_session_agent.and_then(|id| self.agents.get(&id))
@@ -4264,9 +4276,10 @@ impl AppView {
         if self.screen_mode.is_minimal() {
             return;
         }
-        let want_off = self.auth_show_raw_url
+        let want_off = (self.auth_show_raw_url
             && matches!(self.active_view, ActiveView::Welcome)
-            && matches!(self.auth_state, AuthState::Authenticating { .. });
+            && matches!(self.auth_state, AuthState::Authenticating { .. }))
+            || self.stats_modal_open();
         let capture_on = super::MOUSE_CAPTURE_ENABLED.load(std::sync::atomic::Ordering::Acquire);
         if want_off && capture_on {
             self.native_select_hold = true;
