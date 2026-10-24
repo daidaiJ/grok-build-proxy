@@ -974,3 +974,23 @@
 - **遗留**：P0–P5 全部未开工（设计定稿）；D1–D7 待拍板（均给默认倾向，
   可默认执行）；fork 侧 lsp crate 现状锚点已复核（`LspOperation` 仍 6 op、
   `read_diagnostics` 就绪、pull.rs 已存在）。
+
+### 2026-10-24 LSP P1 诊断按需 op + P0 描述路由指南（feat/local-lsp-diagnostics-op）
+
+- **内容**：enhancement-final-design.md 定稿首期施工。T1 两 op
+  （`diagnostics`/`workspaceDiagnostics`）直读 per-server store：单文件
+  带版本感知 settle（fresh 1s / stale 300ms / pull 2s，超时尾注重查）+
+  pull-only 分流（Roslyn 类 server 主动 will_answer 一次）；workspace
+  聚合 tracked-only + limit 100 截断 + 诚实边界注。P0 = 工具描述路由段
+  （grep-vs-LSP 分工 / navigate-then-edit / 改完当回合自验）。P5 搭车 =
+  builtin 五语言检测 + PATHEXT 语义回归用例。
+- **附带收获**：lsp 套件首次本机跑（crate 从未进 win-whitelist），44 挂
+  分族收口——mock 脚本 Windows 文本模式 stdout（`\r\r\n` 帧头）、pull
+  mock 盘符路径 marker 错位、**restart.rs replay_tracked_documents 的
+  `file://` 剥离真 product bug**（Windows 上 server 重启后 tracked docs
+  全部静默丢弃）。前两族修 mock，第三族修产品（Url::to_file_path）。
+- **验证**：GATE_FORCE `ctest.sh -p xai-grok-tools --lib lsp::` 119/119；
+  cargo check 0 error；i18n 扫描 exit 0。watched_files out-of-workspace
+  glob 的 Windows 误命中登记 win-skip 族AA（挂触发，未修）。
+- **遗留**：真实 server 手验随发版活体；P0 描述层实测后定 hook 执法层
+  （D7）；落点清单在 PATCHES 五十六期（上游同步重放用）。

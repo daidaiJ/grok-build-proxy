@@ -46,6 +46,11 @@
 
 ## 2. T1：诊断按需拉取 op
 
+> **已落地（2026-10-24，PATCHES 五十六期，含定稿 §3.2 两补丁）**。
+> 实现偏差：pull 分流走 `will_answer`（非裸 `request`，confirm 逻辑复用）；
+> settle 预算分档 fresh 1s / stale 300ms / pull 2s；workspace 聚合附诚实
+> 边界注 + pull-only server 指引。详见 PATCHES 五十六期。
+
 ### 改动点
 
 1. `types.rs`：`LspOperation` 增 `Diagnostics`、`WorkspaceDiagnostics`；`LspToolInput`

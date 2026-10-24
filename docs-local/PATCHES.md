@@ -3582,3 +3582,73 @@ Windows zip sha256 `ecf3a3c7…` 与发布 `.sha256` 一致，本机已部署
 `grok 1.0.67 (8019d08fba1f)`（D:\tool-cli\grok2），回滚点
 `grok2.exe.1.0.66-6054081.bak`。待活体验证：第三方网关模型 subagent 再次派发
 时收到终态引导并正常收尾（不再 `Tool not found` 重试打转）。
+
+## 五十六期：LSP 诊断按需 op（`diagnostics`/`workspaceDiagnostics`）+ 描述路由指南 + Windows 环境修复（2026-10-24，分支 feat/local-lsp-diagnostics-op）
+
+> [`docs-local/lsp-port/enhancement-final-design.md`](lsp-port/enhancement-final-design.md)
+> 定稿的首期施工：P1（T1）+ P0（随 T1 搭车）+ P5 之 Windows 检测回归用例
+> （随 P1 搭车）。T1 原案（improvements-todo §2）之上按定稿 §3.2 加两点
+> 设计补丁（pull-only 分流 / settle）。D3（limit 缺省 100）按默认执行。
+
+1. **types.rs**：`LspOperation` 增 `Diagnostics`/`WorkspaceDiagnostics`
+   （serde camelCase 序列化名 `diagnostics`/`workspaceDiagnostics`，加
+   `PartialEq`/`Eq`）；`LspToolInput` 增可选 `limit`（workspaceDiagnostics
+   截断，缺省 100 对齐 qwen）。
+2. **dispatch.rs（核心）**：两 op 不发 LSP 请求，直读 per-server
+   `DiagnosticsStore`。`Diagnostics` 单文件：auto-open → settle 等待 →
+   过滤 ERROR/WARNING → `error L{行}:{列}: {message} (source)` 行格式，
+   空结果按「已应答」/「未应答」分流（`clean (server=x)` vs
+   `no diagnostics reported yet`）。两点补丁：
+   - **settle（定稿 §3.2 补丁 2）**：版本感知等待——store 从未应答（首次
+     打开）等 1s（对齐 reminder 路径）、已有旧 verdict（近期被编辑）等
+     300ms、触发过 pull 等 2s（一次 pull 往返）；超时按现状返回并在尾注
+     「编辑后可能尚未稳定，请重查」。等待持 clone handle（store/documents/
+     pull 都是共享句柄），不占 manager 锁。
+   - **pull-only 分流（补丁 1）**：`!server_publishes() && pull.support()
+     == Asking`（即 pull.rs 既有 `worth_asking` 判定的外部复算）时
+     `will_answer` 主动问一次再等——push 型 server 读 store；Roslyn 类
+     只答不推的 server 不再从空 store 返回假 clean。实现走既有
+     `will_answer` 而非裸 `request`（同路径 + confirm 逻辑免费复用）。
+   `WorkspaceDiagnostics`：聚合全部 server 的 tracked 文档（不扫盘），
+   按 server 分块 + limit 截断尾注（`Showing N of M (limit L)`）+
+   诚实边界注（tracked-only，空结果不是全库无错）；从未应答的 pull-only
+   server 标注「用 diagnostics op 按文件查」。
+3. **grok_build/lsp/mod.rs（P0）**：description_template 增两 op 说明 +
+   grep-vs-LSP 路由段（精确文本/字面量/错误信息 → grep；引用/调用链/
+   影响面/大纲 → lsp）+ navigate-then-edit（导航后先读再改）+ 改完
+   接口当回合 `diagnostics` 自验。
+4. **builtin.rs（P5 搭车）**：五语言 PATH 检测回归用例（rust-analyzer/
+   gopls/basedpyright 降级/jdtls/clangd 映射各一条）+ Windows PATHEXT
+   语义用例（`gopls.exe` 命中、无扩展名文件不命中；返回路径带 PATHEXT
+   大小写，断言 eq_ignore_ascii_case）。
+5. **manager.rs**：测试分派 `dispatch_tool_typed` 增两 op 臂（复用同一
+   store 读取函数，生产/测试路径不分叉）。
+
+**Windows 环境修复（附带收获，lsp 套件本机 44 挂 → 0 挂）**：crate 此前
+不在 win-whitelist，lsp 套件从未在本机跑过，本轮 GATE_FORCE 首跑 44 挂
+分族后修掉三族——
+- **mock server 五脚本 stdout 文本模式**：`\r\n` 被 Windows 翻译成
+  `\r\r\n`，LSP 帧头解析全坏（mock 从未在 Windows 工作过）；一律加
+  `sys.stdout.reconfigure(newline="\n")`。
+- **两个 pull mock 的 marker 写错位置**：`uri[len("file://"):]` 在
+  Windows 产出 `/D:/...`，`open` 落到当前盘 `\D:\` 目录；补盘符剥离。
+- **`restart.rs replay_tracked_documents` 真 product bug**：
+  `strip_prefix("file://")` 把 `file:///D:/...` 转成非法路径 `/D:/...`，
+  读文件失败 → server 崩溃重启后 tracked docs **全部静默丢弃**（Linux
+  CI 测不出）；改 `Url::parse + to_file_path` 平台映射。
+
+**验证**：`cargo check -p xai-grok-tools --all-targets` 0 error（9 条
+warning 均既有 grep/bash 测试文件旧 import）；GATE_FORCE
+`ctest.sh -p xai-grok-tools --lib lsp::` **119 passed / 0 failed**
+（2 ignored 既有；含新 8 例：两 op e2e ×4、序列化名 1、五语言检测 5、
+PATHEXT 1）；i18n 扫描 exit 0。`watched_files
+out_of_workspace_globs_never_match` 为既有 Windows 路径匹配问题
+（工作区外绝对 baseUri 的 glob 误命中工作区文件，产品影响小），登记
+win-skip 族AA 挂触发，不在本期修。
+
+**遗留**：① 真实 server 手验（rust-analyzer 开本仓库造错 → `lsp
+diagnostics` → 修复 → clean；多文件错误场景 `workspaceDiagnostics`）随
+发版活体；② P0 路由指南实测（模型是否仍绕过 LSP，决定 hook 执法层是否
+立项，D7）；③ 上游同步重放：`implementations/lsp/` 为 fork 重镇，本轮
+落点 types.rs / dispatch.rs / format.rs / manager.rs / restart.rs /
+builtin.rs / grok_build/lsp/mod.rs。

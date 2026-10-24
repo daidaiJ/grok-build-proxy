@@ -1,6 +1,8 @@
 # LSP 增强最终设计与交接（2026-10-24）
 
-> **状态：设计定稿、未开工。** 本文是 [`README.md`](README.md)（三家调研 + /lsp
+> **状态：P0 + P1 已落地（2026-10-24，分支
+> `feat/local-lsp-diagnostics-op`，PATCHES 五十六期）；P2–P5 未开工。**
+> 本文是 [`README.md`](README.md)（三家调研 + /lsp
 > v1–v2.2 施工）与 [`lsp-improvements-todo.md`](lsp-improvements-todo.md)
 > （T1/T2/T3 施工规划）之上的**最终整合**：补入社区口碑实现两轮检索
 > （Claude Code 原生 LSP / Serena / zircote-lsp-tools / aider）与
