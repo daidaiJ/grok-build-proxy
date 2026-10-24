@@ -360,13 +360,18 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   eager bootstrap 内存尾部、T2 call hierarchy / T3 rename。
   **2026-10-24 最终设计定稿（P0–P5 顺位与核心设计，见
   [`enhancement-final-design.md`](docs-local/lsp-port/enhancement-final-design.md)）：
-  **P0 描述路由指南 + P1 T1 诊断按需 op 已落地**（`feat/local-lsp-diagnostics-op`，
-  PATCHES 五十六期：`diagnostics`/`workspaceDiagnostics` 两 op 直读 store +
-  版本感知 settle + pull-only 分流；附带修复 restart.rs replay 的 Windows
-  `file://` 路径真 product bug——server 重启后 tracked docs 静默丢弃，
-  lsp 套件本机 44 挂 → 0 挂）；P2 懒启动 / P3 T2 / P4 T3 / P5 搭车件未开工。
-  遗留：真实 server 手验随发版活体；watched_files out-of-workspace glob 的
-  Windows 误命中（win-skip 族AA）挂触发。
+  **P0 描述路由指南 + P1 诊断按需 op + P2 懒启动 + P4 rename 写路径已落地**
+  （PATCHES 五十六/五十七/五十八期，三分支顺序叠放
+  `feat/local-lsp-diagnostics-op` → `feat/local-lsp-lazy-start` →
+  `feat/local-lsp-rename`，合并按此序；P1 附带修复 restart.rs replay 的
+  Windows `file://` 路径真 product bug + lsp 套件本机 44 挂 → 0 挂；
+  P2 = per-server 懒启动 + spawn 失败负缓存 + shell eager 参数；
+  P4 = 独立 `lsp_rename` 写工具 + WorkspaceEdit 原子预检）；**P3 call
+  hierarchy 经价值评估降级挂触发**（findReferences+grep 覆盖八成，等真实
+  信号），P5 维持挂触发。遗留：真实 server 手验（诊断主链路 / 懒启动面板 /
+  rename 全量改枚举名）随发版活体；rename 的 diff 面板接入留 v2；
+  watched_files out-of-workspace glob 的 Windows 误命中（win-skip 族AA）
+  挂触发。
 - **主题目录扩容（社区色板移植 + Codex 品牌主题 + Ayu，2026-10-13/14）** —
   从父目录 opencode 主题库移植 11 套社区好评主题（Catppuccin Mocha/Latte、
   Dracula、Gruvbox Dark、Nord、One Dark、Everforest、Kanagawa、Vesper、

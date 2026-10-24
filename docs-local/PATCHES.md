@@ -3652,3 +3652,73 @@ diagnostics` → 修复 → clean；多文件错误场景 `workspaceDiagnostics`
 立项，D7）；③ 上游同步重放：`implementations/lsp/` 为 fork 重镇，本轮
 落点 types.rs / dispatch.rs / format.rs / manager.rs / restart.rs /
 builtin.rs / grok_build/lsp/mod.rs。
+
+## 五十七期：LSP 懒启动——server 首次被触达才拉起 + spawn 失败负缓存（2026-10-24，分支 feat/local-lsp-lazy-start）
+
+> enhancement-final-design.md P2（§3.3），从「挂触发」上调的中价值项：lsp_tools
+> 默认开 + eager bootstrap 意味着每个会话 spawn 都付出全部检出 server 的启动
+> 代价（rust-analyzer 大项目 1–2GB 内存），哪怕全程没用过一次 LSP；D6 按默认
+> 倾向执行（缺省懒启动，显式启用走 eager）。
+
+1. **manager.rs**：`ensure_initialized` 拆出 `ensure_server_started(name)` 按
+   server 启动原语（返回是否需要崩溃监控）；eager 路径 = 逐 server 调它，
+   两路共用同一启动序列。
+2. **dispatch.rs**：`StartupCoordinator` 改 per-server 状态机（map 缺席 =
+   未启动）。文件级 op（位置 op / `diagnostics`）只拉起 owner server；
+   `workspaceSymbol` / `workspaceDiagnostics` 按需全拉（问的是全工作区）。
+   `notify_file_event` = 读写触发点：先入队再拉起（防启动任务的 drain 超前
+   消费）；owner 未就绪时事件进 pre-ready 队列，启动完成后按
+   owner+ownerless 回放（ownerless 的 watched-path 事件由首个启动的 server
+   消费，跨 server 时序以注释说明）。**负缓存**：spawn 失败记 60s TTL，期内
+   同语言访问不再重试（防每文件白探测）；status 聚合 Starting>Failed>Ready。
+3. **reminders/lsp_diagnostics.rs**：去掉无条件 `ensure_started_background()`
+   （eager 泄漏点）——每个 `notify_file_event` 自带懒拉起。
+4. **shell**：`build_lsp_backend(cwd, scope, eager)`——session spawn 传
+   `false`（懒启动缺省路径），`x.ai/lspApply` 热加载传 `true`（/lsp 面板 e 键
+   显式启用 = 跳过懒启动立即拉起，保留用户强制语义）；`/lsp status` 兼容：
+   未拉起 server 不在 running_servers 出现，按配置清单显示为未运行。
+
+验证：GATE_FORCE `ctest.sh -p xai-grok-tools --lib lsp::` **122/122**（新 3 例：
+懒启动只拉 owner 且坏 server 不被拖累 / 编辑触发启动且回放首个变更 /
+负缓存命中 + 健康 server 不受累）；`cargo check tools+shell --all-targets`
+0 error。
+
+遗留：真实会话活体（懒启动下 /lsp status 面板、首触达延迟、内存曲线）随
+发版。
+
+## 五十八期：LSP rename 写路径——独立 `lsp_rename` 工具（2026-10-24，分支 feat/local-lsp-rename）
+
+> enhancement-final-design.md P4（§3.4）。D1（独立工具）与 D2（先全量读内存
+> 再统一写、失败列已写）按默认倾向执行。
+
+1. **implementations/lsp/rename.rs（新，纯函数层）**：`WorkspaceEdit` 扁平化
+   （`documentChanges` 优先于 `changes`；`documentChanges` 内的文件资源操作
+   create/rename/delete **拒绝执行**——符号 rename 不得带文件增删副作用）+
+   `apply_text_edits`（LSP UTF-16 位置→字节偏移、文档序排序校验、越界/重叠
+   即整批拒绝、自尾向前应用——qwen 教训：陈旧偏移绝不冒充成功）。
+2. **`LspBackend::rename`（trait，默认 Err——测试替身免改）**：adapter 实现 =
+   owner server 解析 + ensure_ready（与懒启动联动）+ socket_for_file 自动
+   didOpen + `timed_request(textDocument/rename)` + **原子预检**：全部受影响
+   文件读入内存、edits 全部成型后才返回给工具层，一个坏偏移整批拒绝。
+3. **`grok_build/lsp_rename`（新工具，D1 独立写工具）**：`is_read_only: false`
+   + `ToolScope::Write`，六导航 op 的免审批面零变化；落盘走 `FileSystem`
+   资源（与 search_replace 同写语义）；写阶段失败按 D2 报错并列出已写文件
+   （不回滚）；写后逐文件 `notify_file_event` 喂回 LSP（诊断回喂不漏）；
+   new_name 非空/无空白/无路径分隔符校验。
+4. **接线**：`ToolInput` 增 `LspRename` 变体（derive_more From 自动）+ registry
+   `register::<LspRenameTool>()` + normalization 兜底臂。
+
+**实现偏差（记录）**：设计要求「落盘走既有编辑工具事件链」（zcode 教训）——
+本实现为诊断回喂等价直连（工具内 notify_file_event），未走 `ToolOutput` 事件
+变体（避免动跨 crate 的 `ToolOutput` 枚举面）；reminder 的 drain 对 rename
+结果与编辑同路径可见。代价：diff 面板/acp tracker 不展示 rename 改动（输出为
+文本摘要），接入留 v2。
+
+验证：GATE_FORCE `ctest.sh -p xai-grok-tools --lib lsp::` **130/130**（新 10
+例：rename.rs 纯函数 6 + mock rename server e2e 2〔双文件 edits 全返回 /
+STALE 陈旧偏移拒批〕+ 工具形态 2）；`cargo check tools+shell --all-targets`
+0 error。
+
+遗留：① rust-analyzer 真机手验（本仓库改 `LspOperation` 枚举变体名跑全量
+rename）随发版活体；② 非 YOLO 模式的审批面（多文件改动的授权按工具调用整体
+呈现，未见 sibiling 文件逐个审批——需活体确认体验）；③ diff 面板接入。

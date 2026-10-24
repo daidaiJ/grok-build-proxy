@@ -1,7 +1,9 @@
 # LSP 增强最终设计与交接（2026-10-24）
 
-> **状态：P0 + P1 已落地（2026-10-24，分支
-> `feat/local-lsp-diagnostics-op`，PATCHES 五十六期）；P2–P5 未开工。**
+> **状态：P0/P1/P2/P4 已落地（2026-10-24，PATCHES 五十六/五十七/五十八期；
+> 分支 `feat/local-lsp-diagnostics-op` → `feat/local-lsp-lazy-start` →
+> `feat/local-lsp-rename` 顺序叠放，合并按此序）；P3 降级挂触发（价值评估：
+> findReferences+grep 覆盖八成场景，等真实信号）；P5 维持挂触发。**
 > 本文是 [`README.md`](README.md)（三家调研 + /lsp
 > v1–v2.2 施工）与 [`lsp-improvements-todo.md`](lsp-improvements-todo.md)
 > （T1/T2/T3 施工规划）之上的**最终整合**：补入社区口碑实现两轮检索

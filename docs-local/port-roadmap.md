@@ -994,3 +994,21 @@
   glob 的 Windows 误命中登记 win-skip 族AA（挂触发，未修）。
 - **遗留**：真实 server 手验随发版活体；P0 描述层实测后定 hook 执法层
   （D7）；落点清单在 PATCHES 五十六期（上游同步重放用）。
+
+### 2026-10-24 LSP P2 懒启动 + P4 rename 写路径（feat/local-lsp-lazy-start → feat/local-lsp-rename）
+
+- **内容**：enhancement-final-design.md 中高价值两项按评估顺位落地。P2 =
+  per-server 懒启动（manager 拆 ensure_server_started 原语 / adapter per-server
+  状态机 + 60s spawn 失败负缓存 / notify_file_event 读写触发 / reminders 去
+  eager / shell build_lsp_backend 增 eager 参数：spawn false、lspApply true）。
+  P4 = 独立 `lsp_rename` 写工具（WorkspaceEdit 两形态解析 + 文件操作拒执行 +
+  UTF-16 偏移应用器越界/重叠整批拒 + 原子预检 + D2 失败列已写 + 写后
+  notify_file_event 保诊断回喂）。
+- **验证**：GATE_FORCE lsp:: 122/122 → 130/130（两期共 +11 用例）；tools+shell
+  check 0 error。
+- **顺位裁定记录**：P3 call hierarchy 经价值评估降级挂触发（findReferences +
+  grep 覆盖八成场景，等「findReferences 不够用」的真实信号再立项）；P5 两件
+  （符号体一步取 / hook 执法层）维持挂触发（后者等 P0 描述层实测，D7）。
+- **遗留**：真实 server 手验（懒启动面板 + rename 全量改 `LspOperation` 变体
+  名）随发版活体；rename 的 diff 面板接入与审批活体留 v2/活体；落点清单见
+  PATCHES 五十七/五十八期（上游同步重放用）。
