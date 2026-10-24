@@ -1051,7 +1051,7 @@
   （`e86015c`）随 tag **`v1.0.69`** 发版——release run `40101135537` 双 job
   success、4 资产非草稿，sha256 `094aede4…` 一致，本机部署
   `grok 1.0.69 (e86015c19194)`（回滚点 `grok2.exe.1.0.68-9987be0.bak`）。
-  main build run `40101077754` 同 flake 当日第 3 次挂（重跑中）——**立案线已到**。
+  main build run `40101077754` 同 flake 当日第 3 次挂（重跑绿）——**立案线已到**。
 - **遗留**：limit-probe A/B 活体（触发点后首轮 cached_tokens 比对）随新客户端；
   messages backend in-history 需先改折叠转换层；P3 sidecar 串行化 + 归因头
   probe 视批次余量。

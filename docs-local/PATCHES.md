@@ -3797,5 +3797,5 @@ success）合 main（merge `e86015c`），随 tag **`v1.0.69`** 发版（2026-10
 release run `40101135537` 双 job success、4 资产非草稿；Windows zip sha256
 `094aede4…` 核对一致，发行产物 `grok 1.0.69 (e86015c19194)`，本机已部署
 （D:\tool-cli\grok2，回滚点 `grok2.exe.1.0.68-9987be0.bak`）。main build
-run `40101077754` 同 flake 再挂（当日第 3 次），重跑中——**该 flake 复发
+run `40101077754` 同 flake 再挂（当日第 3 次），重跑绿——**该 flake 复发
 频率已到立案线，建议单独立项修 persistence 计时用例**。
