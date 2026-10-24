@@ -3799,3 +3799,52 @@ release run `40101135537` 双 job success、4 资产非草稿；Windows zip sha2
 （D:\tool-cli\grok2，回滚点 `grok2.exe.1.0.68-9987be0.bak`）。main build
 run `40101077754` 同 flake 再挂（当日第 3 次），重跑绿——**该 flake 复发
 频率已到立案线，建议单独立项修 persistence 计时用例**。
+
+## 六十期：persistence 计时 flake 根治——in-flight 标题用例去竞态化（2026-10-25，分支 fix/local-persistence-title-inflight-flake）
+
+> 背景：`session::persistence::durable_update_tests::
+> reset_title_to_auto_adopts_in_flight_generation_as_auto` 计时 flake 当日
+> CI 三挂（PR #4 run `40097306847` / main run `40101077754` / 另见 v1.0.48、
+> v1.0.58 轮次重跑记录），到立案线单独立项。**根因不是慢，是顺序不确定**——
+> 测试设计缺陷，非产品 bug。
+
+### 根因链（全部锚点核实）
+
+- `persistence_tests.rs` 的 `test_actor_inner` 用 `SamplerConfig::default()`
+  （`base_url` 空串、无 key）装配 `SummaryGenerator`；后台任务 T 的
+  `conversation_collect` 在请求构造阶段即刻报错 → **T 首个 poll 内（微秒级）**
+  落回 `title_fallback_from_user_text` 并把 `GeneratedTitle` 塞回 FIFO 通道
+  （`session/summary.rs:79`）——「生成中」窗口实际只有微秒
+- 测试随后 `storage.reset_title_to_auto(&info).await` 直接落盘 unpin，该写走
+  `apply_summary_patch_reporting` → `tokio::task::spawn_blocking`
+  （`storage/jsonl/mod.rs:1143`，真实 yield 点）；T 的 `GeneratedTitle` 处理
+  （`set_generated_title_if_absent`）同样 spawn_blocking 抢同一把 summary
+  sidecar 锁——两个阻塞闭包谁先拿锁取决于线程池调度，CI 满载时翻车
+- 竞输形态：`if_absent` 先拿锁看到 MANUAL → `Ok(false)` 合法跳过（永不复用）；
+  随后 unpin 刷空盘面；generator 已被 `ResetTitleToAuto` 置回 Idle 但再无
+  chunk → 盘上标题永远空白 → 8s 轮询超时 panic（原 2091 行）
+
+### 修法（纯测试面，零产品改动，`persistence_tests.rs` 单文件）
+
+- unpin 落盘 + `flush_ack` 屏障之后**显式补发一条** `GeneratedTitle(expected)`
+  （FIFO 保证严格后于 reset 处理）；两种调度结局收敛为同一确定值——后台 T
+  的消息与显式消息都由 `title_fallback_from_user_text(CHUNK)` 求值，字符串
+  相同，恰好一条被 `if_absent` 采纳、一条被跳过
+- 删掉 8s 轮询循环，改为 `GeneratedTitle` + `flush_ack` 屏障后**单次读盘**
+  `assert_eq!(display_title(), expected)`（比原断言更强：原只查非空 + 非
+  MANUAL）
+- 同文件排查结论：1887 行远端同步用例传 `mark_summary_done: true`（Done 态
+  不 spawn，无竞态）；`non_resident_reset_then_load_regenerates` 在 reset
+  落盘确认后才 spawn——**仅此一例有顺序竞态**
+
+### 同步重放点（上游同步后必查）
+
+`persistence_tests.rs` 是 `Synced from monorepo` 同步文件：上游若改动该用例
+（或重排其消息序列），以本条为准重放「屏障后显式补发 + 单次读盘」结构；
+核心不变量 = 不依赖 spawn_blocking 线程调度顺序。
+
+验证：GATE_FORCE 门控 Windows 本机单测 ok（1.18s）；连跑 15 次全绿
+（0.28–0.57s）；`title` 族批量过滤 93/94——唯一挂为族AB 环境族
+（acp_session_tests support.rs /tmp 夹具 NotAbsolute，同族N/S/V/W 根因，
+已登记 win-skip，与本次改动无关）；shell `--all-targets` check 0 error。
+Linux CI 全量 shell 套件随 PR build 验证。
