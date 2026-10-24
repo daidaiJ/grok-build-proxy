@@ -421,6 +421,27 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### 嵌套派发深度剥离 task 调用改终态引导 — 已合 main，随 v1.0.67 发版（2026-10-24）
+
+- **当前状态：** 子 agent 深度达限后 task 工具被剥离，但其再派发调用原先落
+  通用 `Tool not found: task` 裸错误——第三方网关弱模型（现场：grok 4.6 派发
+  gpt-6-luna subagent，该 subagent 又尝试派发）拿不到原因就反复重试，subagent
+  回合打转、主会话前台跟随冻结（感知卡死）。修复：`registry/types.rs` 的
+  `call_streaming_with_context` 失败臂拦截——task 调用 + `SubagentDepthCounter >=
+  MaxSubagentDepth`（与 `apply_child_tool_policy` 剥离条件同构）时返回终态引导
+  （不重试，自己继续并汇报）；Task 工具自身深度超限错误追加同样文案。成功
+  派发路径零开销。merge `8019d08`，tag `v1.0.67`。
+- **验证：** `cargo check -p xai-grok-tools --all-targets` 0 error；新增 3 例
+  （深度剥离命中引导 / 根会话保持 not-found / 非任务名不受影响）+ 既有
+  `depth_limit_exceeded` 回归全绿。CI build `40041666526` / release
+  `40041666192` 双 job success、4 资产非草稿；Windows zip sha256 `ecf3a3c7…`
+  核对一致，本机部署 `grok 1.0.67 (8019d08fba1f)`，回滚点
+  `grok2.exe.1.0.66-6054081.bak`。
+- **遗留：** ① 活体验证：第三方网关模型 subagent 再派发时收到引导并正常收尾；
+  ② 若现场另有叠加因素（如 600s 前台等待感知），修复后复现一次即可分辨
+  （qtrace 取证路径见 PATCHES 五十五期上游同步重放点）。
+- **详情指针：** PATCHES.md 五十五期。
+
 ### LLM API 异常响应落盘（`[api_dump]`）+ 压缩传输重试对齐 — 已合 main，随 v1.0.66 发版（2026-10-22）
 
 - **当前状态：** 非 429 采样失败按日期写 `$GROK_HOME/dump/<date>/`（一失败一 JSON，

@@ -3575,3 +3575,10 @@ release 页 4 资产非草稿；Windows zip sha256 `cda253a9…` 与本机下载
 既有测试模块旧 import）；新 3 例 + 既有深度限制用例 GATE_FORCE 定向跑全绿。
 两处落点均在上游同步面（registry/types.rs、task/mod.rs 曾被 `Synced from monorepo`
 覆盖），下次上游同步需按本节重放。
+
+**发版（2026-10-24）**：合 main merge `8019d08`，tag **`v1.0.67`**；build run
+`40041666526` / release run `40041666192` 双 job success，release 页 4 资产非草稿；
+Windows zip sha256 `ecf3a3c7…` 与发布 `.sha256` 一致，本机已部署
+`grok 1.0.67 (8019d08fba1f)`（D:\tool-cli\grok2），回滚点
+`grok2.exe.1.0.66-6054081.bak`。待活体验证：第三方网关模型 subagent 再次派发
+时收到终态引导并正常收尾（不再 `Tool not found` 重试打转）。
