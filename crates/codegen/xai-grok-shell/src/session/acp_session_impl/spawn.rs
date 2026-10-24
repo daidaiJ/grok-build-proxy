@@ -618,6 +618,8 @@ pub(crate) async fn spawn_session_actor(
         reasoning_summary: sampling_config.reasoning_summary,
         stream_tool_calls: Some(sampling_config.stream_tool_calls),
         use_proxy: sampling_config.use_proxy,
+        system_prompt_update: sampling_config.system_prompt_update,
+        prune_mode: sampling_config.prune_mode,
     };
     let actor_pruning_config = xai_chat_state::PruningConfig {
         enabled: session_pruning_config.enabled,

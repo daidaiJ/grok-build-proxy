@@ -769,6 +769,8 @@ impl SessionActor {
                                 reasoning_summary: None,
                 stream_tool_calls: None,
                 use_proxy: false,
+                system_prompt_update: xai_grok_sampling_types::SystemPromptUpdate::Off,
+                prune_mode: xai_grok_sampling_types::PruneMode::Rewrite,
             });
         let creds = self.chat_state_handle.get_credentials().await;
         let model_facts = self.model_auth_facts(cfg.model.as_str());
@@ -860,6 +862,8 @@ impl SessionActor {
             reasoning_summary: cfg.reasoning_summary,
             force_http1: false,
             use_proxy: cfg.use_proxy,
+            system_prompt_update: cfg.system_prompt_update,
+            prune_mode: cfg.prune_mode,
             max_retries: cfg.max_retries.or(Some(self.max_retries)),
             rate_limit_retry_threshold: cfg.rate_limit_retry_threshold,
             stream_tool_calls: cfg.stream_tool_calls.unwrap_or(false),

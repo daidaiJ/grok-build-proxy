@@ -229,6 +229,11 @@ impl ChatStateActor {
                 self.increment_prompt_index();
             }
             ChatStateCommand::UpdateSamplingConfig { config } => {
+                // LOCAL(cache-port): model switches open a fresh cache
+                // namespace — drop the in-history wire state so the next build
+                // freezes the current head instead of restoring the old
+                // model-era prompt.
+                self.state.in_history_wire = None;
                 self.state.sampling_config = *config;
             }
             ChatStateCommand::RecordAgentEditedPath { path } => {

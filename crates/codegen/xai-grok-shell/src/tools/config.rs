@@ -223,6 +223,8 @@ impl ShellToolsetConfig {
             reasoning_summary: None,
             force_http1: false,
             use_proxy: false,
+            system_prompt_update: xai_grok_sampling_types::SystemPromptUpdate::Off,
+            prune_mode: xai_grok_sampling_types::PruneMode::Rewrite,
             max_retries: None,
             rate_limit_retry_threshold: None,
             stream_tool_calls: false,

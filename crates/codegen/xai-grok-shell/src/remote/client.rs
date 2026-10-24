@@ -822,6 +822,10 @@ pub(crate) fn parse_remote_model_value(
         // LOCAL: remote catalogs cannot grant the egress proxy; only local
         // config.toml `[model.<id>] use_proxy = true` opts a model in.
         use_proxy: false,
+        // LOCAL(cache-port): remote catalog carries no cache-assembly
+        // capabilities; user config overrides still win via ConfigModelOverride.
+        system_prompt_update: xai_grok_sampling_types::SystemPromptUpdate::Off,
+        prune_mode: xai_grok_sampling_types::PruneMode::Rewrite,
         laziness_detector: get_object(obj, "lazinessDetector")
             .or_else(|| get_object(obj, "laziness_detector"))
             .or_else(|| meta.and_then(|m| get_object(m, "lazinessDetector")))

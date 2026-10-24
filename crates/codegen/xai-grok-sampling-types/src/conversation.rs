@@ -170,6 +170,10 @@ pub enum SyntheticReason {
     /// The goal rules and tracking policy that accompany a `/goal` objective.
     /// Reserved ahead of its producer; today rules and objective share one untagged `Human` item.
     GoalSetup,
+    /// LOCAL(cache-port): dsh-style in-history system prompt snapshot appended
+    /// after the history tail under `system_prompt_update = in-history`.
+    /// Wire-layer only — never journaled.
+    InHistoryUpdate,
     /// Catch-all for unknown/future variants.
     #[serde(other)]
     Unknown,
@@ -216,7 +220,8 @@ impl SyntheticReason {
             | Self::Interjection
             | Self::GoalSummary
             | Self::StopHookFeedback
-            | Self::WorkingDirectorySwitch => false,
+            | Self::WorkingDirectorySwitch
+            | Self::InHistoryUpdate => false,
         }
     }
 }

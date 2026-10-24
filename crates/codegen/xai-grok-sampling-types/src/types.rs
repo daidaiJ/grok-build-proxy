@@ -1267,6 +1267,49 @@ pub struct SamplingConfig {
     /// egress proxy (`[network]` / `GROK_PROXY`); default false goes direct.
     #[serde(default)]
     pub use_proxy: bool,
+    /// LOCAL(cache-port): dsh-style in-history system prompt updates. When
+    /// `InHistory`, a changed system prompt is appended after the history tail
+    /// (restoring the original head bytes) instead of rewriting `messages[0]`,
+    /// so the cached prefix survives the change. Gated per model because the
+    /// endpoint must honor the latest system message anywhere in the history;
+    /// probe matrix (dsh-port §3.2): chat_completions / responses pass,
+    /// messages backend rejected.
+    #[serde(default)]
+    pub system_prompt_update: SystemPromptUpdate,
+    /// LOCAL(cache-port): how tool-result pruning rewrites the request.
+    /// `Rewrite` (default) keeps today's in-place replacement; `Append` keeps
+    /// the original tool-result bytes and appends a stable invalidation marker
+    /// item after each pruned result, trading request size for a preserved
+    /// prefix-cache tail past the 50% context line.
+    #[serde(default)]
+    pub prune_mode: PruneMode,
+}
+
+/// LOCAL(cache-port): system prompt placement strategy for mid-session prompt
+/// changes. Default `Off` keeps the historical in-place `messages[0]` rewrite.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SystemPromptUpdate {
+    /// Rewrite `messages[0]` in place on change (historical behavior).
+    #[default]
+    Off,
+    /// Append the new snapshot after the history tail; endpoint reads the
+    /// latest system message as effective (dsh `systemPromptUpdate: 'in-history'`).
+    InHistory,
+}
+
+/// LOCAL(cache-port): tool-result pruning style. Default `Rewrite` matches the
+/// historical in-place trim/clear.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PruneMode {
+    /// Replace pruned tool results in place (head/tail trim, hard-clear placeholder).
+    #[default]
+    Rewrite,
+    /// Keep original tool-result bytes; append one stable invalidation marker
+    /// item after each pruned result. Markers never change once emitted, so
+    /// the wire prefix stays append-only across turns.
+    Append,
 }
 
 /// Experimental sampling features, all default-off. Each one changes visible
@@ -1309,6 +1352,9 @@ impl Default for SamplingConfig {
             experimental: ExperimentalSamplingOptions::default(),
             // LOCAL: 模型级代理开关，默认直连
             use_proxy: false,
+            // LOCAL(cache-port): 缓存友好装配选项，默认全关（历史行为）
+            system_prompt_update: SystemPromptUpdate::Off,
+            prune_mode: PruneMode::Rewrite,
         }
     }
 }
