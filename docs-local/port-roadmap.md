@@ -1012,3 +1012,18 @@
 - **遗留**：真实 server 手验（懒启动面板 + rename 全量改 `LspOperation` 变体
   名）随发版活体；rename 的 diff 面板接入与审批活体留 v2/活体；落点清单见
   PATCHES 五十七/五十八期（上游同步重放用）。
+
+### 2026-10-24 LSP 四项（P0/P1/P2/P4）合 main 随 v1.0.68 发版（交接卡收口）
+
+- **内容**：三分支顺序叠放（五十六→五十七→五十八期）按交接卡
+  `.handoff/lsp-enhancements.md` 收口——`feat/local-lsp-rename` tip `9987be0`
+  fast-forward 合 main（三分支线性，一次 ff 即按序含入），PR #3 作为发版前
+  Linux CI 验证面；tag `v1.0.68` 发版。
+- **CI 与发版**：PR build run `40080132346` 双 job success；main build run
+  `40081680780` / release run `40081685940` 双 job success、4 资产非草稿；
+  Windows zip sha256 `58b75c66…` 与 .sha256 文件一致，发行产物
+  `grok 1.0.68 (9987be08d72e)`；本机部署 D:\tool-cli\grok2，回滚点
+  `grok2.exe.1.0.67-8019d08.bak`。
+- **遗留（活体随新客户端）**：诊断主链路 / workspaceDiagnostics、懒启动
+  （spawn 不拉起 / 首触达拉起 / e 键 / 负缓存）、rename 全量改枚举名 +
+  审批面、restart 回放恢复（Windows）——清单见交接卡 §12；P3/P5 挂触发不变。

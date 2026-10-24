@@ -3722,3 +3722,14 @@ STALE 陈旧偏移拒批〕+ 工具形态 2）；`cargo check tools+shell --all-
 遗留：① rust-analyzer 真机手验（本仓库改 `LspOperation` 枚举变体名跑全量
 rename）随发版活体；② 非 YOLO 模式的审批面（多文件改动的授权按工具调用整体
 呈现，未见 sibiling 文件逐个审批——需活体确认体验）；③ diff 面板接入。
+
+**发版记录（五十六/五十七/五十八期合并收口）**：三分支顺序叠放
+（`feat/local-lsp-diagnostics-op` → `feat/local-lsp-lazy-start` →
+`feat/local-lsp-rename`）按序 fast-forward 合 main（main `9987be0`，PR #3
+为 CI 验证面），随 tag **`v1.0.68`** 发版（2026-10-24）：PR build run
+`40080132346` / main build run `40081680780` / release run `40081685940`
+双 job success、4 资产非草稿；Windows zip sha256 `58b75c66…` 核对一致，
+发行产物 `grok 1.0.68 (9987be08d72e)`，本机已部署（回滚点
+`grok2.exe.1.0.67-8019d08.bak`）。活体验证清单见
+`.handoff/lsp-enhancements.md` §12（诊断主链路 / 懒启动 / rename 全量改
+枚举名 / restart 回放）。

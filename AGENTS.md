@@ -433,18 +433,22 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### LSP 中高价值四项（P0/P1/P2/P4）— 施工完成，三分支待合 main 发版（2026-10-24）
+### LSP 中高价值四项（P0/P1/P2/P4）— 已合 main，随 v1.0.68 发版（2026-10-24）
 
 - **当前状态：** 设计定稿顺位里 P0 描述路由 / P1 诊断按需 op / P2 懒启动 /
   P4 `lsp_rename` 写工具全部落地，PATCHES 五十六/五十七/五十八期；三分支
   顺序叠放（`feat/local-lsp-diagnostics-op` → `feat/local-lsp-lazy-start` →
-  `feat/local-lsp-rename`），**合并必须按此序**；P3 降级挂触发、P5 维持挂触发。
+  `feat/local-lsp-rename`）已按序 fast-forward 合 main（main `9987be0`，PR #3
+  为 CI 验证面）随 tag **`v1.0.68`** 发版；P3 降级挂触发、P5 维持挂触发。
+- **CI 与发版：** PR build run `40080132346` 双 job success；main build run
+  `40081680780` / release run `40081685940` 双 job success、4 资产非草稿；
+  Windows zip sha256 `58b75c66…` 核对一致，发行产物报
+  `grok 1.0.68 (9987be08d72e)`；本机部署（D:\tool-cli\grok2），回滚点
+  `grok2.exe.1.0.67-8019d08.bak`。
 - **关键证据：** GATE_FORCE `lsp::` 130/130；tools+shell check 0 error；
   P1 附带修复 restart.rs Windows `file://` 真 bug（44 挂 → 0 挂）。
-- **验收标准：** 发版活体（诊断主链路 / 懒启动面板 / rename 全量改枚举名），
-  清单见 handoff §12。
 - **详情指针：** [`.handoff/lsp-enhancements.md`](.handoff/lsp-enhancements.md)
-- **未验证事项：**
+- **未验证事项（活体随新客户端）：**
   - [ ] 诊断主链路 + workspaceDiagnostics（rust-analyzer 实测）
   - [ ] 懒启动：spawn 不拉起 / 首触达拉起 / e 键立即拉起 / 负缓存
   - [ ] rename 全量改枚举名 + 审批面体验
