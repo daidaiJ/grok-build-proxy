@@ -466,7 +466,10 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   `deepseek/deepseek-v4.1-flash-1017` 加两行能力位，跑触发密集型长会话，
   对比触发点后首轮 cached_tokens（off ≈0 → on ≈ 稳态）。
 - **立案建议：** `reset_title_to_auto…` persistence 计时 flake 当日挂 3 次，
-  复发频率到立案线，建议单独立项修。
+  复发频率到立案线，**已单独立项根治（2026-10-24，六十期，分支
+  `fix/local-persistence-title-inflight-flake`）**：根因 = 用例依赖
+  spawn_blocking 摘要锁的调度顺序（后台 GeneratedTitle 与磁盘 unpin 赛跑），
+  修法 = unpin 屏障后显式补发 GeneratedTitle + 单次读盘断言，零产品改动。
 - **详情指针：** [`.handoff/cache-hit-optimization.md`](.handoff/cache-hit-optimization.md)
 
 ### 未验证事项
