@@ -448,6 +448,16 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   → P2 多会话 → P3 workflow/插件市场）；MVP 替代 = xterm.js 托管 TUI。风险：
   sandbox×leader 互斥、`x.ai/*` 无稳定契约、Windows 侧未实测。
 
+- [`docs-local/inspect-config-keys-todo.md`](docs-local/inspect-config-keys-todo.md) —
+  **`grok inspect` 配置键表缺口（已收口 2026-10-25，分支 `fix/local-inspect-privacy-warning`，
+  PATCHES 六十二期）**：① `[privacy] privacy_banner_acked`（pager 自己写进用户 config 的
+  文档化键）被 inspect 报 unrecognized——修法 = `is_non_serde_config_path` 对
+  `privacy`/`privacy.*` 整节豁免（pager persist 层拥有的节，agent Config 永不 serde
+  建模），新单测 + 守卫/同族用例绿。② 环境陷阱已处置：PATH 上 `~/.grok/bin/grok.exe`
+  （上游 1.0.40，报 9 条假警告 + 重写 user-guide 剪掉 fork 两篇 + 工具集旧版）刷为 fork
+  `1.0.69`，旧版备份 `*.bak-1.0.40-upstream`。**遗留提醒：fork 发新版后同步刷新
+  `~/.grok/bin/`；上游安装命令可能再覆盖该目录**（复现特征与处置见该文档）。
+
 ## 🔄 Handoff 摘要
 
 ### persistence 标题用例 + `/stats` 面板修复 — PR #5/#6 合 main，`v1.0.69` 重发（2026-10-25）

@@ -123,6 +123,7 @@ deepseek 条目实际走 chat_completions/responses——probe 门（dsh-port §
 | P2 | **追加式裁剪改写**（本次新增） | 对 `prompt_cache_update` 类能力模型（或全局开关），工具结果裁剪从"原地替换"改为"追加失效标记块"（dsh addition-only 同构思想）：请求里旧 tool result 保留原字节，其失效声明作为后续追加块发送；50% 线之后缓存可续命 | 与 P1 共用放置/确定性设计（§3.3 派生式 vs journal 直记）；交互面：`[compaction.pruning]` 语义分叉 | +2–3 人天（叠在 P1 上） |
 | P3 | sidecar 串行化 + 共享头对齐 | title 等 sidecar 改主回复后串行（对齐 zcode V01 语义）；子代理稳定头共享面评估 | 纯 shell/pager 小件，收益集中在多子代理/多会话聚合场景 | ≤1 人天 |
 | P3' | 归因头实验 | `x-deepseek-harness-user-id`/`-session-id` 对齐 dsh 发送（作用未证实，纯跟随官方） | 待 probe：header 是否影响缓存路由/限额 | ≤0.5 人天 |
+| P4 | **工具集会话内冻结 + 稳定序**（2026-10-24 追加，pi #10720 思想客户端化，见 §7.3） | 会话生命周期内工具数组字节冻结：初始集固定、新工具只追加尾部、过滤项（plan mode 剥 cursor 工具 `sampler_turn.rs:531` / Messages 后端剥 use_tool 文件表单 `sampler_turn.rs:539`）不再剥数组；MCP 晚连接追加不重排 | pi #10720 机制不可移植（DS 无动态工具加载），纯客户端拼装；7.2 实测已给出跨会话 `tools_hash` 漂移现场 | 2–3 人天 + probe 前置（DS 缓存前缀是否含 tools 数组） |
 
 **建议验收**（全部复用 limit-probe，零新增设施）：同一会话 A/B（机制 on/off），
 指标 = 触发点后首轮 `cached_tokens/prompt_tokens`、TTFT、`/stats` 成本；场景选
@@ -156,7 +157,70 @@ deepseek 条目实际走 chat_completions/responses——probe 门（dsh-port §
   `packages/ai/src/cache-policy.ts`（对内联标记协议生效，DeepSeek 走隐式前缀缓存）。
 - dsh：`deepseek-ai/deepseek-harness`（`main 22ddee37`，clone 于
   `D:\CODE\ai\deepseek-harness-upstream`）——`packages/llm/llm-deepseek/`。
+- pi：`earendil-works/pi`（tag `v1.3.0` `71023ae`，2026-10-15，clone 于 `D:\CODE\ai\pi`）
+  ——§7.1 三特性源码核对；官方 changelog pi.dev/changelog/releases/1.3.0。
 - fork：`xai-chat-state`（pruning/mutations/request_builder）、`xai-grok-shell`
   （compaction/config resolve）、`docs-local/prompt-cache-notes.md`、
   `docs-local/limit-inference.md`。
 - 用户现场观察（2026-10-24）：上下文占用 100–300k 区间突降；未跑探针取证。
+
+## 7. pi 1.3.0 三特性适配评估 + Command Code 网关实测（2026-10-24 追加）
+
+> 背景：pi 1.3.0 发布三件缓存/上下文优化（切 effort 不破缓存 / 切模型剔除旧
+> thinking / Kimi 中途加工具不破缓存）。逐行核对源码后评估对 DS 的适配性，
+> 并用 Command Code 网关实测取证。本节为独立调研追加，不改变 §4 既有拍板。
+
+### 7.1 三特性判定（源码直读，clone `D:\CODE\ai\pi` tag `v1.3.0`）
+
+| pi 特性 | 机制（源码锚点） | 对 DS/fork 判定 |
+|---|---|---|
+| 切 effort 不破缓存（#10853） | `reasoning.effort` 固定，改档走历史内 `configuration_update` 输入项追加回放：每条记录 `providerThinkingLevel` 的旧回复前插当时档位、尾部补当前档位，历史字节永不变（`packages/ai/src/api/openai-responses-shared.ts:226`；仅 openai-responses + API key，ChatGPT 登录态排除） | **不适用，收益 0**。DS 前缀缓存键只含 messages 前缀，请求级 `reasoning_effort` 不进缓存键——问题本身不存在；且 DS chat_completions 无消息流内配置通道。该特性只对 fork 的 responses 后端模型（gpt-6-luna 等）有理论价值，与 DS 无关 |
+| 切模型剔除旧模型 thinking（#10995） | 所有 API 共用预处理 `transformMessages`：非同模型（provider+api+model 三元组）的 thinking 块直接丢弃（`packages/ai/src/api/transform-messages.ts:128-140`）；签名/加密推理例外保留，跨模型 text 签名与 toolCall `thoughtSignature` 一并剥 | **适配、建议做，但收益是行为质量 + token 体积，非命中率**——切模型必换缓存池，切换点注定冷启动。fork 现状：`ConversationItem::Reasoning` 兄弟项出站时**无条件**折叠进 `reasoning_content`，不看产出模型（`xai-grok-sampling-types/src/conversation/chat_completions.rs:192`）；DS 官方对输入 messages 携带 `reasoning_content` 有拒收/不计入口径（reasoner 系 400）。落点：`conversation_to_chat_messages` 按产出模型剥离异源 Reasoning |
+| 中途加工具不破缓存（#10720） | kimi-coding 切 Chat Completions（官方 Kimi Code CLI 同款端点）+ 端点动态工具加载：顶层 `tools` 冻结为初始集，新增工具以带 `tools` 字段的 system 消息锚在历史原位（`packages/ai/src/api/openai-completions.ts:1250-1259`）；只支持追加，删除/同名重定义回退全量（`transcript.ts` `hasNonAdditiveToolChanges`） | **思想适用、机制不可移植**——依赖端点接受工具型 system 消息，DS 无此协议面。客户端自实现 = 工具集会话内冻结 + 只追加，新增 §4 P4（设计见 §7.3）；思想与 dsh addition-only 块同构 |
+
+### 7.2 Command Code 网关实测（A 级，2026-10-24，curl 直测 + v1.0.68 headless）
+
+- **协议覆盖**：`api.commandcode.ai/provider/v1` 同时提供 chat/completions 与
+  responses 两协议，DS 模型（deepseek-v4.1-flash）两边都通。fork 侧三条 CC 条目
+  配置显式 `chat_completions`，代码缺省也是 `ChatCompletions`
+  （`xai-grok-sampling-types/src/types.rs:1155`）——"协议转换"在配置层已是事实。
+- **responses 端点（DS 模型）可用**：非流式返回标准 `response` 对象（`reasoning`
+  summary 项 + `message` 项；非标附加顶层字段 `thinking:{type:"enabled"}`，无害）；
+  流式事件族全标准（`response.created/in_progress/output_item.*`/`response.completed`
+  + `function_call` / `function_call_arguments.delta` 全家），**本次未出现
+  2026-10-02 记录的非标 `response.reasoning.delta`**（当时疑似 glm 路径，DS 路径干净）；
+  工具调用可用；usage 带 `input_tokens_details.cached_tokens` + `reasoning_tokens`。
+- **responses 前缀缓存实证**：同大 prompt（instructions ≈1161 token）连发两次：
+  第一次 cached 0 → 第二次 **cached 1152**（18×64 块，尾部 9 token 未入块）。
+  CC responses 后端对 DS 有真实前缀缓存且如实上报。
+- **chat_completions 缓存实证**：v1.0.68 headless 轮次 `cached_prompt_tokens=10240`
+  （跨会话稳定命中系统提示段；CC 网关透传，fork 的 DeepSeek 平铺字段解析
+  `prompt_cache_hit_tokens` max-in 正常吃到）。
+- **现场证据：工具集跨会话不稳定（P4 直接实证）**——同模型同工作区两次独立
+  headless 会话 `tools_hash` 不同（`06860b92…` vs `899016cc…`），prompt_tokens 差 2：
+  headless 工作区加载 3 个 MCP，约 40k token 的工具块每次会话字节都在变，跨会话
+  DS 前缀缓存在这块全灭，两次稳定命中的只有系统提示段（10240）。
+
+### 7.3 P4 设计要点：工具集会话内冻结 + 稳定序
+
+- **冻结范围**：会话生命周期内出站 `tools` 数组字节不变——初始集在首回合定版，
+  之后新工具（MCP 晚连接、deferred exposure T2 的 `search_tools` 加载）只**追加**
+  到尾部，禁止删除/重排/同位重定义（与 dsh addition-only 同一约束）。
+- **过滤项改造**：plan mode 剥 cursor 工具（`sampler_turn.rs:531`）与 Messages
+  后端剥 use_tool 文件表单（`sampler_turn.rs:539`）这类随请求翻转的过滤，改为
+  不动数组、在工具 description 内标注（或预先在会话建立时定版）。
+- **probe 前置**：DS 缓存前缀是否包含 `tools` 数组（官方文档无明确口径）。
+  limit-probe A/B：稳定工具集 vs 中途换工具集，看 `cached_tokens` 跳变与
+  `tools_hash` 的对应关系。7.2 已证数据面可用（CC 两协议都回传 cached_tokens）。
+- **验收**：复用 limit-probe——跨会话 `tools_hash` 恒等 + tools 块段
+  `cached_tokens` 从 0 变正。
+
+### 7.4 limit-probe 设施两 bug（本次实测发现，建议随 P1 批次顺手修）
+
+- **首跑静默失效**：`xai-grok-sampler/src/limit_probe.rs` `append_line` 只
+  `create(true)` 建文件不建父目录，`~/.grok/limit-probe/` 不存在时每次写入
+  静默失败、永不落盘（本次手动 `mkdir` 后恢复）。修法一行 `create_dir_all`。
+- **门与文档不符**：`ENABLED` 实为显式 opt-in（env 未设置即关闭，
+  `limit_probe.rs:36`）；`limit-inference.md` 与 AGENTS.md 均写"默认开、
+  `GROK_LIMIT_PROBE=0` 关闭"。验收跑 probe 须显式 `GROK_LIMIT_PROBE=1`；
+  两处文档按实现改口径（或代码改回默认开，二者取一）。
