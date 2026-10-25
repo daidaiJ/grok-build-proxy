@@ -3848,3 +3848,51 @@ run `40101077754` 同 flake 再挂（当日第 3 次），重跑绿——**该 f
 （acp_session_tests support.rs /tmp 夹具 NotAbsolute，同族N/S/V/W 根因，
 已登记 win-skip，与本次改动无关）；shell `--all-targets` check 0 error。
 Linux CI 全量 shell 套件随 PR build 验证。
+
+## 六十一期：/stats 面板两修复——y 只复制当前标签页 + 面板期间释放鼠标捕获供原生框选（2026-10-25，分支 fix/local-stats-modal-copy-select）
+
+> 背景：用户报告 /stats 模态两个使用问题：①面板里的用量数字无法用鼠标
+> 框选一部分复制（TUI 捕获鼠标后终端原生选择失效）；②`y`（及页脚按钮）
+> 复制的是全部四个时间窗拼接的整份报表，而不是当前标签页——用户摘录时
+> 被迫粘出一大坨别的窗口的数字。
+>
+> 期号说明：本期挂在 main（止于五十九期）之上编号六十一，把六十让给
+> `fix/local-persistence-title-inflight-flake`（六十期，未合 main），避免
+> 两分支合并后期号撞车。
+
+### 修复 1：`y` 只复制当前标签页（`xai-grok-pager/src/views/stats_modal.rs`）
+
+- `StatsModalState::copy_all()`（遍历 `Window::ALL` 拼四段）改
+  `copy_active_tab()`：只导出 `active_tab` 一页，段头 `== <label> ==`
+  保留（粘出来的文本自带窗口上下文）；要看全部就逐页切过去各复制一份。
+- 两个触发点同步：`y` 键（`handle_stats_modal_key`）与页脚
+  `COPY_STATS_SHORTCUT` 按钮点击（`route_stats_modal_mouse`）。
+- 用例：`y_copies_every_section` 重写为 `y_copies_only_the_active_tab`
+  （5h 页不含其它段头/别窗样本 + 切日页后包含日窗样本、不含 5h 段头）；
+  `single_call_rows_show_cache_hit_as_na` 跟随改名。
+
+### 修复 2：/stats 面板 = 原生选择面（`xai-grok-pager/src/app/app_view.rs`）
+
+- 复用 auth 原始 URL 面板的原生选择机制：`AppView::stats_modal_open()`
+  谓词（`active_agent()` 的 `active_modal` 是 `StatsInfo`）并入
+  `sync_native_selection_mouse()` 的 `want_off`——面板打开期间
+  `DisableMouseCapture`（Windows 另启用 QuickEdit `win_native_selection`），
+  终端自己接管拖选；关闭面板后仅在本次 hold 时恢复捕获（用户
+  `/toggle-mouse-reporting` 关闭态不被打扰）。
+- 谓词只认 `active_agent()`：dashboard/welcome 视角看不到 agent 的面板，
+  不触发释放。
+- 代价（有意）：面板打开期间滚轮滚动/标签点击/页脚点击让位给终端原生
+  选择；键盘（Tab/1-4/hl 切页、jk/翻页滚动、a 展开、y 复制、Esc 关闭）
+  仍覆盖全部操作。转义舞步与真实终端行为随活体验证（谓词用例零副作用，
+  不碰真实 stderr/console）。
+- 用例：`app_view_tests::stats_modal_counts_as_native_select_surface`
+  （无模态 false / StatsInfo true / 关闭 false / dashboard 视角 false）。
+
+### 验证与遗留
+
+- `cargo check -p xai-grok-pager --all-targets` 0 error（8m22s）。
+- ctest 门控过滤 `stats_modal` + 新谓词用例：**18 passed / 0 failed**
+  （含重写的 `y_copies_only_the_active_tab` 与新
+  `stats_modal_counts_as_native_select_surface`；10230 filtered out）。
+- 遗留：活体验证随新客户端——真 TUI 开 /stats 后拖选框选 + `y` 粘贴
+  只有当前页；Windows Terminal/conhost 两宿主下拖选行为抽查。

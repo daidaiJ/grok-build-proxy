@@ -26,7 +26,7 @@ use xai_grok_tools::model_usage_ledger::{
     fmt_tps,
 };
 
-/// 页脚快捷键：复制整份报表。
+/// 页脚快捷键：复制当前标签页报表。
 pub const COPY_STATS_SHORTCUT: usize = 1;
 
 /// 展开/收起超出部分（`a`，页脚图例）。
@@ -106,22 +106,21 @@ impl StatsModalState {
         self.scroll = 0;
     }
 
-    /// 整份报表的可复制文本（与窗口内显示同源，仅去掉左右对齐空格）。
-    pub fn copy_all(&self) -> String {
-        let mut out = Vec::new();
-        for window in Window::ALL {
-            out.push(format!("== {} ==", window.label()));
-            let rows = self.rows_for(window);
-            if rows.is_empty() {
-                out.push(tr("no calls in this window").to_string());
-            } else {
-                for row in &rows {
-                    out.push(model_card_text(row, &self.pricing));
-                }
-                let summary = cost_summary_text(&rows, &self.pricing);
-                if !summary.is_empty() {
-                    out.push(summary);
-                }
+    /// 当前标签页的可复制文本（与窗口内显示同源，仅去掉左右对齐空格）。
+    /// 只导出 [`StatsModalState::active_tab`] 这一页——四个窗口全量拼接反而把
+    /// 别页的数字混进摘录；要看全部就逐页切过去各复制一份。
+    pub fn copy_active_tab(&self) -> String {
+        let mut out = vec![format!("== {} ==", self.active_tab.label())];
+        let rows = self.rows_for(self.active_tab);
+        if rows.is_empty() {
+            out.push(tr("no calls in this window").to_string());
+        } else {
+            for row in &rows {
+                out.push(model_card_text(row, &self.pricing));
+            }
+            let summary = cost_summary_text(&rows, &self.pricing);
+            if !summary.is_empty() {
+                out.push(summary);
             }
         }
         out.join("\n")
@@ -137,7 +136,7 @@ impl StatsModalState {
 pub enum StatsModalOutcome {
     /// 关闭窗口（Esc、`[✗]`、点击窗口外）。
     Close,
-    /// 复制整份报表（`y` 或页脚按钮）。
+    /// 复制当前标签页报表（`y` 或页脚按钮）。
     CopyText(String),
     Changed,
     Unchanged,
@@ -185,7 +184,7 @@ pub fn route_stats_modal_mouse(
         }
         mw::ModalWindowOutcome::ShortcutActivated(id) => {
             if id == COPY_STATS_SHORTCUT {
-                StatsModalOutcome::CopyText(state.copy_all())
+                StatsModalOutcome::CopyText(state.copy_active_tab())
             } else {
                 StatsModalOutcome::Changed
             }
@@ -249,7 +248,7 @@ fn handle_stats_modal_key(state: &mut StatsModalState, key: &KeyEvent) -> StatsM
             state.toggle_expanded();
             StatsModalOutcome::Changed
         }
-        KeyCode::Char('y') => StatsModalOutcome::CopyText(state.copy_all()),
+        KeyCode::Char('y') => StatsModalOutcome::CopyText(state.copy_active_tab()),
         _ => StatsModalOutcome::Unchanged,
     }
 }
@@ -903,11 +902,15 @@ mod tests {
             vec![sample(1_000_000_000_000, "m-solo", 1000, 0)],
         );
         state.now_unix_ms = 1_000_000_000_000;
-        assert!(state.copy_all().contains("cache hit n/a"), "{}", state.copy_all());
+        assert!(
+            state.copy_active_tab().contains("cache hit n/a"),
+            "{}",
+            state.copy_active_tab()
+        );
     }
 
     /// 月窗标签页与其它时间窗同一套卡片渲染，只是窗口更长。
-    /// （卡片头是 `id  N calls` 两空格形；`id · N calls` 是 copy_all 的纯文本形。）
+    /// （卡片头是 `id  N calls` 两空格形；`id · N calls` 是 copy_active_tab 的纯文本形。）
     #[test]
     fn month_tab_renders_the_same_card_layout() {
         let state = state_with_samples();
@@ -917,22 +920,32 @@ mod tests {
         assert!(!text.contains("m-e"), "月窗不该含月窗外的样本: {text}");
     }
 
+    /// `y` 只复制当前标签页：5h 页不含其它窗口的段头与样本，切到日页才见日窗样本。
     #[test]
-    fn y_copies_every_section() {
-        let state = state_with_samples();
-        let text = state.copy_all();
+    fn y_copies_only_the_active_tab() {
+        let mut state = state_with_samples();
+        let text = state.copy_active_tab();
         assert!(text.contains("== Last 5h =="), "{text}");
-        assert!(text.contains("== Last day =="), "{text}");
-        assert!(text.contains("== Last week =="), "{text}");
-        assert!(text.contains("== Last month =="), "{text}");
         assert!(text.contains("m-a · 2 calls"), "{text}");
-        assert!(text.contains("m-c · 1 calls"), "{text}");
+        // 其它标签页的段头与样本不许混进当前页的摘录
+        for other in ["== Last day ==", "== Last week ==", "== Last month =="] {
+            assert!(!text.contains(other), "{other} 不该出现在 5h 页的复制文本: {text}");
+        }
+        assert!(!text.contains("m-b"), "日窗样本不该出现在 5h 页: {text}");
+        assert!(!text.contains("m-c"), "周窗样本不该出现在 5h 页: {text}");
+        assert!(!text.contains("m-e"), "月窗外的样本不该进报表: {text}");
         // 复制文本与卡片同一份数字与 p50/p90 拆分口径
         assert!(
             text.contains("ttft p50 900 · ttft p90 900 · tps p50 50.0 · tps p90 50.0"),
             "{text}"
         );
-        assert!(!text.contains("m-e"), "月窗外的样本不该进报表: {text}");
+
+        state.set_tab(Window::Day);
+        let day = state.copy_active_tab();
+        assert!(day.contains("== Last day =="), "{day}");
+        assert!(day.contains("m-b · 1 calls"), "{day}");
+        assert!(!day.contains("m-c"), "周窗样本不该出现在日页: {day}");
+        assert!(!day.contains("== Last 5h =="), "{day}");
     }
 
     #[test]
