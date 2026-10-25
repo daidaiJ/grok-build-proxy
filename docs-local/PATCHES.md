@@ -3849,6 +3849,8 @@ run `40101077754` 同 flake 再挂（当日第 3 次），重跑绿——**该 f
 已登记 win-skip，与本次改动无关）；shell `--all-targets` check 0 error。
 Linux CI 全量 shell 套件随 PR build 验证。
 
+**发版收口：** PR #5 merge `ce2d88e`；PR #6 同批 merge `ac85985`。最终 main build `40151902095` Linux/Windows 双 job success；与 PR 验证 build `40149746244`、`40149884484` 均全绿。已将 `v1.0.69` 重指到 `ac8598508ca687dc8562e1eb8adc79a1db79c0c2`，release run `40154140290` 双 job success、4 资产非草稿。
+
 ## 六十一期：/stats 面板两修复——y 只复制当前标签页 + 面板期间释放鼠标捕获供原生框选（2026-10-25，分支 fix/local-stats-modal-copy-select）
 
 > 背景：用户报告 /stats 模态两个使用问题：①面板里的用量数字无法用鼠标
@@ -3896,3 +3898,5 @@ Linux CI 全量 shell 套件随 PR build 验证。
   `stats_modal_counts_as_native_select_surface`；10230 filtered out）。
 - 遗留：活体验证随新客户端——真 TUI 开 /stats 后拖选框选 + `y` 粘贴
   只有当前页；Windows Terminal/conhost 两宿主下拖选行为抽查。
+
+**发版收口：** PR #6 merge `ac85985`，最终 main build `40151902095` Linux/Windows 双 job success；PR build `40149884484` 双 job success。`v1.0.69` 标签已重指到该 merge commit；release run `40154140290` 双 job success，发布页为 4 个非草稿资产。Windows zip SHA-256：`d48bd970cac0b0557aadf506405cd042a43ffa17b3da477fef8bd7139b775ff6`；下载校验通过，运行显示 `grok 1.0.69 (ac8598508ca6)`。

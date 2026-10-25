@@ -450,6 +450,13 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### persistence 标题用例 + `/stats` 面板修复 — PR #5/#6 合 main，`v1.0.69` 重发（2026-10-25）
+
+- **合并：** PR #5（标题持久化用例去竞态）merge `ce2d88e`；PR #6（`/stats` 当前页复制与原生鼠标选择）merge `ac85985`。共享 `PATCHES.md` 记录已按六十、六十一期顺序保留。
+- **CI：** PR #5 后 main build `40149746244`、PR #6 更新后 build `40149884484`、最终 main build `40151902095` 均 Linux/Windows 双 job success。
+- **发版：** 按既有指示将已发布标签 `v1.0.69` 重指到 `ac8598508ca687dc8562e1eb8adc79a1db79c0c2`；release run `40154140290` 双 job success，发布页保留发布状态并更新为 4 个资产。Windows zip SHA-256：`d48bd970cac0b0557aadf506405cd042a43ffa17b3da477fef8bd7139b775ff6`；下载发行包校验通过，运行显示 `grok 1.0.69 (ac8598508ca6)`。
+- **活体遗留：** `/stats` 鼠标拖选、`y` 复制当前页需在 Windows Terminal/conhost 中抽查，见 `docs-local/stats-modal-todo.md`。
+
 ### 缓存命中率与稳定性优化 — P1+P2 已合 main 随 v1.0.69 发版（2026-10-24）
 
 - **当前状态：** 拍板（建议值）+ 四象限 probe 通过 + P1 `system_prompt_update
