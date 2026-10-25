@@ -165,3 +165,9 @@ runner::command::tests::project_dir_env_is_exported_to_the_child
 # （分隔符/盘符）。Linux CI 通过；产品影响小（要求 server 注册工作区外
 # 绝对 baseUri glob），修复挂触发（lsp-port 交接账）。
 watched_files::tests::out_of_workspace_globs_never_match
+
+# 族AB（2026-10-25，六十期 title 过滤词首跑暴露）：同族N/S/V/W根因
+# （create_test_actor 夹具写死 /tmp，support.rs:287 AbsPathBuf NotAbsolute panic）。
+# 环境族，与 in-flight 标题去竞态化改动无关（仅改 persistence_tests.rs，
+# 未触碰 acp_session_impl/updates）；行为验证走 Linux CI。
+session::acp_session::updates::inbound_summary_persist_scrub_tests::
