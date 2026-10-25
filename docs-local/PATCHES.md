@@ -3900,3 +3900,51 @@ Linux CI 全量 shell 套件随 PR build 验证。
   只有当前页；Windows Terminal/conhost 两宿主下拖选行为抽查。
 
 **发版收口：** PR #6 merge `ac85985`，最终 main build `40151902095` Linux/Windows 双 job success；PR build `40149884484` 双 job success。`v1.0.69` 标签已重指到该 merge commit；release run `40154140290` 双 job success，发布页为 4 个非草稿资产。Windows zip SHA-256：`d48bd970cac0b0557aadf506405cd042a43ffa17b3da477fef8bd7139b775ff6`；下载校验通过，运行显示 `grok 1.0.69 (ac8598508ca6)`。
+
+## 六十二期：`grok inspect` `[privacy]` 假警告修复 + PATH 过期上游二进制处置（2026-10-25，分支 fix/local-inspect-privacy-warning）
+
+> 背景：`inspect-config-keys-todo.md` 待办收口。用户报告 inspect/doctor 与 fork
+> 变更不同步：fork 构建跑 `grok inspect` 的 `Config Warnings` 只剩一条假警告
+> `[privacy] — unrecognized config key`（`privacy_banner_acked` 是 pager 自己写进
+> 用户 config 的文档化键，`26-config-reference.md:510`）；PATH 上裸 `grok`
+> （`~/.grok/bin/grok.exe`）更是 2026-09-21 的上游 1.0.40，报 9 条假警告 + 重写
+> user-guide 剪掉 fork 两篇 + headless/ACP 工具集旧版。
+>
+> 期号说明：main 止于五十九期；六十期让给 `fix/local-persistence-title-inflight-flake`、
+> 六十一期让给 `fix/local-stats-modal-copy-select`（两分支均未合 main），本期编号
+> 六十二避免合并撞车。
+
+### 修复：`[privacy]` 整节纳入非 serde 路径豁免（xai-grok-shell）
+
+- 落点 `agent/config.rs::is_non_serde_config_path`：新增 `path == "privacy" ||
+  path.starts_with("privacy.")` 分支。语义 = `[privacy]` 节由 pager persist 层拥有
+  （`PrivacyConfig` 经 `save_config_locked` round-trip，`util/config/persist.rs:58`），
+  agent `Config` 永不 serde 建模，节内任何键都不可能构成 unrecognized；前缀豁免沿
+  `features.` 既有先例，pager 未来给 `PrivacyConfig` 加字段不再冒假警告。
+- 取舍（有意）：用户在 `[privacy]` 下手写 typo 键同样静默——该节非安全面，pager
+  round-trip 深合并不丢数据，宽容优于每次 inspect 的噪音。
+- 唯一生产路径 `deserialize_collecting_unrecognized`（`new_from_toml_cfg` 内）已复核
+  无其他产出点（1780 附近是 `ui.status_line` 独立检查，不相干）。
+- 用例：新 `privacy_section_does_not_warn_as_unrecognized`（`[privacy]` 带
+  `privacy_banner_acked` 不报 + 相邻 `[ui] yollo` 真未知键仍报）；守卫
+  `unknown_key_still_warns_next_to_exempt_sections` 与同族
+  `managed_policy_keys_do_not_warn_as_unrecognized` /
+  `parses_cursor_worker_table_without_unrecognized_keys` 复跑绿。
+
+### 环境处置（同批，非代码）
+
+`~/.grok/bin/grok.exe` + `agent.exe`（同文件副本）覆盖为 fork `1.0.69
+(ac8598508ca6)`，旧上游 1.0.40 备份 `*.bak-1.0.40-upstream`。处置后实测：PATH 裸
+`grok inspect` 警告 9 → 1（仅剩 `[privacy]`，随本修复归零）、`grok doctor --json`
+`totalThemes: 19`、user-guide 29 篇恢复。`~/.bashrc` 的 `grok()` 代理 wrapper 指向
+该路径，无需改动。
+
+### 验证与遗留
+
+- `cargo check -p xai-grok-shell --all-targets` 0 error（9m42s）。
+- GATE_FORCE ctest 过滤：`privacy_section` 1/1、`still_warns_next_to_exempt` 1/1、
+  `unrecognized` 族 3/3，全绿。
+- 本机 debug 构建（`-p xai-grok-pager-bin`）实测 `inspect`：`[privacy]` 警告归零。
+- 遗留：① 随下版发版后同步刷新 `~/.grok/bin/`（当前 1.0.69 不含本修复）；② 上游
+  安装命令/自更新可能再覆盖 `~/.grok/bin/`，复现特征与处置见
+  `docs-local/inspect-config-keys-todo.md` 遗留提醒。

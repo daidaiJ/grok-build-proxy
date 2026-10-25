@@ -1462,6 +1462,8 @@ const NON_SERDE_CONFIG_PATHS: &[&str] = &[
 ];
 /// [`NON_SERDE_CONFIG_PATHS`] plus the multi-path groups, every registered feature, every
 /// [`UNMIRRORED_BOOLEAN_FEATURES`] key, and the managed policy pins (no-op in plain config.toml).
+/// `[privacy]` is exempt as a whole section: the pager owns it (`PrivacyConfig` round-trips
+/// through the persist layer, never a Config serde field), so no key under it can be unrecognized.
 fn is_non_serde_config_path(path: &str) -> bool {
     NON_SERDE_CONFIG_PATHS.contains(&path)
         || xai_grok_workspace::permission::resolution::MANAGED_POLICY_CONFIG_KEYS.contains(&path)
@@ -1470,6 +1472,8 @@ fn is_non_serde_config_path(path: &str) -> bool {
         || path
             .strip_prefix("features.")
             .is_some_and(|key| UNMIRRORED_BOOLEAN_FEATURES.contains(&key))
+        || path == "privacy"
+        || path.starts_with("privacy.")
 }
 /// Parse `[auth_provider.<name>]` tables leniently: a malformed entry warns (surfaced by `grok inspect`) and is skipped.
 /// Skipping fails closed for the models referencing the entry instead of failing the whole config.

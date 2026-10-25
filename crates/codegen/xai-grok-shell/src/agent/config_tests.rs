@@ -6061,6 +6061,25 @@ fn unknown_key_still_warns_next_to_exempt_sections() {
         "exactly the typo'd key must be flagged"
     );
 }
+/// `[privacy]` is pager-owned and round-trips through the persist layer, not Config serde:
+/// `privacy_banner_acked` (the key the pager itself writes) must not warn as unrecognized,
+/// while a genuinely unknown key next to it still does.
+#[test]
+fn privacy_section_does_not_warn_as_unrecognized() {
+    let unused = unused_keys_from_toml(
+        r#"
+            [privacy]
+            privacy_banner_acked = "2026-10-25T00:00:00Z"
+            [ui]
+            yollo = true
+        "#,
+    );
+    assert_eq!(
+        unused,
+        vec!["ui.yollo".to_string()],
+        "the pager-owned section is exempt, the typo'd key is not: {unused:?}"
+    );
+}
 /// Regression: a deployment key with no OAuth token must resolve to Proxy.
 #[test]
 fn resolve_upload_method_accepts_deployment_key_without_oauth() {
