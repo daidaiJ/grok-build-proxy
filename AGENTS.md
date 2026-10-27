@@ -218,7 +218,10 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   cache_minutes`，单位分钟）。**首批五家全实现**：OpenCode Go + Command Code（点名）
   + 智谱 GLM / Kimi / MiniMax（拍板追加）；**第六家 DeepSeek 官方 API 余额**
   （2026-10-17，PATCHES 四十九期：Balance 窗口金额进 note，块标题分流「余额」）；
-  Cline / Token Unlimited 放弃。供应商判定
+  Cline / Token Unlimited 放弃。**第七家 Cline Pass + 月度窗额外显示 +
+  Command Code 月度 merge 随 `v1.0.71` 发版（2026-10-28，PATCHES 六十三/六十四期）**；
+  OpenRouter credits / Moonshot 平台余额 / OpenAI Codex 经盘点后用户拍板不引入
+  （候选池在施工文档）。供应商判定
   = 模型 `base_url` host 匹配（无显式配置）。落点：新 crate
   `xai-grok-provider-usage`（纯函数适配器层，一家一文件 + 夹具单测）、shell
   `x.ai/providerUsage` 扩展（TTL 缓存 + GLM 裸key/Bearer 重试 + MiniMax 双路径）、
@@ -451,6 +454,33 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   sandbox×leader 互斥、`x.ai/*` 无稳定契约、Windows 侧未实测。
 
 ## 🔄 Handoff 摘要
+
+### Cline Pass 用量接入 + 月度窗额外显示 + Command Code 月度 merge — 已合 main，随 v1.0.71 发版（2026-10-28）
+
+- **当前状态：** 三件随 tag **`v1.0.71`** 发版（PATCHES 六十三/六十四期，分支
+  `feat/local-clinepass-provider-usage`，merge `386c4d4`）：① **Cline Pass
+  第七家**（`GET api.cline.bot/api/v1/users/me/plan/usage-limits`，Bearer 同
+  推理 key，本机活体 probe 200 三窗齐全；参照 pi 插件 pi-clinepass 0.1.7）；
+  ② **月度窗额外显示**——废除「有 5h/周时月度不渲染」裁剪（用户拍板修订，
+  用例改名 shows_monthly）；③ **Command Code 月度窗补全**（新「互补合并」取数
+  语义 `merge_fetch`/`parse_merged`：credits 段月度剩余 + `/alpha/usage/summary`
+  账期已用推算，活体验证 GOAT $4.61/$70.07 = 6.6% 与既有探针口径一致）。
+  月度可查面盘点：OpenCode Go 原生三窗已有；GLM/Kimi/MiniMax 端点无月度
+  （GLM 的 TIME_LIMIT 月窗是 MCP 工具泳道，不据此编造模型月度窗）。
+  同日两次拍板收窄：API 余额类（OpenRouter credits / Moonshot 开放平台余额）
+  与 OpenAI Codex 均不引入，端点情报保留在
+  [`docs-local/usage/provider-quota-display-todo.md`](docs-local/usage/provider-quota-display-todo.md)
+  候选池。
+- **CI 与发版：** main build `40527430377` 双 job success；release run
+  `40531603150` 双 job success、4 资产非草稿；Windows zip sha256
+  `0423e826…` 核对一致；本机 `D:\tool-cli\grok2` 部署
+  `grok 1.0.71 (386c4d491bbf)`，回滚点 `grok2.exe.1.0.69-e86015c.bak`。
+  **注意：v1.0.70 已被并发会话（/stats 原生选择面撤回）占用，本批改发 71。**
+- **验证：** provider-usage lib 77/77；pager usage_modal 32/32；shell check
+  0 error。合并时 PATCHES 期号撞车重排（stats 撤回占六十二期，ClinePass→
+  六十三期、月度窗→六十四期）。
+- **遗留：** 活体验证随新客户端——`cline-pass/*` 模型 /usage 面板三窗
+  （5h/周/月 + Resets）、Command Code 面板多出月度行。
 
 ### `/stats` 原生选择面撤回 — `v1.0.70` 发版（2026-10-27）
 
