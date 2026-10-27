@@ -948,6 +948,27 @@ mod tests {
         assert!(!day.contains("== Last 5h =="), "{day}");
     }
 
+    /// 回归：面板 `[✗]` 点击必须真正关闭。v1.0.69 的面板期间释放鼠标捕获会让
+    /// 这个按钮收不到事件；撤回原生选择面后应恢复。
+    #[test]
+    fn close_button_click_closes_the_modal() {
+        let mut state = state_with_samples();
+        let _ = rendered(&mut state);
+        let rect = state
+            .window
+            .close_button_rect
+            .expect("render must publish the close-button hit rect");
+        assert_eq!(
+            route_stats_modal_mouse(
+                &mut state,
+                MouseEventKind::Down(crossterm::event::MouseButton::Left),
+                rect.x + rect.width / 2,
+                rect.y + rect.height / 2,
+            ),
+            StatsModalOutcome::Close
+        );
+    }
+
     #[test]
     fn render_smoke_paints_tabs_footer_and_cards() {
         let mut state = state_with_samples();

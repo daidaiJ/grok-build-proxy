@@ -1055,3 +1055,21 @@
 - **遗留**：limit-probe A/B 活体（触发点后首轮 cached_tokens 比对）随新客户端；
   messages backend in-history 需先改折叠转换层；P3 sidecar 串行化 + 归因头
   probe 视批次余量。
+
+### 2026-10-27 /stats 原生选择面撤回（用户拍板不做面板内框选）
+
+- **内容**：撤销六十一期给 /stats 加的「面板期间释放鼠标捕获」。v1.0.69 实测
+  暴露出 `[✗]` 关闭按钮失效与拖选越出面板（终端原生选择无法裁剪，会带上背后
+  对话正文）两个副作用。用户拍板「不要支持可选复制，简单点、不容易出问题」。
+  删 `AppView::stats_modal_open()` 与 `sync_native_selection_mouse()` 的
+  stats 分支；auth 原始 URL 面板机制不动；`y` 只复制当前标签页保留。
+  分支 `fix/local-stats-modal-revert-native-select`，PATCHES 六十二期。
+- **验证**：cargo check pager --all-targets 0 error；ctest `stats_modal`
+  18/18（删 1 例原生选择面用例、新增 1 例 `[✗]` 点击回归，
+  `y_copies_only_the_active_tab` 在）。
+- **遗留**：活体复核 `[✗]` / 滚轮 / 标签点击随新客户端。
+- **发版**：tag `v1.0.70`（`6515ad9e`）release run `40459325505` 双 job
+  success、4 资产非草稿；main build run `40459298820` 双 job success；本机
+  部署 `grok 1.0.70 (6515ad9e6c24)`（`D:\tool\cli`，回滚点
+  `*.1.0.69-ac859850.bak`）。
+

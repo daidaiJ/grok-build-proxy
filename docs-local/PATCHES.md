@@ -3901,7 +3901,43 @@ Linux CI 全量 shell 套件随 PR build 验证。
 
 **发版收口：** PR #6 merge `ac85985`，最终 main build `40151902095` Linux/Windows 双 job success；PR build `40149884484` 双 job success。`v1.0.69` 标签已重指到该 merge commit；release run `40154140290` 双 job success，发布页为 4 个非草稿资产。Windows zip SHA-256：`d48bd970cac0b0557aadf506405cd042a43ffa17b3da477fef8bd7139b775ff6`；下载校验通过，运行显示 `grok 1.0.69 (ac8598508ca6)`。
 
-## 六十二期：Cline Pass 用量接入 /usage 面板——第七家供应商适配器（2026-10-27，分支 feat/local-clinepass-provider-usage）
+## 六十二期：撤回 /stats 原生选择面——关闭按钮恢复可用，复制只保留当前页（2026-10-27，分支 fix/local-stats-modal-revert-native-select）
+
+> 背景：六十一期给 /stats 面板加的「打开期间释放鼠标捕获」在 v1.0.69 实测
+> 暴露两个副作用：① 右上角 `[✗]` 关闭按钮点击无效；② 终端原生拖选无法被
+> 应用裁剪，框选会越出面板、把背后的对话正文一起粘出来。用户拍板：不面板内
+> 框选复制，保持简单、避免边缘问题。
+
+### 改动
+
+- `xai-grok-pager/src/app/app_view.rs`：删除 `stats_modal_open()` 谓词，并从
+  `sync_native_selection_mouse()` 的 `want_off` 移除——/stats 面板不再释放
+  鼠标捕获，`[✗]`/标签页/滚轮/页脚按钮恢复应用内处理。auth 原始 URL 面板的
+  原生选择面机制保持不变。
+- `xai-grok-pager/src/app/app_view_tests.rs`：删除
+  `stats_modal_counts_as_native_select_surface`。
+- 保留六十一期的 `StatsModalState::copy_active_tab()`（`y`/页脚按钮只复制
+  当前标签页）不变。
+
+### 验证与遗留
+
+- `cargo check -p xai-grok-pager --all-targets` 0 error。
+- ctest 门控过滤 `stats_modal`：**18 passed / 0 failed**（六十一期的 18 例减去
+  被删的 `stats_modal_counts_as_native_select_surface`，新增
+  `close_button_click_closes_the_modal` 回归，`y_copies_only_the_active_tab`
+  仍在）。
+- 遗留：活体复核随新客户端——`/stats` 点 `[✗]` 关闭、滚轮/标签点击恢复；
+  面板内不再支持鼠标框选（终端 Shift+拖选是否可用取决于宿主，不在支持面）。
+
+**发版收口：** tag `v1.0.70`（commit `6515ad9e`）release run `40459325505`
+Linux/Windows 双 job success、4 资产非草稿；Windows zip SHA-256
+`52f1bbdd09297fccbe8a34f82a471694d777d029b96c26f25a73022e02d2439c`（下载校验
+一致）；main build run `40459298820` 双 job success。本机部署
+`grok 1.0.70 (6515ad9e6c24)`（`D:\tool\cli` 的 `grok.exe` / `grok2.exe`，
+回滚点 `*.1.0.69-ac859850.bak`）。
+
+
+## 六十三期：Cline Pass 用量接入 /usage 面板——第七家供应商适配器（2026-10-27，分支 feat/local-clinepass-provider-usage）
 
 > 背景：pi 生态插件 pi-clinepass（fifidayone/pi-clinepass 0.1.7）与 yetone/magpie
 > 均已实现「推理同一把 key 直查 ClinePass 订阅用量」；用户点名给 fork 补上
@@ -3949,7 +3985,7 @@ Linux CI 全量 shell 套件随 PR build 验证。
   余额 / SiliconFlow / StepFun / AiHubMix / new-api 中转 / OpenAI Codex OAuth
   窗口 / Qoder / WorkBuddy / ZCode）已盘点入候选池，未拍板。
 
-## 六十三期：供应商月度用量窗额外显示——裁剪规则修订 + Cline Pass 发版准备（2026-10-27，分支 feat/local-clinepass-provider-usage）
+## 六十四期：供应商月度用量窗额外显示——裁剪规则修订 + Cline Pass 发版准备（2026-10-27，分支 feat/local-clinepass-provider-usage）
 
 > 背景：用户拍板——供应商能查到月度用量时**额外显示**，取代 v1.0.46 起的
 > 「有 5h/周窗口时月度不渲染」裁剪规则（拍板 2）。Cline Pass 三窗齐全，
