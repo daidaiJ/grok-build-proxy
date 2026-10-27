@@ -3948,3 +3948,46 @@ Linux CI 全量 shell 套件随 PR build 验证。
 - Token Unlimited 维持放弃；pi/magpie 新候选（OpenRouter 余额 / Moonshot 平台
   余额 / SiliconFlow / StepFun / AiHubMix / new-api 中转 / OpenAI Codex OAuth
   窗口 / Qoder / WorkBuddy / ZCode）已盘点入候选池，未拍板。
+
+## 六十三期：供应商月度用量窗额外显示——裁剪规则修订 + Cline Pass 发版准备（2026-10-27，分支 feat/local-clinepass-provider-usage）
+
+> 背景：用户拍板——供应商能查到月度用量时**额外显示**，取代 v1.0.46 起的
+> 「有 5h/周窗口时月度不渲染」裁剪规则（拍板 2）。Cline Pass 三窗齐全，
+> Command Code 的月度 credits 同样受益。
+
+### 改动（xai-grok-pager 一处 + 用例改名）
+
+- `usage_modal.rs` `provider_usage_lines`：删除 `has_short` 裁剪逻辑，快照里的
+  全部窗口逐条渲染（5h → 周 → 月 → 余额 rank 序）；余额窗渲染分支不动。
+- 用例 `provider_block_replaces_supergrok_and_drops_monthly` 改名
+  `provider_block_replaces_supergrok_and_shows_monthly`，月度断言翻转为
+  必含（三窗 fixture：5h 31% + 周 30% + 月 12% 全渲染）。
+- **Command Code 月度窗补全**（同批，活体验证）：`/alpha/billing/credits` 的
+  `monthlyCredits` 是月度剩余，账期已用在 `/alpha/usage/summary`
+  （`totalMonthlyCredits`，`periodBasis:"billing-period"`）。为此给取数架构加
+  「互补合并」语义：`merge_fetch(provider)` 标记（当前仅 CommandCode）→ 调用方
+  按序取回全部请求 → `parse_merged` 一次解析（第一段走既有状态码分层，summary
+  段补月度窗：total = remaining + used，note `$used / $total · credits`；
+  summary 失败 / `periodBasis` 变化 / 无 monthlyCredits（pay-go 无滚动窗但
+  credits 池在）均尽力降级）。shell 侧 `fetch_text` 助手重构复用。
+  活体 probe：本机 GOAT 套餐月度 $4.61 / $70.07 = 6.6%，与既有探针
+  `scripts-local/commandcode_usage.py` 口径一致。
+- **月度可查面盘点**：OpenCode Go 端点原生三窗（无需改动）；GLM 模型
+  tokens 配额只有 5h+周（`TIME_LIMIT` 月窗是 MCP 工具泳道，调研明确不据此
+  编造模型月度窗）；Kimi / MiniMax 端点只有 5h+周——三家无月度可补。
+- 同批文档：`docs-local/usage/provider-quota-display-todo.md` 拍板 2 修订 +
+  Cline Pass 面板行为更正。
+- **回退记录**：同日曾实现 OpenRouter 余额 / Moonshot 开放平台余额 /
+  OpenAI Codex 窗口三家，经用户两次拍板（余额型不引入、Codex 无场景）全部
+  回退到 `fa899a9`（Cline Pass 提交）；端点情报保留在候选池。
+
+### 验证与发版
+
+- `ctest.sh -p xai-grok-provider-usage --lib` **77 passed / 0 failed**（70 + 新增
+  7：月度 merge 主路径 / 单段降级 / summary 失败降级 / 401 分层不变 /
+  `periodBasis` 变化跳过 / pay-go credits 池月度窗 / merge_fetch 判定与
+  credits+summary 请求对）。
+- `ctest.sh -p xai-grok-pager --lib usage_modal::` **32 passed / 0 failed**
+  （含改名后月度必含用例；10216 filtered out）。
+- shell `cargo check --all-targets`（merge 调用方）随本批验证。
+- 本期随 **`v1.0.70`** 发版（CI 全绿后打 tag），见 Handoff。

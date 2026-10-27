@@ -883,15 +883,9 @@ fn provider_usage_lines(
     lines.push(Line::styled(header, header_style(theme)));
     lines.push(Line::default());
 
-    // 窗口裁剪（拍板 2）：有 5h 或周窗口时月度不渲染。
-    let has_short = snapshot
-        .windows
-        .iter()
-        .any(|w| w.kind != xai_grok_provider_usage::UsageWindowKind::Monthly);
+    // 逐窗渲染（2026-10-27 拍板修订：供应商能查到月度用量时额外显示，
+    // 取代原「有 5h/周窗口时月度不渲染」的裁剪规则）。
     for (index, win) in snapshot.windows.iter().enumerate() {
-        if has_short && win.kind == xai_grok_provider_usage::UsageWindowKind::Monthly {
-            continue;
-        }
         if index > 0 {
             lines.push(Line::default());
         }
@@ -1449,7 +1443,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_block_replaces_supergrok_and_drops_monthly() {
+    fn provider_block_replaces_supergrok_and_shows_monthly() {
         let state = state_with_session();
         let entry = provider_cache_entry(provider_response(Some(provider_snapshot()), None));
         let theme = Theme::current();
@@ -1470,10 +1464,10 @@ mod tests {
         assert!(text[0].contains("individual-goat-monthly"));
         // SuperGrok 额度块被替代。
         assert!(!text.iter().any(|l| l.contains("SuperGrok")), "{text:?}");
-        // 5h + 周 + note/Resets 都在；月度被裁剪（拍板 2）。
+        // 5h + 周 + 月度都在（2026-10-27 拍板修订：月度可查即额外显示）。
         assert!(text.iter().any(|l| l.contains("5h window")));
         assert!(text.iter().any(|l| l.contains("Weekly limit")));
-        assert!(!text.iter().any(|l| l.contains("Monthly limit")), "{text:?}");
+        assert!(text.iter().any(|l| l.contains("Monthly limit")), "{text:?}");
         assert!(text.iter().any(|l| l.contains("$3.10 / $10 · limited")));
         assert!(text.iter().any(|l| l.contains("Resets:")));
         assert!(text.iter().any(|l| l.ends_with("31%")));

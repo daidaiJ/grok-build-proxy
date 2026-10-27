@@ -37,6 +37,28 @@ pub(super) fn parse_response(
     Ok(finish(provider, plan_name, windows, now_ms))
 }
 
+/// 互补合并解析（[`crate::merge_fetch`] 命中的供应商）：全部响应按序取回后
+/// 一次解析。第一段走既有状态码分层 + 单响应解析，其余段交给供应商的 merge
+/// 钩子补窗（当前仅 CommandCode：summary 段补月度窗）。
+pub(super) fn parse_merged(
+    provider: UsageProviderId,
+    parts: &[(u16, &str)],
+    now_ms: u64,
+) -> Result<PlanUsageSnapshot, ProviderUsageError> {
+    let Some((status, body)) = parts.first() else {
+        return Err(ProviderUsageError::Parse {
+            message: "no responses to parse".into(),
+        });
+    };
+    let mut snapshot = parse_response(provider, *status, body, now_ms)?;
+    match provider {
+        UsageProviderId::CommandCode => providers::commandcode::merge(&mut snapshot.windows, parts)?,
+        // 其余供应商没有互补段（merge_fetch 恒 false），多段按单响应语义忽略。
+        _ => {}
+    }
+    Ok(snapshot)
+}
+
 /// 从错误响应体提取人读信息（各家信封形态不同；提取不到返回 None）。
 fn error_message(provider: UsageProviderId, body: &str) -> Option<String> {
     let value: serde_json::Value = serde_json::from_str(body).ok()?;

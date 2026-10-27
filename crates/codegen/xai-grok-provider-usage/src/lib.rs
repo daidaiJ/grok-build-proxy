@@ -22,7 +22,7 @@ mod requests;
 mod types;
 
 pub use base_url_match::provider_for_base_url;
-pub use requests::prepare_requests;
+pub use requests::{merge_fetch, prepare_requests};
 pub use types::{
     PlanUsageSnapshot, PlanUsageWindow, PreparedRequest, ProviderUsageError, UsageProviderId,
     UsageWindowKind,
@@ -36,6 +36,17 @@ pub fn parse_response(
     now_ms: u64,
 ) -> Result<PlanUsageSnapshot, ProviderUsageError> {
     parse::parse_response(provider, status, body, now_ms)
+}
+
+/// 互补合并解析（[`merge_fetch`] 命中的供应商）：调用方把全部请求按序取回后
+/// 一次性传入（`(status, body)` 按请求序），第一段走 [`parse_response`] 语义，
+/// 其余段由供应商的 merge 钩子补窗。
+pub fn parse_merged(
+    provider: UsageProviderId,
+    parts: &[(u16, &str)],
+    now_ms: u64,
+) -> Result<PlanUsageSnapshot, ProviderUsageError> {
+    parse::parse_merged(provider, parts, now_ms)
 }
 
 #[cfg(test)]

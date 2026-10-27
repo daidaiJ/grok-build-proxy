@@ -2,6 +2,13 @@
 
 use crate::types::{PreparedRequest, UsageProviderId};
 
+/// 该供应商的请求列表是「互补合并」而非「按序回退」：调用方应把全部请求按序
+/// 取回后交给 [`crate::parse_merged`] 一次解析（当前仅 CommandCode：credits 段
+/// 出 5h/周窗，summary 段补月度窗；其余供应商都是回退语义，命中即停）。
+pub fn merge_fetch(provider: UsageProviderId) -> bool {
+    matches!(provider, UsageProviderId::CommandCode)
+}
+
 /// 组装某供应商的按序取数请求。`base_url` 是该模型的推理 base_url（选站提示）。
 /// key 为空时返回空列表（调用方落 [`crate::ProviderUsageError::MissingKey`]）。
 pub fn prepare_requests(
@@ -19,10 +26,17 @@ pub fn prepare_requests(
             url: url("https://opencode.ai", "/zen/go/v1/usage"),
             headers: bearer(key),
         }],
-        UsageProviderId::CommandCode => vec![PreparedRequest {
-            url: url("https://api.commandcode.ai", "/alpha/billing/credits"),
-            headers: bearer(key),
-        }],
+        UsageProviderId::CommandCode => vec![
+            PreparedRequest {
+                url: url("https://api.commandcode.ai", "/alpha/billing/credits"),
+                headers: bearer(key),
+            },
+            // 互补段（merge_fetch）：账期聚合给月度已用 credits（推算月度窗）。
+            PreparedRequest {
+                url: url("https://api.commandcode.ai", "/alpha/usage/summary"),
+                headers: bearer(key),
+            },
+        ],
         UsageProviderId::GlmCoding => glm_requests(key, base_url, &url),
         UsageProviderId::KimiCoding => vec![PreparedRequest {
             url: url(&kimi_origin(base_url), "/coding/v1/usages"),
@@ -125,10 +139,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn merge_fetch_is_commandcode_only() {
+        for provider in UsageProviderId::ALL {
+            assert_eq!(merge_fetch(provider), provider == UsageProviderId::CommandCode);
+        }
+    }
+
+    #[test]
+    fn commandcode_has_credits_and_summary_pair() {
+        // 互补合并语义：credits 段 + summary 段（月度已用推算）。
+        let reqs = prepare_requests(UsageProviderId::CommandCode, "k1", None);
+        assert_eq!(reqs.len(), 2);
+        assert_eq!(reqs[0].url, "https://api.commandcode.ai/alpha/billing/credits");
+        assert_eq!(reqs[1].url, "https://api.commandcode.ai/alpha/usage/summary");
+        for req in &reqs {
+            assert_eq!(
+                req.headers,
+                vec![("Authorization".to_string(), "Bearer k1".to_string())]
+            );
+        }
+    }
+
+    #[test]
     fn bearer_providers_single_request() {
         for provider in [
             UsageProviderId::OpenCodeGo,
-            UsageProviderId::CommandCode,
             UsageProviderId::KimiCoding,
             UsageProviderId::DeepSeek,
             UsageProviderId::ClinePass,

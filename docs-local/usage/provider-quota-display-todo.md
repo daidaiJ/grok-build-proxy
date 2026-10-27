@@ -29,7 +29,14 @@
 
 1. **触发**：模型来源 = opencode go、Command Code 这类支持「plan SK 查套餐用量」的
    供应商 → 显示**供应商套餐的量**替代 SuperGrok 块，并**标注供应商来源**。
-2. **窗口粒度**：有 5h 显 5h、有周显周；两者皆无才显月度（5h/周在时月度不渲染）。
+2. **窗口粒度**：有 5h 显 5h、有周显周；~~两者皆无才显月度（5h/周在时月度不渲染）~~
+   **2026-10-27 修订（用户拍板）**：供应商能查到月度用量时**额外显示月度**，
+   不再裁剪（Cline Pass 三窗齐全、Command Code 月度 credits 同样受益）。
+   **月度可查面盘点（2026-10-27）**：OpenCode Go 端点原生三窗（已有）；
+   Command Code = credits 段月度剩余 + `/alpha/usage/summary` 账期已用推算
+   （merge_fetch 互补双请求，活体验证）；GLM 模型 tokens 配额只有 5h+周
+   （`TIME_LIMIT` 月窗是 MCP 工具泳道，调研明确不据此编造模型月度窗）；
+   Kimi / MiniMax 端点只有 5h+周——三家无月度可补。
 3. **支持面收敛**：只支持**与推理同一把 SK** 的供应商（一把 key 直接 Bearer 查询）。
    要控制台账户/Cookie/第二套凭据（AK-SK/临时 token）的一律不给支持。
 4. **缓存**：默认 **5 分钟**，允许用户配置，**单位分钟**（`[provider_usage] cache_minutes`，
@@ -55,7 +62,7 @@
 | 供应商 | 窗口 | 凭据 | 可信度 | 状态 |
 | --- | --- | --- | --- | --- |
 | **OpenCode Go** | 5h 滚动 + 周 + 月 | Bearer，与推理同 key | 端点存在性已实测 + 读上游源码 | **首批**（点名；已实现） |
-| **Command Code（GOAT）** | 5h + 周（美元额度）+ 月度 credits | Bearer，与推理同 key | **已端到端实测**（调研文档 §3） | **首批**（点名；本机 3 模型在用；已实现） |
+| **Command Code（GOAT）** | 5h + 周（美元额度）+ 月度 credits（merge `/alpha/usage/summary` 账期已用推算，2026-10-27 活体验证） | Bearer，与推理同 key | **已端到端实测**（调研文档 §3；月度 merge 2026-10-27 实测） | **首批**（点名；本机 3 模型在用；已实现） |
 | **智谱 / z.ai GLM Coding Plan** | 5h + 周 | 同 key（先裸 key，`code:1001` 信封再换 Bearer） | 读源码核实 + host 存活实测 | **首批**（拍板 6；已实现） |
 | **Kimi For Coding** | 5h + 周 | Bearer 同 key | 读源码核实（零实测） | **首批**（拍板 6；已实现） |
 | **MiniMax Coding Plan** | 5h + 周（激活位门控） | Bearer 同 key | 读源码核实（零实测） | **首批**（拍板 6；已实现） |
@@ -80,7 +87,8 @@
   `api.cline.bot` 匹配 + 单请求端点 + `providers/clinepass.rs` 解析器（`data.limits`
   为主、顶层 `limits` 宽容接受，未知 type/缺 percentUsed 条目跳过）。套餐名与美元 cap
   不取（架构为按序单请求解析，`/plan` 端点留待有需要时再评估）。
-- **面板行为**：三窗口带 resets；月度窗按拍板 2 被裁剪（有 5h/周时不渲染）。
+- **面板行为**：三窗口（5h/周/月）带 resets 全渲染（2026-10-27 拍板修订后
+  月度额外显示）。
 
 
 端点、响应结构、百分比语义（已用 vs 剩余 vs 计数）、各家坑（GLM 站点选择与失败

@@ -17,8 +17,8 @@ use tokio::sync::Mutex as TokioMutex;
 use super::{ExtResult, to_raw_response};
 use crate::agent::MvpAgent;
 use xai_grok_provider_usage::{
-    parse_response, prepare_requests, provider_for_base_url, PlanUsageSnapshot,
-    ProviderUsageError, UsageProviderId,
+    merge_fetch, parse_merged, parse_response, prepare_requests, provider_for_base_url,
+    PlanUsageSnapshot, PreparedRequest, ProviderUsageError, UsageProviderId,
 };
 
 /// 默认缓存分钟数（用户拍板：默认 5 分钟，单位分钟）。
@@ -266,33 +266,18 @@ async fn fetch_snapshot(
     if requests.is_empty() {
         return Err(ProviderUsageError::MissingKey);
     }
+    // 互补合并语义（当前仅 CommandCode）：全部请求按序取回后一次解析。
+    if merge_fetch(provider) {
+        return fetch_merged(client, provider, requests).await;
+    }
     let mut last: Option<ProviderUsageError> = None;
     for (index, req) in requests.iter().enumerate() {
         let has_more = index + 1 < requests.len();
-        let mut builder = client.get(&req.url).timeout(REQUEST_TIMEOUT);
-        for (key, value) in &req.headers {
-            builder = builder.header(key, value);
-        }
-        let response = match builder.send().await {
-            Ok(response) => response,
+        let (status, body) = match fetch_text(client, req).await {
+            Ok(part) => part,
             Err(e) => {
-                tracing::debug!(provider = provider.as_str(), url = %req.url, error = %e, "provider usage: request failed");
-                last = Some(ProviderUsageError::Http {
-                    status: 0,
-                    message: format!("request failed: {}", err_chain(&e)),
-                });
-                continue;
-            }
-        };
-        let status = response.status().as_u16();
-        // body 读取失败（超时/流中断）与传输层失败同待遇：换下一个尝试并记住最后
-        // 错误，绝不能吞成空串——那会把真实原因伪装成 "invalid JSON: EOF"。
-        let body = match response.text().await {
-            Ok(body) => body,
-            Err(e) => {
-                let message = format!("response body read failed: {}", err_chain(&e));
-                tracing::debug!(provider = provider.as_str(), status, message, "provider usage: body read failed");
-                last = Some(ProviderUsageError::Http { status, message });
+                tracing::debug!(provider = provider.as_str(), url = %req.url, error = ?e, "provider usage: request failed");
+                last = Some(e);
                 continue;
             }
         };
@@ -321,6 +306,61 @@ async fn fetch_snapshot(
             message: "no requests to try".to_string(),
         },
     })
+}
+
+/// 互补合并取数（[`merge_fetch`] 命中的供应商）：全部请求按序取回（某段失败
+/// 即止，用已取到的段尽力解析），交给 [`parse_merged`] 一次解析。
+async fn fetch_merged(
+    client: &reqwest::Client,
+    provider: UsageProviderId,
+    requests: &[PreparedRequest],
+) -> Result<PlanUsageSnapshot, ProviderUsageError> {
+    let mut parts: Vec<(u16, String)> = Vec::new();
+    let mut last: Option<ProviderUsageError> = None;
+    for req in requests {
+        match fetch_text(client, req).await {
+            Ok(part) => parts.push(part),
+            Err(e) => {
+                tracing::debug!(provider = provider.as_str(), url = %req.url, error = ?e, "provider usage: merge fetch stopped");
+                last = Some(e);
+                break;
+            }
+        }
+    }
+    if parts.is_empty() {
+        return Err(last.unwrap_or(ProviderUsageError::Parse {
+            message: "no responses fetched".into(),
+        }));
+    }
+    let refs: Vec<(u16, &str)> = parts.iter().map(|(s, b)| (*s, b.as_str())).collect();
+    parse_merged(provider, &refs, now_unix_ms())
+}
+
+/// 单请求执行：URL + 头 + 超时 + body 读取。body 读取失败与传输层失败同样
+/// 归 `Http`（status 0 / 实际码），绝不吞成空串。
+async fn fetch_text(
+    client: &reqwest::Client,
+    req: &PreparedRequest,
+) -> Result<(u16, String), ProviderUsageError> {
+    let mut builder = client.get(&req.url).timeout(REQUEST_TIMEOUT);
+    for (key, value) in &req.headers {
+        builder = builder.header(key, value);
+    }
+    let response = builder.send().await.map_err(|e| {
+        let message = format!("request failed: {}", err_chain(&e));
+        tracing::debug!(url = %req.url, message, "provider usage: transport error");
+        ProviderUsageError::Http {
+            status: 0,
+            message,
+        }
+    })?;
+    let status = response.status().as_u16();
+    let body = response.text().await.map_err(|e| {
+        let message = format!("response body read failed: {}", err_chain(&e));
+        tracing::debug!(url = %req.url, status, message, "provider usage: body read failed");
+        ProviderUsageError::Http { status, message }
+    })?;
+    Ok((status, body))
 }
 
 fn now_unix_ms() -> u64 {
