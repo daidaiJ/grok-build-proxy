@@ -3900,3 +3900,32 @@ Linux CI 全量 shell 套件随 PR build 验证。
   只有当前页；Windows Terminal/conhost 两宿主下拖选行为抽查。
 
 **发版收口：** PR #6 merge `ac85985`，最终 main build `40151902095` Linux/Windows 双 job success；PR build `40149884484` 双 job success。`v1.0.69` 标签已重指到该 merge commit；release run `40154140290` 双 job success，发布页为 4 个非草稿资产。Windows zip SHA-256：`d48bd970cac0b0557aadf506405cd042a43ffa17b3da477fef8bd7139b775ff6`；下载校验通过，运行显示 `grok 1.0.69 (ac8598508ca6)`。
+
+## 六十二期：撤回 /stats 原生选择面——关闭按钮恢复可用，复制只保留当前页（2026-10-27，分支 fix/local-stats-modal-revert-native-select）
+
+> 背景：六十一期给 /stats 面板加的「打开期间释放鼠标捕获」在 v1.0.69 实测
+> 暴露两个副作用：① 右上角 `[✗]` 关闭按钮点击无效；② 终端原生拖选无法被
+> 应用裁剪，框选会越出面板、把背后的对话正文一起粘出来。用户拍板：不面板内
+> 框选复制，保持简单、避免边缘问题。
+
+### 改动
+
+- `xai-grok-pager/src/app/app_view.rs`：删除 `stats_modal_open()` 谓词，并从
+  `sync_native_selection_mouse()` 的 `want_off` 移除——/stats 面板不再释放
+  鼠标捕获，`[✗]`/标签页/滚轮/页脚按钮恢复应用内处理。auth 原始 URL 面板的
+  原生选择面机制保持不变。
+- `xai-grok-pager/src/app/app_view_tests.rs`：删除
+  `stats_modal_counts_as_native_select_surface`。
+- 保留六十一期的 `StatsModalState::copy_active_tab()`（`y`/页脚按钮只复制
+  当前标签页）不变。
+
+### 验证与遗留
+
+- `cargo check -p xai-grok-pager --all-targets` 0 error。
+- ctest 门控过滤 `stats_modal`：**18 passed / 0 failed**（六十一期的 18 例减去
+  被删的 `stats_modal_counts_as_native_select_surface`，新增
+  `close_button_click_closes_the_modal` 回归，`y_copies_only_the_active_tab`
+  仍在）。
+- 遗留：活体复核随新客户端——`/stats` 点 `[✗]` 关闭、滚轮/标签点击恢复；
+  面板内不再支持鼠标框选（终端 Shift+拖选是否可用取决于宿主，不在支持面）。
+
