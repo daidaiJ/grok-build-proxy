@@ -11,6 +11,13 @@ pub(crate) fn parse_ok(provider: UsageProviderId, status: u16, body: &str) -> Pl
     crate::parse_response(provider, status, body, NOW_MS).expect("parse ok")
 }
 
+pub(crate) fn parse_merged_ok(
+    provider: UsageProviderId,
+    parts: &[(u16, &str)],
+) -> PlanUsageSnapshot {
+    crate::parse_merged(provider, parts, NOW_MS).expect("parse merged ok")
+}
+
 pub(crate) fn parse_err(provider: UsageProviderId, status: u16, body: &str) -> ProviderUsageError {
     crate::parse_response(provider, status, body, NOW_MS).expect_err("parse err")
 }

@@ -15,7 +15,8 @@ use crate::types::UsageProviderId;
 /// - MiniMax：`api.minimaxi.com`/`api.minimax.io`/`api.minimax.cn`（国内新推理
 ///   域名无额度接口公开出处，但同一账号体系，查询仍走 api.minimaxi.com）；
 /// - DeepSeek 开放平台：host `api.deepseek.com`（官方 API，推理路径如 `/v1`
-///   不影响匹配）。
+///   不影响匹配）；
+/// - Cline Pass：host `api.cline.bot`（推理与计费同域，用量查询用同一把 SK）。
 pub fn provider_for_base_url(base_url: &str) -> Option<UsageProviderId> {
     let url = base_url.to_lowercase();
     if url.contains("opencode.ai") && url.contains("/zen/go") {
@@ -35,6 +36,8 @@ pub fn provider_for_base_url(base_url: &str) -> Option<UsageProviderId> {
         Some(UsageProviderId::MiniMaxCoding)
     } else if url.contains("api.deepseek.com") {
         Some(UsageProviderId::DeepSeek)
+    } else if url.contains("api.cline.bot") {
+        Some(UsageProviderId::ClinePass)
     } else {
         None
     }
@@ -105,12 +108,24 @@ mod tests {
             provider_for_base_url("https://ark.cn-beijing.volces.com/api/coding/v3"),
             None
         );
-        assert_eq!(
-            provider_for_base_url("https://api.cline.bot/api/v1"),
-            None
-        );
         assert_eq!(provider_for_base_url("token-unlimited.com/v1"), None);
         assert_eq!(provider_for_base_url(""), None);
+    }
+
+    #[test]
+    fn clinepass_matches_inference_host() {
+        // 推理 base_url 带 /api/v1 前缀，用量查询走同域。
+        assert_eq!(
+            provider_for_base_url("https://api.cline.bot/api/v1"),
+            Some(ClinePass)
+        );
+        assert_eq!(provider_for_base_url("https://api.cline.bot"), Some(ClinePass));
+        // 大小写不敏感 + 非 cline host 不匹配
+        assert_eq!(
+            provider_for_base_url("https://API.Cline.Bot/api/v1"),
+            Some(ClinePass)
+        );
+        assert_eq!(provider_for_base_url("https://cline.example.com/api/v1"), None);
     }
 
     #[test]

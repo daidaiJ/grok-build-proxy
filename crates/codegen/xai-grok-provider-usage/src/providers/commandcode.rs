@@ -71,13 +71,145 @@ pub(crate) fn parse(
     Ok((plan_name, out))
 }
 
+/// 互补合并（`crate::parse_merged` 钩子）：第二段 `GET /alpha/usage/summary`
+/// 是账期聚合（实测 2026-10-27：`totalMonthlyCredits` = 本账期已用 credits，
+/// `periodBasis:"billing-period"`），与第一段 credits 的月度剩余
+/// `monthlyCredits` 合成月度窗口：total = remaining + used，used_pct =
+/// used/total×100，note 带 $ 金额。summary 非 2xx / 无字段 / `periodBasis`
+/// 变化 / credits 段无 monthlyCredits（pay-as-you-go）→ 不加月度窗，单段行为
+/// 不变（上游不直接给月度 used/cap，此为推算口径）。
+pub(crate) fn merge(
+    windows: &mut Vec<PlanUsageWindow>,
+    parts: &[(u16, &str)],
+) -> Result<(), ProviderUsageError> {
+    let Some((credits_status, credits_body)) = parts.first() else {
+        return Ok(());
+    };
+    if !(200..300).contains(credits_status) {
+        return Ok(());
+    }
+    let Ok(credits) = serde_json::from_str::<serde_json::Value>(credits_body) else {
+        return Ok(());
+    };
+    let Some(remaining) = credits.pointer("/credits/monthlyCredits").and_then(as_f64) else {
+        return Ok(());
+    };
+    let Some((summary_status, summary_body)) = parts.get(1) else {
+        return Ok(());
+    };
+    if !(200..300).contains(summary_status) {
+        return Ok(());
+    }
+    let Ok(summary) = serde_json::from_str::<serde_json::Value>(summary_body) else {
+        return Ok(());
+    };
+    if summary
+        .get("periodBasis")
+        .and_then(|b| b.as_str())
+        .is_some_and(|b| b != "billing-period")
+    {
+        return Ok(());
+    }
+    let Some(used) = summary
+        .get("totalMonthlyCredits")
+        .and_then(as_f64)
+        .or_else(|| summary.get("totalCredits").and_then(as_f64))
+        .filter(|used| *used >= 0.0)
+    else {
+        return Ok(());
+    };
+    let total = remaining + used;
+    if total <= 0.0 {
+        return Ok(());
+    }
+    let mut win = mk_window(
+        UsageWindowKind::Monthly,
+        Some(crate::parse::clamp_pct(used / total * 100.0)),
+        None,
+    );
+    win.note = Some(format!("${} / ${} \u{b7} credits", fmt_num(used), fmt_num(total)));
+    windows.push(win);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::types::{PlanUsageSnapshot, ProviderUsageError, UsageProviderId, UsageWindowKind};
-    use crate::test_support::{parse_err, parse_ok, pct_of};
+    use crate::test_support::{parse_err, parse_merged_ok, parse_ok, pct_of};
 
     fn snap(status: u16, body: &str) -> PlanUsageSnapshot {
         parse_ok(UsageProviderId::CommandCode, status, body)
+    }
+
+    const CREDITS: &str = r#"{"credits":{"planId":"individual-goat","monthlyCredits":65.4663592199,
+        "purchasedCredits":0,"freeCredits":0},
+        "windowLimits":{"limited":true,"exceeded":null,
+        "fiveHour":{"used":0.0375,"cap":14,"exceeded":false,"resetAt":1793120809374},
+        "weekly":{"used":1.0311,"cap":35,"exceeded":false,"resetAt":1793695849254}}}"#;
+    const SUMMARY: &str = r#"{"totalCount":3015,"totalCost":4.6065888259,"totalCredits":4.6065888259,
+        "totalMonthlyCredits":4.6065888259,"periodBasis":"billing-period"}"#;
+
+    #[test]
+    fn merged_summary_adds_monthly_window() {
+        // 2026-10-27 活体 probe 数值：月度 = 剩余 65.47 + 账期已用 4.61 → 6.57%。
+        let s = parse_merged_ok(UsageProviderId::CommandCode, &[(200, CREDITS), (200, SUMMARY)]);
+        assert_eq!(s.windows.len(), 3);
+        let month = s
+            .windows
+            .iter()
+            .find(|w| w.kind == UsageWindowKind::Monthly)
+            .expect("monthly window");
+        let expected_pct: f64 = 4.6065888259 / (65.4663592199 + 4.6065888259) * 100.0;
+        assert_eq!(month.used_pct, Some(expected_pct.clamp(0.0, 100.0)));
+        assert_eq!(month.note.as_deref(), Some("$4.61 / $70.07 \u{b7} credits"));
+        assert_eq!(month.resets_at_ms, None, "账期重置在上游 summary 未给");
+        // 5h/周窗不受 merge 影响。
+        assert_eq!(pct_of(&s, UsageWindowKind::FiveHour), Some(0.0375 / 14.0 * 100.0));
+    }
+
+    #[test]
+    fn merged_single_part_is_credits_only() {
+        let s = parse_merged_ok(UsageProviderId::CommandCode, &[(200, CREDITS)]);
+        assert_eq!(s.windows.len(), 2);
+        assert!(!s.windows.iter().any(|w| w.kind == UsageWindowKind::Monthly));
+    }
+
+    #[test]
+    fn merged_summary_failure_keeps_credits_windows() {
+        let s = parse_merged_ok(
+            UsageProviderId::CommandCode,
+            &[(200, CREDITS), (500, "boom")],
+        );
+        assert_eq!(s.windows.len(), 2);
+        // 第一段 401 照常归 Unauthorized（merge 不改变凭据分层）。
+        let err = crate::parse_merged(UsageProviderId::CommandCode, &[(401, r#"{"error":{"code":"UNAUTHORIZED"}}"#), (200, SUMMARY)], 0)
+            .expect_err("401");
+        assert!(matches!(err, ProviderUsageError::Unauthorized { .. }));
+    }
+
+    #[test]
+    fn merged_period_basis_mismatch_skips_monthly() {
+        let s = parse_merged_ok(
+            UsageProviderId::CommandCode,
+            &[(200, CREDITS), (200, r#"{"totalMonthlyCredits":9,"periodBasis":"daily"}"#)],
+        );
+        assert_eq!(s.windows.len(), 2);
+    }
+
+    #[test]
+    fn merged_paygo_key_still_gets_monthly_credits_window() {
+        // pay-as-you-go 无滚动窗口，但 credits 段有 monthlyCredits → 月度窗照常合成。
+        let s = parse_merged_ok(
+            UsageProviderId::CommandCode,
+            &[(200, r#"{"credits":{"monthlyCredits":10}}"#), (200, SUMMARY)],
+        );
+        let month = s
+            .windows
+            .iter()
+            .find(|w| w.kind == UsageWindowKind::Monthly)
+            .expect("monthly from credits pool");
+        let expected_pct: f64 = 4.6065888259 / (10.0 + 4.6065888259) * 100.0;
+        assert_eq!(month.used_pct, Some(expected_pct.clamp(0.0, 100.0)));
     }
 
     #[test]
