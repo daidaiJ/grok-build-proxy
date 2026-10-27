@@ -3929,3 +3929,10 @@ Linux CI 全量 shell 套件随 PR build 验证。
 - 遗留：活体复核随新客户端——`/stats` 点 `[✗]` 关闭、滚轮/标签点击恢复；
   面板内不再支持鼠标框选（终端 Shift+拖选是否可用取决于宿主，不在支持面）。
 
+**发版收口：** tag `v1.0.70`（commit `6515ad9e`）release run `40459325505`
+Linux/Windows 双 job success、4 资产非草稿；Windows zip SHA-256
+`52f1bbdd09297fccbe8a34f82a471694d777d029b96c26f25a73022e02d2439c`（下载校验
+一致）；main build run `40459298820` 双 job success。本机部署
+`grok 1.0.70 (6515ad9e6c24)`（`D:\tool\cli` 的 `grok.exe` / `grok2.exe`，
+回滚点 `*.1.0.69-ac859850.bak`）。
+

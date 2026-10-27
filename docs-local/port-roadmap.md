@@ -1068,4 +1068,8 @@
   18/18（删 1 例原生选择面用例、新增 1 例 `[✗]` 点击回归，
   `y_copies_only_the_active_tab` 在）。
 - **遗留**：活体复核 `[✗]` / 滚轮 / 标签点击随新客户端。
+- **发版**：tag `v1.0.70`（`6515ad9e`）release run `40459325505` 双 job
+  success、4 资产非草稿；main build run `40459298820` 双 job success；本机
+  部署 `grok 1.0.70 (6515ad9e6c24)`（`D:\tool\cli`，回滚点
+  `*.1.0.69-ac859850.bak`）。
 

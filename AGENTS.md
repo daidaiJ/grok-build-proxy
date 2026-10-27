@@ -255,7 +255,9 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   文档内含现状锚点、改动点、验收标准与纪律要求。
   **2026-10-17 变更**：压缩账本标签页退场，第 4 标签页改月度统计（滚动 30 天，
   `/stats month`，恢复 df81acf 月窗；`StatsTab` 枚举删除，`Window` 直驱 4 窗），
-  PATCHES 四十五期随 v1.0.61。
+  PATCHES 四十五期随 v1.0.61。**2026-10-27**：面板内原生框选按用户拍板撤回
+  （关闭按钮失效 + 拖选越界），`y` 只复制当前标签页保留，PATCHES 六十二期随
+  `v1.0.70`。
 - [`docs-local/webdav-sync-todo.md`](docs-local/webdav-sync-todo.md) — WebDAV 同步（用量 +
   主机无关配置，服务端按机器分子目录）+ `/sync` 选择恢复/同步。**评估完成、未开工**；分期
   T1 传输层+假服务夹具 → T2 白名单/合并内核+`grok2 sync` CLI → T3 `/sync` TUI → T4 加密与凭据。
@@ -449,6 +451,24 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   sandbox×leader 互斥、`x.ai/*` 无稳定契约、Windows 侧未实测。
 
 ## 🔄 Handoff 摘要
+
+### `/stats` 原生选择面撤回 — `v1.0.70` 发版（2026-10-27）
+
+- **背景/拍板：** v1.0.69 的「面板期间释放鼠标捕获」实测导致右上角 `[✗]`
+  点击无效、拖选越出面板并带上背后的对话正文（终端原生选择无法被应用裁剪）。
+  用户拍板不做面板内框选复制，保持简单。
+- **改动：** 删除 `AppView::stats_modal_open()` 与 `sync_native_selection_mouse()`
+  的 stats 分支（auth 原始 URL 面板机制不动）；保留 `y`/页脚按钮只复制当前
+  标签页；新增 `[✗]` 点击回归用例。PATCHES 六十二期，分支
+  `fix/local-stats-modal-revert-native-select`。
+- **验证：** `cargo check -p xai-grok-pager --all-targets` 0 error；ctest
+  `stats_modal` 18 passed / 0 failed。
+- **CI/发版：** tag `v1.0.70`（`6515ad9e`）release run `40459325505` 双 job
+  success、4 资产非草稿（Windows zip sha256 `52f1bbdd…`）；main build run
+  `40459298820` success；本机 `D:\tool\cli` 部署 `grok 1.0.70 (6515ad9e6c24)`
+  （回滚点 `*.1.0.69-ac859850.bak`）。
+- **遗留：** 活体复核 `[✗]` / 滚轮 / 标签点击随新客户端；面板内不再支持
+  鼠标框选，`y` 复制当前页是唯一面板级复制路径。
 
 ### persistence 标题用例 + `/stats` 面板修复 — PR #5/#6 合 main，`v1.0.69` 重发（2026-10-25）
 
