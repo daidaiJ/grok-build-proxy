@@ -3900,3 +3900,51 @@ Linux CI 全量 shell 套件随 PR build 验证。
   只有当前页；Windows Terminal/conhost 两宿主下拖选行为抽查。
 
 **发版收口：** PR #6 merge `ac85985`，最终 main build `40151902095` Linux/Windows 双 job success；PR build `40149884484` 双 job success。`v1.0.69` 标签已重指到该 merge commit；release run `40154140290` 双 job success，发布页为 4 个非草稿资产。Windows zip SHA-256：`d48bd970cac0b0557aadf506405cd042a43ffa17b3da477fef8bd7139b775ff6`；下载校验通过，运行显示 `grok 1.0.69 (ac8598508ca6)`。
+
+## 六十二期：Cline Pass 用量接入 /usage 面板——第七家供应商适配器（2026-10-27，分支 feat/local-clinepass-provider-usage）
+
+> 背景：pi 生态插件 pi-clinepass（fifidayone/pi-clinepass 0.1.7）与 yetone/magpie
+> 均已实现「推理同一把 key 直查 ClinePass 订阅用量」；用户点名给 fork 补上
+> （推翻 2026-10-10 拍板 7 的 Cline 放弃部分）。
+
+### 端点与口径（活体 probe 实测）
+
+- `GET https://api.cline.bot/api/v1/users/me/plan/usage-limits`，`Authorization:
+  Bearer <推理同一把 sk_ key>`（2026-10-27 本机 probe HTTP 200）：
+  `{"data":{"limits":[{"type":"five_hour","percentUsed":32,
+  "resetsAt":"2026-10-27T17:55:51.323980658Z"},{"type":"weekly",…},
+  {"type":"monthly",…}]},"success":true}`。
+- `percentUsed` 已是已用口径；`resetsAt` RFC 3339 纳秒精度（既有
+  `parse_epoch_ms` 宽容截毫秒）。参照 pi-clinepass `src/usage.ts` `fetchPlanLimits`；
+  套餐名与美元 cap 在 `/api/v1/users/me/plan`（本轮单请求不查，架构为按序单请求解析）。
+
+### 实现（xai-grok-provider-usage 一家一文件惯例，shell/pager 零改动）
+
+- `types.rs`：`UsageProviderId::ClinePass`（as_str `cline-pass`，显示名
+  `Cline Pass`，ALL 6→7）。
+- `base_url_match.rs`：host `api.cline.bot` → ClinePass（推理 base_url
+  `https://api.cline.bot/api/v1` 命中；既有「不匹配」断言用例翻转为命中用例）。
+- `requests.rs`：单请求 `origin + /api/v1/users/me/plan/usage-limits`；origin
+  跟随 base_url 的 cline.bot host（默认 `https://api.cline.bot`，路径剥掉）。
+- `providers/clinepass.rs`：`data.limits` 为主、顶层 `limits` 宽容接受；未知
+  type / 缺 `percentUsed` 条目跳过；空则 Parse 错误。三窗口
+  FiveHour/Weekly/Monthly；月度窗按拍板 2 被渲染层裁剪（有 5h/周时不显）。
+- pager/shell：`usage_modal.rs:875` 的 provider 标题匹配有 `_` 通配臂、shell
+  错误分层通用——枚举加臂即生效，两 crate 零改动。
+
+### 验证
+
+- `cargo check -p xai-grok-provider-usage --all-targets` 0 error。
+- `ctest.sh -p xai-grok-provider-usage --lib` **70 passed / 0 failed**（基线 54 +
+  新增 16：夹具活体形态 / 整数百分比与顶层 limits 宽容 / 未知 type 与缺
+  percentUsed 跳过 / 空 limits Parse / 401 归 Unauthorized / base_url host 跟随）。
+- 文档：`docs-local/usage/provider-quota-display-todo.md`（供应商清单 + 拍板 7
+  勘误 + 施工实况 + pi/magpie 候选池盘点）。
+
+### 遗留
+
+- 活体验证随新客户端：/usage 面板对 `cline-pass/*` 模型出「Plan usage —
+  Cline Pass」三窗口（5h/周 + Resets）。
+- Token Unlimited 维持放弃；pi/magpie 新候选（OpenRouter 余额 / Moonshot 平台
+  余额 / SiliconFlow / StepFun / AiHubMix / new-api 中转 / OpenAI Codex OAuth
+  窗口 / Qoder / WorkBuddy / ZCode）已盘点入候选池，未拍板。

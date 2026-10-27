@@ -60,9 +60,28 @@
 | **Kimi For Coding** | 5h + 周 | Bearer 同 key | 读源码核实（零实测） | **首批**（拍板 6；已实现） |
 | **MiniMax Coding Plan** | 5h + 周（激活位门控） | Bearer 同 key | 读源码核实（零实测） | **首批**（拍板 6；已实现） |
 | **DeepSeek 开放平台（官方 API）** | 无窗口（按量计费余额，金额） | Bearer 同 key | 官方文档 | **第六家追加**（2026-10-17 用户点名；已实现） |
+| **Cline Pass** | 5h + 周 + 月（percentUsed） | Bearer 同 key（静态 `sk_` key 即可） | **已端到端实测**（2026-10-27 活体 probe 200）+ 读 pi-clinepass 0.1.7 源码 | **第七家追加**（2026-10-27 用户点名，推翻拍板 7 的 Cline 部分；已实现，见下） |
 | 火山 Ark Coding Plan | session/周/月 | **AK/SK 第二套凭据**（推理 key 实测被拒） | 读源码核实 + 推理 key 实测被拒 | **剔除**（违反拍板 3） |
 | 百炼 / 千问 Token Plan | 5h + 周 | console 临时 token 两步链路 | 读源码核实 + 第三方记录 | **剔除**（违反拍板 3；2026-10-10 复核官方 CLI 源码：单 key 仍不支持，见调研文档 §3） |
-| Cline（本机在用）/ Token Unlimited（本机在用） | 未知 | 未知 | 调研盲区（调研文档当时按收录标准剔除） | **放弃**（拍板 7，不会长期订阅） |
+| ~~Cline~~（→ ClinePass）/ Token Unlimited（本机在用） | 未知 | 未知 | 调研盲区（调研文档当时按收录标准剔除） | ~~**放弃**（拍板 7）~~；**Cline 部分已翻案**（2026-10-27：pi 插件 pi-clinepass 与 magpie 均已实现单 key 查询，用户点名引入）；Token Unlimited 维持放弃 |
+
+### 第七家追加：Cline Pass（2026-10-27，分支 `feat/local-clinepass-provider-usage`）
+
+- **端点**（推理与计费同域 `https://api.cline.bot`，Bearer 用推理同一把 key）：
+  `GET /api/v1/users/me/plan/usage-limits` → `{"data":{"limits":[
+  {"type":"five_hour","percentUsed":32,"resetsAt":"2026-10-27T17:55:51.323980658Z"},
+  {"type":"weekly",…},{"type":"monthly",…}]},"success":true}`。
+  `percentUsed` 已是已用口径；`resetsAt` RFC 3339 纳秒精度（`parse_epoch_ms` 宽容截毫秒）。
+  本机活体 probe（`cline-pass/deepseek-v4.1-flash` 的 `sk_` key）HTTP 200 三窗口齐全。
+- **参照源码**：pi 插件 [pi-clinepass](https://github.com/fifidayone/pi-clinepass) 0.1.7
+  `src/usage.ts` `fetchPlanLimits`（另查 `/api/v1/users/me/plan` 取套餐名与美元 cap，
+  本轮单请求不查）；yetone/magpie 的 cline 配额卡同源同构。
+- **实现**：`UsageProviderId::ClinePass`（as_str `cline-pass`）+ base_url host
+  `api.cline.bot` 匹配 + 单请求端点 + `providers/clinepass.rs` 解析器（`data.limits`
+  为主、顶层 `limits` 宽容接受，未知 type/缺 percentUsed 条目跳过）。套餐名与美元 cap
+  不取（架构为按序单请求解析，`/plan` 端点留待有需要时再评估）。
+- **面板行为**：三窗口带 resets；月度窗按拍板 2 被裁剪（有 5h/周时不渲染）。
+
 
 端点、响应结构、百分比语义（已用 vs 剩余 vs 计数）、各家坑（GLM 站点选择与失败
 信封、MiniMax 周窗激活位、Command Code `exceeded` 才是权威拦停判据等）见调研文档
@@ -212,9 +231,40 @@ pub struct PlanUsageWindow {
 ## 待定决策（拍板点）
 
 1. ~~供应商清单~~ **已拍板**：GLM / Kimi / MiniMax 全进首批（拍板 6）。
-2. ~~Cline / Token Unlimited~~ **已拍板**：放弃（拍板 7）。
+2. ~~Cline / Token Unlimited~~ **已拍板**：放弃（拍板 7）。**勘误（2026-10-27）**：
+   Cline 部分翻案为 Cline Pass 第七家（用户点名，见上）；Token Unlimited 维持放弃。
 3. ~~配置键名~~ **已拍板**：不做显式配置，base_url 匹配（拍板 8）。
 4. Command Code 的 `monthlyCredits`（$ 余额）是否加一行辅助显示（当前不显，
    窗口 note 里已带每窗 $ used/cap）。
 5. 失败负缓存（短 TTL 内不重试）做与否；当前设计为不写失败缓存。
 6. `chat_kind` 网关会话是否渲染供应商块（当前跟随现状跳过）。
+
+## 候选池（2026-10-27 盘点 pi / magpie 新增面，未拍板）
+
+来源：pi 插件 [pi-check-agent-quota](https://github.com/Linen9/pi-check-agent-quota)
+`extensions/lib/providers.ts`（fetcher 注册表）与 yetone/magpie
+`internal/provider/balance.go`（host → balance 端点表）、
+`internal/provider/subscription_usage.go`（OAuth 订阅配额面）。均读源码核实，未实测。
+
+**纯 API key 单请求（余额型，最贴合现适配器模式）：**
+
+| 供应商 | 端点 | 口径 | 参照 |
+| --- | --- | --- | --- |
+| OpenRouter | `GET api.openrouter.ai/api/v1/credits` | $ 余额（`total_credits − total_usage`） | pi + magpie 双实现 |
+| Moonshot/Kimi 开放平台 | `api.moonshot.ai`/`api.moonshot.cn` + `/v1/users/me/balance` | $/¥ 余额（`available_balance`） | pi + magpie 双实现 |
+| SiliconFlow | `api.siliconflow.cn`/`.com` + `/v1/user/info` | ¥/$ 余额 | magpie |
+| 阶跃 StepFun | `api.stepfun.com`/`.ai` + `/v1/accounts` | ¥/$ 余额 | magpie |
+| AiHubMix | `/dashboard/billing/remain`（key）或 `/api/user/self`（access token） | 余额/账号 quota | magpie |
+| new-api/one-api 中转 | `/api/usage/token`（key 单独可查） | key 剩余额度 | magpie |
+
+**OAuth 订阅窗口型（5h/周/月）：**
+
+| 供应商 | 端点 | 参照与注意 |
+| --- | --- | --- |
+| OpenAI Codex（ChatGPT 订阅） | `GET chatgpt.com/backend-api/wham/usage`，Bearer OAuth JWT + `chatgpt-account-id` header（JWT claim `https://api.openai.com/auth` 提取） | pi 已实现（token 当 apiKey 传）；5h + 7d `used_percent` + `plan_type` |
+| Qoder / WorkBuddy AI / ZCode | magpie 有配额卡，实现不在 repo main（内建或插件），端点需抓包/探针 | 用户在订三家，价值高但取数面要先发现 |
+
+**不引入**：Claude/Cursor/Copilot/Gemini/Antigravity（magpie 读各家 harness 本地
+登录态文件，非单 key HTTP，违反拍板 3 精神）；火山 doubao / qwen / 小米 token plan
+（pi 插件显式 un-provider，无公开端点）；zai 开放平台账户报告（bigmodel 按量，
+与 GLM coding plan 不同凭据面，价值看使用）。

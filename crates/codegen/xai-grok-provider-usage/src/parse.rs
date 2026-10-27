@@ -32,6 +32,7 @@ pub(super) fn parse_response(
         UsageProviderId::KimiCoding => providers::kimi::parse(&value)?,
         UsageProviderId::MiniMaxCoding => providers::minimax::parse(&value)?,
         UsageProviderId::DeepSeek => providers::deepseek::parse(&value)?,
+        UsageProviderId::ClinePass => providers::clinepass::parse(&value)?,
     };
     Ok(finish(provider, plan_name, windows, now_ms))
 }

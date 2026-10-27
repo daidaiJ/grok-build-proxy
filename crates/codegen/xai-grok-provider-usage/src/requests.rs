@@ -33,6 +33,10 @@ pub fn prepare_requests(
             url: url(&deepseek_origin(base_url), "/user/balance"),
             headers: bearer(key),
         }],
+        UsageProviderId::ClinePass => vec![PreparedRequest {
+            url: url(&clinepass_origin(base_url), "/api/v1/users/me/plan/usage-limits"),
+            headers: bearer(key),
+        }],
     }
 }
 
@@ -95,6 +99,16 @@ fn deepseek_origin(base_url: Option<&str>) -> String {
     }
 }
 
+/// ClinePass：默认 api.cline.bot；base_url 指向 cline.bot 其他 host 时跟随
+/// （推理与计费同域，端点参照 pi-clinepass `fetchPlanLimits`，2026-10-27 活体
+/// probe 实测 200）。
+fn clinepass_origin(base_url: Option<&str>) -> String {
+    match base_url.and_then(origin_of) {
+        Some(o) if o.contains("cline.bot") => o,
+        _ => "https://api.cline.bot".to_string(),
+    }
+}
+
 /// 从 base_url 提取 scheme+host origin（如 `https://api.kimi.com/coding` → `https://api.kimi.com`）。
 fn origin_of(base_url: &str) -> Option<String> {
     let rest = base_url.split_once("://")?;
@@ -117,6 +131,7 @@ mod tests {
             UsageProviderId::CommandCode,
             UsageProviderId::KimiCoding,
             UsageProviderId::DeepSeek,
+            UsageProviderId::ClinePass,
         ] {
             let reqs = prepare_requests(provider, "sk-test", None);
             assert_eq!(reqs.len(), 1, "{provider:?}");
@@ -193,6 +208,21 @@ mod tests {
         // 非 deepseek host 的 base_url 不影响默认端点
         let reqs = prepare_requests(UsageProviderId::DeepSeek, "k1", Some("https://example.com/v1"));
         assert_eq!(reqs[0].url, "https://api.deepseek.com/user/balance");
+    }
+
+    #[test]
+    fn clinepass_follows_base_host_and_drops_path() {
+        // 推理 base_url 带 /api/v1：用量端点用 scheme+host origin + 完整计费路径。
+        let reqs = prepare_requests(UsageProviderId::ClinePass, "k1", Some("https://api.cline.bot/api/v1"));
+        assert_eq!(reqs.len(), 1);
+        assert_eq!(reqs[0].url, "https://api.cline.bot/api/v1/users/me/plan/usage-limits");
+        assert_eq!(
+            reqs[0].headers,
+            vec![("Authorization".to_string(), "Bearer k1".to_string())]
+        );
+        // 非 cline host 的 base_url 不影响默认端点
+        let reqs = prepare_requests(UsageProviderId::ClinePass, "k1", Some("https://example.com/v1"));
+        assert_eq!(reqs[0].url, "https://api.cline.bot/api/v1/users/me/plan/usage-limits");
     }
 
     #[test]

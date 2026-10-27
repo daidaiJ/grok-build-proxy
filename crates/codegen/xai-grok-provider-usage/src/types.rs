@@ -15,17 +15,20 @@ pub enum UsageProviderId {
     MiniMaxCoding,
     /// DeepSeek 开放平台（官方 API，按量计费；查余额而非套餐窗口）。
     DeepSeek,
+    /// Cline Pass（cline.bot 订阅；推理与计费同域 api.cline.bot）。
+    ClinePass,
 }
 
 impl UsageProviderId {
     /// 全部合法配置值，供配置校验与错误提示。
-    pub const ALL: [UsageProviderId; 6] = [
+    pub const ALL: [UsageProviderId; 7] = [
         UsageProviderId::OpenCodeGo,
         UsageProviderId::CommandCode,
         UsageProviderId::GlmCoding,
         UsageProviderId::KimiCoding,
         UsageProviderId::MiniMaxCoding,
         UsageProviderId::DeepSeek,
+        UsageProviderId::ClinePass,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -36,6 +39,7 @@ impl UsageProviderId {
             UsageProviderId::KimiCoding => "kimi-coding",
             UsageProviderId::MiniMaxCoding => "minimax",
             UsageProviderId::DeepSeek => "deepseek",
+            UsageProviderId::ClinePass => "cline-pass",
         }
     }
 
@@ -48,6 +52,7 @@ impl UsageProviderId {
             UsageProviderId::KimiCoding => "Kimi For Coding",
             UsageProviderId::MiniMaxCoding => "MiniMax Coding Plan",
             UsageProviderId::DeepSeek => "DeepSeek",
+            UsageProviderId::ClinePass => "Cline Pass",
         }
     }
 
