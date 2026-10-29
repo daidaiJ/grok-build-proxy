@@ -143,6 +143,15 @@ pub struct NetworkConfig {
     /// an empty list routes all hosts (loopback still direct).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub proxy_hosts: Option<Vec<String>>,
+    /// LOCAL(insecure-tls): IP literals whose TLS certificates are accepted
+    /// without verification — a self-hosted gateway reachable only by address,
+    /// serving a self-signed certificate. Accepted forms: `10.0.0.5`,
+    /// `192.168.1.20:8443`, `::1`, `[fd00::5]:8443`; the port never scopes the
+    /// entry. Only IP literals are honored — a DNS-named endpoint keeps full
+    /// verification (put its CA in `GROK_EXTRA_CA_BUNDLE`). Unset verifies
+    /// everywhere, which is the default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub insecure_tls_hosts: Option<Vec<String>>,
 }
 
 /// LOCAL: `[provider_usage]` — 供应商套餐用量查询（`/usage` 面板）。当前模型的
@@ -1883,6 +1892,9 @@ impl Config {
             self.network.proxy.clone(),
             self.network.proxy_hosts.clone(),
         );
+        // LOCAL(insecure-tls): the certificate-verification bypass allowlist for
+        // IP-literal endpoints, resolved next to the proxy rule.
+        xai_grok_extra_ca::set_insecure_tls_hosts(self.network.insecure_tls_hosts.clone());
         // LOCAL: `[api_dump]` abnormal-response capture, read by the sampler.
         {
             let defaults = xai_grok_sampler::api_dump::Settings::default();

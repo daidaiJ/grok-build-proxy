@@ -373,6 +373,23 @@ name = "Local Llama"
 temperature = 0.8
 ```
 
+### Self-Signed HTTPS Gateway (LOCAL)
+
+A gateway reachable only by IP address and serving a self-signed certificate needs its address on the insecure-TLS allowlist, or every request fails certificate verification:
+
+```toml
+[network]
+insecure_tls_hosts = ["10.0.0.5"]
+
+[model.lan-gateway]
+model = "qwen3-235b"
+base_url = "https://10.0.0.5:8443/v1"
+name = "LAN Gateway"
+api_key = "sk-..."
+```
+
+Only IP literals are accepted; a DNS-named endpoint keeps verification and belongs in `GROK_EXTRA_CA_BUNDLE` instead. See [Local Enhancements → Insecure TLS for IP endpoints](29-local-enhancements.md#insecure-tls-for-ip-endpoints) for the accepted forms and the exact scope.
+
 ---
 
 ## Custom Models Endpoint

@@ -7,6 +7,7 @@ This build of Grok carries a set of local enhancements on top of upstream: an eg
 | Signal | Offer |
 | --- | --- |
 | Model calls time out, TLS errors, or the user is behind a corporate/clash proxy | `[network]` (see [Egress proxy](#egress-proxy)) |
+| A provider `base_url` is a bare IP address and its certificate fails to verify (self-signed) | `insecure_tls_hosts` (see [Insecure TLS for IP endpoints](#insecure-tls-for-ip-endpoints)) |
 | Shell tool misbehaves on Windows — mangled `/flag` arguments, wrong shell picked | `[shell]` (see [Shell backend](#shell-backend)) |
 | User wants call counters or throughput on the status row | `api-calls` / `perf` items (see [Status line extras](#status-line-extras)) |
 | Requests to OpenCode Go drop context across turns | `${session_id}` header (see [Session-affinity headers](#session-affinity-headers)) |
@@ -29,6 +30,23 @@ proxy = "http://127.0.0.1:7897"
 ```
 
 `proxy_hosts` entries match as dot-boundary suffixes: `x.ai` covers `api.x.ai` and `auth.x.ai` but not `notx.ai`. Prefer the built-in default (first-party hosts only) so nothing else on the machine silently rides the tunnel; use `[]` only when the user says everything must go through the proxy. Environment equivalents: `GROK_PROXY` (URL) and `GROK_PROXY_HOSTS` (comma-separated); the config table wins when both are set.
+
+---
+
+## Insecure TLS for IP endpoints
+
+**What it does.** Skips TLS certificate verification for **IP-literal** endpoints, so a self-hosted gateway that is reachable only by address and serves a self-signed certificate can be used as a model `base_url`. The allowlist is process-wide and read at config load, like the egress proxy, and it is honored by model requests, the `/usage` provider query, and the `/auth` panel's model lookup.
+
+```toml
+[network]
+insecure_tls_hosts = ["10.0.0.5", "192.168.1.20:8443", "[fd00::5]"]
+```
+
+Entries must be IP literals: `10.0.0.5`, `192.168.1.20:8443`, `::1`, `[fd00::5]:8443` all work, and a port never narrows an entry to that port. Any other entry — a hostname, a typo — is dropped with a warning instead of failing the launch. A DNS-named endpoint with a self-signed certificate keeps full verification on purpose: point `GROK_EXTRA_CA_BUNDLE` at that CA instead of disabling verification for a name that could resolve anywhere.
+
+Environment equivalent: `GROK_INSECURE_TLS_HOSTS` (comma-separated); the config table wins when both are set. Unset is the default and verifies every certificate.
+
+**Scope.** Only the listed addresses skip verification, and only on the paths that consult the list. A model with an mTLS identity (`mtls_cert_dir`) still verifies its pinned server certificate. Allowlisted endpoints always connect directly, never through the `[network]` proxy. MCP servers and web tools do not consult this list.
 
 ---
 

@@ -71,15 +71,28 @@ pub async fn prewarm_transport(base_url: &str) -> PrewarmReport {
         tracing::debug!(%base_url, "sampler transport prewarm skipped: no dialable origin");
         return report(PrewarmOutcome::NoOrigin, None);
     };
-    let client = match crate::shared_http::pooled_client() {
-        PooledClient::SharingDisabled => {
-            return report(PrewarmOutcome::SharingDisabled, Some(origin));
+    let client = if xai_grok_extra_ca::insecure_tls_for_url(base_url) {
+        // LOCAL(insecure-tls): an allowlisted IP endpoint dials through the
+        // verification-free client the sampler itself will use; the pooled
+        // client would only fail its handshake.
+        match crate::shared_http::client_insecure() {
+            Ok(client) => client,
+            Err(error) => {
+                tracing::debug!(%error, "sampler transport prewarm skipped: insecure client build failed");
+                return report(PrewarmOutcome::ClientUnavailable, Some(origin));
+            }
         }
-        PooledClient::Unavailable(error) => {
-            tracing::debug!(%error, "sampler transport prewarm skipped: shared client build failed");
-            return report(PrewarmOutcome::ClientUnavailable, Some(origin));
+    } else {
+        match crate::shared_http::pooled_client() {
+            PooledClient::SharingDisabled => {
+                return report(PrewarmOutcome::SharingDisabled, Some(origin));
+            }
+            PooledClient::Unavailable(error) => {
+                tracing::debug!(%error, "sampler transport prewarm skipped: shared client build failed");
+                return report(PrewarmOutcome::ClientUnavailable, Some(origin));
+            }
+            PooledClient::Ready(client) => client,
         }
-        PooledClient::Ready(client) => client,
     };
     let claim = match claim_origin(&origin) {
         Ok(claim) => claim,

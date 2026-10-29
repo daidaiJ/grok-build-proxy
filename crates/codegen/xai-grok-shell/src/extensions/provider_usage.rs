@@ -206,7 +206,7 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     }
 
     let requests = prepare_requests(provider, &api_key, Some(&entry.info().base_url));
-    let client = http_client(entry.info().use_proxy);
+    let client = http_client(entry.info().use_proxy, &entry.info().base_url);
     match fetch_snapshot(&client, provider, &requests).await {
         Ok(snapshot) => {
             xai_grok_telemetry::unified_log::info(
@@ -245,8 +245,11 @@ pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
 
 /// 直连（默认）或走进程级出口代理（该模型 `use_proxy = true` 时），与采样路径的
 /// 代理语义一致。用量端点多数与推理同 host，代理决策跟着模型走。
-fn http_client(use_proxy: bool) -> reqwest::Client {
-    let configure = |builder: reqwest::ClientBuilder| builder.tcp_nodelay(true);
+/// `[network] insecure_tls_hosts` 名单内的 IP 端点（自签证书）同样跳过证书验证。
+fn http_client(use_proxy: bool, base_url: &str) -> reqwest::Client {
+    let configure = |builder: reqwest::ClientBuilder| {
+        xai_grok_extra_ca::apply_insecure_tls(builder.tcp_nodelay(true), base_url)
+    };
     let result = if use_proxy {
         xai_grok_extra_ca::build_reqwest_client(configure)
     } else {

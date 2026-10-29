@@ -4027,3 +4027,89 @@ Linux/Windows 双 job success、4 资产非草稿；Windows zip SHA-256
   （含改名后月度必含用例；10216 filtered out）。
 - shell `cargo check --all-targets`（merge 调用方）随本批验证。
 - 本期随 **`v1.0.70`** 发版（CI 全绿后打 tag），见 Handoff。
+## 六十五期：IP 端点自签证书放行——`[network] insecure_tls_hosts`（2026-10-29，分支 feat/local-insecure-tls-ip-hosts）
+
+> 需求（用户口述）：供应商 `base_url` 是纯 IP 地址（自建网关 / 内网推理服务），
+> 证书自签，采样请求一律卡在证书校验上。要能配置放行。
+
+### 设计（两个候选里选「省事且安全」的那条）
+
+- **面 = 进程级 host 白名单**，落在既有 `[network]` 表（旁边就是 `proxy` /
+  `proxy_hosts`），而不是模型级 `insecure_tls = true`。理由：① 调用点按「目标
+  host 是否在名单内」各自决策即可，无需把字段一路穿到 `SamplingConfig` /
+  `SamplerConfig`（`ModelInfo` / `SamplingConfig` 是全字段字面量构造，新增字段
+  会在十余处构造点产生连锁改动）；② 一条配置同时覆盖采样、`/usage` 取数、
+  `/auth` 面板检索（面板检索时还没有 model 条目，模型级开关覆盖不到）；
+  ③ 未配置时零行为变化。
+- **条目只收 IP 字面量**（`10.0.0.5` / `192.168.1.20:8443` / `::1` /
+  `[fd00::5]:8443`），DNS 名一律丢弃 + warn：域名自签证书的既有正解是
+  `GROK_EXTRA_CA_BUNDLE`（校验照旧开着），把绕过面锁死在「不可能指向公网的
+  地址」上。
+- **实现走 reqwest 的 `danger_accept_invalid_certs(true)`**（rustls 后端下
+  等价于 `NoVerifier`，链校验与主机名校验一起跳过），不碰
+  `use_preconfigured_tls` + 自定义 rustls verifier 那条路——后者要求自己接管
+  ALPN，会把整棵树的客户端构建路径都换掉，回归面大且与上游同步冲突。
+
+### 改动
+
+- `xai-grok-extra-ca/src/lib.rs`：新增 LOCAL(insecure-tls) 段——
+  `ENV_GROK_INSECURE_TLS_HOSTS`、`set_insecure_tls_hosts`（配置加载期一次注入，
+  同 `set_process_proxy` 语义）、`insecure_tls_hosts()`（config → env 回退）、
+  `insecure_tls_for_url` / `insecure_tls_allows_host` 判定、`apply_insecure_tls`
+  构建器糖；`parse_insecure_tls_hosts` 纯函数（解析 + 去重 + 丢弃非 IP）。
+- `xai-grok-sampler/src/shared_http.rs`：新增两个不校验证书的共享客户端
+  （h2 / http1），恒直连（名单内是 IP 端点，代理匹配器本就不命中）。
+- `xai-grok-sampler/src/client.rs`：`SamplingClient::new` 按 `base_url` host
+  选择客户端；mTLS 优先级更高（有固定身份时仍校验）；`client_new` 结构化日志
+  增 `insecure_tls` 字段，首次命中打一条 warn。
+- `xai-grok-sampler/src/prewarm.rs`：名单内端点改用不校验证书的客户端预热
+  （否则预热必然握手失败，日志误报 failed，且真实连接池也没热上）。
+- `xai-grok-shell/src/agent/config.rs`：`NetworkConfig` 增
+  `insecure_tls_hosts`；`resolve_runtime_fields` 里与 proxy 同批注入。
+- `xai-grok-shell/src/extensions/provider_usage.rs`：`http_client` 增 base_url
+  入参，名单内跳过证书验证（用量端点与推理同 host）。
+- `xai-grok-shell/src/extensions/provider_models.rs`：`/auth` 面板
+  `GET {base_url}/models` 同上（用户在面板里填的就是待接入的 IP base URL）。
+- 文档：user-guide `29-local-enhancements.md` 新增「Insecure TLS for IP
+  endpoints」节 + 信号表一行；`11-custom-models.md` 新增「Self-Signed HTTPS
+  Gateway (LOCAL)」小节。
+
+### 验证
+
+- `cargo check`：extra-ca / sampler / shell 三 crate `--all-targets` 0 error
+  0 warning。
+- `ctest.sh -p xai-grok-extra-ca --lib`：**20 passed / 0 failed**（新增
+  `insecure_tls_tests` 5 例：四种 IP 字面量形态、域名/垃圾丢弃、等价条目去重、
+  仅命中名单内 host、URL 序列化的括号 IPv6 形态）。
+- `ctest.sh -p xai-grok-sampler --test insecure_tls`：**1 passed / 0 failed**
+  ——自签证书双回环端点端到端：未列入的 `127.0.0.2` 失败且错误文本确认为证书
+  校验失败（断言含 `certificate`）、请求 0 次到达；列入的 `127.0.0.1` 请求到达。
+- `GATE_FORCE=1 ctest.sh -p xai-grok-shell --lib insecure_tls`：**1 passed**
+  （`[network] insecure_tls_hosts` 解析进 config 且不报 unrecognized key）。
+- 同批跑 `ctest.sh -p xai-grok-sampler --tests`：lib 300/0 + 其余集成目标全绿，
+  唯一挂 `--test prewarm::prewarm_wire_lifecycle`（"首个采样请求必须复用预热
+  连接"）——**A/B 定案为既有失败**（stash 掉本轮 sampler 改动后同挂），登记
+  win-skip 族AC，与本轮无关。
+
+### 活体验证（本机 debug 二进制 + 自签 HTTPS 假端点，2026-10-29）
+
+- 夹具：`openssl req -x509`（SAN `IP:127.0.0.1`）自签证书 + python 自签 HTTPS
+  OpenAI 兼容假服务（`127.0.0.1:8443`，`/v1/chat/completions` 走 SSE），
+  独立 `GROK_HOME` 两份 config（仅差 `[network] insecure_tls_hosts`），模型
+  `base_url = "https://127.0.0.1:8443/v1"`。
+- **未列入名单**：`grok2 -p "say pong"` 退出码 1、`error_kind: http`，
+  假服务请求日志 **0 条**（握手未完成）——证书校验照旧生效。
+- **列入 `["127.0.0.1"]`**：同一套配置输出 `pong`、退出码 0，假服务日志出现
+  `POST /v1/chat/completions`——放行只由名单决定。
+- 操作备忘：debug 构建的主线程栈仅 1 MiB（PE `SizeOfStackReserve`），
+  跑 TUI/headless 会 `has overflowed its stack`；本机临时把二进制副本的
+  `SizeOfStackReserve` 补到 256 MiB 才跑起来（release 产物无此问题，无需改动）。
+
+### 遗留
+
+- 未覆盖面（有意）：MCP server HTTP（`xai-grok-mcp` 自带 reqwest 0.13 客户端）、
+  web_fetch / web_search 等工具客户端不查本名单。
+- 真实内网 IP 网关（非 loopback）活体验证未做；`/usage` 面板与 `/auth` 检索
+  两面对应的假服务路径未单独采（代码同判定函数）。
+- 名单为进程级、配置加载期注入：改配置需重启（与 `[network] proxy` 同语义）。
+- 非 IP 条目被丢弃时的 warn 文案本机未采（单测覆盖解析，未采日志文本）。

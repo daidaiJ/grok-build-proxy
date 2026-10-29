@@ -17,6 +17,19 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 > 补充以文末"后记"追加。规约类完工文档（如 ui-i18n-plan）不归档但须在头部
 > 标明"已完工 + 保留角色"。更新本索引时先核对文件真实存在。
 
+- **IP 端点自签证书放行（`[network] insecure_tls_hosts`，已落地分支待合，2026-10-29）** —
+  用户需求：供应商 `base_url` 是纯 IP（自建/内网网关）且证书自签时，采样被证书校验
+  卡死。实现 = 进程级 host 白名单（与 `[network] proxy` 同语义，配置加载期注入），
+  **只收 IP 字面量**（`10.0.0.5` / `192.168.1.20:8443` / `::1` / `[fd00::5]:8443`），
+  DNS 名丢弃 + warn（域名自签的既有正解是 `GROK_EXTRA_CA_BUNDLE`）；命中即用
+  `danger_accept_invalid_certs` 客户端，覆盖采样 / `/usage` 取数 / `/auth` 面板
+  `/models` 检索三面，未列入 host 一律照旧校验。env 等价 `GROK_INSECURE_TLS_HOSTS`。
+  PATCHES 六十五期；分支 `feat/local-insecure-tls-ip-hosts`。验证：extra-ca lib
+  20/0（含新增 5 例）、sampler `--test insecure_tls` 1/0（自签双回环端到端，
+  未列入失败且错误确认为证书问题）、shell `--lib insecure_tls` 1/0；**本机
+  debug 二进制活体已采**（自签 HTTPS 假端点：未列入 → 退出码 1 + 假服务 0 请求；
+  列入 → 输出 `pong` + 收到 POST）。
+
 - **空闲时自动压缩主上下文（已落地，随发版待活体验证）** — 实验特性
   `[features] idle_auto_compact`（默认关，env `GROK_IDLE_AUTO_COMPACT`）：
   成功回合结束的空闲点若上下文已过 auto-compact 阈值，提前把摘要做完，
