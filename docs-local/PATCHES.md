@@ -4262,3 +4262,92 @@ gash 的 CLI 与 bash 同构（`src/main.rs::parse_cli`），模式只有三条�
 - 遗留：① 随下版发版后同步刷新 `~/.grok/bin/`（当前 1.0.69 不含本修复）；② 上游
   安装命令/自更新可能再覆盖 `~/.grok/bin/`，复现特征与处置见
   `docs-local/inspect-config-keys-todo.md` 遗留提醒。
+
+## 六十八期：发版依赖缓存预热——`release-warm` 消除每次 tag 的全量冷构建（2026-11-07，分支 ci/local-release-cache-warm）
+
+> 背景：用户反馈「PR build 完合到 master，build 又很慢？release 也是」，要求
+> 优化 CI 缓存。实测确认 release 侧问题远比 build 严重：**每次 tag 都是全量冷构建**。
+
+### 根因：GitHub 缓存按 ref 作用域，tag 之间互不可见
+
+一个 run 只能 restore「自己这个 ref」和**默认分支**的缓存，读不到**别的 tag**：
+
+- v1.0.70 于 2026-10-27 06:37 存入 1.09 GiB blob；
+- v1.0.71 九小时后启动，日志仍打 `No cache found.`；v1.0.72 同理。
+
+所以每个 `v*` tag 都是全新 ref → 冷构建 → 28–31 min（实测 v1.0.70 27m08s /
+v1.0.71 21m31s / v1.0.72 27m54s，Build release binary 步）。这与缓存容量、
+过期无关，纯粹是 ref 隔离。
+
+顺带核实的两条（都**不改**）：
+
+- **build.yml 的 target/ 不缓存是有意为之**——debug target 约 3.5 GB，
+  每次 main/PR 都碰，10 GB LRU 会先把更冷的 release blob 挤掉。实测
+  `cache-targets: false` 下 cold/warm 的 check 步只差 13 秒（7m08s vs 6m55s），
+  加 target 收益远小于挤掉 release 缓存的代价。
+- **增量编译已关**（`CARGO_INCREMENTAL=0` + `CARGO_PROFILE_RELEASE_INCREMENTAL=false`），
+  Rust 1.99 的「CI 环境自动禁用增量」对本仓库净收益为零。
+- ccache（无 rustc 支持）/ sccache（GHA 后端曾 5k+ 碎片撑爆配额、0% 命中）/
+  kache（新项目，需自建远端）/ mold（Rust 1.90+ 已默认 rust-lld，本仓 release
+  profile 无 LTO，链接非瓶颈）——均判定不换。
+
+### 方案：在默认分支预热 release scope
+
+新增 `.github/workflows/release-warm.yml`，在 `main` 上用与 `release.yml`
+**完全相同的 rust-cache scope** 跑一次同样的 `--release` 构建：
+
+| 参数 | 值（两个 job 均与 release.yml 一致） |
+|---|---|
+| linux `cache-scope` | `release-2` |
+| windows `cache-scope` | `release-xwin-2` |
+| `cache-targets` / `cache-workspace-crates` / `cache-on-failure` | `true` / `false` / `true` |
+
+键不含 workflow 文件名——`shared-key` 在 rust-cache 里**取代** job-based key
+（README：「used instead of the automatic job-based key」），故 `release-warm`
+与 `release.yml` 天然同键；历史也印证过（两 workflow 曾共享 job 名，
+rust-cache 直接把 debug 产物 restore 进 release job）。
+
+触发条件刻意收窄到 **rust-cache 实际会哈希的输入**：`Cargo.lock` /
+`Cargo.toml` / `crates/**/Cargo.toml` / `rust-toolchain.toml` /
+`.cargo/config.toml`，外加两个 workflow 本体与 `ci-setup/**`（定义「缓存什么」）。
+rust-cache **不哈希 workspace 源码**，所以普通源码提交不动键、不重跑；
+外加 `workflow_dispatch` 兜底（blob 被 7 天 LRU 淘汰、或 scope 版本号 bump 时）。
+`concurrency` 独立成组、`cancel-in-progress: false`——取消会留下占着同键的半成品
+blob（v1.0.28 踩过）。无 `GROK_VERSION` 注入：该环境变量只影响
+`xai-grok-version` / `xai-grok-pager-bin` 两个 crate 的产物，依赖树与戳无关，
+留给 tag run 自己重编。
+
+### 实测效果
+
+| 阶段 | run | 结果 |
+|---|---|---|
+| 预热（冷） | `42375487020` | 双 job success，各 **45 min** |
+| 预热产物 | — | `v1-rust-release-2-Linux-x64-9fdb79ed-3cd26c2e` 1.23 GB + `v1-rust-release-xwin-2-...` 1.17 GB，ref 均 `refs/heads/main` |
+| tag v1.0.73（热） | `42379141762` | 双 job success，各 **18 min** |
+
+tag run 日志直接确认命中：
+
+```
+Cache hit for: v1-rust-release-2-Linux-x64-9fdb79ed-3cd26c2e
+Restored from cache key "v1-rust-release-2-Linux-x64-9fdb79ed-3cd26c2e" full match: true.
+```
+
+release 构建 45 → 18 min（约 -60%）。
+
+### 同批：`jp` 死函数删除
+
+`xai-grok-agent/src/prompt/user_message.rs` 测试模块的 `jp` helper 两个平台都无
+调用点，Linux job 每次 `Test touched crates` 报
+`warning: function jp is never used`（行 340，build run `42375487092`）。
+`c78b45bb` 只加了 `#[cfg_attr(windows, allow(dead_code))]`，压住的是 Windows 侧；
+「only the cfg(unix) cases below call it」的注释也已失效（该文件已无 `cfg(unix)`
+用例）。上游同文件亦是死函数，属同步遗留，直接删除（`d5d1488b`）。
+`context.rs` / `hooks_adapter.rs` 的同名 helper 有真实调用点，不动。
+
+### 遗留
+
+- **`build.yml` 的 `paths-ignore` 未补 `.github/**`**：纯 CI YAML 提交
+  （如 PR #9 只加一个 workflow 文件）仍会跑完整 build（约 19 min）。
+  已向用户提出，未拍板。
+- `release-warm` 的 `workflow_dispatch` 在文件落到默认分支前不可用
+  （GitHub 行为），首次只能靠 `push` 触发。

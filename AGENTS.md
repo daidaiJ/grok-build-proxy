@@ -485,6 +485,42 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### 发版缓存预热（release-warm）+ gash 后端 + inspect 修复 — v1.0.73 发版（2026-11-07）
+
+- **当前状态：** tag **`v1.0.73`**（`a4f73dc8`）已发版，4 资产非草稿。本批含
+  三件：① **gash shell 后端**（PATCHES 六十六期，PR #8，merge `76b860f1`）；
+  ② **`grok inspect` `[privacy]` 假警告修复**（六十七期，PR #7，merge `17df15cb`）；
+  ③ **`jp` 死函数删除**（`d5d1488b`，`xai-grok-agent` 测试模块零调用点，
+  Linux job 每次报 `warning: function jp is never used`；`c78b45bb` 只加了
+  `#[cfg_attr(windows, allow(dead_code))]`，压的是 Windows 侧）。
+- **CI 缓存核心修复（本轮主线）：** 根因是 GitHub 缓存**按 ref 作用域**——
+  一个 run 只能读「自己这个 ref」和**默认分支**，读不到别的 tag。历史上
+  v1.0.70 在 06:37 存了 1.09 GiB blob，九小时后 v1.0.71 仍打
+  `No cache found.`，所以**每次 tag 都是全量冷构建**。
+  修法 = 新增 `.github/workflows/release-warm.yml`（PR #9，merge `a4f73dc8`）：
+  在 `main` 上用与 `release.yml` **完全相同的 rust-cache scope**
+  （`release-2` / `release-xwin-2`、`cache-targets: true`、
+  `cache-workspace-crates: false`、`cache-on-failure: true`）跑一次
+  `--release` 构建，把依赖产物写进默认分支作用域。键不含 workflow 文件名
+  （`shared-key` 取代 job-based key），故 tag run 能精确命中。
+  触发条件刻意收窄到 rust-cache 会哈希的输入（`Cargo.lock` / `Cargo.toml` /
+  `crates/**/Cargo.toml` / `rust-toolchain.toml` / `.cargo/config.toml` +
+  两个 workflow + `ci-setup/**`），源码提交不动键、不重跑。
+- **实测效果：** `release-warm` run `42375487020` 双 job success（冷，各 45 min），
+  落盘 `v1-rust-release-2-Linux-x64-9fdb79ed-3cd26c2e`（1.23 GB）+ 
+  `v1-rust-release-xwin-2-...`（1.17 GB），ref 均为 `refs/heads/main`。
+  tag run `42379141762` 双 job success、各 **18 min**，日志
+  `Cache hit for: v1-rust-release-2-...` / `Restored from cache key "..." full match: true.`
+  对照此前 v1.0.70/71/72 的 23–31 min。压缩约 60%。
+- **部署：** `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.73 (a4f73dc86ed2)`
+  （回滚点 `grok2.exe.1.0.72-7f1fdcd4.bak`）；`~/.grok/bin/{grok,agent}.exe`
+  同步刷为 1.0.73（旧 fork 版备份 `*.bak-1.0.69-fork`）。
+- **gash 后端已启用：** `~/.grok/config.toml` 新增 `[shell] backend = "gash"`。
+  端到端实测（新进程带正确 PATH）：bash 工具实际执行
+  `D:\tool-cli\gash\gash.exe`（`$0` 探测确认）。**注意 `find_gash()` 依赖
+  PATH 或 `GASH_ROOT`**——`D:\tool-cli\gash` 在用户 PATH 里（新进程可见），
+  但**改 PATH 前启动的旧终端/进程看不见**，会静默回退到 Git Bash。
+
 ### Cline Pass 用量接入 + 月度窗额外显示 + Command Code 月度 merge — 已合 main，随 v1.0.71 发版（2026-10-28）
 
 - **当前状态：** 三件随 tag **`v1.0.71`** 发版（PATCHES 六十三/六十四期，分支
