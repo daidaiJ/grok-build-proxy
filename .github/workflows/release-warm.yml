@@ -1,0 +1,143 @@
+# LOCAL: keep the release-scoped dependency cache warm on the default branch.
+#
+# Why this exists. A tag run can restore caches created on the default branch,
+# but it cannot read another tag's cache (GitHub docs, "Restrictions for
+# accessing a cache": runs restore from their own branch or the default branch,
+# never from a different tag name). Every `v*` tag is therefore a brand-new ref,
+# so before this workflow every release rebuilt the whole dependency tree from
+# scratch: v1.0.70 wrote a 1.09 GiB blob at 06:37 on 2026-10-27, v1.0.71 started
+# nine hours later and still logged `No cache found.`
+#
+# What it does. Runs the same `--release` build as release.yml on `main`, with
+# the same rust-cache scopes (`release-2`, `release-xwin-2`) and the same
+# `cache-targets: true` / `cache-workspace-crates: false` settings, so the
+# dependency artifacts land in the default-branch scope under the exact key a
+# later tag will look for. release.yml's own header already described warming
+# this cache via workflow_dispatch; this automates it instead of relying on
+# someone remembering to dispatch before every tag.
+#
+# Why a separate workflow file still produces the same cache key as release.yml.
+# rust-cache's key is `{prefix-key}-{shared-key}-{platform}-{hash...}`, and
+# `ci-setup` always passes `shared-key` — which replaces its job-based key, so
+# the workflow *file* is not part of it. The history in release.yml proves this:
+# build.yml and release.yml once shared job names and rust-cache restored debug
+# artifacts straight into release jobs, i.e. two different workflow files minted
+# one key. Keeping the same `shared-key` values gives the same key here.
+# Do not rename the `linux` / `windows` jobs or change the `cache-scope` values
+# without changing release.yml to match — either edit silently breaks the warm.
+#
+# Why it is not wired to every push. rust-cache keys on the hash of Cargo.lock,
+# every member Cargo.toml, rust-toolchain.toml and .cargo/config.toml — NOT on
+# workspace sources. An ordinary source-only commit therefore leaves the key
+# unchanged and the existing warm blob still applies, so re-warming would only
+# burn ~30 minutes of runner time per push for no new artifact. Only the inputs
+# in the path filter below can move the key, plus manual dispatch for the case
+# where a warm blob was evicted (>7 days unread) or the cache scopes were bumped.
+#
+# Releases are infrequent (the last 15 release runs span 2026-10-15..10-29), so
+# this runs on the order of once per dependency change rather than per commit.
+name: release-warm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Exactly the files rust-cache hashes into its key. A change to any of
+      # them mints a new key, so the previous blob cannot serve the next tag.
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/**/Cargo.toml"
+      - "rust-toolchain.toml"
+      - ".cargo/config.toml"
+      # The two workflows that define what gets cached; keep them in sync.
+      - ".github/workflows/release.yml"
+      - ".github/workflows/release-warm.yml"
+      - ".github/actions/ci-setup/**"
+  workflow_dispatch:
+
+# Its own group: never cancel a warm run mid-build. rust-cache saves on post
+# even after a cancel, and a partial blob would occupy the exact key the next
+# tag restores (the v1.0.28 cancel-poisoning release.yml documents).
+concurrency:
+  group: release-warm-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+  RUSTUP_MAX_RETRIES: "10"
+  CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # rust-cache hashes Cargo.toml of every member; a shallow clone still
+          # has the working tree, so depth 1 is enough. Kept at 0 only in
+          # release.yml where git-describe feeds the version stamp.
+          fetch-depth: 1
+      - uses: chetan/git-restore-mtime-action@v2
+      - uses: ./.github/actions/ci-setup
+        with:
+          # Identical to release.yml's linux job. Diverging scopes here would
+          # silently warm a key no tag ever looks for.
+          cache-scope: release-2
+          cache-targets: "true"
+          cache-workspace-crates: "false"
+          # The warm build itself is the only long step, and a cancelled or
+          # failed run still leaves a usable dependency tree. Matches
+          # release.yml, which sets this so an upload failure rerun hits warm.
+          cache-on-failure: "true"
+      # Deliberately no GROK_VERSION stamp: the version is a compile-time input
+      # for xai-grok-version / xai-grok-pager-bin (both build.rs files declare
+      # `rerun-if-env-changed=GROK_VERSION`). Leaving it unset here keeps those
+      # two crates' artifacts keyed the same as a dev build, and the tag run
+      # recompiles them with its own stamp. Everything else — the dependency
+      # tree this workflow exists to warm — is stamp-independent.
+      - name: Warm the release dependency cache
+        run: cargo build --locked --release -p xai-grok-pager-bin
+
+  windows:
+    # Cross-compile windows-msvc on Linux, exactly as release.yml does. See that
+    # file's header for why the fork moved off native windows-latest.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      XWIN_CACHE_DIR: ${{ github.workspace }}/.xwin-cache
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - uses: chetan/git-restore-mtime-action@v2
+      - name: Install clang / lld / ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install --quiet -y clang lld ninja-build
+      - uses: ./.github/actions/ci-setup
+        with:
+          cache-scope: release-xwin-2
+          cache-targets: "true"
+          cache-workspace-crates: "false"
+          rust-targets: x86_64-pc-windows-msvc
+          rust-components: llvm-tools
+          cache-on-failure: "true"
+      # The MSVC SDK download is ~1.5 GB and keyed by SDK version, not by ref,
+      # so this entry is already shared across tags. Kept so a cold warm-run
+      # does not re-fetch it. (No `zip` here: this job never packages.)
+      - name: Cache MSVC SDK (xwin)
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.XWIN_CACHE_DIR }}
+          key: xwin-sdk-17-${{ runner.os }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-xwin
+      - name: Warm the release dependency cache (windows-msvc)
+        run: cargo xwin build --locked --release -p xai-grok-pager-bin --target x86_64-pc-windows-msvc
