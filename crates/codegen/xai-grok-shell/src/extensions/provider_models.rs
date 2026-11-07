@@ -39,8 +39,12 @@ pub struct ProviderModelsResponse {
 }
 
 /// 直连（缺省）或跟随进程级出口代理，与 modelCatalog 同一客户端纪律。
-fn http_client() -> reqwest::Client {
-    let configure = |builder: reqwest::ClientBuilder| builder.tcp_nodelay(true);
+/// `[network] insecure_tls_hosts` 名单内的 IP 端点（自签证书）跳过证书验证——
+/// 面板检索时用户填的就是待接入的 base URL，此时还没有 model 条目。
+fn http_client(url: &str) -> reqwest::Client {
+    let configure = |builder: reqwest::ClientBuilder| {
+        xai_grok_extra_ca::apply_insecure_tls(builder.tcp_nodelay(true), url)
+    };
     xai_grok_extra_ca::build_reqwest_client(configure).unwrap_or_else(|_| reqwest::Client::new())
 }
 
@@ -96,7 +100,7 @@ pub async fn handle(_agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
         .and_then(|v| v.as_str())
         .map(str::to_string);
 
-    let mut response = fetch_models(&http_client(), &base_url, api_key.as_deref()).await;
+    let mut response = fetch_models(&http_client(&base_url), &base_url, api_key.as_deref()).await;
     // 回包里的 base_url 统一为去尾斜杠形态，调用方比对用。
     response.base_url = base_url;
     to_raw_response(&response)

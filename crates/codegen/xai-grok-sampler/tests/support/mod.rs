@@ -35,8 +35,10 @@ pub fn test_config(base_url: &str, api_key: &str) -> SamplerConfig {
     }
 }
 
-pub async fn send_one(client: &SamplingClient) {
-    let request = ConversationRequest {
+/// A minimal single-user-turn conversation, shared by the wire tests and by
+/// tests that need the request result instead of just the side effect.
+pub fn conversation_request() -> ConversationRequest {
+    ConversationRequest {
         items: vec![ConversationItem::User(UserItem {
             content: vec![ContentPart::Text {
                 text: Arc::<str>::from("hi"),
@@ -44,6 +46,9 @@ pub async fn send_one(client: &SamplingClient) {
             ..Default::default()
         })],
         ..Default::default()
-    };
-    let _ = client.conversation(request).await;
+    }
+}
+
+pub async fn send_one(client: &SamplingClient) {
+    let _ = client.conversation(conversation_request()).await;
 }

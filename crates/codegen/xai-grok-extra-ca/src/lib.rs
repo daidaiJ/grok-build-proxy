@@ -176,6 +176,136 @@ fn proxy_match(host_suffixes: &[String], all_hosts: bool, url: &str, uri: &reqwe
     matched.then(|| url.to_string())
 }
 
+// ---------------------------------------------------------------------------
+// LOCAL(insecure-tls): opt-in certificate-verification bypass for IP-literal
+// endpoints — a self-hosted gateway reachable only by address, serving a
+// self-signed certificate.
+//
+// The allowlist holds IP addresses only, so no entry can widen the policy to a
+// public hostname; a DNS-named self-signed endpoint is served by the CA-bundle
+// path (`GROK_EXTRA_CA_BUNDLE`) instead. Callers that know their target URL ask
+// [`insecure_tls_for_url`] and apply [`apply_insecure_tls`]. Unset (the
+// default) verifies every certificate exactly as before.
+// ---------------------------------------------------------------------------
+
+pub const ENV_GROK_INSECURE_TLS_HOSTS: &str = "GROK_INSECURE_TLS_HOSTS";
+
+static INSECURE_TLS_HOSTS: OnceLock<Vec<std::net::IpAddr>> = OnceLock::new();
+
+/// Set the process-wide insecure-TLS allowlist from `[network] insecure_tls_hosts`.
+/// Call once at config load, before the first client build; later calls are ignored.
+/// `None` leaves the slot unset so the `GROK_INSECURE_TLS_HOSTS` env fallback stays reachable;
+/// an empty vec is an explicit "verify everywhere".
+pub fn set_insecure_tls_hosts(hosts: Option<Vec<String>>) {
+    let Some(hosts) = hosts else {
+        return;
+    };
+    let _ = INSECURE_TLS_HOSTS.set(resolve_insecure_tls_hosts(&hosts, "config"));
+}
+
+/// The resolved allowlist: the config-loaded list ([`set_insecure_tls_hosts`]),
+/// else `GROK_INSECURE_TLS_HOSTS` (comma-separated). Empty when neither is set.
+pub fn insecure_tls_hosts() -> &'static [std::net::IpAddr] {
+    INSECURE_TLS_HOSTS.get_or_init(|| match std::env::var(ENV_GROK_INSECURE_TLS_HOSTS) {
+        Ok(raw) => {
+            let entries: Vec<String> = raw
+                .split(',')
+                .map(str::trim)
+                .filter(|entry| !entry.is_empty())
+                .map(str::to_string)
+                .collect();
+            resolve_insecure_tls_hosts(&entries, ENV_GROK_INSECURE_TLS_HOSTS)
+        }
+        Err(_) => Vec::new(),
+    })
+}
+
+/// True when `host` — a URL host string, so IPv6 arrives bracketed — is allowlisted.
+pub fn insecure_tls_allows_host(host: &str) -> bool {
+    host_allowed(host, insecure_tls_hosts())
+}
+
+/// True when `url`'s host is allowlisted. An unparsable URL, a hostname, and an
+/// empty allowlist all answer false.
+pub fn insecure_tls_for_url(url: &str) -> bool {
+    reqwest::Url::parse(url)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(str::to_owned))
+        .is_some_and(|host| insecure_tls_allows_host(&host))
+}
+
+/// [`insecure_tls_for_url`] applied to a client builder: the certificate-chain
+/// and hostname checks are skipped only for an allowlisted host.
+pub fn apply_insecure_tls(builder: reqwest::ClientBuilder, url: &str) -> reqwest::ClientBuilder {
+    if insecure_tls_for_url(url) {
+        builder.danger_accept_invalid_certs(true)
+    } else {
+        builder
+    }
+}
+
+/// Parse, log both outcomes, and keep the IPs.
+fn resolve_insecure_tls_hosts(entries: &[String], source: &str) -> Vec<std::net::IpAddr> {
+    let (allowed, dropped) = parse_insecure_tls_hosts(entries);
+    if !dropped.is_empty() {
+        tracing::warn!(
+            source,
+            dropped = ?dropped,
+            "insecure TLS: only IP literals are honored (a self-signed DNS endpoint belongs in GROK_EXTRA_CA_BUNDLE); dropped"
+        );
+    }
+    if !allowed.is_empty() {
+        let hosts: Vec<String> = allowed.iter().map(ToString::to_string).collect();
+        tracing::warn!(
+            source,
+            hosts = ?hosts,
+            "insecure TLS: certificate verification is disabled for these hosts"
+        );
+    }
+    allowed
+}
+
+/// Entries to (allowlisted IPs, dropped text). Accepted forms: `10.0.0.5`,
+/// `10.0.0.5:8443`, `::1`, `[::1]`, `[fd00::5]:8443`; a port never scopes the entry.
+pub(crate) fn parse_insecure_tls_hosts(
+    entries: &[String],
+) -> (Vec<std::net::IpAddr>, Vec<String>) {
+    let mut allowed = Vec::new();
+    let mut dropped = Vec::new();
+    for entry in entries {
+        match parse_host_ip(entry) {
+            Some(ip) => {
+                if !allowed.contains(&ip) {
+                    allowed.push(ip);
+                }
+            }
+            None => dropped.push(entry.clone()),
+        }
+    }
+    (allowed, dropped)
+}
+
+/// The IP a host string denotes, bracketed IPv6 included; `None` for a hostname.
+fn parse_host_ip(host: &str) -> Option<std::net::IpAddr> {
+    let host = host.trim();
+    if host.is_empty() {
+        return None;
+    }
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return Some(ip);
+    }
+    if let Ok(socket) = host.parse::<std::net::SocketAddr>() {
+        return Some(socket.ip());
+    }
+    host.strip_prefix('[')
+        .and_then(|rest| rest.strip_suffix(']'))
+        .and_then(|inner| inner.parse::<std::net::IpAddr>().ok())
+}
+
+fn host_allowed(host: &str, allowed: &[std::net::IpAddr]) -> bool {
+    parse_host_ip(host).is_some_and(|ip| allowed.contains(&ip))
+}
+
 /// ring on Windows ARM64: aws-lc-sys's jitterentropy is miscompiled for that target and overflows the stack on the first TLS handshake (xai-org/plugin-marketplace#426).
 const IS_RING_TARGET: bool = cfg!(all(windows, target_arch = "aarch64"));
 
@@ -724,5 +854,65 @@ mod process_proxy_tests {
         assert!(host_is_loopback("127.0.0.1"));
         assert!(host_is_loopback("[::1]"));
         assert!(!host_is_loopback("api.x.ai"));
+    }
+}
+
+// LOCAL(insecure-tls): allowlist parsing and host matching.
+#[cfg(test)]
+mod insecure_tls_tests {
+    use std::net::IpAddr;
+
+    use super::{host_allowed, parse_insecure_tls_hosts};
+
+    fn parse(entries: &[&str]) -> (Vec<IpAddr>, Vec<String>) {
+        let owned: Vec<String> = entries.iter().map(|entry| (*entry).to_string()).collect();
+        parse_insecure_tls_hosts(&owned)
+    }
+
+    fn allowed(entries: &[&str]) -> Vec<IpAddr> {
+        parse(entries).0
+    }
+
+    #[test]
+    fn accepts_every_ip_literal_form() {
+        let (ips, dropped) = parse(&["10.0.0.5", "192.168.1.20:8443", "::1", "[fd00::5]:8443"]);
+        assert!(dropped.is_empty());
+        assert_eq!(
+            ips,
+            vec![
+                "10.0.0.5".parse::<IpAddr>().unwrap(),
+                "192.168.1.20".parse::<IpAddr>().unwrap(),
+                "::1".parse::<IpAddr>().unwrap(),
+                "fd00::5".parse::<IpAddr>().unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn drops_hostnames_and_garbage() {
+        let (ips, dropped) = parse(&["api.example.com", "grok.lan", "", "10.0.0.5:abc"]);
+        assert!(ips.is_empty());
+        assert_eq!(dropped.len(), 4);
+    }
+
+    #[test]
+    fn deduplicates_equivalent_entries() {
+        assert_eq!(allowed(&["10.0.0.5", "10.0.0.5:8443", " 10.0.0.5 "]).len(), 1);
+    }
+
+    #[test]
+    fn matches_only_allowlisted_hosts() {
+        let list = allowed(&["10.0.0.5"]);
+        assert!(host_allowed("10.0.0.5", &list));
+        assert!(!host_allowed("10.0.0.6", &list));
+        assert!(!host_allowed("api.example.com", &list));
+        assert!(!host_allowed("10.0.0.5", &[]));
+    }
+
+    #[test]
+    fn matches_the_bracketed_form_url_serialization_produces() {
+        let list = allowed(&["fd00::5"]);
+        assert!(host_allowed("[fd00::5]", &list));
+        assert!(!host_allowed("[fd00::6]", &list));
     }
 }

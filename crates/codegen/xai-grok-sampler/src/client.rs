@@ -704,8 +704,26 @@ impl SamplingClient {
                 );
             });
         }
+        // LOCAL(insecure-tls): an allowlisted IP-literal `base_url` (self-hosted
+        // gateway, self-signed certificate) gets a client that skips
+        // certificate verification. mTLS still wins: a pinned identity verifies.
+        let insecure_tls = xai_grok_extra_ca::insecure_tls_for_url(&config.base_url);
+        if insecure_tls {
+            static INSECURE_TLS_WARNED: std::sync::Once = std::sync::Once::new();
+            INSECURE_TLS_WARNED.call_once(|| {
+                tracing::warn!(
+                    "TLS certificate verification is disabled for an allowlisted host \
+                     (insecure_tls_hosts): {}",
+                    config.base_url
+                );
+            });
+        }
         let http = if let Some(cert_dir) = config.mtls_cert_dir.as_deref() {
             crate::shared_http::mtls_client(cert_dir, config.force_http1)?
+        } else if insecure_tls && config.force_http1 {
+            crate::shared_http::client_http1_insecure().map_err(SamplingError::Http)?
+        } else if insecure_tls {
+            crate::shared_http::client_insecure().map_err(SamplingError::Http)?
         } else if config.force_http1 && use_proxy {
             crate::shared_http::client_http1().map_err(SamplingError::Http)?
         } else if config.force_http1 {
@@ -724,6 +742,7 @@ impl SamplingClient {
             api_backend = ?config.api_backend,
             auth_scheme = ?config.auth_scheme,
             request_compression = ?config.request_compression,
+            insecure_tls,
             // "unset" (not "none"): `ReasoningEffort::None` is a real wire value; logging the absent Option as "none" looked like we were sending it
             reasoning_effort = config.reasoning_effort.map_or("unset", |e| e.into()),
             has_api_key = config.api_key.is_some(),

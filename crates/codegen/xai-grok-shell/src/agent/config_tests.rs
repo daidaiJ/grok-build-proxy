@@ -1219,6 +1219,26 @@ fn model_override_applies_use_proxy() {
     .apply("m", Some(entry), &EndpointsConfig::default());
     assert!(entry.info.use_proxy);
 }
+// LOCAL(insecure-tls): `[network] insecure_tls_hosts` parses into the config and
+// must not warn as an unknown key. The IP-literal filter and the verification
+// bypass itself live in `xai-grok-extra-ca`.
+#[test]
+fn network_insecure_tls_hosts_parses_without_unrecognized_warning() {
+    let toml_str = r#"
+        [network]
+        insecure_tls_hosts = ["10.0.0.5", "[fd00::5]:8443"]
+    "#;
+    let (config, _) = resolve_models_from_toml(toml_str, None);
+    assert_eq!(
+        config.network.insecure_tls_hosts.as_deref(),
+        Some(&["10.0.0.5".to_string(), "[fd00::5]:8443".to_string()][..])
+    );
+    assert!(
+        unused_keys_from_toml(toml_str).is_empty(),
+        "insecure_tls_hosts must not warn as unrecognized: {:?}",
+        unused_keys_from_toml(toml_str)
+    );
+}
 #[test]
 fn sampling_config_uses_fallback_when_no_model_api_key() {
     let model = test_model_entry("test-model", "https://test.api/v1", None, None, None);

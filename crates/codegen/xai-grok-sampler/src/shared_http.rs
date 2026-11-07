@@ -20,6 +20,10 @@ static SHARED_HTTP1: OnceLock<reqwest::Client> = OnceLock::new();
 // LOCAL: proxy-free twins for the model-level `use_proxy = false` path.
 static SHARED_H2_NO_PROXY: OnceLock<reqwest::Client> = OnceLock::new();
 static SHARED_HTTP1_NO_PROXY: OnceLock<reqwest::Client> = OnceLock::new();
+// LOCAL(insecure-tls): certificate-verification-free twins for base URLs on the
+// `[network] insecure_tls_hosts` allowlist.
+static SHARED_H2_INSECURE: OnceLock<reqwest::Client> = OnceLock::new();
+static SHARED_HTTP1_INSECURE: OnceLock<reqwest::Client> = OnceLock::new();
 
 /// Kill switch: `GROK_SAMPLER_SHARED_CLIENT=0` (or `false`, any case) builds a fresh `reqwest::Client` per `SamplingClient` instead.
 /// Resolved once per process: the environment cannot change externally after spawn.
@@ -106,6 +110,18 @@ pub(crate) fn client_http1_no_proxy() -> Result<reqwest::Client, reqwest::Error>
     shared(&SHARED_HTTP1_NO_PROXY, build_http_client_http1_no_proxy, sharing_disabled())
 }
 
+/// LOCAL(insecure-tls): HTTP/2 client that skips certificate verification, for
+/// base URLs on the `[network] insecure_tls_hosts` allowlist. Always direct: an
+/// allowlisted endpoint is IP-literal, which the proxy matcher never routes.
+pub(crate) fn client_insecure() -> Result<reqwest::Client, reqwest::Error> {
+    shared(&SHARED_H2_INSECURE, build_http_client_insecure, sharing_disabled())
+}
+
+/// LOCAL(insecure-tls): HTTP/1.1 twin of [`client_insecure`].
+pub(crate) fn client_http1_insecure() -> Result<reqwest::Client, reqwest::Error> {
+    shared(&SHARED_HTTP1_INSECURE, build_http_client_http1_insecure, sharing_disabled())
+}
+
 /// Build a `reqwest::Client` for sampling with HTTP/2 and connection pooling.
 /// Env knobs are read once, when the shared client is first built.
 fn build_http_client() -> Result<reqwest::Client, reqwest::Error> {
@@ -115,6 +131,20 @@ fn build_http_client() -> Result<reqwest::Client, reqwest::Error> {
 /// LOCAL: proxy-free build of [`build_http_client`].
 fn build_http_client_no_proxy() -> Result<reqwest::Client, reqwest::Error> {
     xai_grok_extra_ca::build_reqwest_client_no_proxy(configure_http2)
+}
+
+/// LOCAL(insecure-tls): verification-free build of [`build_http_client`].
+fn build_http_client_insecure() -> Result<reqwest::Client, reqwest::Error> {
+    xai_grok_extra_ca::build_reqwest_client_no_proxy(|builder| {
+        configure_http2(builder).danger_accept_invalid_certs(true)
+    })
+}
+
+/// LOCAL(insecure-tls): verification-free build of [`build_http_client_http1`].
+fn build_http_client_http1_insecure() -> Result<reqwest::Client, reqwest::Error> {
+    xai_grok_extra_ca::build_reqwest_client_no_proxy(|builder| {
+        configure_http1(builder).danger_accept_invalid_certs(true)
+    })
 }
 
 fn configure_http2(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
