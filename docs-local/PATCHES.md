@@ -4113,3 +4113,105 @@ Linux/Windows 双 job success、4 资产非草稿；Windows zip SHA-256
   两面对应的假服务路径未单独采（代码同判定函数）。
 - 名单为进程级、配置加载期注入：改配置需重启（与 `[network] proxy` 同语义）。
 - 非 IP 条目被丢弃时的 warn 文案本机未采（单测覆盖解析，未采日志文本）。
+
+## 六十六期：新增 `gash` shell 后端——原生 Rust bash（`[shell] backend = "gash"`）（2026-11-07，分支 feat/local-gash-shell-backend）
+
+> 需求（用户口述）：本机装了 gash（`D:\tool-cli\gash\gash.exe`，
+> https://github.com/hex2f/gash ，MIT，v0.2.0），给 grok2 的 bash 工具配一个
+> 后端用这个。先研究「除了 `-c` 是不是还有更适合 agent 的形式」，结论是
+> `-c` 仍是唯一可用面（详见下方调研），故按既有 `[shell]` 表扩展一个取值。
+
+### 调研：gash 的调用面（比 `-c` 更适合 agent 的形式？）
+
+gash 的 CLI 与 bash 同构（`src/main.rs::parse_cli`），模式只有三条：
+`-c`（命令串）、`script-file`、`-s` / 空参数（读 stdin）。没有 `--json`、
+没有常驻/RPC、没有结构化输出——`--pretty-print` / `--dump-strings` /
+`--dump-po-strings` / `--wordexp` 都被显式忽略（解析后 `{}`），
+`--pretty-print` 实际直接执行脚本。逐项实测（本机 v0.2.0）：
+
+| 候选 | 结论 |
+| --- | --- |
+| `-c` | **采用**。与 Git Bash 语义逐项对齐：退出码（`exit 42`→42、`false`→1）、`set -e`、stderr 分流、`&&`、positional args（`$0`/`$1`）、父进程 env 注入、UTF-8 全对 |
+| `-s` / stdin | **不采用**。命令文本走 stdin 可绕开 CreateProcess 32767 限制（实测 1 MB 脚本可跑、Git Bash 同样），但我们的 spawn 点是 `Stdio::null()`，`gash -s </dev/null` **静默空跑且退出码 0**（CLI 把「无脚本 + 非 tty」当读 stdin），会把工具结果伪装成成功；改 spawn 契约的面远大于收益 |
+| `script-file` | **不采用**。同样绕开长度限制（实测 40 KB 脚本成功，`-c` 则 126），但要在临时目录落盘 + 每命令多一次文件 IO，且引号/编码面新增一条路径 |
+| `-i` | 不采用。`-i` 是交互式 REPL/行编辑，非 agent 面 |
+| `-l` | **PTY 面采用**（`pty_session` 与 Git Bash 一致 `-l`），`-c` 面不用（`-l` 会 source `~/.bash_profile`，agent 命令不该被用户 rc 影响） |
+
+**长度限制的真实归属**：`-c` 的 32767 上限来自 Windows CreateProcess
+（`WinError 206`），Git Bash 在同一位置**同样失败**（python `subprocess.run`
+对两者都抛 206），不是 gash 的缺陷。gash 真正的独有缺陷是**长参数列表**：
+1200 文件 glob（56 KB argv）时 Git Bash 输出 1200，gash 报
+`ls: 文件名或扩展名太长。`（README 声称此处 100% 兼容，实为
+[issue #20](https://github.com/hex2f/gash/issues/20)，已在上游立案未修）。
+`-s` / 脚本形式**都不能规避**这一条（实测三种形式全挂），故无法用调用面绕过。
+
+### 设计（两条路里选「纯加法」的那条）
+
+- **面 = 既有 `[shell] backend` 表加一个取值 `gash`**（`GROK_SHELL=gash` 等价），
+  不新开配置表、不碰级联默认（默认仍是 pwsh → powershell → Git Bash → powershell）。
+  理由：既有表已经有「选 Git Bash 拿 Unix 工具链」的语义，gash 是同一格子里更快
+  的同类项；新表会多一套优先级/文档/校验面而无额外表达力。
+- **解析器 `find_gash()` 不猜安装目录**：gash 是单文件、无固定安装路径，
+  顺序 = `GASH_ROOT`（可指 exe 或含 exe 的目录）→ 自身可执行文件同目录 →
+  `PATH` 的 `where`。找不到就 warn + 退回级联（与 `bash` 未装 Git Bash 同语义）。
+- **不注入 MSYS 守卫**（与 Git Bash 后端的唯一实质差异）：实测 gash 自带的
+  转换器已能区分「真 MSYS 路径」与「`/flag` 开关」——clean env 下
+  `/nologo /t:Build` 原样透传、`/c/Users/...` → `C:/Users/...`、`/tmp` → `%TEMP%`、
+  `/d/CODE/ai` → `D:/CODE/ai`。而 Git Bash 是靠
+  `MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL=*` 硬关转换才保住 `/flag`（代价是
+  真路径也不转）。若把 Git Bash 那对守卫也给 gash，反而会掐掉它对 `/c/...`
+  该做的转换，把 `C:/...` 直接喂给 MSYS 工具。
+- **能力位按「bash 兼容」整格对齐**：`has_unix_utilities` /
+  `supports_chain_operator` 为真（复用 Git for Windows 的
+  `ls`/`grep`/`sed`/`awk`），`ampersand_semantics` = `PosixBackground`；
+  hooks 的命令改写与 PTY 的 `-l` 一并跟随。**例外 = `name()` 返回 `"gash"`**
+  （不冒充 `bash`）：它进 `<user_info>` 前缀、系统提示 `Shell:` 字段与日志，
+  如实标注才不会让排查时误判成 Git Bash。
+
+### 改动
+
+- `xai-grok-config/src/shell.rs`：`WindowsShell::Gash(String)` 变体；
+  `find_gash()`（`GASH_ROOT` → exe 同目录 → `where gash.exe`）；显式覆盖分支
+  `"gash"`；`name()`/`has_unix_utilities()`/`supports_chain_operator()`/
+  `ampersand_semantics()`；`invocation_for` 的 `Gash` 臂（`-c` + 仅 UTF-8 env，
+  不注入 MSYS 守卫）。
+- `xai-grok-shell-terminal/src/pty_session.rs`：PTY shell 解析跟随 `Gash`（`-l`）。
+- `xai-grok-hooks/src/runner/command.rs`：`env_root` 的 MSYS 形态与
+  `rewrite_hook_command_for_windows_shell` 跟随 `Gash`。
+- `xai-grok-shell/src/agent/config.rs`：`ShellBackendConfig::backend` 取值文档补 `gash`。
+- `xai-grok-pager/docs/user-guide/29-local-enhancements.md`：取值表补 `gash` 行 +
+  「`gash` lookup」段 + 何时该选它。
+- 测试（`shell.rs` 内）：既有 `has_unix_utilities_only_true_for_gitbash` 改名并
+  加 gash 断言；新增 `gash_reports_its_own_name_and_bash_capabilities`、
+  `invocation_for_gash_omits_msys_guards`；`invocation_for_sets_utf8_env_on_every_variant`
+  的变体数组补 gash。本机 7/7 绿（`cargo test -p xai-grok-config --lib -- shell::`）。
+
+### 验证
+
+- 本机 `cargo check -p xai-grok-config -p xai-grok-shell-terminal -p xai-grok-hooks
+  -p xai-grok-shell --all-targets` 0 error（10m20s）。
+- `cargo test -p xai-grok-config --lib -- shell::` 7 passed / 0 failed。
+- **CI 覆盖面提示**：`Gash` 变体全部在 `#[cfg(not(unix))]` 下，Linux job 编译不到，
+  只有 **windows job** 的
+  `cargo check -p xai-grok-config -p xai-proto-build -p xai-grok-shell -p xai-grok-hooks -p xai-grok-agent`
+  覆盖它（`xai-grok-shell-terminal` 两个 job 都不在列，仅经由 `xai-grok-shell` 的
+  依赖被编译到，其自身测试不在 CI 跑）。
+- 已知与本改动无关的本机既有失败（baseline 同样失败，非本分支引入）：
+  `xai-grok-config` 的 `plugin_inline_stdio_expands_plugin_root`（PATH 分隔符断言
+  在 Windows 上左右不等）、`global_hook_sources::trust_boundary_sources_are_not_discovery`
+  （symlink 夹具）、`managed_text::validator_timeout_is_bounded`（计时）；
+  `xai-grok-shell-terminal` 的 `streaming_local_terminal::tests::test_kill_returns_signal`
+  （Windows 无 `signal 9`）。`xai-grok-config` 本不在本机白名单，
+  上游套件本就不跑。
+
+### 遗留
+
+- **长参数列表**（glob > 32767 argv）在 gash 下仍失败（上游 issue #20），
+  agent 跑 `ls logs/*.out` 类宽 glob、且 stderr 被重定向时会静默拿到空结果。
+  调用面无法规避，需等上游修复。
+- **`-s` 的静默空跑**（stdin 为空时退出码 0）未加防护——当前不用该形式，
+  但若将来改 spawn 契约走 stdin，必须先处理。
+- 活体验证：headless 跑一轮 `[shell] backend = "gash"` 下的真实命令
+  （含 `grep`/`sed`/`&&`、中文路径、`/flag` 参数）未做。
+- 本机 gash 为手动放入 `D:\tool-cli\gash`（未走 winget），`find_gash` 靠 PATH 命中；
+  若日后移到别处需同步改 PATH 或设 `GASH_ROOT`。

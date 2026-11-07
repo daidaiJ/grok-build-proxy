@@ -205,7 +205,12 @@ pub async fn run_command_hook(
     #[cfg(not(unix))]
     let env_root = {
         use xai_grok_config::shell::{WindowsShell, detect_windows_shell};
-        if is_shell_command && matches!(detect_windows_shell(), WindowsShell::GitBash(_)) {
+        if is_shell_command
+            && matches!(
+                detect_windows_shell(),
+                WindowsShell::GitBash(_) | WindowsShell::Gash(_)
+            )
+        {
             Cow::Owned(ctx.workspace_root.replace('\\', "/"))
         } else {
             Cow::Borrowed(ctx.workspace_root)
@@ -536,7 +541,7 @@ fn rewrite_hook_command_for_windows_shell<'a>(
         WindowsShell::Pwsh | WindowsShell::PowerShell => {
             rewrite_posix_env_refs_for_powershell(command, extra_env)
         }
-        WindowsShell::GitBash(_) => Cow::Borrowed(command),
+        WindowsShell::GitBash(_) | WindowsShell::Gash(_) => Cow::Borrowed(command),
         WindowsShell::Cmd => {
             if command.contains('$') {
                 tracing::warn!(
