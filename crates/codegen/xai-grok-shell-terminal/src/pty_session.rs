@@ -702,6 +702,7 @@ fn resolve_pty_shell(shell: Option<&str>) -> (String, Vec<String>) {
         use xai_grok_config::shell::{WindowsShell, detect_windows_shell};
         match detect_windows_shell() {
             WindowsShell::GitBash(path) => (path.clone(), vec!["-l".to_string()]),
+            WindowsShell::Gash(path) => (path.clone(), vec!["-l".to_string()]),
             WindowsShell::Pwsh => ("pwsh".to_string(), vec!["-NoLogo".to_string()]),
             WindowsShell::PowerShell => ("powershell.exe".to_string(), vec!["-NoLogo".to_string()]),
             WindowsShell::Cmd => ("cmd.exe".to_string(), vec![]),

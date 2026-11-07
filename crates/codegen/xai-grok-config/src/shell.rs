@@ -5,7 +5,7 @@
 //! PowerShell is preferred over Git Bash: MSYS2 path translation mangles every flag starting with `/` (e.g. MSBuild `/t:Build`, cl.exe `/nologo`).
 //! This breaks native Windows C++/C#/.NET builds.
 //!
-//! Set `GROK_SHELL` to override auto-detection: `pwsh`, `powershell`, `bash`, or `cmd`.
+//! Set `GROK_SHELL` to override auto-detection: `pwsh`, `powershell`, `bash`, `gash`, or `cmd`.
 //! The result is cached for the process lifetime.
 
 /// Detected Windows shell and how to invoke it.
@@ -13,6 +13,10 @@
 #[derive(Clone, Debug)]
 pub enum WindowsShell {
     GitBash(String),
+    /// LOCAL: gash, a native Rust bash-compatible shell (no Cygwin `fork()` emulation).
+    /// Reuses Git for Windows' MSYS tools, so it is a drop-in for the `GitBash` variant
+    /// with the same Unix utilities and `&&` chaining, at a fraction of the fork cost.
+    Gash(String),
     Pwsh,
     PowerShell,
     Cmd,
@@ -26,7 +30,7 @@ static SHELL_OVERRIDE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock
 
 /// LOCAL: set the Windows shell backend from config (`[shell] backend`).
 /// Accepts the same values as `GROK_SHELL`: `pwsh` | `powershell` | `bash`
-/// (also `gitbash`/`git-bash`) | `cmd`. Call once at config load, before the
+/// (also `gitbash`/`git-bash`) | `gash` | `cmd`. Call once at config load, before the
 /// first bash-tool call; later calls are ignored.
 #[cfg(not(unix))]
 pub fn set_windows_shell_override(backend: Option<String>) {
@@ -70,6 +74,15 @@ pub fn detect_windows_shell() -> &'static WindowsShell {
                         "GROK_SHELL={val} but Git Bash not found; falling through to auto-detect"
                     );
                 }
+                "gash" => {
+                    if let Some(path) = find_gash() {
+                        tracing::info!(shell = path, "Windows shell (GROK_SHELL override): gash");
+                        return WindowsShell::Gash(path);
+                    }
+                    tracing::warn!(
+                        "GROK_SHELL={val} but gash.exe not found; falling through to auto-detect"
+                    );
+                }
                 "cmd" | "cmd.exe" => {
                     tracing::info!("Windows shell (GROK_SHELL override): cmd.exe");
                     return WindowsShell::Cmd;
@@ -77,7 +90,7 @@ pub fn detect_windows_shell() -> &'static WindowsShell {
                 other => {
                     tracing::warn!(
                         "GROK_SHELL={other} is not recognized \
-                         (expected pwsh|powershell|bash|cmd); falling through to auto-detect"
+                         (expected pwsh|powershell|bash|gash|cmd); falling through to auto-detect"
                     );
                 }
             }
@@ -157,12 +170,68 @@ fn find_git_bash() -> Option<String> {
     None
 }
 
+/// LOCAL: locate `gash.exe` (https://github.com/hex2f/gash), a native bash-compatible shell.
+///
+/// `GASH_ROOT` wins when set (same override the shell itself honors), then a portable copy next to
+/// our own executable, then PATH via `where`. There is no "well-known install directory" to probe:
+/// gash ships as a single binary that users unzip anywhere, and `winget install hex2f.gash` puts it
+/// on PATH in a per-user package directory we cannot predict.
+#[cfg(not(unix))]
+fn find_gash() -> Option<String> {
+    if let Ok(root) = std::env::var("GASH_ROOT") {
+        let root = root.trim();
+        if !root.is_empty() {
+            // `GASH_ROOT` may name the Git install or a folder holding `gash.exe`; try both shapes.
+            let with_bin = std::path::Path::new(root)
+                .join("gash.exe")
+                .to_string_lossy()
+                .to_string();
+            if std::path::Path::new(&with_bin).exists() {
+                return Some(with_bin);
+            }
+            if std::path::Path::new(root).is_file() {
+                return Some(root.to_string());
+            }
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        let sibling = dir.join("gash.exe");
+        if sibling.exists() {
+            return Some(sibling.to_string_lossy().to_string());
+        }
+    }
+
+    // Fall back to PATH. `where` prints every match, one per line.
+    if let Ok(output) = {
+        let mut cmd = std::process::Command::new("where");
+        xai_tty_utils::detach_std_command(&mut cmd);
+        cmd.arg("gash.exe").stdin(std::process::Stdio::null());
+        cmd.output()
+    } && output.status.success()
+    {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            let line = line.trim();
+            if !line.is_empty() {
+                return Some(line.to_string());
+            }
+        }
+    }
+    None
+}
+
 #[cfg(not(unix))]
 impl WindowsShell {
     /// Short display name for user-facing contexts (e.g. "bash", "pwsh").
     pub fn name(&self) -> &'static str {
         match self {
             Self::GitBash(_) => "bash",
+            // Reported as "gash" rather than "bash" so logs, the `<user_info>` prefix and the
+            // system prompt `Shell:` field show which bash-compatible shell is actually in use.
+            Self::Gash(_) => "gash",
             Self::Pwsh => "pwsh",
             Self::PowerShell => "powershell",
             Self::Cmd => "cmd.exe",
@@ -170,23 +239,24 @@ impl WindowsShell {
     }
 
     /// Whether this shell supports the `&&` pipeline chain operator for error-propagating command chaining.
-    /// True for pwsh (`&&` arrived in PS 7.0) and Git Bash; powershell.exe 5.1 has no `&&`.
+    /// True for pwsh (`&&` arrived in PS 7.0) and the bash-compatible shells; powershell.exe 5.1 has no `&&`.
     /// `cmd.exe` has `&&` but we use `;` there for uniformity with the `-Command` invocation style used elsewhere.
     pub fn supports_chain_operator(&self) -> bool {
-        matches!(self, Self::Pwsh | Self::GitBash(_))
+        matches!(self, Self::Pwsh | Self::GitBash(_) | Self::Gash(_))
     }
 
     /// Whether `grep`, `head`, `tail`, `sed`, `awk`, `find` are usable from this shell.
-    /// True only for Git Bash, where MSYS2 bundles them inside the bash subprocess.
+    /// True for the bash-compatible shells: both Git Bash and gash reach the MSYS2 tools bundled
+    /// inside the Git for Windows install (gash looks them up there by design).
     pub fn has_unix_utilities(&self) -> bool {
-        matches!(self, Self::GitBash(_))
+        matches!(self, Self::GitBash(_) | Self::Gash(_))
     }
 
     /// How this shell interprets a bare `&` token.
     /// Drives the `run_terminal_cmd` background-operator validation, which must differ per shell.
     pub fn ampersand_semantics(&self) -> AmpersandSemantics {
         match self {
-            Self::GitBash(_) => AmpersandSemantics::PosixBackground,
+            Self::GitBash(_) | Self::Gash(_) => AmpersandSemantics::PosixBackground,
             Self::Pwsh => AmpersandSemantics::PowerShellCore,
             Self::PowerShell => AmpersandSemantics::WindowsPowerShell,
             Self::Cmd => AmpersandSemantics::CmdSeparator,
@@ -292,6 +362,16 @@ fn invocation_for(shell: &WindowsShell, command: &str) -> ShellInvocation {
                 utf8_env[0],
                 utf8_env[1],
             ],
+        },
+        WindowsShell::Gash(path) => ShellInvocation {
+            program: path.clone(),
+            args: vec!["-c".to_string(), command.to_string()],
+            // gash needs no path-translation guards: its converter already tells real MSYS paths
+            // (`/c/x` -> `C:/x`, `/tmp`, `/usr/bin`) apart from `/flag`-style switches, so MSBuild
+            // `/t:Build` and cl.exe `/nologo` survive on their own. Setting Git Bash's blanket
+            // `MSYS2_ARG_CONV_EXCL=*` here would suppress the conversion gash does perform, sending
+            // `C:/...` where the MSYS tools expect `/c/...`, so the guards are deliberately absent.
+            env: utf8_env.to_vec(),
         },
         WindowsShell::Pwsh => ShellInvocation {
             program: "pwsh".to_string(),
@@ -493,17 +573,30 @@ mod tests {
         assert!(!is_executable(tmp.path()));
     }
 
-    /// Only Git Bash bundles the Unix utilities; the PowerShell and cmd variants do not.
+    /// The Unix-utilities flag follows the bash-compatible shells: Git Bash and gash both reach
+    /// the MSYS2 tools in the Git for Windows install; the PowerShell and cmd variants do not.
     #[cfg(not(unix))]
     #[test]
-    fn has_unix_utilities_only_true_for_gitbash() {
+    fn has_unix_utilities_true_for_bash_compatible_shells() {
         assert!(
             WindowsShell::GitBash("C:\\Program Files\\Git\\bin\\bash.exe".into())
                 .has_unix_utilities()
         );
+        assert!(WindowsShell::Gash("D:\\tool-cli\\gash\\gash.exe".into()).has_unix_utilities());
         assert!(!WindowsShell::Pwsh.has_unix_utilities());
         assert!(!WindowsShell::PowerShell.has_unix_utilities());
         assert!(!WindowsShell::Cmd.has_unix_utilities());
+    }
+
+    /// gash reports its own name so logs and the prompt `Shell:` field name the shell actually in use.
+    /// The bash-compatible shells keep POSIX `&` and `&&`; PowerShell and cmd keep their own semantics.
+    #[cfg(not(unix))]
+    #[test]
+    fn gash_reports_its_own_name_and_bash_capabilities() {
+        let gash = WindowsShell::Gash("D:\\tool-cli\\gash\\gash.exe".into());
+        assert_eq!(gash.name(), "gash");
+        assert!(gash.supports_chain_operator());
+        assert_eq!(gash.ampersand_semantics(), AmpersandSemantics::PosixBackground);
     }
 
     /// Git Bash backgrounds with a bare `&`; PowerShell uses `&` as the call operator; `cmd.exe` uses it as a sequential separator.
@@ -530,12 +623,13 @@ mod tests {
     }
 
     /// Every Windows shell variant injects the UTF-8 env defaults.
-    /// Builds all four variants directly so it doesn't depend on the test host's shell.
+    /// Builds every variant directly so it doesn't depend on the test host's shell.
     #[cfg(not(unix))]
     #[test]
     fn invocation_for_sets_utf8_env_on_every_variant() {
         let variants = [
             WindowsShell::GitBash("C:\\Program Files\\Git\\bin\\bash.exe".into()),
+            WindowsShell::Gash("D:\\tool-cli\\gash\\gash.exe".into()),
             WindowsShell::Pwsh,
             WindowsShell::PowerShell,
             WindowsShell::Cmd,
@@ -572,6 +666,25 @@ mod tests {
         assert!(
             inv.env.contains(&("MSYS2_ARG_CONV_EXCL", "*")),
             "{:?}",
+            inv.env
+        );
+    }
+
+    /// gash runs the same `-c` invocation shape as Git Bash, but without the MSYS2 path-translation
+    /// guards: its own converter already spares `/flag` switches, and the blanket
+    /// `MSYS2_ARG_CONV_EXCL=*` would stop it converting the MSYS paths the Git tools need.
+    #[cfg(not(unix))]
+    #[test]
+    fn invocation_for_gash_omits_msys_guards() {
+        let inv = invocation_for(
+            &WindowsShell::Gash("D:\\tool-cli\\gash\\gash.exe".into()),
+            "echo hi",
+        );
+        assert_eq!(inv.program, "D:\\tool-cli\\gash\\gash.exe");
+        assert_eq!(inv.args, vec!["-c".to_string(), "echo hi".to_string()]);
+        assert!(
+            !inv.env.iter().any(|(k, _)| k.starts_with("MSYS")),
+            "gash must not inherit Git Bash's MSYS guards, got {:?}",
             inv.env
         );
     }

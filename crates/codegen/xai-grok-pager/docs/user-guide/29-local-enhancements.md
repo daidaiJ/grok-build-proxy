@@ -56,7 +56,7 @@ Environment equivalent: `GROK_INSECURE_TLS_HOSTS` (comma-separated); the config 
 
 ```toml
 [shell]
-backend = "bash"   # pwsh | powershell | bash (=gitbash/git-bash) | cmd (=cmd.exe)
+backend = "bash"   # pwsh | powershell | bash (=gitbash/git-bash) | gash | cmd (=cmd.exe)
 ```
 
 | `backend` | Shell spawned | What it changes |
@@ -64,19 +64,22 @@ backend = "bash"   # pwsh | powershell | bash (=gitbash/git-bash) | cmd (=cmd.ex
 | `pwsh` | PowerShell 7+ | `&&` chaining and native `\` paths; no `grep` / `head` / `tail` / `sed` / `awk` |
 | `powershell` | Windows PowerShell 5.1 | Native paths; no `&&` (chained commands use `;`); no Unix utilities |
 | `bash` (also `gitbash`, `git-bash`) | Git Bash (MSYS2) | Unix utilities available; MSYS2 path translation is disabled for the child (`MSYS_NO_PATHCONV=1`, `MSYS2_ARG_CONV_EXCL=*`) so `/flag` arguments survive |
+| `gash` | [gash](https://github.com/hex2f/gash) (native Rust bash) | Same Unix utilities and `&&` chaining as `bash`, from a shell that does not emulate `fork()` — several times faster per command. No MSYS2 guards are injected: gash's own converter already spares `/flag` switches, and the blanket exclusion would stop it translating the `/c/...` paths the Git tools need |
 | `cmd` (also `cmd.exe`) | `cmd.exe` | Native paths; no `&&` chaining in our invocation; no Unix utilities |
 | unset | auto cascade | pwsh → powershell.exe → Git Bash → powershell.exe |
 
 Every variant gets `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8:surrogateescape` injected, so Python children decode UTF-8 output under the legacy ANSI codepage.
 
+**`gash` lookup.** gash ships as one binary with no installer location we can predict, so it is resolved from `GASH_ROOT` (a path to `gash.exe` or a folder holding it), then `gash.exe` next to our own executable, then `PATH`. `GROK_SHELL=gash` resolves the same way; when nothing is found we log a warning and fall back to the cascade.
+
 **Precedence and when it takes effect.**
 
 - `[shell] backend` beats the `GROK_SHELL` environment variable (`GROK_SHELL` takes the same names); with neither set, the cascade decides.
-- An unrecognized value — and `bash` when no Git Bash is installed — logs a warning and falls back to the cascade instead of failing the launch.
+- An unrecognized value — and `bash` with no Git Bash installed, or `gash` with no `gash.exe` found — logs a warning and falls back to the cascade instead of failing the launch.
 - The shell is latched the first time the process needs it, and the config is read before that; the practical consequence is that changing the value takes effect **after a restart**, not mid-session.
 - The table is Windows-only. On Unix it is parsed and ignored, and upstream's resolution stays in charge: `GROK_SHELL` as an absolute path (honored only when the file name matches the requested kind, `bash` or `zsh`, and the file is executable) → `$SHELL` (same name test) → `which` → `/bin`, `/usr/bin`, `/usr/local/bin`, `/opt/homebrew/bin` → `/bin/bash`. The kind itself comes from `$SHELL` (bash unless it contains `zsh`).
 
-**When to configure it.** Suggest `backend = "bash"` when the user's workflow is Unix-flavored (make, shell scripts, ripgrep pipelines): Git Bash carries the Unix utilities, and its path-translation guards keep `/flag` arguments intact. Leave the default when they mostly run native Windows toolchains (`MSBuild /t:Build`, `cl.exe /nologo`, `dotnet`), where PowerShell passes such flags through unchanged.
+**When to configure it.** Suggest `backend = "bash"` when the user's workflow is Unix-flavored (make, shell scripts, ripgrep pipelines): Git Bash carries the Unix utilities, and its path-translation guards keep `/flag` arguments intact. Suggest `backend = "gash"` for the same workflows when command latency matters — a session that runs many short commands pays Git Bash's `fork()` cost on every one. Leave the default when they mostly run native Windows toolchains (`MSBuild /t:Build`, `cl.exe /nologo`, `dotnet`), where PowerShell passes such flags through unchanged.
 
 ---
 

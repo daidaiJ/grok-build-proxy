@@ -243,7 +243,7 @@ impl ModelGroupConfig {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ShellBackendConfig {
-    /// `pwsh` | `powershell` | `bash` (also `gitbash`/`git-bash`) | `cmd`.
+    /// `pwsh` | `powershell` | `bash` (also `gitbash`/`git-bash`) | `gash` | `cmd`.
     /// Unset = auto-detect: pwsh → powershell.exe → Git Bash → powershell.exe
     /// (PowerShell is preferred because MSYS2 path translation mangles
     /// `/flag`-style arguments of native Windows toolchains). Takes precedence
