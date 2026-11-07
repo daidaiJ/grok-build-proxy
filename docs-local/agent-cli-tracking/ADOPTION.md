@@ -309,3 +309,59 @@ P1/P2 按 §3/§4 表内级别随迭代带入；每项引入后在本文勾选�
 3. 8.1.3 / 8.1.4 / 8.1.5 作为技能包在 P2 T2 之后随 TUI 轮评估。
 4. 8.1.6 / 8.1.7 / 8.1.8 / 8.1.9 各挂触发信号：workflow 运行中修订需求、Bash 截图场景、
    MCP 资源变更需求、记忆命中率下降反馈。
+
+---
+
+## 9. zcode 3.17.x 三轮增补（2026-11-07）
+
+> 背景：父目录 zcode `git pull --ff-only` 到 v3.17.2（`a9fe401e`，2 个快照提交，
+> CLI 工作区 0.17.1），新增 tag v3.17.1 / v3.17.2。机制逐条与源码锚点见
+> [notes/zcode.md](notes/zcode.md)「2026-11-07 刷新」节。本轮**不改 §7 / §8 既有判定**，
+> 只追加新面、防误报与落地顺位。判定口径仍是§0 的三件事：协议接口兼容性 / token 经济学 /
+> TUI 便利性，不碰架构。
+>
+> 去伪：diff 5,315 文件 / +226k / −613k 行且 rename detection 被跳过，用 `git ls-tree`
+> 双版本树核对后确认**本轮唯一真新增插件包是 `zcode-site-plugin`**，其余 16 个插件与全部
+> 技能数量（superpowers 14 / zcode-guide 6 / bundled 1）零变化、`skills-lock.json` blob 未变。
+> 决策摘要与待办台账另见专题 [`zcode-317-port/README.md`](../zcode-317-port/README.md)，
+> 本文 §9 只做引入定级、防误报与负面清单。
+
+### 9.1 新候选
+
+| # | 特性 | 来源锚点 | 现状对照 | 落点 | 级别 |
+|---|---|---|---|---|---|
+| 9.1.1 | **provider-builtin-tool-compat**：GLM 服务端内置工具下发成 markdown 伪装调用，按结构改写成原生 `mcp_tool_use`/`mcp_tool_result` 并删重，防模型「照着文字假装调用工具」 | zcode `adapters/src/model/provider-builtin-tool-compat/compat.ts:96-162`、`tests/fixtures/provider-builtin-analyze-image.sse` | fork 的 `server_tool_use` 是 headless 里 Grok 原生 web_search 内联块解析，不是这类改写 | `xai-grok-sampler` 流 collect / 协议转换层 | 🟡 **P1（条件性）**：BYOK 网关真出现该形态时按 `[api_dump]` 现场取证再立项 |
+| 9.1.2 | **provider-tool-rounds**：服务端内置工具按轮切分回放；`compactGroupKey` 取持久化 assistant 消息 id（不用 tool call id）、有轮次不挂 tokens（服务端 usage 是多轮合计） | zcode `core/src/runtime/provider-tool-rounds/CONTRACT.md:1-37`、`rounds.ts:47-79` | fork 压缩后请求一致性由 chat-state + sampler 保证，无「服务端多轮合成单 assistant」的切分语义 | `xai-chat-state` 回放 + `xai-grok-sampler` usage 归属 | 🟢 **P1 参照**（并入压缩/协议兼容轮） |
+| 9.1.3 | **按协议固定请求形态**：仅 anthropic-messages 把 system-reminder 折进 tool result，OpenAI 兼容保持独立 user 消息 | zcode `core/src/runtime/helpers/provider-request-messages.ts:61,85-87`、`adapters/tests/request-capabilities.test.ts` | fork 三协议转换已纯函数化且有 byte-equal 前缀不变量测试，但 reminder 折叠未分协议定型 | 请求构造边界 | 🟢 **P1 参照**（前缀缓存稳定性） |
+| 9.1.4 | **post-compact-file-restore**：压缩后按 readFileState 重读磁盘补回文件内容（≤5 文件 / 5k / 50k 上限），跳过其他写入者 | zcode `core/src/runtime/helpers/compact-post-reminders.ts:44-56`、`core/tests/post-compact-file-restore.test.ts` | fork 有压缩 + read 一致性面，无压缩后文件回补 | `xai-grok-compaction` + `xai-grok-tools` read state | 🟢 **P1 参照**（压缩闭环配套） |
+| 9.1.5 | **ToolSearch 3.17 修正**：公告以 metadata 为唯一事实源渲染、模式切换只重渲染文案不替换历史、`hiddenNames` 区分本轮隐藏 vs MCP 断连、关键词明确不支持正则 | zcode `core/src/tool/search/CONTRACT.md`、`description.ts` 新增 ~90 行、`exposure.ts`/`history.ts` 重构 | workflow-pi-port P2 T2 **仍是「预研选型完成，未开工」**，原型已四参照定稿（§2.3 为 3.16.2） | `deferred-tool-exposure.md` §2.3 后补第五参照 + 施工约束 | **P1（并入 P2 T2，不另立项）** |
+| 9.1.6 | **hook `onError` + interrupt-marker**：`PreToolUse` 新字段 `allow|deny`（缺席 fail-open，仅 hook 自身故障生效，deny 等价 exit 2）；用户停止标记按请求/工具阶段区分 + 取消工具结果统一改写 + 冷恢复还原 | zcode `core/src/hooks/types.ts`、`runner.ts:219,513-526`、`core/src/runtime/methods/interrupt-marker.ts:43-69` | fork hooks 七事件 fail-open、无 per-hook 故障策略；七事件枚举无需加 | `xai-grok-hooks` + shell stop/cancel 路径 | 🟢 **P1（小件随手轮）** |
+| 9.1.7 | **CONTRACT.md 契约治理**：四件套（CONTRACT.md / contract.ts / module.ts / contract.example.ts / +contract.test.ts）+ `architecture-policy.yaml` 阈值（800 行/文件、300 行契约、12 公开方法、禁环、禁深导入）+ 13 条规则 + baseline 只压存量 + pre-push 门禁 + `architecture:adopt` 脚手架 + 「先契约后代码」skill | zcode `architecture-policy.yaml`、`scripts/architecture/`、` .agents/skills/architecture-governance/SKILL.md` | fork 有 `clippy.toml`/`rustfmt.toml`/`AGENTS.md` 规约，但无机器可执行的模块边界与 owner/依赖白名单 | 仓库工具链 + 新增 architecture-governance skill | 🟢 **P1/P2（工程资产，成本中等、长期收益最大）** |
+| 9.1.8 | **workspace-mcp-trust 内核**：`allows` 连接准入重验 + `guard` 包住整个 lease + 未知/陈旧/损坏默认拒绝 | zcode `bootstrap/src/workspace-mcp-trust/contract.ts:6-15` | §7.1.10 workspace hook 信任摘要同族（`folder_trust` 已有项目信任），当时判「缓」 | `xai-grok-mcp` 准入 + `xai-grok-hooks` | 🟢 **P2**（与 §7.1.10 合并成一个安全小件） |
+| 9.1.9 | **官方插件 seed 完整性门禁细化**：`requiredSeedPaths` 差集非空即抛 `ZCODE_PLUGIN_SEED_INCOMPLETE` + 逐文件 SHA-256 + marker + 临时目录 rename 原子替换 + 15s lock + 回退旧缓存 | zcode `bootstrap/src/app/bundled-plugins.ts`、`official-plugin-definitions.ts:431-471`（唯一新增项 zcode-site v0.4.2） | §8.1.10 已列 P3，本轮拿到完整实现 | `xai-grok-plugin-marketplace` bootstrap | 🟢 **P3**（实现参照已备，维持原级别） |
+| 9.1.10 | **session-features header**：会话级能力位只增不减、冷恢复从历史推导、出站 header 校验/剔除静态同名头 | zcode `docs/design/v2/model/session-features-header.md:1-217` | fork 的 `[model.<id>]` / 能力位体系已覆盖同域，无官方统计口径 | — | 🗂 **留档**（架构通用词表绑官方） |
+
+### 9.2 本轮核实的「fork 已有 / 尚未做」防误报
+
+| 项 | 核实结论 |
+|---|---|
+| superpowers 三件 A/B（§8.4 第 2 条） | **仍未落地**：fork 内 `superpowers` / `test-driven-development` / `systematic-debugging` 只出现在 pager `extensions_modal.rs` 与 `cta_e2e.rs` 的**插件市场测试 fixture**（模拟 obra/superpowers 市场源），无 bundled 技能正文 |
+| `server_tool_use` | ✅ 已有，但语义不同——`xai-grok-pager/src/headless/reducer/messages/web_search.rs` 是 Grok 后端 web_search 内联块的 headless 输出解析；9.1.1 是入站协议改写，两者不冲突 |
+| hooks 七事件 / fail-open | ✅ 已有（`xai-grok-hooks`）；缺的只是 `onError` 的 per-hook 故障策略，九事件/八事件说法均不成立 |
+| 插件市场 / 安装账本 | ✅ 已有（§8.3）；缺 `requiredSeedPaths` + SHA-256 完整性门禁 |
+| 技能 / 插件资产数 | 与 §8 判定一致：本轮零新增技能、零新增可移植插件，只有 zcode-site 一个服务端绑定新包 |
+
+### 9.3 不移植增补
+
+- **`zcode-site-plugin` 全家**（`site-deploy` 技能 + 7 个 `/site-*` + MCP `sites` + Sites 面板）：绑 zcode-server JWT、Debian 12/Node 24 云运行时、配额与内容审核错误码；可借的只有「stage + start.sh + 本地 check + 上传前显式确认」的交互契约。
+- **mcp-node-fallback**（Electron Node shim）、**official-command-endpoint / local-ttft / input-prediction-sidecar / conversation-quote-context**（官方服务端 + 多端 V4）、**node-repl-call-ledger**（Worker broker）、**session-lifecycle V4 五态机**（app-server 协议）、**causality-order-bindings**（TS AST）、桌面/远程/数据同步 101 份新文档中的 96 份：产品边界外，🗂 留档。
+- 维持 §7.2 / §8.2 全部负面清单（dynamic-workflow TS 工作流、model-option-map DSL、off-peak 票据、CUA / 移动端 / office viewer / Gen UI 等）。
+
+### 9.4 落地顺序建议（本轮）
+
+1. **9.1.5 先做**：P2 T2 尚未开工，把 3.17 的「公告 metadata 唯一事实源 / hidden vs disconnected / 不替换历史文本」并进 §2.3 之后当第五参照，零成本、避免开工后返工。
+2. **9.1.2 / 9.1.3 / 9.1.4** 随协议兼容 / 压缩轮一起对照，重点验三处不变量：分组键用消息 id、reminder 按协议定型、压缩后回补文件内容是否与 §2.1 byte-equal 前缀不变量测试冲突。
+3. **9.1.6 小件随手轮**：`onError` 与 interrupt-marker 都不碰架构，可独立提交。
+4. **9.1.7 单独立项评估**：CONTRACT.md 是本轮唯一「跨语言、长期复利」的工程资产，但要先定 adopt 范围（建议挑 `xai-grok-mcp` / `xai-grok-compaction` 两个高频改动 crate 试点 + baseline 压存量），别一次性全仓铺开。
+5. **条件触发**：9.1.1 等 `[api_dump]` 抓到伪装内置工具现场；9.1.8 与 §7.1.10 合并等 folder_trust 覆盖面核对结果；9.1.9 随插件市场轮。
+6. **§8.4 第 2 条维持原议**：superpowers 三件（TDD / systematic-debugging / verification-before-completion）skills-only A/B 仍未做，本轮技能正文零变化，可随时开工。

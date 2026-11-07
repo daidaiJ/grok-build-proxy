@@ -39,14 +39,21 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   四十四/四十七期；定案与 D9 施工记录
   [`docs-local/vision-bridge/plan.md`](docs-local/vision-bridge/plan.md)。
 
-- **zcode 3.16.2 CLI 刷新（2026-10-21 调研入库）** — 父目录 zcode 拉到 v3.16.2
-  （`3c5b2276`）；旗舰 ToolSearch/DeferredToolCall 已作为 workflow-pi-port
-  P2 T2 第四参照（[`deferred-tool-exposure.md`](docs-local/workflow-pi-port/deferred-tool-exposure.md)
+- **zcode 3.17.2 CLI 刷新（2026-11-07 调研入库；上一轮 2026-10-21 v3.16.2）** — 父目录
+  zcode 同步到 v3.17.2（`a9fe401e`，CLI 0.17.1，2 个快照提交）；旗舰
+  ToolSearch/DeferredToolCall 的 3.17 公告/投影修正并作 workflow-pi-port P2 T2
+  第五参照（该专题**仍未开工**，原型见
+  [`deferred-tool-exposure.md`](docs-local/workflow-pi-port/deferred-tool-exposure.md)
   §2.3）；内置技能/插件清单（superpowers 14 / zcode-guide 6 / skill-creator /
-  plugin-creator / office 四件）与移植定级见
+  plugin-creator / office 四件，本轮数量零变化）与逐轮移植定级见
   [`agent-cli-tracking/notes/zcode.md`](docs-local/agent-cli-tracking/notes/zcode.md)
-  + [`ADOPTION.md`](docs-local/agent-cli-tracking/ADOPTION.md) §8。P1 候选 =
-  ToolSearch 参照 + superpowers 三件技能 A/B；无代码改动。
+  + [`ADOPTION.md`](docs-local/agent-cli-tracking/ADOPTION.md) §8/§9；决策摘要与待办台账
+  另见专题 [`zcode-317-port/README.md`](docs-local/zcode-317-port/README.md)。本轮新面 =
+  provider-builtin-tool-compat / provider-tool-rounds / 按协议折叠 reminder /
+  压缩后文件回补 / hook `onError` / **CONTRACT.md 契约治理**（四件套 + policy.yaml +
+  pre-push 门禁，跨语言最值钱的工程资产）；唯一真新增插件 `zcode-site` 绑官方服务端，
+  不移植。P1 = P2 T2 补参照 + 协议/压缩轮三件 + hooks 小件 + superpowers 三件
+  A/B（**仍未做**，fork 里只在插件市场测试 fixture 出现）；**无代码改动**，只入库文档。
 
 - **缓存策略优化移植专题（P1+P2 已落地 2026-10-24，分支待合；活体 A/B 待验）** — 回答三问：① zcode
   开源版对 DS v4.1 缓存命中率高于 opencode v2 的结构性原因（稳定/动态分层 +

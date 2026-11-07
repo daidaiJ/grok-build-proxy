@@ -2,7 +2,7 @@
 
 > 仓库: ZCode（Z.ai/智谱官方 AI 编程工作台开源仓）· 本地克隆: `D:/CODE/ai/zcode`
 > 语言栈: TypeScript monorepo（pnpm）· 血缘: Z.ai 官方产品，交互/概念体系（hooks 事件名、SKILL.md、agent frontmatter、rewind、plan mode）与 Claude Code 高度同构但为自研实现，非 fork；依赖 Vercel AI SDK（带仓库 patch）；捆绑 superpowers 插件（MIT）
-> 分析基准 commit: `29628c9`（2026-09-23，v3.14.3，2026-10-11 首轮）→ `3c5b2276`（2026-10-20，v3.16.2，2026-10-21 刷新）
+> 分析基准 commit: `29628c9`（2026-09-23，v3.14.3，2026-10-11 首轮）→ `3c5b2276`（2026-10-20，v3.16.2，2026-10-21 刷新）→ `a9fe401e`（2026-11-03，v3.17.2，2026-11-07 刷新）
 > 范围: 特性设计面（不逐文件流水账）；行号均实际读过源码
 
 ## 定位与血缘
@@ -181,13 +181,75 @@ Z.ai（智谱海外品牌）/BigModel 的官方 AI 编程工作台：桌面（El
   lease、off-peak runtime、tool-result-settlement、channel-reply 模块化、插件市场更新。
 - 早于 3.14.3 已有：Bash 图片输出（基线提交即存在）、bash AST 权限。
 
+## 2026-11-07 刷新：v3.16.2 → v3.17.2（CLI 面）
+
+> 决策摘要与待办台账见 [`../../zcode-317-port/README.md`](../../zcode-317-port/README.md)；
+> 本文只做机制逐条与源码锚点（单一事实源）。
+
+> 刷新方式：`git pull --ff-only origin main`，`3c5b2276` → `a9fe401e`（2 个提交：
+> `a60ba6a7` 无版本标题 + `a9fe401e` v3.17.2）；新增 tag v3.17.1 / v3.17.2；根版本
+> 3.17.2、CLI 工作区 0.17.1。diff 5,315 文件 / +226,212 / −613,001 行，仍是公开
+> 快照重排为主（git 明确告警 rename detection 被跳过），**用 `git ls-tree` 双版本树
+> 交叉核对才判定新增资产**，别信 A/D 标记——本轮插件包没有发生目录迁移。
+
+### 协议 / 请求形态（对 fork 最直接）
+
+| 机制 | 落点 | 对 fork 的意义 |
+|---|---|---|
+| **provider-builtin-tool-compat**：GLM 服务端内置工具（`analyze_image`/`webReader`）把多轮合成单条 assistant 下发成 markdown 伪装调用头 + 结果副本，SDK 会丢块、模型「照着文字假装调用工具」；按结构改写成原生 `mcp_tool_use`/`mcp_tool_result`（`server_name: zcode-provider-builtin`）并删重复 markdown | `adapters/src/model/provider-builtin-tool-compat/compat.ts:14-23,96-162,229-271`；真实脱敏流 fixture `adapters/tests/fixtures/provider-builtin-analyze-image.sse`（glm-5.3） | 🟡 **条件性 P1**；纯协议变换零 IO。fork 的 `server_tool_use` 是 headless 里 Grok 原生 web_search 内联块解析，不是这类「伪装调用改写」；BYOK 接国模网关时可用 `[api_dump]` 取证再决定 |
+| **provider-tool-rounds**：服务端执行的内置工具按轮切分（独立 reasoning/text、工具卡 Scheduled→Started→Result、`providerExecuted:true`、回放 `assistant(text,tool_use)+tool(result)`、未收口轮补错误）；`compactGroupKey` **必须取持久化 assistant 消息 id**（相邻响应会复用 tool call id），有轮次的响应**不挂 tokens**（服务端 usage 是多轮合计，会高估一倍） | `core/src/runtime/provider-tool-rounds/CONTRACT.md:1-37`、`rounds.ts:15-26,47-79` | 🟢 **P1 参照**；三处不变量（分组键、回放形态、usage 归属）直接决定压缩后请求一致性，对准协议方言 + 前缀缓存 |
+| **requestCapabilities / foldReminders**：仅 `anthropic-messages` 把 system-reminder 折进 tool result，OpenAI 兼容协议保持独立 user 消息 | `adapters/tests/request-capabilities.test.ts`、`core/src/runtime/helpers/provider-request-messages.ts:61,85-87,339`、`core/tests/fold-reminders-tool-error.test.ts` | 🟢 **P1 参照**；按协议固定请求形态，避免同一会话中途变形破坏前缀 |
+| **post-compact-file-restore**：压缩后按 `readFileState` 从新到旧重读磁盘补回文件内容（≤5 文件 / 单文件 5k / 总 50k tokens），跳过其他写入者与排除路径 | `core/src/runtime/helpers/compact-post-reminders.ts:27-30,44-56`、`core/tests/post-compact-file-restore.test.ts` | 🟢 **P1 参照**；fork 已有压缩 + read 一致性面，这是压缩闭环的必要配套 |
+
+### 运行时状态 / 工具
+
+- **tool-search 3.17.x 有实质改动（不是新协议）**：新增 managed 模块 `core/src/tool/search/`（CONTRACT.md + contract/module）；`description.ts` 增约 90 行 `renderToolSearchAnnouncement`，公告改为**以 metadata 为唯一事实源**渲染 `RuntimeAttachmentEntry`，模式切换只重渲染文案、不替换历史任意文本；新增 `hiddenNames` 区分「本轮隐藏」与「MCP 断连」，收紧关键词正则语义（明确不支持正则）；`exposure.ts`/`history.ts` 相应重构。→ 给 fork workflow-pi-port P2 T2 补两条施工坑，见 [`../../workflow-pi-port/deferred-tool-exposure.md`](../../workflow-pi-port/deferred-tool-exposure.md)。
+- **interrupt-marker**：用户停止后给模型的固定标记按请求阶段 / 工具阶段区分，被取消工具统一改写 `USER_STOPPED_TOOL_RESULT_CONTENT`，冷恢复按 source 还原（`core/src/runtime/methods/interrupt-marker.ts:11-16,24-36,43-69`）。
+- **hook `onError`**：**不是第八个事件**，是 `PreToolUse` 的新配置字段 `HookOnError = allow|deny`，缺席 = fail-open；仅 hook 自身运行出错时生效，`deny` 等价退出码 2；用户中断 / 未信任工作区 hook / async 不受影响（`core/src/hooks/types.ts`、`runner.ts:219,513-526`、`configured-runner.ts:112,169`、`core/tests/hook-on-error.test.ts`）。七事件枚举未变。
+- **runtime-context-announcements**：compact 后的上下文重述与公告（`core/src/runtime/methods/context-refresh.ts:261,294,311`）。
+- **session-features header**：会话级能力标签 `Set` 只增不减（compact/rewind/冷恢复不撤销、子会话不继承、workspace scope 不发），出站写 `x-zcode-session-features`（排序去重、每标签 `^[a-z0-9_]{1,64}$`、总长 ≤256、非法整头省略），provider 静态同名头一律剔除；标签可从历史 best-effort 推导（`docs/design/v2/model/session-features-header.md:1-217`、`core/src/runtime/session-features/session-features.ts:47-62,202-236`）。架构通用，词表绑官方统计口径 → 🟡 设计参照。
+- **工具 handler 本轮全是 M、无新增文件**：`handlers/index.ts` 注册 `cronPauseSelfToolEntry`、注释掉 `replyToChannelToolEntry` 默认注册、子 runtime 移除 `RUN_INTROSPECTION_TOOLS`；`tool-search.ts`/`deferred-tool-call.ts` 仅 2–6 行小改。
+
+### MCP / 会话 / 多端（多为官方形态绑定）
+
+- **workspace-mcp-trust**：`inspect/decide/allows/guard` 四方法，工作区级 MCP 声明精确摘要比对 + 授权原子写 + **连接准入重验 + `guard` 包住整个 lease**，未知/陈旧/损坏默认拒绝（`bootstrap/src/workspace-mcp-trust/CONTRACT.md:1-16`、`contract.ts:6-15`）→ 🟢 安全内核可吸收，与 §7.1.10 workspace hook 信任摘要同族。
+- **session-lifecycle**：`unloaded/starting/ready/stopping/faulted` 五态 + 每 session 唯一写者 + 并发矩阵 + 清理失败进 faulted（`docs/design/v2/session-runtime-lifecycle.md:1-216`、`bootstrap/src/session-lifecycle/controller.ts:47-67,142-207`）→ 🗂 绑 app-server/V4，TUI 单进程只需借状态机。
+- **mcp-node-fallback**：仅 Electron Node 下给 stdio MCP 注入 node/npm/npx shim（PATH 末尾追加 + 两个 env var，Windows `Path`/`PATH` 大小写归一）→ ❌ Rust 原生 TUI 无此运行时。
+- **official-command-endpoint**（UDS/命名管道 + 每 session token 窄代理，只放行 `/api/v1/sites`，CLI 不持凭证）/ **local-ttft**（V4 CommandInbox 计时）/ **input-prediction-sidecar**（手机远控 ghost hint，近 6 轮、3 候选、confidence≥0.8、20s 超时）/ **conversation-quote-context**（飞书/Bot 引用材料，不混 canonical 正文）→ ❌ 全绑官方服务端与多端。
+- **node-repl-call-ledger**：每次 `js` 调用随机 token，facts 只由主线程 broker 写入，组装结果先删模型可写 `_meta` 再回写，防 Worker 冒充（`docs/design/v2/tool/20-node-repl-call-ledger.md`、`node-repl-host/src/call-ledger/ledger.ts`）→ ❌ fork 无 node_repl 宿主。
+- **dynamic-workflow** 仅静态分析增强：`causality-order-bindings.ts` 解析「经参数应用」的回调绑定，把不动点合并的回调换成当前内联调用实际绑定的函数，支撑递归预计算；配 6 个 `shared-helper-*` 图 fixture → 🗂 绑 TS AST，Rhai 侧只留档。
+
+### 工程治理：CONTRACT.md 契约四件套（本轮最值得拿走的东西）
+
+全仓 `34 A + 23 M` 个 `CONTRACT.md`。每个 managed 模块 = `CONTRACT.md`（**只记类型与测试无法表达的不变量**：owner、状态单一事实源、异步时序）+ `contract.ts`（唯一公开入口：branded id / zod schema / typed commands/events/errors / port 接口）+ `module.ts`（`id / requires / provides / publicEntrypoints`，注释要求与 policy.yaml 同步）+ `contract.example.ts` + `contract.test.ts`（CLI/CUA 例外保留，App 单测已退役）。三层机器校验：① `architecture-policy.yaml` 登记 roots/requires/publicEntrypoints/layers/layerOrder/owner，全局阈值 `maxFileLines 800`、`maxContractLines 300`、`maxPublicMethods 12`、`forbidCycles`、`forbidDeepImports`、`newFilesEnforcedSince 2026-09-10` + 精确路径 exceptions；② `scripts/architecture/policy.mjs` + `violations.mjs` 实现 13 条规则（module-dependency / deep-import / cycle / layer-direction / missing-module-artifact / manifest-policy-mismatch / disable-count 等），`.architecture-baseline.json` 只压存量、**新增违规 blocking**；③ `.husky/pre-push` → `verify:pre-push` → `test:architecture` + `architecture:check --changed`，另有 `pnpm architecture:adopt <id> --root <dir>` 从真实 import 推断 requires 并 scaffold 四件套，`.agents/skills/architecture-governance/SKILL.md` 把「先契约后代码」写成 agent 工作流。→ 🟢 **跨语言可移植**：Rust 侧用 trait/newtype/typestate 承载 `contract.ts` 的公开面、`pub(crate)` + workspace `Cargo.toml` 天然实现 publicEntrypoints/禁深导入，把依赖白名单、方法数上限、循环依赖做成自建 architecture-check + baseline，CONTRACT.md 当与代码同目录的「人类不变量清单」。
+
+### 插件 / 技能生态（本轮几乎没动）
+
+- **`zcode-site-plugin` 是唯一真正新增的插件包**（50 文件全 A，`git ls-tree` 双版本树核对；`3c5b2276` 无此路径，其余 16 个插件包已在 `apps/zcode-cli/packages/`）：`zcode-site` v0.4.2，1 技能 `site-deploy`（5 references + 4 templates）+ 7 个 `/site-*` 薄命令 + MCP `sites` + Sites UI 面板；`site-deploy` 规定 `.zcode-site/stage/` + `start.sh` → `zcode-site check` → `deploy`，云运行时硬绑 Debian 12/x86-64、Node 24/Python 3.12、`0.0.0.0:3000`、90s 健康检查、包 ≤200MB，错误码含 3611/3612/3608（内容审核/付费 badge）；`src/server/api.ts` 的 `origin` 直注 "zcode-server origin"，带官方鉴权头 `com.zcode/official-mcp-auth`。❌ 不移植，可借的只有「stage + 本地 check + 上传前显式确认」交互。
+- **技能数量零变化**：superpowers 14（MIT）、zcode-guide 6（MIT）、bundled-skills 1（dynamic-workflows）两版完全一致；根与 CLI 的 `skills-lock.json` blob hash 未变；`docs/superpowers/specs/2026-10-24-project-management.md` 是桌面「设置→项目」页规格，**不对应新技能**。20 个 M 中最大的是 `bundled-skills/.../dynamic-workflows/SKILL.md`（+21/−6）；`zcode-guide/diagnosing-commands` 把 `!\`...\`` 从「执行并粘贴」改成「重写为让模型用 Bash 工具执行的指令」（对应 `custom-command-shell-expansion.ts` 删除）。office 四件 / visualize / browser-use / CUA / 移动端插件均只有 1–2 行修订或版本 bump。
+- **官方插件 seed 体系**：`official-plugin-definitions.ts:431-471` 唯一新增项 `zcode-site` v0.4.2（`defaultEnabled: true`、`requiredSeedPaths` 10 项）；`bundled-plugins.ts` 的 `findMissingOfficialPluginSeedPaths()` 差集非空即抛 `ZCODE_PLUGIN_SEED_INCOMPLETE`、拒绝写缓存并回退旧版缓存，逐文件 SHA-256 比对 + `.zcode-plugin-seed.json` marker + 临时目录 rename 原子替换 + 备份回滚 + 15s 共享 seed lock + 顶层白名单裁剪 + hook 脚本 0755 → 🟢 上一轮 §8.1.10 的「缺件拒装」有了完整实现参照。
+- **新增斜杠命令**仅 `zcode-site-plugin/commands/` 的 7 个 `/site-*`；`config/provider/regression/`（`providers.example.json` + `test-list.json`）与 `tools/provider-regression/`（26 文件，带四件套）是模型回归夹具（TEXT-001/TOOL-001/REASON-001、repetitions、timeoutMs、concurrency），不是新配置体系。
+
+### 移植判定汇总（本轮）
+
+- **P1（并入既有专题，不另立项）**：tool-search 3.17 公告/投影修正 → workflow-pi-port P2 T2 第五参照；provider-tool-rounds + foldReminders + post-compact-file-restore → 协议兼容 / 压缩轮；`onError` fail-open/deny + interrupt-marker → hooks/stop 小件轮；**§8.4 的 superpowers 三件 A/B 仍未做**（本轮核实 fork 里 `superpowers` 只出现在插件市场测试 fixture，无 bundled 技能）。
+- **P1/P2（条件触发）**：provider-builtin-tool-compat（BYOK 网关真出现 markdown 伪装内置工具时，用 `[api_dump]` 取证）、workspace-mcp-trust 的 `allows`/`guard` 内核（与 §7.1.10 合并）、CONTRACT.md 契约治理（工程资产，成本中等但长期收益最大）、官方 seed 完整性门禁。
+- **🗂 留档**：session-features header 架构、session-lifecycle 五态机、causality-order-bindings、provider-regression 夹具。
+- **❌ 不移植**：zcode-site-plugin 全家、mcp-node-fallback、official-command-endpoint、local-ttft、input-prediction-sidecar、conversation-quote-context、node-repl-call-ledger、桌面/远程/数据同步那一大堆 `docs/issues`（101 个新文档里 CLI 设计文档只有 5 个）。
+
+### 版本归因（避免把旧特性当新增）
+
+- 3.17.1 / 3.17.2（`a60ba6a7` / `a9fe401e`）：provider-builtin-tool-compat、provider-tool-rounds、session-features header、workspace-mcp-trust、session-lifecycle、CONTRACT.md 契约治理铺开、zcode-site-plugin、tool-search 公告重构、input-prediction/local-ttft、dynamic-workflow 因果绑定分析。
+- 早于 3.17 已有：ToolSearch/DeferredToolCall、FillWorkflowHole、ApplyPatch、Bash 图片输出、插件 seed 框架、superpowers 14 技能、skills-lock。
+
 ## 版本与活跃度
 
-- 版本 **v3.16.2**（根 `package.json`；CLI 工作区 `apps/zcode-cli/package.json` 0.17.0；README
-  更新日志 2026-10-19）。
+- 版本 **v3.17.2**（根 `package.json`；CLI 工作区 `apps/zcode-cli/package.json` 0.17.1；README
+  更新日志 2026-11-03）。
 - 公开快照：v3.14.3（`29628c9`）→ v3.15.1（`aac47556`）→ 2026-10-19 / 10-20 两次
-  `chore: sync ZCode source`（`0a1fc56d` / `3c5b2276`）；仓库已从单提交快照变为持续同步，
-  文件数 7,060 → 18,266。
+  `chore: sync ZCode source`（`0a1fc56d` / `3c5b2276`，v3.16.2）→ 2026-10-30 / 11-03
+  （`a60ba6a7` / `a9fe401e`，v3.17.1 / v3.17.2）；仓库已从单提交快照变为持续同步，
+  文件数 7,060 → 18,266 → 5,315 文件变更的一次大重排（+226k / −613k 行，勿按行数估特性）。
 - 官方产品在营（zcode.z.ai 网关、官方插件市场 CDN、Feishu/Discord 社区），**活跃维护中**。
 
 ## 存疑 / 仅文档宣称
@@ -199,6 +261,9 @@ Z.ai（智谱海外品牌）/BigModel 的官方 AI 编程工作台：桌面（El
 - `superpowers-plugin` 在仓库内有完整 14 技能源码与 MIT LICENSE，但不在 CLI bootstrap 的
   官方插件 seed 表里；它的分发走插件市场，不能当作「CLI 首启即装」的内置项。
 - 插件 UI / Gen UI / office 查看面板只在桌面与 Web 形态可用；CLI TUI 只能消费其中的技能正文。
+- 3.17.x 的 provider-builtin-tool-compat / provider-tool-rounds / session-features 的证据主要是
+  仓库内单测、脱敏 SSE fixture 与设计文档，**未跑真实多网关 BYOK**；「服务端内置工具按轮回放」
+  的收益只在官方 Coding Plan 链路上自证，别家国模网关是否下发同形态需 `[api_dump]` 现场取证。
 
 ## 刷新方法
 
@@ -209,6 +274,8 @@ git -C D:/CODE/ai/zcode log --oneline <old>..HEAD
 git -C D:/CODE/ai/zcode diff --stat <old>..HEAD -- apps/zcode-cli
 ```
 
-快照同步会让 diff 极大（本次 61 万行），先按 `apps/zcode-cli/packages` 的新增目录/文件与
-`docs/design` 归类，再读源码；不要按 diff 行数估特性量。版本号看根 `package.json`，CLI 工作区
-版本看 `apps/zcode-cli/package.json`。
+快照同步会让 diff 极大（10-21 那次 61 万行、本次 +226k/−613k 行），先按
+`apps/zcode-cli/packages` 的新增目录/文件与 `docs/design` 归类，再读源码；不要按 diff 行数估
+特性量。git 会因文件数过多跳过 rename detection（告警 `renameLimit`），**判定「某资产是否新增」
+必须 `git ls-tree -r <old> | grep <path>` 与 `<new>` 交叉核对**，只看 A/D 标记会把目录重排误判成
+新插件。版本号看根 `package.json`，CLI 工作区版本看 `apps/zcode-cli/package.json`。

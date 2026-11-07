@@ -15,7 +15,7 @@
 | kimi-code | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) | `D:/CODE/ai/kimi-code` | `02d829e1` 2026-09-19 | 自研（pi TUI + agent-core-v2/kosong） |
 | crush | [charmbracelet/crush](https://github.com/charmbracelet/crush) | `D:/CODE/ai/crush` | `5e3fe4b` 2026-10-03 | Charm 官方自研（Go，fantasy/catwalk） |
 | goose | [aaif-goose/goose](https://github.com/aaif-goose/goose)（原 block/goose） | `D:/CODE/ai/goose` | `3bd8520` 2026-10-09 | Block 出品自研（Rust，AAIF 基金会治理） |
-| zcode | ZCode（Z.ai/智谱官方） | `D:/CODE/ai/zcode` | `3c5b2276` 2026-10-20（v3.16.2） | Z.ai 官方自研（TS，Claude Code 同构概念体系） |
+| zcode | ZCode（Z.ai/智谱官方） | `D:/CODE/ai/zcode` | `a9fe401e` 2026-11-03（v3.17.2） | Z.ai 官方自研（TS，Claude Code 同构概念体系） |
 
 > 口碑注记（2026-10-11，用户口径）：opencode 与 MiMo-Code 社区口碑下降，其设计仅作机制参照，不再作为对齐对象。
 
@@ -63,6 +63,7 @@
 
 - [ADOPTION.md](ADOPTION.md) — 引入评估（协议兼容性 / token 经济学 / TUI 易用性 / 稳定性 trick，含落点 crate 与优先级）
 - [notes/opencode.md](notes/opencode.md) · [notes/mimo-code.md](notes/mimo-code.md) · [notes/qwen-code.md](notes/qwen-code.md) · [notes/minimax-code.md](notes/minimax-code.md) · [notes/kimi-code.md](notes/kimi-code.md) · [notes/crush.md](notes/crush.md) · [notes/goose.md](notes/goose.md) · [notes/zcode.md](notes/zcode.md) — 分仓库机制笔记（含仓库相对路径 file:line 引用）
+- [zcode-317-port/README.md](../zcode-317-port/README.md) — zcode v3.17.x 移植专题（决策摘要 + 待办台账，2026-11-07 起）
 
 ## 2026-10-11 增补批次（crush / goose / zcode）
 
@@ -98,6 +99,21 @@
 - 工具面候选：FillWorkflowHole、Bash 图片输出、MCP 资源订阅、LLM memory selector；ApplyPatch 与
   memory dream 在 fork 已有，不重复立项。
 - 引入定级与负面清单见 [ADOPTION.md](ADOPTION.md) §8。
+
+## 2026-11-07 刷新（zcode v3.16.2 → v3.17.2）
+
+- 本轮单独建专题 [`zcode-317-port/README.md`](../zcode-317-port/README.md)：决策摘要 + 待办台账；
+  逐条机制与 file:line 在 [notes/zcode.md](notes/zcode.md)「2026-11-07 刷新」节，定级 / 防误报 /
+  负面清单在 [ADOPTION.md](ADOPTION.md) §9。
+- CLI 增量主角不是新工具而是**协议与工程治理**：provider-builtin-tool-compat（GLM 伪装调用
+  改写）、provider-tool-rounds（`compactGroupKey` 用消息 id / 有轮次不挂 tokens）、按协议折叠
+  reminder、压缩后文件回补、ToolSearch 公告重构、hook `onError`、CONTRACT.md 契约四件套 +
+  `architecture-policy.yaml` + pre-push 门禁（本轮最值钱的跨语言工程资产）。
+- 插件/技能本轮几乎没动：唯一真新增 `zcode-site-plugin`（绑官方服务端，不移植），
+  superpowers 14 / zcode-guide 6 / bundled 1 数量零变化、`skills-lock.json` 未变；
+  §8.4 的 superpowers 三件 A/B **仍未做**。
+- 方法注记：快照 diff 5,315 文件会让 rename detection 被跳过，判定新增资产必须 `git ls-tree`
+  双版本树核对，别信 A/D 标记。
 
 ## 追踪更新方法
 
