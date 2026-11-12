@@ -92,19 +92,6 @@ impl From<SendFeedbackOutput> for crate::types::output::ToolOutput {
 #[derive(Debug, Default)]
 pub struct SendFeedbackTool;
 
-/// Absolute drafts file for a session folder. Tool descriptions only.
-/// An empty folder (session-agnostic finalize, e.g. the workspace manifest)
-/// yields an empty path so the description omits the sentence.
-pub fn drafts_file_path(session_folder: &std::path::Path) -> String {
-    if session_folder.as_os_str().is_empty() {
-        return String::new();
-    }
-    session_folder
-        .join(xai_grok_feedback::FEEDBACK_DRAFTS_FILENAME)
-        .display()
-        .to_string()
-}
-
 /// Raw MiniJinja template. Built without `format!` so `${{ }}` / `${% %}`
 /// survive; `format!` treats `{{` / `}}` as escaped braces and would cache a
 /// one-brace peel that `TemplateRenderer` then skips.
@@ -133,9 +120,7 @@ ${%- endif %}\n\n\
 # Confirmation\n\n\
 After drafting feedback and ending your turn, tell the user the draft is saved locally for this session. In the Grok CLI they review and send it by typing `/feedback` and opening the Drafts tab; from any other client, have them resume this session in the Grok CLI first.\n\n\
 # Misc\n\n\
-${%- if feedback_drafts_path %}\n\
-This session's drafts file is ${{ feedback_drafts_path }}.\n\
-${%- endif %}\n\
+Feedback drafts are stored in this session's folder.\n\n\
 If the user's feedback can be answered from the docs (for example UI element locations or setup), read the Grok Build docs locally or online and answer alongside the created draft.\n\n\
 ",
     );
@@ -266,6 +251,7 @@ impl xai_tool_runtime::Tool for SendFeedbackTool {
     ) -> Result<SendFeedbackOutput, xai_tool_runtime::ToolError> {
         let resources = crate::types::tool_metadata::shared_resources(&ctx)?;
         let session_folder = resources.lock().await.require::<SessionFolder>()?.0.clone();
+        let drafts_path = session_folder.join(xai_grok_feedback::FEEDBACK_DRAFTS_FILENAME);
         let draft_id = input
             .draft_id
             .as_deref()
@@ -295,7 +281,10 @@ impl xai_tool_runtime::Tool for SendFeedbackTool {
         map_append_result(result)?;
 
         Ok(SendFeedbackOutput {
-            message: SUCCESS_MESSAGE.to_owned(),
+            message: format!(
+                "{SUCCESS_MESSAGE} This session's drafts file is {}.",
+                drafts_path.display()
+            ),
         })
     }
 }
