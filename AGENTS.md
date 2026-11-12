@@ -516,6 +516,20 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
+### send_feedback 缓存一致性优化 — 待开工（2026-11-12 交接）
+
+- **当前状态：** 审计与配置已完成，代码未动；下个会话在
+  `fix/local-send-feedback-cache-prefix` 分支实现。
+- **关键证据：** 两个会话的 `tool_definitions.json` 只有 `send_feedback`
+  （会话草稿路径）与 `spawn_subagent`（模型清单）不同；新会话首轮命中停在
+  10,240 tokens，而 system+tools 约 16–18k。
+- **验收标准：** 描述与会话路径无关（单测 + 两会话逐字节一致）；首轮
+  `cachedPromptTokens` 升到 ~16k；工具输出仍带草稿文件路径；check/ctest 绿。
+- **详情指针：** [`.handoff/send-feedback-cache-prefix.md`](.handoff/send-feedback-cache-prefix.md)
+- **配置前提：** `~/.grok/config.toml` 已加 `prune_mode = "append"`、
+  `system_prompt_update = "in-history"`、`[toolset.bash] output_byte_limit = 40000`
+  （备份 `config.toml.bak-token-econ-20261112-124324`），不要再改。
+
 ### 发版缓存预热（release-warm）+ gash 后端 + inspect 修复 — v1.0.73 发版（2026-11-07）
 
 - **当前状态：** tag **`v1.0.73`**（`a4f73dc8`）已发版，4 资产非草稿。本批含
