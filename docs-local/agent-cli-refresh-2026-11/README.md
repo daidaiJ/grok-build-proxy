@@ -17,7 +17,7 @@
 
 | # | 设计 | 来源 | 解决什么 | fork 现状 | 判定 |
 |---|---|---|---|---|---|
-| 1 | **Prompt Snapshot** | zcode 3.18 | 冷恢复/换版本后 system 字节变化 → 整段前缀缓存失效 | 冷载用当前 prompt 覆写 head | ⭐ P1 |
+| 1 | **Prompt Snapshot** | zcode 3.18 | 冷恢复/换版本后 system 字节变化 → 整段前缀缓存失效 | 顶层 resume 保留旧 head；仅子 agent spawn / 客户端 override / 换模型覆写 | 🟡 P3（缓存收益已被覆盖） |
 | 2 | **一次性修复持久化**（signedReasoningReset / reduced images） | zcode 3.18 + Kimi 2.4.0 | 请求级修复每轮重付一次 400 与重试/转写 | D9 只改本次请求副本 | ⭐ P1 |
 | 3 | **后台 subagent 停滞提醒** | zcode 3.18 | 后台任务无声卡死，父会话空等或反复轮询 | 无 | 🟢 P1（体验） |
 | 4 | **重试判定结构化**（显式 retryability / 不猜配额 / 内容过滤不重试） | Kimi 2.5.0/2.5.1 | 文本推断导致误重试或过早放弃 | 部分 body 启发式 | 🟢 P2 |
@@ -37,15 +37,18 @@
   microcompact / 跳过的压缩保留快照。fork 复制父会话快照给子会话。
 - 读失败/非法行按“无快照”处理，不阻塞恢复；写失败只告警。
 
-**fork 缺口**：冷载时 `replace_or_insert_system_head` 用**当前** prompt 预应用
-（`xai-chat-state/src/conversation_util.rs:22`，调用方
-`xai-grok-shell/src/agent/mvp_agent/mod.rs:1040`）；`system_prompt_update = in-history`
-只解决**会话内**变更（`request_builder.rs:145`），跨进程/跨版本仍会换字节。升级二进制后
-恢复旧会话，第一请求很可能整段 miss。
+**fork 现状（2026-11-12 核对修正）**：顶层用户会话冷载**保留 journal 里的旧 head**——
+`spawn.rs:1419` 调 `install_system_prompt`，非 subagent 分支不覆写；只有 subagent
+spawn、客户端 `systemPromptOverride`（`mvp_agent/mod.rs:1050` → `ReplaceSystemPrompt`）
+和换模型（`model_switch.rs:484`）会换字节。也就是说跨进程/跨版本恢复**不会**重写
+system 前缀，Prompt Snapshot 的主要缓存收益在 fork 里已经由“保留旧 head”实现；
+代价是恢复后的提示词/日期可能陈旧，这属于新鲜度取舍，不是缓存缺口。
+`system_prompt_update = in-history`（`request_builder.rs:145`）补的是**会话内**变更。
+真正剩下的缓存口子不在 system，而在 tools：`send_feedback` 描述嵌入本会话草稿路径
+（`send_feedback.rs:137`），使每个会话的 tools 前缀唯一（见 §7）。
 
-**建议**：会话首次请求时把渲染后的 system blocks 写入会话 journal（或 sidecar），
-冷载时模型匹配则原样复用；压缩/换模型时清除。tools 保持每次现取，语义与 zcode 一致。
-落点 `xai-chat-state` 载入路径 + shell 冷载预应用点。**2–4 人天**。
+**建议**：降为 P3。只有确实需要“恢复后强制刷新提示词、同时保住缓存”时，才做
+会话级 system snapshot；否则维持现状，把精力放到 tools 前缀的会话无关化。
 
 **验收**：同一会话在二进制升级后恢复，首请求的 limit-probe prefix hash 与
 `cached_tokens` 不出现断崖；压缩后首请求允许重建一次。
@@ -144,6 +147,48 @@ system reminder 注入父会话；送达前按同一套条件复验。**2–3 �
 `/effort` 入队到下一回合；设置变更沿用“本回合不变”的规则，避免半途换模型导致前缀与
 工具集同时变化。**2–3 人天**。
 
+## 7. 缓存命中现状复核（2026-11-12，relay `deepseek-flash` = V4.1 Flash）
+
+**实测基线**（`~/.grok/cache/model-usage.jsonl`，2026-11-02 → 11-12，1486 轮）：
+
+- 稳态命中率：均值 96.5%、中位 98.95%、p10 94.2%；prompt token 总量 206.0M，
+  其中 202.3M 命中（98.2%）。
+- <50% 命中的 25 轮全部落在会话起点、隔夜恢复或压缩后；会话内连续轮次基本
+  97–99.9%。
+- 单轮最大 prompt 345k，**10 天没有一轮越过 500k**，即 `prune_mode` 覆盖的
+  50% 上下文裁剪门从未触发。
+
+**relay 探针**（本机配置，自签证书放行，请求 37–2461 prompt tokens）：
+
+- 尾部/中段 `system` 均返回 200，且最新 system 指令生效（"secret word BANANA"）；
+- 前缀缓存可见：同一 1245-token 请求第二次 `cached_tokens=1152`（92.8%）；
+- 在 system 首字节前加 10 字节（模拟日期/提示词变更）→ `cached_tokens=0`。
+
+**新发现（真正剩下的口子）**：`send_feedback` 的工具描述嵌入本会话草稿路径
+（`crates/codegen/xai-grok-tools/src/implementations/grok_build/send_feedback.rs:137`），
+使每个会话的 tools 段唯一。对比两个会话的 `tool_definitions.json`，23 个工具里只有
+`send_feedback`（会话路径）和 `spawn_subagent`（模型清单随配置）不同；新会话首轮
+命中停在 **10,240 tokens**（system 11KB + tools 54KB ≈ 16–18k tokens），后续轮次才补齐。
+grok2 每次新建会话都要重付这段 prefill（首轮 TTFT 4–9s 的大头之一）。
+
+**建议（按收益）**：
+
+1. **P0**：把会话路径从 `send_feedback` 描述移到工具输出或静态占位（描述只说明
+   “草稿保存在本会话目录”）。这是纯描述改动，风险低，能让新会话首轮命中
+   system+tools 的完整前缀。
+2. **P1**：对 cached-prefix 模型显式开两个能力位（relay 探针已过）：
+   ```toml
+   [model."relay/deepseek-flash"]
+   prune_mode = "append"
+   system_prompt_update = "in-history"
+   ```
+   触发频率低（见上），但越过 500k 或会话内提示词变更时避免整段断崖。
+3. **P2**：把 50% 裁剪门（`request_builder.rs:217` 硬编码）上调或做成可配。
+   cache_read $0.003/M 比 input $0.15/M 便宜 50 倍，500k 处裁剪省不下钱，
+   却会打断前缀并丢工具结果。
+4. **P3**：会话创建时预热 system+tools 前缀（空跑一次），把首轮 prefill 藏到
+   用户输入期间；成本约 $0.003/会话。
+
 ## 不建议 / 存疑
 
 - **context-composition 协议面**：fork 没有对应的插件/App 消费方，先不做线格式。
@@ -153,7 +198,10 @@ system reminder 注入父会话；送达前按同一套条件复验。**2–3 �
 
 ## 未决
 
-- [ ] relay 网关冷恢复后 head 重写是否真的断缓存（limit-probe 取证）。
+- [x] relay 冷恢复 head 是否断缓存：顶层 resume 保留旧 head（`spawn.rs:1419`），
+  不重写；真正的会话级差异在 `send_feedback` 工具描述（见 §7）。
+- [ ] `send_feedback` 描述去掉会话路径后，新会话首轮 `cached_tokens` 是否从
+  ~10k 升到 ~16k（改完开新会话实测）。
 - [ ] D9 转写在一次会话里平均触发几次（决定修复优先级）。
 - [ ] 本地后台 subagent 的停滞阈值（15 分钟对交互式偏长，可先 5 分钟）。
 - [ ] 总预算行 A/B 的判定口径（完成率 / token / 轮次）。

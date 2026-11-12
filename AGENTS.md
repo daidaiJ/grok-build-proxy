@@ -499,8 +499,11 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   blocks，冷恢复/换版本保持逐字节前缀；tools 不快照；压缩/换模型清空）与后台 subagent
   **停滞提醒**（只认模型/工具进展，15min 起翻倍至 4h，送达前复验）；两份 issue 与
   Kimi 2.4.0 #4413 同证「请求级修复必须落会话级标记」，否则每轮重付 400/转写。
-  fork 侧 Prompt Snapshot 缺失（冷载用当前 prompt 覆写 head）、D9 转写仅请求副本、
-  无停滞提醒；建议 P1 三者 + P2 重试判定结构化/上下文预算 A/B/运行中 UX。
+  fork 侧 Prompt Snapshot 的缓存收益已被「顶层 resume 保留旧 head」覆盖（仅子 agent
+  spawn / 客户端 override / 换模型覆写），降 P3；D9 转写仅请求副本、无停滞提醒。
+  2026-11-12 缓存复核（§7）：relay deepseek-flash 稳态命中 98.2%，裁剪门 500k 从未
+  触发；新发现 `send_feedback` 描述嵌入会话草稿路径，使新会话 tools 前缀唯一、首轮
+  命中停在 ~10k tokens → 建议 P0 去会话化；P1 两能力位；P2 裁剪门上调。
   目录内含锚点、验收与未决项。
 
 ## 🔄 Handoff 摘要
