@@ -493,6 +493,16 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   10 任务 A/B；不建议默认自动 subagent / deferred tool search。目录内含数据表、代码
   锚点、验收与未决项。
 
+- [`docs-local/agent-cli-refresh-2026-11/`](docs-local/agent-cli-refresh-2026-11/README.md) —
+  **zcode v3.18.0 + Kimi Code 2.5.x 成本/稳定性/体验增量（调研完成 2026-11-12，建议待
+  拍板）**：zcode `b95ebaff` 新增 **Prompt Snapshot**（按会话持久化渲染后的 system
+  blocks，冷恢复/换版本保持逐字节前缀；tools 不快照；压缩/换模型清空）与后台 subagent
+  **停滞提醒**（只认模型/工具进展，15min 起翻倍至 4h，送达前复验）；两份 issue 与
+  Kimi 2.4.0 #4413 同证「请求级修复必须落会话级标记」，否则每轮重付 400/转写。
+  fork 侧 Prompt Snapshot 缺失（冷载用当前 prompt 覆写 head）、D9 转写仅请求副本、
+  无停滞提醒；建议 P1 三者 + P2 重试判定结构化/上下文预算 A/B/运行中 UX。
+  目录内含锚点、验收与未决项。
+
 ## 🔄 Handoff 摘要
 
 ### 发版缓存预热（release-warm）+ gash 后端 + inspect 修复 — v1.0.73 发版（2026-11-07）

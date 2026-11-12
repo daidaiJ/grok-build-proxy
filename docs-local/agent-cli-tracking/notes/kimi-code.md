@@ -5,6 +5,10 @@
 > 语言栈: TypeScript / pnpm · 架构血缘: 自研（pi 生态 TUI + 自研 agent-core-v2/kosong/minidb/transcript）
 > 分析日期: 2026-09-19 · 范围: TUI 层与 agent 通用优化（remote-control/kap-server/node-sdk 等未覆盖）
 > 引入评估见 [../ADOPTION.md](../ADOPTION.md)
+> 2026-11-12 刷新：上游 `main 1ec24a5f`（2.5.3 已发布）。本轮只取成本/稳定性/体验增量
+> （steer 中断、/model 运行中可用、修复持久化、显式 retryability），见
+> [`../../agent-cli-refresh-2026-11/README.md`](../../agent-cli-refresh-2026-11/README.md)。
+> 本地克隆已不在本机，本轮经 GitHub API + CHANGELOG 读取（未逐文件读码）。
 
 ## ① 架构总览
 

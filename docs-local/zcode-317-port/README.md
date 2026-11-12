@@ -55,6 +55,7 @@ TUI 便利性**，不碰架构、不引入内置模型目录/厂商 preset。
 | 3.6 | workspace-mcp-trust 的 `allows` 准入重验 + `guard` 包 lease | `xai-grok-mcp` 准入 + `xai-grok-hooks` | 与 ADOPTION §7.1.10（workspace hook 信任摘要）合并成一个安全小件，先核对 `folder_trust` 覆盖面 | ⏳ 缓 |
 | 3.7 | 官方插件 seed 完整性门禁 | `xai-grok-plugin-marketplace` bootstrap | 维持 §8.1.10 的 P3；实现参照已备，随插件市场轮 | ⏳ 缓 |
 | 3.8 | superpowers 三件 skills-only A/B（TDD / systematic-debugging / verification-before-completion） | bundled skills | **§8.4 顺位第 2 条仍未做**；本轮核实 fork 里 `superpowers` 只出现在 pager 插件市场测试 fixture，技能正文零变化，随时可开工 | ⏳ 未做 |
+| 3.9 | v3.18.0 的 Prompt Snapshot / 停滞提醒 / 修复持久化（成本·稳定性·体验轴） | `xai-chat-state` 冷载 + `xai-grok-sampler` 重试 + shell 后台任务 | 见 [`../agent-cli-refresh-2026-11/README.md`](../agent-cli-refresh-2026-11/README.md)；先 probe 冷恢复 head 重写是否真断缓存 | ⏳ 未做 |
 
 **留档不立项**：session-features header 架构（能力位只增不减 + 冷恢复推导，词表绑官方统计）、
 session-lifecycle 五态机/唯一写者/并发矩阵、`causality-order-bindings`（TS AST）、
@@ -87,6 +88,7 @@ session-lifecycle 五态机/唯一写者/并发矩阵、`causality-order-binding
 
 - [ ] **3.1** 把 3.17 公告/投影修正补进 `deferred-tool-exposure.md` §2.3 之后（第五参照），随 P2 T2 开工
 - [ ] **3.8** superpowers 三件 A/B（对比现有 `/code-review` / `/verify` 流程），再决定是否整包引入
+- [ ] **3.9** v3.18.0 成本/稳定性/体验三件（Prompt Snapshot / 停滞提醒 / 修复持久化），按 `../agent-cli-refresh-2026-11/README.md` 的 P1 顺序
 - [ ] **3.2** 协议/压缩轮三件对照，先跑前缀不变量测试
 - [ ] **3.3** hooks 小件独立提交
 - [ ] **3.4** CONTRACT.md 试点范围拍板（2 个 crate + baseline）
