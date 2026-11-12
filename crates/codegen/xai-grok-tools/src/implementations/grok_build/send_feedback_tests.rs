@@ -254,7 +254,8 @@ fn description_is_free_of_the_session_folder() {
         std::collections::HashMap::new(),
         std::collections::HashMap::new(),
     );
-    let description = render_advertised_description(&renderer, build_description_template());
+    let template = build_description_template();
+    let description = render_advertised_description(&renderer, &template);
 
     for session in [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()] {
         let drafts_file = session.path().join(FEEDBACK_DRAFTS_FILENAME);
