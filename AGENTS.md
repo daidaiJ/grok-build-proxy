@@ -501,10 +501,18 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   Kimi 2.4.0 #4413 同证「请求级修复必须落会话级标记」，否则每轮重付 400/转写。
   fork 侧 Prompt Snapshot 的缓存收益已被「顶层 resume 保留旧 head」覆盖（仅子 agent
   spawn / 客户端 override / 换模型覆写），降 P3；D9 转写仅请求副本、无停滞提醒。
-  2026-11-12 缓存复核（§7）：relay deepseek-flash 稳态命中 98.2%，裁剪门 500k 从未
-  触发；新发现 `send_feedback` 描述嵌入会话草稿路径，使新会话 tools 前缀唯一、首轮
-  命中停在 ~10k tokens → 建议 P0 去会话化；P1 两能力位；P2 裁剪门上调。
+  缓存与成本复核已独立成篇（见下一条 token 经济审计）。
   目录内含锚点、验收与未决项。
+
+- [`docs-local/token-economy-audit-2026-11/`](docs-local/token-economy-audit-2026-11/README.md) —
+  **token 经济审计（2026-11-12，分析完成、改造待拍板）**：relay deepseek-flash
+  10 天 1502 轮，prompt 209.7M / 命中 206.0M（98.2%），单轮 139.6k / 137.2k /
+  2.5k；输出 772（reasoning 466）；成本约 $1.87（cached $0.62 / uncached $0.55 /
+  output $0.70）。阻碍：前缀稳定性（`send_feedback` 会话路径把首轮命中封顶在
+  10,240 tokens）、新增工具输出（bash 默认 200k 字符、压缩默认关且一期有损）、
+  输出侧 high effort。安全改造：bash 上限 40k、append + in-history、
+  `send_feedback` 去会话化、P1 无损压缩层；不做缩工具面 / 全局降 effort /
+  激进裁剪。含 relay 探针、代码锚点与 A/B 验收。
 
 ## 🔄 Handoff 摘要
 

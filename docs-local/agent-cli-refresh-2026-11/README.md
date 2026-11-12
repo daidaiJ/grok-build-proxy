@@ -45,7 +45,7 @@ system 前缀，Prompt Snapshot 的主要缓存收益在 fork 里已经由“保
 代价是恢复后的提示词/日期可能陈旧，这属于新鲜度取舍，不是缓存缺口。
 `system_prompt_update = in-history`（`request_builder.rs:145`）补的是**会话内**变更。
 真正剩下的缓存口子不在 system，而在 tools：`send_feedback` 描述嵌入本会话草稿路径
-（`send_feedback.rs:137`），使每个会话的 tools 前缀唯一（见 §7）。
+（`send_feedback.rs:137`），使每个会话的 tools 前缀唯一（见 [token 经济审计](../token-economy-audit-2026-11/README.md)）。
 
 **建议**：降为 P3。只有确实需要“恢复后强制刷新提示词、同时保住缓存”时，才做
 会话级 system snapshot；否则维持现状，把精力放到 tools 前缀的会话无关化。
@@ -147,97 +147,13 @@ system reminder 注入父会话；送达前按同一套条件复验。**2–3 �
 `/effort` 入队到下一回合；设置变更沿用“本回合不变”的规则，避免半途换模型导致前缀与
 工具集同时变化。**2–3 人天**。
 
-## 7. 缓存命中现状复核（2026-11-12，relay `deepseek-flash` = V4.1 Flash）
+## 7. 缓存 / token 经济复核
 
-**实测基线**（`~/.grok/cache/model-usage.jsonl`，2026-11-02 → 11-12，1486 轮）：
-
-- 稳态命中率：均值 96.5%、中位 98.95%、p10 94.2%；prompt token 总量 206.0M，
-  其中 202.3M 命中（98.2%）。
-- <50% 命中的 25 轮全部落在会话起点、隔夜恢复或压缩后；会话内连续轮次基本
-  97–99.9%。
-- 单轮最大 prompt 345k，**10 天没有一轮越过 500k**，即 `prune_mode` 覆盖的
-  50% 上下文裁剪门从未触发。
-
-**relay 探针**（本机配置，自签证书放行，请求 37–2461 prompt tokens）：
-
-- 尾部/中段 `system` 均返回 200，且最新 system 指令生效（"secret word BANANA"）；
-- 前缀缓存可见：同一 1245-token 请求第二次 `cached_tokens=1152`（92.8%）；
-- 在 system 首字节前加 10 字节（模拟日期/提示词变更）→ `cached_tokens=0`。
-
-**新发现（真正剩下的口子）**：`send_feedback` 的工具描述嵌入本会话草稿路径
-（`crates/codegen/xai-grok-tools/src/implementations/grok_build/send_feedback.rs:137`），
-使每个会话的 tools 段唯一。对比两个会话的 `tool_definitions.json`，23 个工具里只有
-`send_feedback`（会话路径）和 `spawn_subagent`（模型清单随配置）不同；新会话首轮
-命中停在 **10,240 tokens**（system 11KB + tools 54KB ≈ 16–18k tokens），后续轮次才补齐。
-grok2 每次新建会话都要重付这段 prefill（首轮 TTFT 4–9s 的大头之一）。
-
-**建议（按收益）**：
-
-1. **P0**：把会话路径从 `send_feedback` 描述移到工具输出或静态占位（描述只说明
-   “草稿保存在本会话目录”）。这是纯描述改动，风险低，能让新会话首轮命中
-   system+tools 的完整前缀。
-2. **P1**：对 cached-prefix 模型显式开两个能力位（relay 探针已过）：
-   ```toml
-   [model."relay/deepseek-flash"]
-   prune_mode = "append"
-   system_prompt_update = "in-history"
-   ```
-   触发频率低（见上），但越过 500k 或会话内提示词变更时避免整段断崖。
-3. **P2**：把 50% 裁剪门（`request_builder.rs:217` 硬编码）上调或做成可配。
-   cache_read $0.003/M 比 input $0.15/M 便宜 50 倍，500k 处裁剪省不下钱，
-   却会打断前缀并丢工具结果。
-4. **P3**：会话创建时预热 system+tools 前缀（空跑一次），把首轮 prefill 藏到
-   用户输入期间；成本约 $0.003/会话。
-
-## 8. Token 经济：阻碍与安全改造（2026-11-12 复核）
-
-**Token 去向**（relay `deepseek-flash`，1502 轮）：
-
-- 平均每轮 prompt 139.6k，其中 137.2k 命中（98.2%）；新增未命中约 2.5k/轮。
-- 输出 772 tokens/轮，其中 reasoning 466（60%）。
-- 成本拆分：cached $0.62 / uncached $0.55 / output $0.70，合计约 $1.87 / 10 天。
-- 会话基座约 40k tokens：system 2.8k + tools 13.4k + AGENTS/rules 17.5k +
-  skills 6.6k。首轮全额，之后按 cached 计价，所以“瘦基座”对账单影响很小，
-  主要影响首轮 prefill 与上下文占用。
-
-**阻碍（按影响排序）**：
-
-1. **前缀字节稳定性**：`send_feedback` 的会话路径把新会话 tools 前缀变成唯一
-   （首轮命中停在 10,240 tokens）；`spawn_subagent` 的模型清单随配置集合变化；
-   换模型、改 skills/AGENTS 都会整段失效。断崖成本与上下文长度成正比，是唯一
-   带乘数效应的杠杆。
-2. **新 token 侧**：bash 输出上限 200k 字符（约 50k tokens/次，`agent/config.rs`
-   的 `default_output_byte_limit`），全量进入历史；`[tool_output_compression]`
-   默认关，且一期是 head/tail 有损压缩（唯一型 JSON、搜索结果尾部会丢）。
-3. **输出侧**：config 设了 `default_reasoning_effort = "high"`，reasoning 占输出
-   60%；subagent 未配 `[subagents.efforts]`。主线程降 effort 有质量风险，
-   subagent 是安全面。
-4. **裁剪/压缩定位**：prune 门 50% 硬编码、默认 rewrite；1M 模型下 500k 才触发，
-   10 天最大 345k 未触发。压缩主要解决上下文与延迟，不是当前账单主项。
-5. **观测缺口**：`model-usage.jsonl` 没有 session id/purpose，无法把辅助调用、
-   压缩收益与断崖归因到会话；limit-probe 未开。
-6. **辅助调用**：recap 默认开（10 次）、two-pass compaction（2 次）、title refresh
-   关；金额可忽略，先不要动。
-7. **压缩已做缓存对齐**：`compaction_verbatim_input` 默认 true，保留 tool I/O 以
-   复用前缀（`compaction.rs:1010`）。为“省输入”剥 reasoning/tools 会让整段
-   summarizer 输入从 cached 变 uncached，成本反而上升。
-
-**安全改造（不伤稳定/体验）**：
-
-- **P0（配置）**：`[toolset.bash] output_byte_limit = 40000`——中段截断与全量日志
-  路径已有（`bash/mod.rs:364`），信息不丢；`prune_mode = "append"` +
-  `system_prompt_update = "in-history"`（relay probe 已过）。
-- **P0（代码）**：`send_feedback` 描述去掉会话路径，路径放进工具输出。
-- **P1（代码）**：无损压缩层（重复行折叠、JSON 精确去重、search 全量保留、运行时
-  往返自校验、CCR 可取回），一期有损层继续默认关；跨轮去重保持 keep-earliest +
-  前缀单调。这是唯一能同时降 token、保语义、不破缓存的方向。
-- **P2**：prune 门做成可配（默认不变）；`model-usage` 增 sessionId/purpose；
-  按需配 `[subagents.efforts] explore = "low"`。
-- **不做**：缩工具面/deferred tool exposure（缓存下收益极小、质量风险大）；
-  全局降 reasoning effort；激进裁剪；为压缩重写历史。
-
-**验收**：同任务 A/B 5 个会话，比较 uncached prompt tokens、TTFT、compaction 次数、
-工具重跑/失败率；压缩层要求 prefix 字节不变且 `expand_output` 可取回原文。
+本轮的缓存与成本审计已独立成篇：
+[`token-economy-audit-2026-11`](../token-economy-audit-2026-11/README.md)。
+要点：relay `deepseek-flash` 稳态命中 98.2%；新会话首轮命中被
+`send_feedback` 的会话路径封顶在 10,240 tokens；P0 = 去会话化 + bash 上限
+40k + 两个能力位；P1 = 无损压缩层。
 
 ## 不建议 / 存疑
 
@@ -249,7 +165,7 @@ grok2 每次新建会话都要重付这段 prefill（首轮 TTFT 4–9s 的大�
 ## 未决
 
 - [x] relay 冷恢复 head 是否断缓存：顶层 resume 保留旧 head（`spawn.rs:1419`），
-  不重写；真正的会话级差异在 `send_feedback` 工具描述（见 §7）。
+  不重写；真正的会话级差异在 `send_feedback` 工具描述（见 [token 经济审计](../token-economy-audit-2026-11/README.md)）。
 - [ ] `send_feedback` 描述去掉会话路径后，新会话首轮 `cached_tokens` 是否从
   ~10k 升到 ~16k（改完开新会话实测）。
 - [ ] D9 转写在一次会话里平均触发几次（决定修复优先级）。
