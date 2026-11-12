@@ -4382,8 +4382,25 @@ release 构建 45 → 18 min（约 -60%）。
   静态文案仍在。`success_message_names_this_session_drafts_file`——成功输出
   含本会话草稿文件绝对路径。既有两处 `message == SUCCESS_MESSAGE` 断言改
   `starts_with`。
-- 远程 CI 验证（本机不编译）：`build.yml` Linux job 新增
+- 远程 CI 验证：`build.yml` Linux job 新增
   `cargo test --locked -p xai-grok-tools --lib send_feedback`（该 crate 此前
   只做 `check`，新增用例在 CI 无执行入口），随 PR 双 job 跑通。
   活体复验待新会话：`tool_definitions.json` 的 `send_feedback` 条目跨会话
   一致、首轮 `cachedPromptTokens` 由 ~10,240 升到 ~16k。
+
+### 合并时补修（`7439656d`）
+
+- 首轮 PR CI Linux 红：`description_is_free_of_the_session_folder` 用空
+  kind/param 映射渲染模板，而模板读 `tools.by_kind.ask_user` 与
+  `params.feedback.*`，MiniJinja 报 undefined，`strip_markers_on_render_failure`
+  的 `debug_assert!(false)` 在测试 profile 直接 panic。补上 finalize 同款
+  最小映射后本机 `GATE_FORCE=1 ctest -p xai-grok-tools --lib send_feedback`
+  12/12；PR 重跑 `43224221264` 双 job 绿。
+
+### 发版
+
+- tag `v1.0.74`（`aae2d569`，PR #10 merge）；main build `43229928591`
+  双 job success；release run `43236583050` 双 job success、4 资产非草稿，
+  Windows zip sha256 `e1f4f1c8396923d409bd69fe6b4a76a1c7ada82eccfa975e647de85603813304`
+  核对一致。本机部署 `grok 1.0.74 (aae2d5692699)`
+  （`D:\tool-cli\grok2`），回滚点 `grok2.exe.1.0.73-a4f73dc8.bak`。

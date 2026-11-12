@@ -516,19 +516,33 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### send_feedback 缓存一致性优化 — 待开工（2026-11-12 交接）
+### send_feedback 缓存一致性优化 — v1.0.74 发版（2026-11-12）
 
-- **当前状态：** 审计与配置已完成，代码未动；下个会话在
-  `fix/local-send-feedback-cache-prefix` 分支实现。
-- **关键证据：** 两个会话的 `tool_definitions.json` 只有 `send_feedback`
-  （会话草稿路径）与 `spawn_subagent`（模型清单）不同；新会话首轮命中停在
-  10,240 tokens，而 system+tools 约 16–18k。
-- **验收标准：** 描述与会话路径无关（单测 + 两会话逐字节一致）；首轮
-  `cachedPromptTokens` 升到 ~16k；工具输出仍带草稿文件路径；check/ctest 绿。
-- **详情指针：** [`.handoff/send-feedback-cache-prefix.md`](.handoff/send-feedback-cache-prefix.md)
+- **当前状态：** 已合 main 并随 tag **`v1.0.74`**（`aae2d569`）发版。远程 7 个
+  docs 提交先快进（`4dc0a075..aaa0adc1`）；PR #10（`pandazhangS` fork，分支
+  `fix/local-send-feedback-cache-prefix`）merge `aae2d569`。本机
+  `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.74 (aae2d5692699)`，回滚点
+  `grok2.exe.1.0.73-a4f73dc8.bak`；`~/.grok/bin/{grok,agent}.exe` 同步刷新
+  （备份 `*.bak-1.0.73-fork`）。
+- **改动（PATCHES 六十九期）：** 工具描述去掉本会话草稿绝对路径（改静态
+  文案「Feedback drafts are stored in this session's folder.」），路径改由
+  成功输出披露；删除 renderer 的 `feedback_drafts_path` 注入与专用 helper。
+  目标 = 新会话首轮 tools 前缀逐字节稳定，`cachedPromptTokens` 从 ~10,240
+  恢复到 system+tools 全段。
+- **合并时补修：** PR 新用例用空 kind/param 映射渲染描述模板，模板读
+  `tools.by_kind.ask_user` 与 `params.feedback.*`，debug 断言在 marker-strip
+  回退处 panic（Linux job 红）。补渲染上下文（`7439656d`）后本机
+  `send_feedback` 12/12。
+- **CI 与发版：** PR 重跑 `43224221264` 双 job success；main build
+  `43229928591` 双 job success；release run `43236583050` 双 job success、
+  4 资产非草稿，Windows zip sha256 `e1f4f1c8…` 核对一致。
+- **验收标准（余）：** 活体新会话复验 `tool_definitions.json` 的
+  `send_feedback` 条目跨会话一致、首轮 `cachedPromptTokens` 升到 ~16k。
 - **配置前提：** `~/.grok/config.toml` 已加 `prune_mode = "append"`、
   `system_prompt_update = "in-history"`、`[toolset.bash] output_byte_limit = 40000`
   （备份 `config.toml.bak-token-econ-20261112-124324`），不要再改。
+- **详情指针：** PATCHES 六十九期；
+  [`docs-local/token-economy-audit-2026-11/README.md`](docs-local/token-economy-audit-2026-11/README.md)。
 
 ### 发版缓存预热（release-warm）+ gash 后端 + inspect 修复 — v1.0.73 发版（2026-11-07）
 
