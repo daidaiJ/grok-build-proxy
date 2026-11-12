@@ -189,6 +189,56 @@ grok2 每次新建会话都要重付这段 prefill（首轮 TTFT 4–9s 的大�
 4. **P3**：会话创建时预热 system+tools 前缀（空跑一次），把首轮 prefill 藏到
    用户输入期间；成本约 $0.003/会话。
 
+## 8. Token 经济：阻碍与安全改造（2026-11-12 复核）
+
+**Token 去向**（relay `deepseek-flash`，1502 轮）：
+
+- 平均每轮 prompt 139.6k，其中 137.2k 命中（98.2%）；新增未命中约 2.5k/轮。
+- 输出 772 tokens/轮，其中 reasoning 466（60%）。
+- 成本拆分：cached $0.62 / uncached $0.55 / output $0.70，合计约 $1.87 / 10 天。
+- 会话基座约 40k tokens：system 2.8k + tools 13.4k + AGENTS/rules 17.5k +
+  skills 6.6k。首轮全额，之后按 cached 计价，所以“瘦基座”对账单影响很小，
+  主要影响首轮 prefill 与上下文占用。
+
+**阻碍（按影响排序）**：
+
+1. **前缀字节稳定性**：`send_feedback` 的会话路径把新会话 tools 前缀变成唯一
+   （首轮命中停在 10,240 tokens）；`spawn_subagent` 的模型清单随配置集合变化；
+   换模型、改 skills/AGENTS 都会整段失效。断崖成本与上下文长度成正比，是唯一
+   带乘数效应的杠杆。
+2. **新 token 侧**：bash 输出上限 200k 字符（约 50k tokens/次，`agent/config.rs`
+   的 `default_output_byte_limit`），全量进入历史；`[tool_output_compression]`
+   默认关，且一期是 head/tail 有损压缩（唯一型 JSON、搜索结果尾部会丢）。
+3. **输出侧**：config 设了 `default_reasoning_effort = "high"`，reasoning 占输出
+   60%；subagent 未配 `[subagents.efforts]`。主线程降 effort 有质量风险，
+   subagent 是安全面。
+4. **裁剪/压缩定位**：prune 门 50% 硬编码、默认 rewrite；1M 模型下 500k 才触发，
+   10 天最大 345k 未触发。压缩主要解决上下文与延迟，不是当前账单主项。
+5. **观测缺口**：`model-usage.jsonl` 没有 session id/purpose，无法把辅助调用、
+   压缩收益与断崖归因到会话；limit-probe 未开。
+6. **辅助调用**：recap 默认开（10 次）、two-pass compaction（2 次）、title refresh
+   关；金额可忽略，先不要动。
+7. **压缩已做缓存对齐**：`compaction_verbatim_input` 默认 true，保留 tool I/O 以
+   复用前缀（`compaction.rs:1010`）。为“省输入”剥 reasoning/tools 会让整段
+   summarizer 输入从 cached 变 uncached，成本反而上升。
+
+**安全改造（不伤稳定/体验）**：
+
+- **P0（配置）**：`[toolset.bash] output_byte_limit = 40000`——中段截断与全量日志
+  路径已有（`bash/mod.rs:364`），信息不丢；`prune_mode = "append"` +
+  `system_prompt_update = "in-history"`（relay probe 已过）。
+- **P0（代码）**：`send_feedback` 描述去掉会话路径，路径放进工具输出。
+- **P1（代码）**：无损压缩层（重复行折叠、JSON 精确去重、search 全量保留、运行时
+  往返自校验、CCR 可取回），一期有损层继续默认关；跨轮去重保持 keep-earliest +
+  前缀单调。这是唯一能同时降 token、保语义、不破缓存的方向。
+- **P2**：prune 门做成可配（默认不变）；`model-usage` 增 sessionId/purpose；
+  按需配 `[subagents.efforts] explore = "low"`。
+- **不做**：缩工具面/deferred tool exposure（缓存下收益极小、质量风险大）；
+  全局降 reasoning effort；激进裁剪；为压缩重写历史。
+
+**验收**：同任务 A/B 5 个会话，比较 uncached prompt tokens、TTFT、compaction 次数、
+工具重跑/失败率；压缩层要求 prefix 字节不变且 `expand_output` 可取回原文。
+
 ## 不建议 / 存疑
 
 - **context-composition 协议面**：fork 没有对应的插件/App 消费方，先不做线格式。
