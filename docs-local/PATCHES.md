@@ -4382,7 +4382,8 @@ release 构建 45 → 18 min（约 -60%）。
   静态文案仍在。`success_message_names_this_session_drafts_file`——成功输出
   含本会话草稿文件绝对路径。既有两处 `message == SUCCESS_MESSAGE` 断言改
   `starts_with`。
-- 远程 CI 验证（本机不编译）：PR build 双 job；`Tool touched crates` 应跑
-  `xai-grok-tools` 套件。活体复验待新会话：`tool_definitions.json` 的
-  `send_feedback` 条目跨会话一致、首轮 `cachedPromptTokens` 由 ~10,240
-  升到 ~16k。
+- 远程 CI 验证（本机不编译）：`build.yml` Linux job 新增
+  `cargo test --locked -p xai-grok-tools --lib send_feedback`（该 crate 此前
+  只做 `check`，新增用例在 CI 无执行入口），随 PR 双 job 跑通。
+  活体复验待新会话：`tool_definitions.json` 的 `send_feedback` 条目跨会话
+  一致、首轮 `cachedPromptTokens` 由 ~10,240 升到 ~16k。
