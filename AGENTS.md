@@ -482,6 +482,16 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
   （上游 1.0.40，报 9 条假警告 + 重写 user-guide 剪掉 fork 两篇 + 工具集旧版）刷为 fork
   `1.0.69`，旧版备份 `*.bak-1.0.40-upstream`。**遗留提醒：fork 发新版后同步刷新
   `~/.grok/bin/`；上游安装命令可能再覆盖该目录**（复现特征与处置见该文档）。
+- [`docs-local/harness-model-fit/`](docs-local/harness-model-fit/README.md) — **harness × 国模
+  适配专题（调研完成 2026-11-12，建议待拍板）**：FrontierHarness v1.1 live（21 harness ×
+  5 模型 × 62 任务 × 4 次，抓取时约 65% cells）显示 Codex 在 4/5 模型第一（DeepSeek 与
+  Pi 同档）、Pi 在 GLM/DeepSeek 前二，共性 = 固定小工具面 + 只追加历史 + 单线循环 +
+  原生 OpenAI 协议；同厂 Kimi Code 在 K3 上仅第 12。fork 侧差距：默认 19–20 工具 vs
+  4–6、两个缓存能力位默认关（`types.rs:1356-1357`）、无前缀回归护栏/本地 A/B。
+  建议 P0 开 `in-history` + `append`（先 probe relay 网关，探针不过只留 append）、
+  P1 新增 `grok-build-lean` 预设（~9 工具，绑定 per-model `agent_type`）、P1 前缀护栏 +
+  10 任务 A/B；不建议默认自动 subagent / deferred tool search。目录内含数据表、代码
+  锚点、验收与未决项。
 
 ## 🔄 Handoff 摘要
 
