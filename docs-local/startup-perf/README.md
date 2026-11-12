@@ -3,6 +3,11 @@
 > **状态：排查完成（2026-10-03，客户端 1.0.40），缓解方案待拍板。**
 > 只收深挖节点与可复现流程，不复述可从代码推出的内容。姊妹篇：
 > [`status-line-perf-wiki.md`](../status-line-perf-wiki.md)（请求级 TTFT/TPS）。
+>
+> **2026-11-12 复测（v1.0.73）：** 远端目录阻塞已不再是本机主因
+> （`startup.fetch_models_blocking` 0ms）；当前主卡点是新会话创建
+> （中位 4675ms）与首轮 MCP grace（2s），空闲退出 join 76–203ms。
+> span/事件细化方案见 [`span-plan.md`](span-plan.md)。
 
 ## 结论（TL;DR）
 
