@@ -1068,11 +1068,8 @@ impl ToolRegistryBuilder {
             }
         }
         let session_folder = crate::types::resources::SessionFolder(ctx.session_folder.clone());
-        let feedback_drafts_path =
-            crate::implementations::grok_build::send_feedback::drafts_file_path(&session_folder.0);
         let renderer = TemplateRenderer::new(kind_to_name.clone(), kind_params.clone())
             .with_system_reminders_enabled(self.system_reminders_enabled)
-            .with_feedback_drafts_path(feedback_drafts_path)
             .with_whole_read(truncation_config.whole_read);
         let mut tools = Vec::new();
         let mut resources = Resources::new();

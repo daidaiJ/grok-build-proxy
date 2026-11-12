@@ -4351,3 +4351,39 @@ release 构建 45 → 18 min（约 -60%）。
   已向用户提出，未拍板。
 - `release-warm` 的 `workflow_dispatch` 在文件落到默认分支前不可用
   （GitHub 行为），首次只能靠 `push` 触发。
+
+## 六十九期：`send_feedback` 描述去会话路径——恢复新会话首轮的 tools 前缀缓存（2026-11-12，分支 fix/local-send-feedback-cache-prefix）
+
+> 背景：token 经济审计（`docs-local/token-economy-audit-2026-11/README.md`）
+> 发现 23 个工具的定义里只有 `send_feedback` 与 `spawn_subagent` 跨会话不同，
+> 而 `send_feedback` 的差异是本会话草稿绝对路径注入了工具描述。新会话首轮
+> `cachedPromptTokens` 恰好停在 10,240，而 system+tools 约 16–18k，断点就在
+> 该句所在位置之后。relay `deepseek-flash` 稳态命中 98.2%，问题只在会话起点。
+
+### 改动（`xai-grok-tools` 三处，纯描述/输出面）
+
+- `implementations/grok_build/send_feedback.rs`：模板 `# Misc` 段删除
+  `${%- if feedback_drafts_path %}This session's drafts file is ...${%- endif %}`，
+  换成与会话无关的静态文案「Feedback drafts are stored in this session's folder.」；
+  删除只为描述服务的 `drafts_file_path()` helper。
+- 同文件 `run()`：在 `session_folder` 移入 `spawn_blocking` 之前算出
+  `drafts_path`（`FEEDBACK_DRAFTS_FILENAME`），成功输出改为
+  「Local feedback draft saved. This session's drafts file is <path>.」，
+  用户可见的「草稿在哪」信息不丢。
+- `registry/types.rs` 删除 renderer 注入（`with_feedback_drafts_path`）；
+  `types/template_renderer.rs` 删除 `feedback_drafts_path` 字段、默认值与
+  builder（无其他模板消费者）。
+- 工具 schema、`/feedback` UI、草稿文件格式与写盘逻辑零改动。
+
+### 验证
+
+- 新增用例：`description_is_free_of_the_session_folder`——两个临时会话目录
+  下渲染的 description 都不含目录、`feedback_drafts.json` 与旧句；
+  静态文案仍在。`success_message_names_this_session_drafts_file`——成功输出
+  含本会话草稿文件绝对路径。既有两处 `message == SUCCESS_MESSAGE` 断言改
+  `starts_with`。
+- 远程 CI 验证（本机不编译）：`build.yml` Linux job 新增
+  `cargo test --locked -p xai-grok-tools --lib send_feedback`（该 crate 此前
+  只做 `check`，新增用例在 CI 无执行入口），随 PR 双 job 跑通。
+  活体复验待新会话：`tool_definitions.json` 的 `send_feedback` 条目跨会话
+  一致、首轮 `cachedPromptTokens` 由 ~10,240 升到 ~16k。

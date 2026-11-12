@@ -64,7 +64,7 @@ async fn valid_inputs_append_canonical_drafts_and_omit_absent_optionals() {
     sparse.task_category = None;
 
     let output = run(session.path(), full.clone()).await.unwrap();
-    assert_eq!(output.message, SUCCESS_MESSAGE);
+    assert!(output.message.starts_with(SUCCESS_MESSAGE));
     run(session.path(), sparse.clone()).await.unwrap();
 
     let stored: Vec<(FeedbackDraftInput, u64)> = FeedbackDraftStore::new(session.path())
@@ -141,7 +141,7 @@ async fn draft_id_updates_existing_draft_instead_of_appending() {
 
     let output = run_tool(session.path(), update).await.unwrap();
 
-    assert_eq!(output.message, SUCCESS_MESSAGE);
+    assert!(output.message.starts_with(SUCCESS_MESSAGE));
     let drafts = FeedbackDraftStore::new(session.path()).list().unwrap();
     let [draft] = drafts.as_slice() else {
         panic!("expected exactly one draft: {drafts:?}");
@@ -245,6 +245,55 @@ fn schema_has_canonical_fields() {
             .filter_map(serde_json::Value::as_str)
             .collect::<BTreeSet<_>>(),
         BTreeSet::from(["details", "title", "type"]),
+    );
+}
+
+#[test]
+fn description_is_free_of_the_session_folder() {
+    // The template branches on `tools.by_kind.ask_user` and interpolates
+    // `params.feedback.*`, so empty maps are a render error (debug builds
+    // panic in the marker-strip fallback).
+    let tools = std::collections::HashMap::from([(
+        crate::types::tool::ToolKind::AskUser,
+        "ask_user".to_owned(),
+    )]);
+    let params = std::collections::HashMap::from([(
+        crate::types::tool::ToolKind::Feedback,
+        ["draft_id", "title", "details", "product_area", "failure_mode"]
+            .into_iter()
+            .map(|name| (name.to_owned(), name.to_owned()))
+            .collect(),
+    )]);
+    let renderer =
+        crate::types::template_renderer::TemplateRenderer::new(tools, params);
+    let template = build_description_template();
+    let description = render_advertised_description(&renderer, &template);
+
+    for session in [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()] {
+        let drafts_file = session.path().join(FEEDBACK_DRAFTS_FILENAME);
+        assert!(!description.contains(&drafts_file.display().to_string()));
+        assert!(!description.contains(&session.path().display().to_string()));
+    }
+    assert!(!description.contains(FEEDBACK_DRAFTS_FILENAME));
+    assert!(description.contains("Feedback drafts are stored in this session's folder."));
+}
+
+#[tokio::test]
+async fn success_message_names_this_session_drafts_file() {
+    let session = tempfile::tempdir().unwrap();
+    let output = run(
+        session.path(),
+        input("What happened:\n- Drafts land next to the session.", None),
+    )
+    .await
+    .unwrap();
+
+    assert!(output.message.starts_with(SUCCESS_MESSAGE));
+    let drafts_file = session.path().join(FEEDBACK_DRAFTS_FILENAME);
+    assert!(
+        output.message.contains(&drafts_file.display().to_string()),
+        "message names the drafts file: {}",
+        output.message
     );
 }
 

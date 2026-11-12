@@ -60,6 +60,10 @@ jobs:
       # crate this fork touches but does not test on CI.
       - name: Check untested crates
         run: cargo check --locked -p xai-grok-tools
+      # `send_feedback`'s description must stay byte-identical across sessions
+      # (it is part of the cached tools prefix), so run that suite here.
+      - name: Test send_feedback description
+        run: cargo test --locked -p xai-grok-tools --lib send_feedback
       # One invocation on purpose: every cargo call resolves features over its
       # own -p set, so splitting shell / pager-bin / the touched crates into
       # separate steps re-resolved features and recompiled ~90% of the tree per

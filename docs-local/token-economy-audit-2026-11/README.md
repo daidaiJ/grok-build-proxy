@@ -105,6 +105,11 @@ reasoning/tools，那会把整段 summarizer 输入从 cached 变 uncached。
 | P2 | `model-usage` 增 sessionId/purpose | 把辅助调用、压缩收益、断崖归因到会话 | 无 |
 | P2 | 按需配 `[subagents.efforts] explore = "low"` | 降 subagent reasoning，主线程质量不变 | 低，取决于 subagent 类型 |
 
+**施工状态（2026-11-12）**：三条 P0 均已落地——两条配置已写入本机
+`config.toml`（备份在案）；`send_feedback` 描述去会话路径在分支
+`fix/local-send-feedback-cache-prefix`（PATCHES 六十九期），路径改由工具成功
+输出披露，首轮缓存提升待新会话实测。
+
 ```toml
 [toolset.bash]
 output_byte_limit = 40000
@@ -152,7 +157,8 @@ EOF
 # 对比会话工具定义：~/.grok/sessions/<cwd>/<session>/tool_definitions.json
 ```
 
-- `send_feedback.rs:137` — 会话路径进入描述。
+- `send_feedback.rs` — 会话路径曾在描述模板里（`:137`，已由六十九期移出，
+  改到 `run()` 的成功输出）。
 - `request_builder.rs:145` — in-history 放置；`:217` — 50% prune 门。
 - `spawn.rs:1419` — resume 保留 head；`model_switch.rs:484` — 换模型换 head。
 - `compaction.rs:1010` — verbatim input 缓存对齐。

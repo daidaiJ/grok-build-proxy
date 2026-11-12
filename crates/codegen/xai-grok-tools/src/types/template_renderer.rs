@@ -65,8 +65,6 @@ struct TemplateContext {
     /// the model. Descriptions that promise "you are notified on completion" branch on this so the promise is only made
     /// when it can be kept. Defaults to `true` (prod CLI behavior).
     system_reminders_enabled: bool,
-    /// Absolute path to this session's drafts file, when known.
-    feedback_drafts_path: String,
     /// Which file classes `read_file` returns whole; read descriptions only promise it for classes that are on.
     whole_read: WholeReadPolicy,
 }
@@ -261,7 +259,6 @@ impl TemplateRenderer {
                 shell_uses_semicolon: xai_grok_config::shell::chain_separator() == ";",
                 has_unix_utilities: xai_grok_config::shell::has_unix_utilities(),
                 system_reminders_enabled: true,
-                feedback_drafts_path: String::new(),
                 whole_read: WholeReadPolicy::default(),
             },
         }
@@ -271,14 +268,6 @@ impl TemplateRenderer {
     #[must_use]
     pub fn with_whole_read(mut self, policy: WholeReadPolicy) -> Self {
         self.ctx.whole_read = policy;
-        self
-    }
-
-    /// Absolute drafts file for this session. Session id and cwd are already
-    /// fixed when the tool server starts.
-    #[must_use]
-    pub fn with_feedback_drafts_path(mut self, path: impl Into<String>) -> Self {
-        self.ctx.feedback_drafts_path = path.into();
         self
     }
 
