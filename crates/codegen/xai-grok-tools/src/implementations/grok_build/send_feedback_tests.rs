@@ -250,10 +250,22 @@ fn schema_has_canonical_fields() {
 
 #[test]
 fn description_is_free_of_the_session_folder() {
-    let renderer = crate::types::template_renderer::TemplateRenderer::new(
-        std::collections::HashMap::new(),
-        std::collections::HashMap::new(),
-    );
+    // The template branches on `tools.by_kind.ask_user` and interpolates
+    // `params.feedback.*`, so empty maps are a render error (debug builds
+    // panic in the marker-strip fallback).
+    let tools = std::collections::HashMap::from([(
+        crate::types::tool::ToolKind::AskUser,
+        "ask_user".to_owned(),
+    )]);
+    let params = std::collections::HashMap::from([(
+        crate::types::tool::ToolKind::Feedback,
+        ["draft_id", "title", "details", "product_area", "failure_mode"]
+            .into_iter()
+            .map(|name| (name.to_owned(), name.to_owned()))
+            .collect(),
+    )]);
+    let renderer =
+        crate::types::template_renderer::TemplateRenderer::new(tools, params);
     let template = build_description_template();
     let description = render_advertised_description(&renderer, &template);
 
