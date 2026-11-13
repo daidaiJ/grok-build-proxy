@@ -30,9 +30,36 @@ use xai_grok_tools::model_usage_ledger::{
 pub const COPY_STATS_SHORTCUT: usize = 1;
 
 /// 展开/收起超出部分（`a`，页脚图例）。
-const EXPAND_TOGGLE_LABEL: &str = "a all models";
+const EXPAND_TOGGLE_LABEL: &str = "a expand all";
 /// 未展开时每个时间窗最多画多少个 model 卡片。
 const MAX_CARDS: usize = 8;
+
+/// `/stats` 的分组维度：默认按模型，`g` 依次切到用途、会话。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatsDimension {
+    Model,
+    Purpose,
+    Session,
+}
+
+impl StatsDimension {
+    fn next(self) -> Self {
+        match self {
+            Self::Model => Self::Purpose,
+            Self::Purpose => Self::Session,
+            Self::Session => Self::Model,
+        }
+    }
+
+    /// 分组说明整句的 i18n 键（非模型维度才显示）。
+    fn caption_key(self) -> &'static str {
+        match self {
+            Self::Model => "grouped by model",
+            Self::Purpose => "grouped by purpose",
+            Self::Session => "grouped by session",
+        }
+    }
+}
 /// 指标数值右对齐的最小宽度（`45.2k` / `230.4`）；更宽的数值按卡片内实际最宽值放宽。
 const VALUE_WIDTH: usize = 8;
 /// 性能段一行的指标格数：p50 / p90 各一格，ttft 与 tps 各占一行。
@@ -49,6 +76,8 @@ pub struct StatsModalState {
     pub now_unix_ms: u64,
     /// 时间窗标签页是否展开全部 model 卡片。
     pub expanded: bool,
+    /// 分组维度（模型 / 用途 / 会话）。
+    pub dimension: StatsDimension,
     /// 模型目录价（进程级 store 的克隆；打开时种子化，回包后由 dispatch 刷新）。
     pub pricing: CatalogPrices,
     /// LOCAL(token-economy): 打开的会话断崖记录（按窗口过滤后汇总）。
@@ -66,6 +95,7 @@ impl StatsModalState {
             samples,
             now_unix_ms: ModelCallSample::now_unix_ms(),
             expanded: false,
+            dimension: StatsDimension::Model,
             pricing: CatalogPrices::new(),
             cache_breaks: Vec::new(),
             content_rect: Rect::default(),
@@ -123,14 +153,22 @@ impl StatsModalState {
     /// 别页的数字混进摘录；要看全部就逐页切过去各复制一份。
     pub fn copy_active_tab(&self) -> String {
         let mut out = vec![format!("== {} ==", self.active_tab.label())];
+        let show_cost = self.dimension == StatsDimension::Model;
+        if !show_cost {
+            out.push(tr(self.dimension.caption_key()).to_string());
+        }
         let rows = self.rows_for(self.active_tab);
         if rows.is_empty() {
             out.push(tr("no calls in this window").to_string());
         } else {
             for row in &rows {
-                out.push(model_card_text(row, &self.pricing));
+                out.push(model_card_text(row, &self.pricing, show_cost));
             }
-            let summary = cost_summary_text(&rows, &self.pricing);
+            let summary = if show_cost {
+                cost_summary_text(&rows, &self.pricing)
+            } else {
+                String::new()
+            };
             if !summary.is_empty() {
                 out.push(summary);
             }
@@ -139,7 +177,21 @@ impl StatsModalState {
     }
 
     fn rows_for(&self, window: Window) -> Vec<ModelUsageAggregate> {
-        model_usage_ledger::aggregate(&self.samples, window.len_ms(), self.now_unix_ms)
+        match self.dimension {
+            StatsDimension::Model => {
+                model_usage_ledger::aggregate(&self.samples, window.len_ms(), self.now_unix_ms)
+            }
+            StatsDimension::Purpose => model_usage_ledger::aggregate_by_purpose(
+                &self.samples,
+                window.len_ms(),
+                self.now_unix_ms,
+            ),
+            StatsDimension::Session => model_usage_ledger::aggregate_by_session(
+                &self.samples,
+                window.len_ms(),
+                self.now_unix_ms,
+            ),
+        }
     }
 }
 
@@ -260,6 +312,11 @@ fn handle_stats_modal_key(state: &mut StatsModalState, key: &KeyEvent) -> StatsM
             state.toggle_expanded();
             StatsModalOutcome::Changed
         }
+        KeyCode::Char('g') => {
+            state.dimension = state.dimension.next();
+            state.scroll = 0;
+            StatsModalOutcome::Changed
+        }
         KeyCode::Char('y') => StatsModalOutcome::CopyText(state.copy_active_tab()),
         _ => StatsModalOutcome::Unchanged,
     }
@@ -304,6 +361,11 @@ pub fn render_stats_modal(
         },
         Shortcut {
             label: EXPAND_TOGGLE_LABEL,
+            clickable: false,
+            id: 0,
+        },
+        Shortcut {
+            label: "g group",
             clickable: false,
             id: 0,
         },
@@ -361,17 +423,22 @@ fn tab_lines(state: &StatsModalState, theme: &Theme, width: u16) -> Vec<Line<'st
     if rows.is_empty() {
         return vec![muted_line(theme, tr("no calls in this window"))];
     }
+    let show_cost = state.dimension == StatsDimension::Model;
     let shown = if state.expanded {
         rows.len()
     } else {
         rows.len().min(MAX_CARDS)
     };
     let mut lines: Vec<Line<'static>> = Vec::new();
+    if !show_cost {
+        lines.push(muted_line(theme, tr(state.dimension.caption_key())));
+        lines.push(Line::default());
+    }
     for (i, row) in rows.iter().take(shown).enumerate() {
         if i > 0 {
             lines.push(Line::default());
         }
-        lines.extend(model_card_lines(row, theme, width, &state.pricing));
+        lines.extend(model_card_lines(row, theme, width, &state.pricing, show_cost));
     }
     if shown < rows.len() {
         lines.push(Line::default());
@@ -382,8 +449,13 @@ fn tab_lines(state: &StatsModalState, theme: &Theme, width: u16) -> Vec<Line<'st
             template.replace("{n}", &(rows.len() - shown).to_string()),
         ));
     }
-    // 合计行（拍板：无价模型从合计剔除、标注条数）
-    let summary = cost_summary_text(&rows, &state.pricing);
+    // 合计行（拍板：无价模型从合计剔除、标注条数）；按用途/会话分组时价格
+    // 无从归属，整段省略。
+    let summary = if show_cost {
+        cost_summary_text(&rows, &state.pricing)
+    } else {
+        String::new()
+    };
     if !summary.is_empty() {
         lines.push(Line::default());
         lines.push(muted_line(theme, summary));
@@ -477,6 +549,7 @@ fn model_card_lines(
     theme: &Theme,
     width: u16,
     pricing: &CatalogPrices,
+    show_cost: bool,
 ) -> Vec<Line<'static>> {
     let mut lines = vec![Line::from(vec![
         Span::styled(row.model_id.clone(), header_style(theme)),
@@ -486,15 +559,17 @@ fn model_card_lines(
         ),
     ])];
 
-    let cost = model_catalog_store::aggregate_cost(pricing, row)
-        .map(fmt_cost)
-        .unwrap_or_else(|| model_catalog_store::UNPRICED_LABEL.to_string());
     let mut token_pairs: Vec<(&'static str, String)> = vec![
         (tr("input"), fmt_tokens(row.prompt_tokens)),
         (tr("output"), fmt_tokens(row.completion_tokens)),
         (tr("cache read"), fmt_tokens(row.cached_read_tokens)),
-        (tr("cost"), cost),
     ];
+    if show_cost {
+        let cost = model_catalog_store::aggregate_cost(pricing, row)
+            .map(fmt_cost)
+            .unwrap_or_else(|| model_catalog_store::UNPRICED_LABEL.to_string());
+        token_pairs.push((tr("cost"), cost));
+    }
     if row.reasoning_tokens > 0 {
         token_pairs.push((tr("reasoning"), fmt_tokens(row.reasoning_tokens)));
     }
@@ -588,11 +663,8 @@ impl MetricGrid {
 }
 
 /// 卡片块的纯文本版（复制用）。
-fn model_card_text(row: &ModelUsageAggregate, pricing: &CatalogPrices) -> String {
+fn model_card_text(row: &ModelUsageAggregate, pricing: &CatalogPrices, show_cost: bool) -> String {
     let mut parts = vec![format!("{} · {} {}", row.model_id, row.calls, tr("calls"))];
-    let cost = model_catalog_store::aggregate_cost(pricing, row)
-        .map(fmt_cost)
-        .unwrap_or_else(|| model_catalog_store::UNPRICED_LABEL.to_string());
     let mut tokens = vec![
         format!("{} {}", tr("input"), fmt_tokens(row.prompt_tokens)),
         format!("{} {}", tr("output"), fmt_tokens(row.completion_tokens)),
@@ -601,8 +673,13 @@ fn model_card_text(row: &ModelUsageAggregate, pricing: &CatalogPrices) -> String
             tr("cache read"),
             fmt_tokens(row.cached_read_tokens)
         ),
-        format!("{} {}", tr("cost"), cost),
     ];
+    if show_cost {
+        let cost = model_catalog_store::aggregate_cost(pricing, row)
+            .map(fmt_cost)
+            .unwrap_or_else(|| model_catalog_store::UNPRICED_LABEL.to_string());
+        tokens.push(format!("{} {}", tr("cost"), cost));
+    }
     if row.reasoning_tokens > 0 {
         tokens.push(format!(
             "{} {}",
@@ -824,7 +901,7 @@ mod tests {
 
     /// 一张卡片渲染成文本行（测试用固定宽度，不依赖终端）。
     fn card_lines(row: &ModelUsageAggregate, width: u16) -> Vec<String> {
-        model_card_lines(row, &Theme::current(), width, &CatalogPrices::new())
+        model_card_lines(row, &Theme::current(), width, &CatalogPrices::new(), true)
             .iter()
             .map(|l| l.to_string())
             .collect()
@@ -896,7 +973,7 @@ mod tests {
             accepts_images: None,
             }),
         );
-        let lines = model_card_lines(&row, &Theme::current(), 80, &pricing)
+        let lines = model_card_lines(&row, &Theme::current(), 80, &pricing, true)
             .iter()
             .map(|l| l.to_string())
             .collect::<Vec<_>>();
@@ -1078,5 +1155,52 @@ mod tests {
         assert!(text.contains("unexplained 1"), "{text}");
         assert!(text.contains("uncached after break 220k"), "{text}");
         assert!(cache_break_summary_text(&breaks, 2_000).is_none());
+    }
+
+    #[test]
+    fn g_cycles_grouping_dimension_and_resets_scroll() {
+        let mut state = StatsModalState::new(Window::Day, Vec::new());
+        state.scroll = 7;
+        assert_eq!(state.dimension, StatsDimension::Model);
+        for expected in [
+            StatsDimension::Purpose,
+            StatsDimension::Session,
+            StatsDimension::Model,
+        ] {
+            assert_eq!(
+                route_stats_modal_key(&mut state, &key(KeyCode::Char('g'))),
+                StatsModalOutcome::Changed
+            );
+            assert_eq!(state.dimension, expected);
+            assert_eq!(state.scroll, 0);
+        }
+    }
+
+    #[test]
+    fn purpose_and_session_grouping_relabel_rows_and_drop_cost() {
+        use xai_grok_tools::model_usage_ledger::CallPurpose;
+        let now = 1_000_000_000_000;
+        let mut main = sample(now - 1_000, "m-a", 1_000, 900);
+        main.purpose = Some(CallPurpose::Main);
+        main.session_id = Some("s1".into());
+        let mut recap = sample(now - 2_000, "m-b", 500, 0);
+        recap.purpose = Some(CallPurpose::Recap);
+        recap.session_id = Some("s2".into());
+        let mut state = StatsModalState::new(Window::FiveHours, vec![main, recap]);
+        state.now_unix_ms = now;
+
+        assert_eq!(state.rows_for(Window::FiveHours).len(), 2);
+
+        state.dimension = StatsDimension::Purpose;
+        let rows = state.rows_for(Window::FiveHours);
+        assert!(rows.iter().any(|r| r.model_id == "main"), "{rows:?}");
+        assert!(rows.iter().any(|r| r.model_id == "recap"), "{rows:?}");
+        let copied = state.copy_active_tab();
+        assert!(!copied.contains("cost "), "分组维度不该带价格: {copied}");
+
+        state.dimension = StatsDimension::Session;
+        let rows = state.rows_for(Window::FiveHours);
+        assert!(rows.iter().any(|r| r.model_id == "s1"), "{rows:?}");
+        assert!(rows.iter().any(|r| r.model_id == "s2"), "{rows:?}");
     }
 }
