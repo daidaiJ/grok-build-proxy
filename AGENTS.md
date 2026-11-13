@@ -95,7 +95,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ## 活跃待办（2026-11-13）
 
 ### 施工中 / 待合
-- 压缩指令（`/compact <instructions>`）— 待开工；设计与锚点见 `docs-local/compact-instructions-handoff.md`。
+- 压缩指令（`/compact <instructions>`）— PR #11 CI 双绿待合；实现/验收见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 - token 经济可观测性 — P1 账本 `sessionId`+`purpose`、断崖检测；`docs-local/token-economy-audit-2026-11/cache-observability-plan.md`。
 - grok-doctor 技能 — P1；`docs-local/agent-cli-tracking/skill-plugin-port-eval-2026-11-13.md`。
@@ -113,7 +113,9 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 最新交接（2026-11）
 
-- **待开工**：`/compact <instructions>`（压缩重点指令）—— 设计与锚点见 `docs-local/compact-instructions-handoff.md`。
+- **待合**：`/compact <instructions>` —— PR #11（`feat/local-compact-instructions`）CI 双绿
+  （build `43359242671`：linux 27m28s / windows 9m37s）；GitHub token 无 merge 权限，
+  待仓库主合并。剩余活体验收见 `docs-local/compact-instructions-handoff.md` §12。
 - **v1.0.74（11-12 发版）**：`send_feedback` 描述去掉会话路径；活体确认工具定义跨会话一致，首轮命中待新会话复测。
 - **2026-11-13**：token 经济配置已应用——4 个 1M 模型 `prune_mode=append` + `system_prompt_update=in_history`，窗口封顶 500k + 80% 压缩；修正 `in-history` 非法拼写（此前能力位未生效）。变更说明在 `D:\pro\agent-teams-docs\grok-token-economy-config-changes.md`。
 - **v1.0.73**：release-warm 缓存预热、gash 后端、`inspect [privacy]` 修复。

@@ -1,12 +1,13 @@
 ---
 handoff_id: compact-instructions
-status: active
+status: implemented-awaiting-merge
 ---
 
 # Handoff：压缩指令 `/compact <instructions>`
 
-> 交接日期：2026-11-13。下个会话从这里开工；完成后按 AGENTS.md 治理规则删除
-> 入口待办并归档本文（或标 completed）。
+> 交接日期：2026-11-13。**实现完成**：PR #11（`feat/local-compact-instructions`）
+> CI 双绿（Linux 27m28s / Windows 9m37s，run `43359242671`），待仓库主合并后做
+> 活体验收（§5 最后一项）。GitHub token 无 `MergePullRequest` 权限。
 
 ## 1. 目标
 
@@ -15,11 +16,12 @@ status: active
 
 ## 2. 当前进度与状态
 
-- **当前阶段**：调研完成，未改代码。
-- **状态**：待开工（in-progress 前置）。
-- **已完成**：确认 `/compact` 拒绝参数、摘要 prompt 已有 `user_context` 槽位、
-  唯一生产者是活动 goal；确定改动链路与验收（见下）。
-- **未开始**：pager 命令、ACP 参数、shell compact 入口、prompt 合并、测试、文档。
+- **当前阶段**：实现完成，PR #11 待合（CI 双绿）。
+- **已完成**：pager 命令/effect、ACP 类型、shell handler/命令链路、prompt 合并、
+  单元测试、用户文档、PATCHES 七十期、CI 过滤器扩展。
+- **额外覆盖（交接时未列）**：shell 自解析路径 `BuiltinAction::Compact` 也携带
+  指令，旧式客户端把 `/compact ...` 当 prompt 文本发来时不丢文本。
+- **未完成**：合并 + 新版本活体验收（摘要 prompt 与摘要内容体现重点）。
 
 ## 3. 关键证据
 
@@ -67,12 +69,15 @@ status: active
 ## 5. 验收标准
 
 - [ ] `/compact 保留数据库迁移和失败命令` → 摘要 prompt 出现该文本（日志或
-      `[api_dump]` 可见），摘要内容体现重点。
-- [ ] 裸 `/compact` 行为与现在完全一致。
-- [ ] 自动压缩、切模型压缩（`SwitchModelCompact`）不带用户指令。
-- [ ] `cargo check -p xai-grok-pager -p xai-grok-shell --all-targets` 0 error；
-      定向测试绿；i18n 扫描 0 挂。
-- [ ] 旧客户端（不带 instructions）调用 `x.ai/compact_conversation` 正常。
+      `[api_dump]` 可见），摘要内容体现重点。**待合入发版后活体验收。**
+- [x] 裸 `/compact` 行为与现在完全一致 — 命令单测、drain 单测（`None`）、
+      既有带图/补全用例；prompt 无 `User-provided context` 段断言。
+- [x] 自动压缩、切模型压缩（`SwitchModelCompact`）不带用户指令 —
+      `run_compact_only` 传 `None`，`run_compact_inner` 自动调用点为 `None`。
+- [x] 编译/测试 — 远程 CI run `43359242671` 双 job success：Linux 全量 shell 套件
+      + pager 新增过滤器，Windows `cargo check`。
+- [x] 旧客户端（不带 instructions）调用 `x.ai/compact_conversation` 正常 —
+      `#[serde(default)]` + 反序列化单测；pager 仅在 `Some` 时写该字段。
 
 ## 6. 设计决策 / 待定
 
@@ -123,7 +128,20 @@ status: active
 ## 12. 明确标注为验证的事项
 
 ### 已执行、待验证
-- 无（本任务尚未开工）。
+- `/compact <instructions>` 端到端活体验收（摘要 prompt 文本 + 摘要内容体现重点），
+  合入并发版后用新会话验证；`[api_dump]` 可见 `User-provided context` 段。
+
+### 实现落点（PR #11）
+- 远端分支 `feat/local-compact-instructions`（origin 与 `pandazhangS` fork 均有）；
+  PR https://github.com/daidaiJ/grok-build-proxy/pull/11 ，`mergeStateStatus: CLEAN`。
+- 未在本地编译（按本轮约定走远程 CI）：Linux `Test touched crates` success 覆盖
+  新增 shell 单测；`Test pager additions` 新增
+  `compact_drain compact_no_args compact_with_args compact_whitespace_only
+  compact_rejects_instructions slash_compact_with_trailing_text
+  compact_completable_with_optional_args`。
+- 偏差说明：长度上限（4,000 字符）在 pager 与 shell ACP 边界各校验一次，共用
+  `session_compact::MAX_COMPACTION_INSTRUCTIONS_CHARS`；i18n 旧的预置 usage 键
+  `/compact compaction instructions` 改为 `/compact [instructions]`。
 
 ### 已完成且已验证
 - [x] `/compact` 拒绝参数 — 源码 `compact.rs` 的 `NO_ARGS` 与 `submission_refusal` 实读确认。
