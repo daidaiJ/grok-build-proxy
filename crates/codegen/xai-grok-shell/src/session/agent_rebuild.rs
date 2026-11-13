@@ -345,7 +345,6 @@ impl AgentRebuildSpec {
         .with_subagents_enabled(*subagents_enabled)
         .with_subagent_toggle(subagent_toggle.clone())
         .with_background_workflows_enabled(*background_workflows_enabled)
-        .with_task_model_slugs(presentation.model_slugs.clone())
         .with_task_model_selection(presentation.selection)
         .with_ask_user_question_enabled(*ask_user_question_enabled)
         .with_persona_summaries(persona_summaries.clone())
@@ -667,7 +666,7 @@ mod legacy_tests {
             .await;
     }
     #[tokio::test(flavor = "current_thread")]
-    async fn rebuild_projects_fresh_public_model_keys_into_task_description() {
+    async fn rebuild_keeps_the_task_description_stable_while_the_model_validator_refreshes() {
         tokio::task::LocalSet::new()
             .run_until(async {
                 let mut spec = test_rebuild_spec_default();
@@ -695,12 +694,11 @@ mod legacy_tests {
                     .expect("first agent build should succeed");
                 let first_description = task_description(&first);
                 assert!(
-                    first_description.contains(
-                        "If the user explicitly asks for the model of a subagent/task, you may ONLY use model slugs from this list:\n\
-                         - alpha-public\n\
-                         - zeta-public"
-                    )
+                    first_description.contains("invalid slug is rejected"),
+                    "static guidance should defer the slug list to the validator: {first_description}"
                 );
+                assert!(!first_description.contains("alpha-public"));
+                assert!(!first_description.contains("zeta-public"));
                 assert!(!first_description.contains("private-hidden-model"));
                 assert!(!first_description.contains("private-unselectable-model"));
                 assert!(!first_description.contains("internal-alpha"));
@@ -723,13 +721,9 @@ mod legacy_tests {
                     .await
                     .expect("rebuilt agent should succeed");
                 let rebuilt_description = task_description(&rebuilt);
-                assert!(
-                    rebuilt_description.contains(
-                        "If the user explicitly asks for the model of a subagent/task, you may ONLY use model slugs from this list:\n\
-                         - alpha-public\n\
-                         - beta-public\n\
-                         - zeta-public"
-                    )
+                assert_eq!(
+                    first_description, rebuilt_description,
+                    "catalog changes must not alter the tool description bytes"
                 );
             })
             .await;
