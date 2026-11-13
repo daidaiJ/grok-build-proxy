@@ -75,8 +75,11 @@ jobs:
       # bonus. The pager step below stays separate: it runs a name-filtered
       # subset, and one invocation cannot run other crates whole while
       # filtering the pager.
+      # 25 minutes was too tight: 2026-11-13 the main run spent 25m03s and was
+      # killed right after its last doctest, with no failing test (PR run: 15m49s
+      # for the same step).
       - name: Test touched crates
-        timeout-minutes: 25
+        timeout-minutes: 40
         run: >-
           cargo test --locked
           -p xai-grok-config -p xai-chat-state -p xai-grok-status-line
