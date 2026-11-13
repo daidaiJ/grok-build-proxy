@@ -78,7 +78,7 @@ impl AgentView {
                         return InputOutcome::Unchanged;
                     }
                     self.last_context_click_at = Some(now);
-                    return InputOutcome::Action(Action::ShowContextInfo);
+                    return InputOutcome::Action(Action::ShowContextInfo { detail: false });
                 }
                 if self.hit_plan_button.contains(mouse.column, mouse.row) {
                     if self.plan_approval_view.is_some() {

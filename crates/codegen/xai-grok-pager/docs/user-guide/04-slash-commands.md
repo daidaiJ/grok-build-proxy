@@ -42,6 +42,15 @@ Grok also auto-compacts once the context window hits 85% (tune it with `[session
 
 Show the context window split into System prompt, Messages, Reasoning/overhead, and Free.
 Rows for Tool definitions, Skills, and MCP servers are already counted in those totals.
+The `Idle cost` line adds the system prompt and tool definitions: the tokens every request pays before the conversation starts.
+
+`/context detail` appends the per-tool definition cost, largest first, so it is clear which tools dominate that baseline.
+All itemized numbers are `chars / 4` estimates and can differ from the provider's tokenizer by a few percent.
+
+```text
+/context
+/context detail
+```
 
 ### `/session-info`
 

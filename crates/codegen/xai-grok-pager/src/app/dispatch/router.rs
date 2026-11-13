@@ -1270,7 +1270,7 @@ fn dispatch_inner(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::OpenTutorial => dispatch_open_tutorial(app),
         Action::RenameSession { title } => dispatch_rename_session(app, title),
         Action::ResetSessionTitleToAuto => dispatch_reset_session_title(app),
-        Action::ShowContextInfo => dispatch_show_context_info(app),
+        Action::ShowContextInfo { detail } => dispatch_show_context_info(app, detail),
         Action::ShowUsage => dispatch_show_usage(app),
         Action::ShowStats { window } => dispatch_show_stats(app, window),
         Action::ManageBilling => dispatch_manage_billing(app),

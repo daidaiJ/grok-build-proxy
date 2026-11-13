@@ -23,6 +23,8 @@ pub struct ContextInfoBlock {
     pub snapshot: ContextInfo,
     /// Active model name at the time of capture (display-only).
     pub model: String,
+    /// `/context detail`: append the per-tool definition breakdown.
+    pub detail: bool,
 }
 
 /// Shape of the categorical bar: how the 100 cells are laid out. Both shapes hold the same 100 cells, so the visual
@@ -205,7 +207,14 @@ impl ContextInfoBlock {
         Self {
             snapshot,
             model: model.into(),
+            detail: false,
         }
+    }
+
+    /// Append the per-tool definition breakdown (`/context detail`).
+    pub fn with_detail(mut self, detail: bool) -> Self {
+        self.detail = detail;
+        self
     }
 
     /// Build the styled lines for an arbitrary content width.
@@ -399,6 +408,15 @@ impl ContextInfoBlock {
         }
         lines.push(Line::from(""));
 
+        // Every request pays for the system prompt and the tool definitions before the conversation starts.
+        // Naming that baseline is the number to cut when trimming tools or AGENTS.md.
+        let idle_tokens = snapshot.system_prompt_tokens + tool_tokens;
+        lines.push(Line::from(Span::styled(
+            format!("Idle cost (system + tools): {} tokens", fmt_tok(idle_tokens)),
+            muted,
+        )));
+        lines.push(Line::from(""));
+
         // `threshold_tokens` uses `div_ceil` rather than truncating integer division. Without `div_ceil`, tiny totals
         // could produce `remaining == 0` while `usage_pct < threshold_percent`. That would show `~0 tokens remaining` for
         // a context window that isn't actually at the threshold.
@@ -445,8 +463,68 @@ impl ContextInfoBlock {
             )));
         }
 
+        if self.detail {
+            lines.extend(detail_lines(snapshot, primary, label_style, muted));
+        }
+
         lines
     }
+}
+
+/// Per-tool definition costs, largest first (`/context detail`). Rows are capped so a
+/// large tool set cannot bury the rest of the report; the remainder is summarized in one line.
+fn detail_lines(
+    snapshot: &ContextInfo,
+    header_style: Style,
+    label_style: Style,
+    muted: Style,
+) -> Vec<Line<'static>> {
+    const MAX_DETAIL_ROWS: usize = 12;
+    let mut lines = vec![
+        Line::from(""),
+        Line::from(Span::styled("Tool definitions (detail)", header_style)),
+    ];
+    if snapshot.tool_usage.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No per-tool breakdown in this snapshot.",
+            muted,
+        )));
+        return lines;
+    }
+    let name_width = snapshot
+        .tool_usage
+        .iter()
+        .take(MAX_DETAIL_ROWS)
+        .map(|item| item.name.chars().count())
+        .max()
+        .unwrap_or(0);
+    for item in snapshot.tool_usage.iter().take(MAX_DETAIL_ROWS) {
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{:<name_width$}", item.name, name_width = name_width),
+                label_style,
+            ),
+            Span::raw(" "),
+            Span::styled(format!("{:>6} tokens", fmt_tok(item.tokens)), muted),
+        ]));
+    }
+    let hidden = snapshot.tool_usage.len().saturating_sub(MAX_DETAIL_ROWS);
+    if hidden > 0 {
+        let hidden_tokens: u64 = snapshot
+            .tool_usage
+            .iter()
+            .skip(MAX_DETAIL_ROWS)
+            .map(|item| item.tokens)
+            .sum();
+        lines.push(Line::from(Span::styled(
+            format!(
+                "\u{2026} and {hidden} more tools \u{00b7} {} tokens",
+                fmt_tok(hidden_tokens)
+            ),
+            muted,
+        )));
+    }
+    lines
 }
 
 /// Format a token count compactly (`123`, `1.2k`, `999k`). The cutover from `{.1}k` to plain `{}k` happens at
@@ -607,6 +685,7 @@ mod tests {
             usage_pct: 4,
             auto_compact_threshold_percent: 85,
             usage_categories: vec![],
+            tool_usage: vec![],
         }
     }
 
@@ -979,6 +1058,7 @@ mod tests {
             usage_pct: 20,
             auto_compact_threshold_percent: 65,
             usage_categories: vec![],
+            tool_usage: vec![],
         };
         let block = ContextInfoBlock::new(snap, "grok-build");
         let theme = test_theme();
@@ -1326,6 +1406,62 @@ mod tests {
         assert!(
             l14.contains("Free") && l14.contains("963k"),
             "wide legend should keep label + tokens on one line, got: {l14:?}"
+        );
+    }
+
+    #[test]
+    fn idle_cost_line_sums_system_and_tools() {
+        let block = ContextInfoBlock::new(snapshot(), "grok-4");
+        let theme = test_theme();
+        let lines = block.build_lines(&theme, BarLayout::WIDE);
+        let all = all_text(&lines);
+        // snapshot(): system 1_200 + tools 5_600 = 6_800 -> "6.8k"
+        assert!(
+            all.contains("Idle cost (system + tools): 6.8k tokens"),
+            "expected idle cost line, got:\n{all}"
+        );
+    }
+
+    #[test]
+    fn detail_view_lists_tool_costs_largest_first() {
+        let mut snap = snapshot();
+        snap.tool_usage = vec![
+            xai_grok_shell::session::ToolUsageItem {
+                name: "workflow".into(),
+                tokens: 5_570,
+            },
+            xai_grok_shell::session::ToolUsageItem {
+                name: "send_feedback".into(),
+                tokens: 4_066,
+            },
+        ];
+        let block = ContextInfoBlock::new(snap, "grok-4").with_detail(true);
+        let theme = test_theme();
+        let lines = block.build_lines(&theme, BarLayout::WIDE);
+        let all = all_text(&lines);
+        assert!(
+            all.contains("Tool definitions (detail)") && all.contains("workflow"),
+            "expected the per-tool appendix, got:\n{all}"
+        );
+        assert!(
+            all.find("workflow").unwrap() < all.find("send_feedback").unwrap(),
+            "rows must keep the snapshot's largest-first order, got:\n{all}"
+        );
+    }
+
+    #[test]
+    fn default_view_omits_tool_detail_section() {
+        let mut snap = snapshot();
+        snap.tool_usage = vec![xai_grok_shell::session::ToolUsageItem {
+            name: "workflow".into(),
+            tokens: 5_570,
+        }];
+        let block = ContextInfoBlock::new(snap, "grok-4");
+        let theme = test_theme();
+        let lines = block.build_lines(&theme, BarLayout::WIDE);
+        assert!(
+            !all_text(&lines).contains("Tool definitions (detail)"),
+            "/context without detail must stay compact"
         );
     }
 }

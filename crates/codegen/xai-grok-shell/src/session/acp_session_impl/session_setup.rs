@@ -650,6 +650,15 @@ impl SessionActor {
             .collect();
         let tool_definitions_count = tool_defs.len();
         let tool_definitions_tokens = xai_chat_state::estimate_tool_definitions_tokens(&tool_defs);
+        // `/context detail`: the same estimate split per tool so the biggest contributors are named.
+        let mut tool_usage: Vec<ToolUsageItem> = tool_defs
+            .iter()
+            .map(|td| ToolUsageItem {
+                name: td.function.name.clone(),
+                tokens: xai_chat_state::estimate_tool_definition_tokens(td),
+            })
+            .collect();
+        tool_usage.sort_by(|a, b| b.tokens.cmp(&a.tokens).then_with(|| a.name.cmp(&b.name)));
         let message_count = self.chat_state_handle.get_conversation_len().await;
         let message_tokens = self.chat_state_handle.get_estimated_messages_tokens().await;
         let usage_categories = self.usage_categories().await;
@@ -684,6 +693,7 @@ impl SessionActor {
                 usage_pct,
                 auto_compact_threshold_percent: self.compaction.threshold_percent.get(),
                 usage_categories,
+                tool_usage,
             },
         }
     }

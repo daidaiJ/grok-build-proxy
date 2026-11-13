@@ -367,6 +367,7 @@ mod tests {
                 usage_pct: 4,
                 auto_compact_threshold_percent: 85,
                 usage_categories: vec![],
+                tool_usage: vec![],
             },
         }
     }

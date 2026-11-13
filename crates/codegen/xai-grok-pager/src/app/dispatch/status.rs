@@ -87,6 +87,8 @@ pub(super) fn open_usage_info_modal(
             agent_id: id,
             session_id: session_id.clone(),
             nonce,
+            // The modal renders from its own `context_detail`; this field serves the minimal-mode path.
+            detail: false,
         });
         effects.push(Effect::ShowSessionInfo {
             agent_id: id,
@@ -372,9 +374,22 @@ pub(super) fn scrub_error_for_toast(error: &str) -> String {
 }
 
 /// `/context` and the context-bar click: open the usage modal on its "Context usage" tab, or fetch-and-show in scrollback in minimal mode.
-pub(super) fn dispatch_show_context_info(app: &mut AppView) -> Vec<Effect> {
+pub(super) fn dispatch_show_context_info(app: &mut AppView, detail: bool) -> Vec<Effect> {
     if !app.screen_mode.is_minimal() {
-        return open_usage_info_modal(app, crate::views::usage_modal::UsageInfoTab::ContextUsage);
+        let effects =
+            open_usage_info_modal(app, crate::views::usage_modal::UsageInfoTab::ContextUsage);
+        if let ActiveView::Agent(id) = app.active_view {
+            if let Some(agent) = app.agents.get_mut(&id) {
+                if let Some(state) = usage_modal_state_mut(agent) {
+                    state.apply_context_detail(detail);
+                }
+            }
+        } else if let Some(dashboard) = app.dashboard.as_mut() {
+            if let Some(state) = dashboard.usage_modal.as_mut() {
+                state.apply_context_detail(detail);
+            }
+        }
+        return effects;
     }
     let ActiveView::Agent(id) = app.active_view else {
         return vec![];
@@ -390,6 +405,7 @@ pub(super) fn dispatch_show_context_info(app: &mut AppView) -> Vec<Effect> {
         agent_id: id,
         session_id,
         nonce: Default::default(),
+        detail,
     }]
 }
 
@@ -707,6 +723,7 @@ pub(super) fn handle_context_info_complete(
     session_id: &acp::SessionId,
     info: Box<xai_grok_shell::session::SessionInfoResponse>,
     nonce: u64,
+    detail: bool,
 ) -> Vec<Effect> {
     let minimal = app.screen_mode.is_minimal();
     if let Some(agent) = app.agents.get_mut(&agent_id) {
@@ -723,14 +740,17 @@ pub(super) fn handle_context_info_complete(
         let snapshot = info.data.context;
         agent.apply_full_context_info(snapshot.clone());
         if let Some(state) = usage_modal_state_mut(agent) {
-            state.context = Some(crate::scrollback::blocks::ContextInfoBlock::new(
-                snapshot, model,
-            ));
+            // The modal owns the flag so `/context detail` toggles without a refetch.
+            let detail = state.context_detail;
+            state.context = Some(
+                crate::scrollback::blocks::ContextInfoBlock::new(snapshot, model)
+                    .with_detail(detail),
+            );
             state.context_error = None;
         } else if minimal {
             push_and_page_flip(
                 &mut agent.scrollback,
-                crate::scrollback::block::RenderBlock::context_info(snapshot, model),
+                crate::scrollback::block::RenderBlock::context_info(snapshot, model, detail),
             );
         }
         // Full mode with the modal closed: the result arrived after dismissal, so drop it
