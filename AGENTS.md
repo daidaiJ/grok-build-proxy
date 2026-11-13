@@ -114,7 +114,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 最新交接（2026-11）
 
-- **2026-11-13 token 经济波次**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；#16（断崖 + `/stats` 分组）CI 中；`/compress-fast` 待推（append 模式走「清理 + 失效标记」）；交接卡 `.handoff/token-economy-wave-2026-11.md`。
+- **2026-11-13 token 经济波次**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；#16（断崖 + `/stats` 分组）、#17（`/compress-fast`，append 模式走「清理 + 失效标记」）CI 中；交接卡 `.handoff/token-economy-wave-2026-11.md`。
 - **v1.0.75（11-13 发版）**：`/compact <instructions>` 手动压缩保留重点。PR #11
   merge `828d5f5e`；release run `43373939909` success，4 资产，Windows zip sha256
   `2ea66d92…`；本机部署 `D:\tool\cli\grok2.exe` = `grok 1.0.75 (828d5f5e0486)`，
