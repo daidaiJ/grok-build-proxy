@@ -43,6 +43,18 @@ pub struct CompactConversationRequest {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CompactConversationResponse {}
 
+// ── Context cleanup ─────────────────────────────────────────────────────
+
+/// LOCAL(compress-fast): `x.ai/session/compressFast` request.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct CompressFastRequest {
+    #[serde(alias = "sessionId")]
+    pub session_id: String,
+    /// Recent user turns whose tool results stay verbatim. Defaults to 2.
+    #[serde(default, alias = "keepLastTurns")]
+    pub keep_last_turns: Option<usize>,
+}
+
 // ── Feedback ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

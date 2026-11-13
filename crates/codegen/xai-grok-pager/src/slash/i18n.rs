@@ -119,6 +119,8 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "旁路提问，不打断当前任务",
         ),
         ("Compact conversation history", "压缩对话历史"),
+        ("Clear old tool results without a model call", "清理旧工具结果（零模型调用）"),
+        ("Clearing old tool results", "清理旧工具结果中"),
         (
             "Change the working directory for new agents",
             "更改新代理的工作目录",

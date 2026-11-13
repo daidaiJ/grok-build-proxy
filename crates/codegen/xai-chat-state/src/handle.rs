@@ -307,6 +307,19 @@ impl ChatStateHandle {
         .await
     }
 
+    /// LOCAL(compress-fast): clear tool results older than `keep_last_n_turns`
+    /// user turns without a model call. `None` if the actor is dead.
+    pub async fn compress_fast(
+        &self,
+        keep_last_n_turns: usize,
+    ) -> Option<crate::types::CompressFastOutcome> {
+        self.query("CompressFast", |reply| ChatStateCommand::CompressFast {
+            keep_last_n_turns,
+            reply,
+        })
+        .await
+    }
+
     /// Atomically align the leading `System` message with `prompt`, persisting when changed.
     /// Serializes with turn pushes so a mid-turn reconnect cannot drop concurrent updates.
     /// `Some(changed)`, or `None` if the actor is dead.

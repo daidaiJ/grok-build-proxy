@@ -1999,6 +1999,59 @@ pub(super) fn handle_memory_command_complete(
     drain.effects
 }
 
+/// LOCAL(compress-fast): close the command state and post the cleanup outcome.
+pub(super) fn handle_compress_fast_complete(
+    app: &mut AppView,
+    agent_id: AgentId,
+    result: Result<
+        crate::slash::commands::compress_fast::CompressFastResponse,
+        String,
+    >,
+) -> Vec<Effect> {
+    let Some(agent) = app.agents.get_mut(&agent_id) else {
+        return vec![];
+    };
+    if agent.session.state.command_in_flight() != Some(&AgentCommand::CompressFast) {
+        tracing::debug!("Ignoring compress-fast result (not in its command state)");
+        return vec![];
+    }
+    let elapsed = agent.turn_elapsed().unwrap_or_default();
+    agent.session.finish_command();
+
+    match result {
+        Ok(response) => agent
+            .scrollback
+            .push_block(RenderBlock::session_event(
+                SessionEvent::CompressFastCompleted {
+                    cleared_tool_results: response.cleared_tool_results,
+                    bytes_freed: response.bytes_freed,
+                    skipped: response.skipped,
+                    elapsed,
+                },
+            )),
+        Err(error) => {
+            tracing::error!(agent = ?agent_id, %error, "compress-fast failed");
+            agent
+                .scrollback
+                .push_block(RenderBlock::session_event(SessionEvent::TurnFailed {
+                    error,
+                    elapsed: Some(elapsed),
+                }));
+        }
+    }
+
+    agent.mark_turn_finished(TurnEnd::Completed);
+    agent.activity_started_at = None;
+    agent.last_activity = None;
+
+    if app.reconnect_pending {
+        return vec![];
+    }
+    let drain = maybe_drain_queue(agent, &mut app.pending_image_notices);
+    note_peek_page_flip(app, agent_id, drain.page_flip_entry);
+    drain.effects
+}
+
 pub(super) fn handle_compact_complete(
     app: &mut AppView,
     agent_id: AgentId,

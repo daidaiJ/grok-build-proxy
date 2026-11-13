@@ -6,6 +6,8 @@ pub mod btw;
 pub mod cd;
 pub mod compact;
 pub mod compact_mode;
+// LOCAL(compress-fast): zero-model-call cleanup of old tool results
+pub mod compress_fast;
 pub mod config_agents;
 pub mod context;
 pub mod context_window;
@@ -99,6 +101,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(model::ModelCommand),
         Arc::new(context::ContextCommand),
         Arc::new(compact::CompactCommand),
+        Arc::new(compress_fast::CompressFastCommand),
         Arc::new(fork::ForkCommand),
         Arc::new(resume::ResumeCommand),
         // Steering the work in front of you.

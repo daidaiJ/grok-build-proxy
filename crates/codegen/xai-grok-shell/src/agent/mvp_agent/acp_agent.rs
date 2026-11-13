@@ -2057,7 +2057,8 @@ impl acp::Agent for MvpAgent {
             | crate::extensions::memory::MEMORY_REWRITE_METHOD
             | crate::extensions::memory::MEMORY_LIST_METHOD
             | crate::extensions::memory::MEMORY_TOGGLE_METHOD
-            | crate::extensions::memory::MEMORY_FORGET_METHOD => {
+            | crate::extensions::memory::MEMORY_FORGET_METHOD
+            | crate::extensions::memory::COMPRESS_FAST_METHOD => {
                 crate::extensions::memory::handle(self, &args).await
             }
             "x.ai/skills/refresh-baseline" => {

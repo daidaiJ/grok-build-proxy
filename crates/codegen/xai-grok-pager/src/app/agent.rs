@@ -116,6 +116,8 @@ pub enum AgentCommand {
     MemoryFlush,
     /// `/dream`: consolidate memory now.
     MemoryDream,
+    /// LOCAL(compress-fast): drop old tool-result bodies without a model call.
+    CompressFast,
 }
 impl AgentCommand {
     /// Human-readable label for the status line (e.g., "Compacting").
@@ -129,6 +131,7 @@ impl AgentCommand {
             Self::ForkSession => "Forking session",
             Self::MemoryFlush => "Flushing memory",
             Self::MemoryDream => "Consolidating memory",
+            Self::CompressFast => "Clearing old tool results",
         }
     }
     /// The raw command text (e.g., "/compact").
@@ -142,6 +145,7 @@ impl AgentCommand {
             Self::ForkSession => "fork",
             Self::MemoryFlush => "/flush",
             Self::MemoryDream => "/dream",
+            Self::CompressFast => "/compress-fast",
         }
     }
     /// Manual `/compact` or the idle family-switch compact that reuses the same cancel/status path.

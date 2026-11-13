@@ -2753,6 +2753,20 @@ pub(crate) fn execute(
                     }
                 });
         }
+        Effect::CompressFast { agent_id, session_id } => {
+            use xai_grok_shell::extensions::memory::COMPRESS_FAST_METHOD;
+            let tx = acp_tx.clone();
+            tasks.spawn(async move {
+                let result =
+                    memory_command_request::<crate::slash::commands::compress_fast::CompressFastResponse>(
+                        COMPRESS_FAST_METHOD,
+                        &session_id,
+                        &tx,
+                    )
+                    .await;
+                TaskResult::CompressFastComplete { agent_id, result }
+            });
+        }
         Effect::MemoryForget { agent_id, session_id, path, expected_content_hash } => {
             use xai_grok_shell::extensions::memory::{
                 MEMORY_FORGET_METHOD, MemoryForgetRequest, MemoryForgetResponse,

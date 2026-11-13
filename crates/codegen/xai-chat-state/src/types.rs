@@ -156,6 +156,24 @@ pub struct AutoCompactTrigger {
     pub utilization_percent: u8,
 }
 
+/// LOCAL(compress-fast): why a manual cleanup did not rewrite anything.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CompressFastSkip {
+    /// Every old tool result is already cleared (or there are none old enough).
+    NothingToClear,
+}
+
+/// LOCAL(compress-fast): result of the zero-model-call cleanup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressFastOutcome {
+    pub cleared_tool_results: usize,
+    pub bytes_freed: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skipped: Option<CompressFastSkip>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
