@@ -7,12 +7,16 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 时，先跑 `cbm cli get_architecture`（hotspots/clusters）或 `query_graph`（Cypher 查调用链、
 复杂度），一次拿到结构地图再读代码，禁止上来就连环 grep。用法与陷阱见 `~/.zcode/skills/cbm/SKILL.md`。
 
-## 分支纪律（MANDATORY）
+## 分支纪律（MANDATORY，2026-11-13 改口径）
 
-- **主分支只收文档，不收功能代码**：一切新功能/修复/重构必须在 feature 分支（如
-  `feat/local-*`）上开发提交，验证通过后合入 main 并按 `vX.Y.Z` 打 tag 发版。
-  main 上只允许直接提交文档类改动（AGENTS.md、docs-local/、README 等），禁止在
-  main 上直接提交任何非文档变更。
+- **直接在 `main` 上施工，不再开新分支**：功能/修复/重构一律提交到 main，靠
+  GitHub Actions 的 build 结果验收，通过后按 `vX.Y.Z` 打 tag 发版。
+- **一次推送一批**：main 的 push 会触发 `build.yml`（docs-only 改动被 `paths-ignore`
+  跳过、不跑 CI），因此仍按「攒一批改动 → 一次推送 → 红就修完再推」执行，
+  禁止一个提交一次 build。
+- **main 红了当班修**：没有 PR 门禁兜底，CI 失败就是 main 失败；拿到失败日志先分族
+  （见下节时间成本原则），修完连同原因一起再推。
+- 历史 `feat/local-*` 分支保留作考古对照，不再新增；现存未合的 PR 按原样验收合并。
 
 ## 调试的时间成本原则（MANDATORY）
 
@@ -97,7 +101,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ### 施工中 / 待合
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
-- token 经济可观测性 — 账本 `sessionId`+`purpose`、缓存断崖、`/stats` 分组已合 main；`/compress-fast` 待推 PR；`docs-local/token-economy-audit-2026-11/cache-observability-plan.md`。
+- token 经济可观测性 — 账本 `sessionId`+`purpose` 已合 main；缓存断崖 + `/stats` 分组（PR #16）与 `/compress-fast`（PR #17，append 模式走「清理 + 失效标记」）待 CI 绿后合；`docs-local/token-economy-audit-2026-11/cache-observability-plan.md`。
 - grok-doctor 技能 — P1；`docs-local/agent-cli-tracking/skill-plugin-port-eval-2026-11-13.md`。
 
 ### 待活体验证（随新客户端）
@@ -114,7 +118,8 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 最新交接（2026-11）
 
-- **2026-11-13 token 经济波次**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；#16（断崖 + `/stats` 分组）、#17（`/compress-fast`，append 模式走「清理 + 失效标记」）CI 中；交接卡 `.handoff/token-economy-wave-2026-11.md`。
+- **2026-11-13 token 经济波次**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；#16（断崖 + `/stats` 分组）、#17（`/compress-fast`，append 模式走「清理 + 失效标记」）CI 中，全绿后合并再发版（用户指定「等所有这几波需求都全绿后再发」）；交接卡 `.handoff/token-economy-wave-2026-11.md`。
+- **2026-11-13 分支口径变更**：后续直接在 `main` 施工，不再开 feature 分支（见「分支纪律」）。
 - **v1.0.75（11-13 发版）**：`/compact <instructions>` 手动压缩保留重点。PR #11
   merge `828d5f5e`；release run `43373939909` success，4 资产，Windows zip sha256
   `2ea66d92…`；本机部署 `D:\tool\cli\grok2.exe` = `grok 1.0.75 (828d5f5e0486)`，
