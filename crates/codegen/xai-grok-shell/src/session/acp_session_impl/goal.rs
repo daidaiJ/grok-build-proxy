@@ -115,8 +115,17 @@ impl SessionActor {
                 active_model.clone(),
                 &session_id,
             );
+            let call_started = std::time::Instant::now();
             let response = match client.conversation_collect(request).await {
-                Ok(response) => response,
+                Ok(response) => {
+                    self.record_side_call_sample(
+                        xai_grok_tools::model_usage_ledger::CallPurpose::Goal,
+                        &active_model,
+                        &response,
+                        call_started.elapsed().as_millis() as u64,
+                    );
+                    response
+                }
                 Err(error) => {
                     let _ = self
                         .chat_state_handle

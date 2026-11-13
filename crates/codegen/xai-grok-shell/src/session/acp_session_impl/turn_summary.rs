@@ -109,7 +109,7 @@ impl SessionActor {
                 ConversationItem::system(turn_summary::TURN_SUMMARY_SYSTEM),
                 ConversationItem::user(turn_summary::turn_summary_user_message(&user_text, &reply)),
             ],
-            model: Some(model),
+            model: Some(model.clone()),
             reasoning_effort,
             x_grok_conv_id: Some(format!("turn-summary-{}", uuid::Uuid::new_v4())),
             x_grok_req_id: Some(format!("xai-turn-summary-{}", uuid::Uuid::new_v4())),
@@ -119,13 +119,22 @@ impl SessionActor {
             ..Default::default()
         };
 
+        let call_started = std::time::Instant::now();
         let response = match tokio::time::timeout(
             settings.timeout,
             client.conversation_collect(request),
         )
         .await
         {
-            Ok(Ok(r)) => r,
+            Ok(Ok(r)) => {
+                self.record_side_call_sample(
+                    xai_grok_tools::model_usage_ledger::CallPurpose::TurnSummary,
+                    &model,
+                    &r,
+                    call_started.elapsed().as_millis() as u64,
+                );
+                r
+            }
             Ok(Err(e)) => {
                 tracing::warn!(error = %e, "turn summary: model call failed");
                 return;

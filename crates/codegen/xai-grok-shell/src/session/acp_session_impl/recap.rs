@@ -369,13 +369,22 @@ impl SessionActor {
         // The artifact records the exact model-facing items after trust projection; the canonical conversation state remains raw
         let chat_history_for_artifact = request.items.clone();
 
+        let call_started = std::time::Instant::now();
         let response = match tokio::time::timeout(
             settings.timeout,
             client.conversation_collect(request),
         )
         .await
         {
-            Ok(Ok(r)) => Ok(r),
+            Ok(Ok(r)) => {
+                self.record_side_call_sample(
+                    xai_grok_tools::model_usage_ledger::CallPurpose::Recap,
+                    &model,
+                    &r,
+                    call_started.elapsed().as_millis() as u64,
+                );
+                Ok(r)
+            }
             Ok(Err(e)) => Err(e.to_string()),
             Err(_) => Err(format!(
                 "timed out after {} ms",
@@ -833,7 +842,15 @@ impl SessionActor {
         };
 
         let response = match sampling_client.conversation_collect(request).await {
-            Ok(r) => r,
+            Ok(r) => {
+                self.record_side_call_sample(
+                    xai_grok_tools::model_usage_ledger::CallPurpose::Other,
+                    &request_model,
+                    &r,
+                    started.elapsed().as_millis() as u64,
+                );
+                r
+            }
             Err(e) => {
                 tracing::debug!(error = %e, "prompt suggest inference failed");
                 log_fetch(

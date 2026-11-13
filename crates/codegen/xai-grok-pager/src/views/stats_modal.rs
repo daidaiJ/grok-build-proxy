@@ -604,6 +604,8 @@ mod tests {
         ModelCallSample {
             ts_unix_ms: ts,
             model_id: model.to_string(),
+            session_id: None,
+            purpose: None,
             prompt_tokens: prompt,
             completion_tokens: 500,
             cached_prompt_tokens: cached,

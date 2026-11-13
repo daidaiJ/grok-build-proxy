@@ -3492,6 +3492,10 @@ impl SessionActor {
                         ts_unix_ms:
                             xai_grok_tools::model_usage_ledger::ModelCallSample::now_unix_ms(),
                         model_id: model_id.clone(),
+                        session_id: Some(self.session_info.id.0.to_string()),
+                        purpose: Some(
+                            xai_grok_tools::model_usage_ledger::CallPurpose::Main,
+                        ),
                         prompt_tokens: u64::from(usage.map(|u| u.prompt_tokens).unwrap_or(0)),
                         completion_tokens: u64::from(
                             usage.map(|u| u.completion_tokens).unwrap_or(0),

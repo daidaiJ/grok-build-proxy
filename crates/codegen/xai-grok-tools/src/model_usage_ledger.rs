@@ -86,6 +86,34 @@ const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 /// 进程内串行化 append + 剪裁，避免并发重写交错。
 static LEDGER_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// 一次模型调用属于哪条链路。旧账本没有该字段，读取侧按主回合处理。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CallPurpose {
+    Main,
+    Recap,
+    TurnSummary,
+    Compaction,
+    Title,
+    Goal,
+    Other,
+}
+
+impl CallPurpose {
+    /// 稳定显示名，/stats 按用途分组时使用。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Main => "main",
+            Self::Recap => "recap",
+            Self::TurnSummary => "turn_summary",
+            Self::Compaction => "compaction",
+            Self::Title => "title",
+            Self::Goal => "goal",
+            Self::Other => "other",
+        }
+    }
+}
+
 /// 一次成功模型调用的用量/性能采样。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,6 +121,12 @@ pub struct ModelCallSample {
     /// Unix 毫秒时间戳。
     pub ts_unix_ms: u64,
     pub model_id: String,
+    /// 会话 id；旧行缺失。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// 调用用途；旧行缺失，按主回合处理。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purpose: Option<CallPurpose>,
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
     pub cached_prompt_tokens: u64,
@@ -115,6 +149,11 @@ impl ModelCallSample {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0)
+    }
+
+    /// 旧行（无 `purpose`）与显式 `main` 都算主回合。
+    pub fn is_main_turn(&self) -> bool {
+        matches!(self.purpose, None | Some(CallPurpose::Main))
     }
 }
 
@@ -269,15 +308,34 @@ pub fn fmt_tps_pair(p50: Option<f64>, p90: Option<f64>, na: &str) -> String {
 }
 
 /// 把样本按 `window_ms` 时间窗过滤后按 model 聚合，按总 token 降序排列。
+/// 只统计主回合（旧行没有 `purpose`，按主回合处理），保持升级前的报表口径。
 pub fn aggregate(
     samples: &[ModelCallSample],
     window_ms: u64,
     now_unix_ms: u64,
 ) -> Vec<ModelUsageAggregate> {
+    aggregate_filtered(samples, window_ms, now_unix_ms, true)
+}
+
+/// 与 [`aggregate`] 相同，但包含 sidecar（recap / turn_summary / goal 等）调用。
+pub fn aggregate_all(
+    samples: &[ModelCallSample],
+    window_ms: u64,
+    now_unix_ms: u64,
+) -> Vec<ModelUsageAggregate> {
+    aggregate_filtered(samples, window_ms, now_unix_ms, false)
+}
+
+fn aggregate_filtered(
+    samples: &[ModelCallSample],
+    window_ms: u64,
+    now_unix_ms: u64,
+    main_only: bool,
+) -> Vec<ModelUsageAggregate> {
     let cutoff = now_unix_ms.saturating_sub(window_ms);
     let mut by_model: indexmap::IndexMap<String, Vec<&ModelCallSample>> = indexmap::IndexMap::new();
     for sample in samples {
-        if sample.ts_unix_ms >= cutoff {
+        if sample.ts_unix_ms >= cutoff && (!main_only || sample.is_main_turn()) {
             by_model
                 .entry(sample.model_id.clone())
                 .or_default()
@@ -337,6 +395,8 @@ mod tests {
         ModelCallSample {
             ts_unix_ms,
             model_id: model.to_string(),
+            session_id: None,
+            purpose: None,
             prompt_tokens: prompt,
             completion_tokens: 100,
             cached_prompt_tokens: cached,
@@ -376,6 +436,46 @@ mod tests {
         // 5h 窗更短，结果一致（样本都在 5h 内）
         let rows_5h = aggregate(&samples, WINDOW_5H_MS, now);
         assert_eq!(rows_5h.len(), 2);
+    }
+
+    #[test]
+    fn legacy_rows_without_new_fields_parse_as_main_turn() {
+        let original = sample(1_000, "m-a", 100, 50, 900, 50.0);
+        let json = serde_json::to_string(&original).unwrap();
+        let parsed: ModelCallSample = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.session_id, None);
+        assert_eq!(parsed.purpose, None);
+        assert!(parsed.is_main_turn());
+    }
+
+    #[test]
+    fn purpose_and_session_round_trip_in_camel_case_json() {
+        let mut s = sample(1_000, "m-a", 100, 50, 900, 50.0);
+        s.session_id = Some("session-1".to_string());
+        s.purpose = Some(CallPurpose::TurnSummary);
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json["sessionId"], "session-1");
+        assert_eq!(json["purpose"], "turn_summary");
+        let parsed: ModelCallSample = serde_json::from_value(json).unwrap();
+        assert_eq!(parsed, s);
+    }
+
+    #[test]
+    fn aggregate_keeps_main_only_while_aggregate_all_includes_sidecars() {
+        let now = 1_000_000_000_000;
+        let main = sample(now - 1000, "m-a", 1_000, 800, 900, 50.0);
+        let mut sidecar = sample(now - 2000, "m-a", 5_000, 0, 500, 10.0);
+        sidecar.session_id = Some("s-1".to_string());
+        sidecar.purpose = Some(CallPurpose::Recap);
+        let samples = vec![main, sidecar];
+
+        let main_rows = aggregate(&samples, WINDOW_WEEK_MS, now);
+        assert_eq!(main_rows[0].calls, 1);
+        assert_eq!(main_rows[0].prompt_tokens, 1_000);
+
+        let all_rows = aggregate_all(&samples, WINDOW_WEEK_MS, now);
+        assert_eq!(all_rows[0].calls, 2);
+        assert_eq!(all_rows[0].prompt_tokens, 6_000);
     }
 
     #[test]

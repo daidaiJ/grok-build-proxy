@@ -99,6 +99,37 @@ pub(super) fn should_strip_side_call_reasoning(
 }
 
 impl SessionActor {
+    /// LOCAL(token-economy): 把 sidecar 的用量写进主账本，`purpose` 让 `/stats`
+    /// 能把 turn_summary / recap / title / goal 这些隐藏调用与主回合分开。
+    pub(crate) fn record_side_call_sample(
+        &self,
+        purpose: xai_grok_tools::model_usage_ledger::CallPurpose,
+        model_id: &str,
+        response: &xai_grok_sampling_types::ConversationResponse,
+        duration_ms: u64,
+    ) {
+        let Some(usage) = response.usage.as_ref() else {
+            return;
+        };
+        xai_grok_tools::model_usage_ledger::append_sample(
+            &xai_grok_config::grok_home(),
+            &xai_grok_tools::model_usage_ledger::ModelCallSample {
+                ts_unix_ms: xai_grok_tools::model_usage_ledger::ModelCallSample::now_unix_ms(),
+                model_id: model_id.to_string(),
+                session_id: Some(self.session_info.id.0.to_string()),
+                purpose: Some(purpose),
+                prompt_tokens: u64::from(usage.prompt_tokens),
+                completion_tokens: u64::from(usage.completion_tokens),
+                cached_prompt_tokens: u64::from(usage.cached_prompt_tokens),
+                cache_creation_tokens: u64::from(usage.cache_creation_prompt_tokens),
+                reasoning_tokens: u64::from(usage.reasoning_tokens),
+                ttft_ms: None,
+                tps: None,
+                duration_ms,
+            },
+        );
+    }
+
     /// Request skeleton for an auxiliary call that replays the parent conversation under the parent's `prompt_cache_key`.
     /// Temperature stays unset: cli-chat-proxy may inject a `thinking` config, and the Messages API then requires temperature == 1.
     pub(crate) fn parent_cached_request(&self, call: AuxCall) -> ConversationRequest {
