@@ -74,7 +74,6 @@ pub struct AgentBuilder {
     background_workflows_enabled: bool,
     ask_user_question_enabled: bool,
     subagent_toggle: HashMap<String, bool>,
-    task_model_slugs: Vec<String>,
     task_model_selection: TaskModelSelection,
     skills_config: crate::prompt::skills::SkillsConfig,
     /// Which vendor (`.claude`/`.cursor`) dirs are scanned for skills / rules / AGENTS.md; the all-on default reproduces historical behavior.
@@ -330,7 +329,6 @@ impl AgentBuilder {
             background_workflows_enabled: false,
             ask_user_question_enabled: true,
             subagent_toggle: HashMap::new(),
-            task_model_slugs: Vec::new(),
             task_model_selection: TaskModelSelection::default(),
             skills_config: Default::default(),
             compat: Default::default(),
@@ -599,11 +597,6 @@ impl AgentBuilder {
     }
     pub fn with_background_workflows_enabled(mut self, enabled: bool) -> Self {
         self.background_workflows_enabled = enabled;
-        self
-    }
-    /// Advertised in the GrokBuild Task description.
-    pub fn with_task_model_slugs(mut self, slugs: Vec<String>) -> Self {
-        self.task_model_slugs = slugs;
         self
     }
     /// Whether the task tools advertise and accept an explicit child model.
@@ -945,10 +938,7 @@ impl AgentBuilder {
                 .find(|tc| tc.id == task_tool_id)
             {
                 let mut description = xai_tool_types::build_task_description(&TASK_TOOL_NAMING);
-                description.push_str(&task_model_guidance(
-                    self.task_model_selection,
-                    &self.task_model_slugs,
-                ));
+                description.push_str(&task_model_guidance(self.task_model_selection));
                 task_tc.description_override = Some(description);
             }
         }
@@ -1388,28 +1378,13 @@ Prefer doing the work yourself unless delegation is clearly necessary.\n\
 Usage: specify a short ${{ params.task.description }} and a detailed ${{ params.task.prompt }}.\n\
 ${{ params.task.run_in_background }}: Returns immediately with a subagent_id. Use the task output tool to retrieve results. This is set to true by default.";
 const TASK_MODEL_PARAM: &str = "${{ params.task.model }}";
-fn task_model_guidance(selection: TaskModelSelection, model_slugs: &[String]) -> String {
+fn task_model_guidance(selection: TaskModelSelection) -> String {
     if selection == TaskModelSelection::Inherited {
         return String::new();
     }
-    let mut model_slugs = model_slugs.to_vec();
-    model_slugs.sort_unstable();
-    model_slugs.dedup();
-    if model_slugs.is_empty() {
-        return format!(
-            "\n\nNo explicit model slugs are currently available. \
-             OMIT the `{TASK_MODEL_PARAM}` field."
-        );
-    }
-    let model_list = model_slugs
-        .into_iter()
-        .map(|slug| format!("- {slug}"))
-        .collect::<Vec<_>>()
-        .join("\n");
     format!(
-        "\n\nIf the user explicitly asks for the model of a subagent/task, you may ONLY use model slugs from this list:\n\
-         {model_list}\n\n\
-         If the user does NOT _explicitly_ request a model, OMIT the `{TASK_MODEL_PARAM}` field."
+        "\n\nIf the user explicitly asks for the model of a subagent/task, pass a catalog model slug in `{TASK_MODEL_PARAM}`. \
+         An invalid slug is rejected with the list of valid slugs; omit the field to inherit the parent model."
     )
 }
 fn resolve_shell_for_prompt() -> String {
@@ -1708,19 +1683,12 @@ mod tests {
         assert!(desc.contains("${{ params.task.isolation }}"));
     }
     #[test]
-    fn task_model_guidance_lists_public_model_slugs() {
-        let desc = task_model_guidance(
-            TaskModelSelection::Selectable,
-            &["zeta".to_string(), "alpha".to_string(), "alpha".to_string()],
-        );
-        assert!(desc.contains("- alpha\n- zeta"));
+    fn task_model_guidance_is_static_and_defers_slug_list_to_validator() {
+        let desc = task_model_guidance(TaskModelSelection::Selectable);
         assert!(desc.contains("${{ params.task.model }}"));
-    }
-    #[test]
-    fn task_model_guidance_handles_empty_model_catalog() {
-        let desc = task_model_guidance(TaskModelSelection::Selectable, &[]);
-        assert!(desc.contains("${{ params.task.model }}"));
+        assert!(desc.contains("invalid slug is rejected"));
         assert!(!desc.contains("- alpha"));
+        assert_eq!(task_model_guidance(TaskModelSelection::Inherited), "");
     }
     #[test]
     fn task_model_guidance_resolves_model_param_override() {
@@ -1734,10 +1702,7 @@ mod tests {
             )]),
         );
         let rendered = renderer
-            .render(&task_model_guidance(
-                TaskModelSelection::Selectable,
-                &["alpha".to_string()],
-            ))
+            .render(&task_model_guidance(TaskModelSelection::Selectable))
             .expect("model guidance should render");
         assert!(rendered.contains("`child_model`"));
         assert!(!rendered.contains("params.task.model"));
