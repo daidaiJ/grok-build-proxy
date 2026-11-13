@@ -136,6 +136,10 @@ status: merged-awaiting-release
 - 远端分支 `feat/local-compact-instructions`（origin 与 `pandazhangS` fork 均有）；
   PR https://github.com/daidaiJ/grok-build-proxy/pull/11 已 MERGED，合入提交
   `828d5f5e`（本机 `git merge --no-ff` + 推 main，token 无 PR merge 权限）。
+- main 首次 build（`43363285019`）在 Linux 步骤 25 分钟超时被杀，日志确认全部
+  单测与 doctest 已通过、无失败用例；随后把该步骤上限提到 40 分钟
+  （`8b3d6c8b`，merge `d42a8abb`），main build `43367116994` 双 job success
+  （linux 39m56s，其中 Test touched crates 23m24s；pager 步骤 9m18s）。
 - 未在本地编译（按本轮约定走远程 CI）：Linux `Test touched crates` success 覆盖
   新增 shell 单测；`Test pager additions` 新增
   `compact_drain compact_no_args compact_with_args compact_whitespace_only
