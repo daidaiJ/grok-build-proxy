@@ -1189,7 +1189,8 @@ mod tests {
         let mut state = StatsModalState::new(Window::FiveHours, vec![main, recap]);
         state.now_unix_ms = now;
 
-        assert_eq!(state.rows_for(Window::FiveHours).len(), 2);
+        // 默认模型维度沿用主回合口径，侧写调用（recap）不计入。
+        assert_eq!(state.rows_for(Window::FiveHours).len(), 1);
 
         state.dimension = StatsDimension::Purpose;
         let rows = state.rows_for(Window::FiveHours);
