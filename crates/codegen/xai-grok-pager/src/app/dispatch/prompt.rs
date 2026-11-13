@@ -2019,16 +2019,18 @@ pub(super) fn handle_compress_fast_complete(
     agent.session.finish_command();
 
     match result {
-        Ok(response) => agent
-            .scrollback
-            .push_block(RenderBlock::session_event(
-                SessionEvent::CompressFastCompleted {
-                    cleared_tool_results: response.cleared_tool_results,
-                    bytes_freed: response.bytes_freed,
-                    skipped: response.skipped,
-                    elapsed,
-                },
-            )),
+        Ok(response) => {
+            agent
+                .scrollback
+                .push_block(RenderBlock::session_event(
+                    SessionEvent::CompressFastCompleted {
+                        cleared_tool_results: response.cleared_tool_results,
+                        bytes_freed: response.bytes_freed,
+                        skipped: response.skipped,
+                        elapsed,
+                    },
+                ));
+        }
         Err(error) => {
             tracing::error!(agent = ?agent_id, %error, "compress-fast failed");
             agent
