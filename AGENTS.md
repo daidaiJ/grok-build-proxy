@@ -107,6 +107,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ### 未开工 / 待拍板
 - workflow-pi-port P2 T2（deferred tools）；kimicode T2b（replay 双路径）；step-code P3/P4；dsh-port P1。
 - zcode 3.17.2 P1（provider-tool-rounds / foldReminders / post-compact 回补 / hooks `onError` / superpowers 三件 A/B）；opencode diff 面板；webdav sync；`/dump`；startup-perf 缓解；其余 21 套主题；harness-model-fit 建议；agent-cli-refresh P3（prompt snapshot）。
+- qwen 1.0 增补 — `/context detail`+idle cost（P0）、microcompaction 规格（并入 P1）、调度闸门（P2）；`docs-local/agent-cli-tracking/notes/qwen-code-1.0-2026-11.md`。
 
 ### 长期挂起
 - Ctrl+Enter 幽灵气球（P2，`docs-local/issues/`）；quota 他机对账；limit-probe T3；dump 自动清理；model-picker T2。

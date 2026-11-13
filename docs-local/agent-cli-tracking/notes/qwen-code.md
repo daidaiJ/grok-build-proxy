@@ -5,6 +5,7 @@
 > 语言栈: TypeScript / Ink+React 19 · 架构血缘: gemini-cli 深度 fork（packages/core = agent 引擎，packages/cli = TUI）
 > 分析日期: 2026-09-19 · 范围: TUI 层与 agent 通用优化（vscode/desktop/web/channels 等未覆盖）
 > 引入评估见 [../ADOPTION.md](../ADOPTION.md)
+> 2026-11 增补（1.0 Preview / 0.26–0.27）：[qwen-code-1.0-2026-11.md](qwen-code-1.0-2026-11.md)
 
 ## ① 架构总览
 

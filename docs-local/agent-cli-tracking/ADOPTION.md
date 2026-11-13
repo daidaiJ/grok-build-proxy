@@ -365,3 +365,24 @@ P1/P2 按 §3/§4 表内级别随迭代带入；每项引入后在本文勾选�
 4. **9.1.7 单独立项评估**：CONTRACT.md 是本轮唯一「跨语言、长期复利」的工程资产，但要先定 adopt 范围（建议挑 `xai-grok-mcp` / `xai-grok-compaction` 两个高频改动 crate 试点 + baseline 压存量），别一次性全仓铺开。
 5. **条件触发**：9.1.1 等 `[api_dump]` 抓到伪装内置工具现场；9.1.8 与 §7.1.10 合并等 folder_trust 覆盖面核对结果；9.1.9 随插件市场轮。
 6. **§8.4 第 2 条维持原议**：superpowers 三件（TDD / systematic-debugging / verification-before-completion）skills-only A/B 仍未做，本轮技能正文零变化，可随时开工。
+
+## 10. qwen-code 1.0 增补（2026-11-13）
+
+> 背景：qwen-code 发布 1.0 Preview（Qoder harness 合并、原生安装包），本地克隆已更新到
+> `84b5b53f`（2026-11-13）。机制与源码锚点见
+> [notes/qwen-code-1.0-2026-11.md](notes/qwen-code-1.0-2026-11.md)。本轮只追加
+> 「上下文成本可观测 / 规则压缩 / 调度省 token / 插件中间件」四面，不改 §1–§9 判定。
+
+| # | 特性 | 来源锚点 | 现状对照 | 落点 | 级别 |
+|---|---|---|---|---|---|
+| 10.1 | **`/context detail` + idle cost**：分类之外逐项列出每个工具/context 文件/skill 的常驻 token，并用「问一句不调工具」的输入量作为与模型无关的成本指标 | qwen `docs/users/features/context-cost.md`、`packages/cli/src/ui/commands/contextCommand.ts` | fork `/context` 五类汇总，逐项文本只为 telemetry 生成（`session/acp_session_impl/context_snapshot.rs`）；本地估算函数已有（`estimate_tokens`） | `ContextInfo` 加条目列表 + pager detail 视图 | 🟡 **P0** |
+| 10.2 | **microcompaction + `/compress-fast`**：强制清老工具结果/内联媒体/thinking，零模型调用；500k 字符默认阈值；NOOP 用同一 estimator 判定；改写后撤销读缓存与记忆体记账 | qwen `core/src/services/microcompaction/microcompact.ts`、`config/clearContextDefaults.ts`、`ui/commands/compressFastCommand.ts` | ADOPTION §2.2 已列 P1，fork 无 history 侧规则清理，只有 85% 的 LLM 压缩 | `xai-grok-compaction` + context edit journal（`xai-workflow` 的 replace_visible/hide_visible） | 🟡 **P1**（规格已备） |
+| 10.3 | **定时任务闸门**：到期先跑一条 shell 命令，静默退出 0 则整轮跳过；有输出才作为数据附着到 prompt | qwen `docs/users/features/scheduled-tasks.md`、CronCreate `gate` | `scheduler_create` 只有 interval/prompt/durable/fire_immediately，到期无条件跑 | `xai-grok-tools/.../scheduler/create.rs` + 到期判断 | 🟢 **P2** |
+| 10.4 | **`tools.eager`（内置工具 deferred）**：工具仍注册，初始请求只声明白名单，其余经 tool_search→tool_call 桥；阈值默认 0，声明列表保持字节稳定 | qwen `docs/users/features/context-cost.md` §2 | fork 桥只索引 MCP 工具（`search_tool/mod.rs`）；`tools:` 白名单是硬删 | ToolIndex 扩内置 + `use_tool` 执行内置 | 🟢 **P3（待 10.1 数据）** |
+| 10.5 | **Mods 插件中间件**（QuickJS 沙箱、`tool.call` 改写、`tool.check` 仅收紧） | qwen `docs/users/extension/mods/`、`packages/core/src/mods/`（13.7k 行） | fork 插件 = manifest + skills/hooks/MCP；hook 已只广告 deny/block（`extensions/hooks.rs`），收紧原则已收敛 | — | 🚫 **不引入运行时**，只记两条经验（见 note §2.1） |
+
+**负面清单增补**：followup suggestions（每轮一次 LLM 调用，净支出）、tool-use summaries
+（需 fast model 路由，fork 只有 `compact_model`；挂到便宜模型路由后再评估）、交互卡片 /
+Web Shell composer 指标（无 TUI 载体）、Agent Plugins v1 / Qoder 插件生态（生态位竞争）。
+
+**顺序**：10.1（解锁度量）→ 10.2（并入既有 P1）→ 10.3（独立小件）→ 10.4（先量后拍）。
