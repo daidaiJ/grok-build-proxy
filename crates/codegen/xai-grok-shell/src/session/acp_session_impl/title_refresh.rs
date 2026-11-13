@@ -142,13 +142,22 @@ impl SessionActor {
             req_id: format!("xai-title-refresh-{}", uuid::Uuid::new_v4()),
         });
 
+        let call_started = std::time::Instant::now();
         let response = match tokio::time::timeout(
             TITLE_REFRESH_MODEL_TIMEOUT,
             setup.client.conversation_collect(request),
         )
         .await
         {
-            Ok(Ok(r)) => r,
+            Ok(Ok(r)) => {
+                self.record_side_call_sample(
+                    xai_grok_tools::model_usage_ledger::CallPurpose::Title,
+                    &setup.model,
+                    &r,
+                    call_started.elapsed().as_millis() as u64,
+                );
+                r
+            }
             Ok(Err(e)) => {
                 tracing::warn!(error = %e, "title refresh: model call failed");
                 return None;
