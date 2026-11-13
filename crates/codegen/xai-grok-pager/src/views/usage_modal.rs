@@ -89,6 +89,8 @@ pub struct UsageInfoModalState {
     pub ctx: UsageInfoContext,
     pub context: Option<ContextInfoBlock>,
     pub context_error: Option<String>,
+    /// `/context detail`: render the per-tool definition breakdown.
+    pub context_detail: bool,
     /// Structured `/session-info` rows, built upstream from typed session data (never by re-parsing a formatted string).
     pub session_fields: Option<Vec<SessionInfoField>>,
     pub session_error: Option<String>,
@@ -146,6 +148,7 @@ impl UsageInfoModalState {
             ctx,
             context: None,
             context_error: None,
+            context_detail: false,
             session_error: None,
             session_usage_text: None,
             billing_loading: false,
@@ -158,6 +161,18 @@ impl UsageInfoModalState {
             plain_lines: Vec::new(),
             pending_press: None,
             text_drag: None,
+        }
+    }
+
+    /// Apply the `/context detail` flag and rebuild an already-cached block so the open modal
+    /// reflects the change without another fetch.
+    pub fn apply_context_detail(&mut self, detail: bool) {
+        self.context_detail = detail;
+        if let Some(block) = self.context.take() {
+            self.context = Some(
+                crate::scrollback::blocks::ContextInfoBlock::new(block.snapshot, block.model)
+                    .with_detail(detail),
+            );
         }
     }
 

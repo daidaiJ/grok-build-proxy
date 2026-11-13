@@ -1830,7 +1830,8 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             session_id,
             info,
             nonce,
-        } => handle_context_info_complete(app, agent_id, &session_id, info, nonce),
+            detail,
+        } => handle_context_info_complete(app, agent_id, &session_id, info, nonce, detail),
         TaskResult::ContextInfoFailed {
             agent_id,
             session_id,

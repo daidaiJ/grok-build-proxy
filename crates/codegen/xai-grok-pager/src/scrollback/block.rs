@@ -683,8 +683,9 @@ impl RenderBlock {
     pub fn context_info(
         snapshot: xai_grok_shell::session::ContextInfo,
         model: impl Into<String>,
+        detail: bool,
     ) -> Self {
-        RenderBlock::ContextInfo(ContextInfoBlock::new(snapshot, model))
+        RenderBlock::ContextInfo(ContextInfoBlock::new(snapshot, model).with_detail(detail))
     }
 
     pub fn session_event(event: SessionEvent) -> Self {
@@ -1459,8 +1460,9 @@ mod searchable_text_tests {
             usage_pct: 10,
             auto_compact_threshold_percent: 85,
             usage_categories: vec![],
+            tool_usage: vec![],
         };
-        let block = RenderBlock::context_info(snapshot, "grok-4.5");
+        let block = RenderBlock::context_info(snapshot, "grok-4.5", false);
         // Only the model name is source text; the rest is a numeric breakdown.
         assert_eq!(block.searchable_text().as_deref(), Some("grok-4.5"));
     }

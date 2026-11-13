@@ -1859,6 +1859,7 @@ fn stale_context_info_results_do_not_update_replaced_session() {
             session_id: "test-session".into(),
             info: Box::new(context_info_response()),
             nonce: Default::default(),
+            detail: false,
         }),
         &mut app,
     );
@@ -2010,12 +2011,21 @@ fn show_usage_opens_modal_on_usage_limit_tab_with_fetches() {
 fn show_context_info_retabs_open_modal_without_refetching() {
     let mut app = test_app_with_agent();
     dispatch(Action::ShowUsage, &mut app);
-    let effects = dispatch(Action::ShowContextInfo, &mut app);
+    let effects = dispatch(Action::ShowContextInfo { detail: false }, &mut app);
     assert!(effects.is_empty(), "got: {effects:?}");
     assert_eq!(
         usage_modal_state(&app).active_tab,
         crate::views::usage_modal::UsageInfoTab::ContextUsage
     );
+}
+
+#[test]
+fn show_context_info_detail_sets_the_modal_flag_without_refetching() {
+    let mut app = test_app_with_agent();
+    dispatch(Action::ShowUsage, &mut app);
+    let effects = dispatch(Action::ShowContextInfo { detail: true }, &mut app);
+    assert!(effects.is_empty(), "re-tab must not refetch, got: {effects:?}");
+    assert!(usage_modal_state(&app).context_detail);
 }
 
 #[test]
@@ -2057,6 +2067,7 @@ fn usage_results_populate_open_modal_not_scrollback() {
             session_id: "test-session".into(),
             info: Box::new(context_info_response()),
             nonce,
+            detail: false,
         }),
         &mut app,
     );

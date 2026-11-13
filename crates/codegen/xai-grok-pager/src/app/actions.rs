@@ -716,7 +716,10 @@ pub enum Action {
     /// Unpin the current session title (`/rename --auto`).
     ResetSessionTitleToAuto,
     /// Show detailed context usage (progress bar, token breakdown, stats).
-    ShowContextInfo,
+    /// `detail` adds the per-tool definition breakdown (`/context detail`).
+    ShowContextInfo {
+        detail: bool,
+    },
     /// `/usage`: session token/cost, plus consumer credits when visible.
     ShowUsage,
     /// `/stats` (LOCAL): model-usage report in the stats modal.
@@ -2030,6 +2033,8 @@ pub enum Effect {
         session_id: acp::SessionId,
         /// Usage-modal fetch generation; echoed back on the task result.
         nonce: u64,
+        /// Render the per-tool definition breakdown.
+        detail: bool,
     },
     /// Fetch current bundle cache status via `x.ai/bundle/status`.
     FetchBundleStatus,
@@ -3034,6 +3039,8 @@ pub enum TaskResult {
         session_id: acp::SessionId,
         info: Box<xai_grok_shell::session::SessionInfoResponse>,
         nonce: u64,
+        /// Render the per-tool definition breakdown.
+        detail: bool,
     },
     /// Context info fetch failed. Drop if `session_id` no longer matches.
     ContextInfoFailed {

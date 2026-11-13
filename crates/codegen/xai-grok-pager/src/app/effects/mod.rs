@@ -3823,7 +3823,7 @@ pub(crate) fn execute(
                     }
                 });
         }
-        Effect::ShowContextInfo { agent_id, session_id, nonce } => {
+        Effect::ShowContextInfo { agent_id, session_id, nonce, detail } => {
             let tx = acp_tx.clone();
             tasks
                 .spawn(async move {
@@ -3834,6 +3834,7 @@ pub(crate) fn execute(
                                 session_id,
                                 info: Box::new(info),
                                 nonce,
+                                detail,
                             }
                         }
                         Err(error) => {

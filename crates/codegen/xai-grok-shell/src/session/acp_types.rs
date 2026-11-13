@@ -483,6 +483,18 @@ impl TokenUsageCategory {
     }
 }
 
+/// One tool definition's estimated definition cost, for the `/context detail` breakdown.
+/// The estimate covers name + description + serialized parameters, matching
+/// `xai_chat_state::estimate_tool_definition_tokens`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ToolUsageItem {
+    /// Tool name as advertised to the model.
+    pub name: String,
+    /// Estimated definition tokens this tool costs on every request.
+    pub tokens: u64,
+}
+
 /// Formats a count with a naively pluralized noun: `"1 skill"`, `"21 skills"`.
 pub fn count_detail(count: u64, noun: &str) -> String {
     let suffix = if count == 1 { "" } else { "s" };
@@ -516,6 +528,10 @@ pub struct ContextInfo {
     /// Empty on partial snapshots.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub usage_categories: Vec<TokenUsageCategory>,
+    /// Per-tool definition cost, largest first (`/context detail`).
+    /// Empty on partial snapshots.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_usage: Vec<ToolUsageItem>,
 }
 
 impl ContextInfo {

@@ -3317,7 +3317,7 @@ fn dashboard_usage_modal_reopen_retabs_without_refetch_and_session_slashes_stay_
     open_dashboard(&mut app);
     let _ = dispatch_dashboard_dispatch_slash(&mut app, "/usage".into());
     let nonce = dashboard_usage_modal(&app).fetch_nonce;
-    let effects = dispatch(Action::ShowContextInfo, &mut app);
+    let effects = dispatch(Action::ShowContextInfo { detail: false }, &mut app);
     assert!(
         effects.is_empty(),
         "re-open must not refetch, got: {effects:?}"

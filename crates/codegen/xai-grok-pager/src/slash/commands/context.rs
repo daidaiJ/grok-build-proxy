@@ -10,15 +10,25 @@ impl SlashCommand for ContextCommand {
     slash_meta! {
         name: "context",
         description: "View context usage",
-        usage: "/context",
+        usage: "/context [detail]",
         session_scoped: true,
     }
 
-    fn run(&self, ctx: &mut CommandExecCtx, _args: &str) -> CommandResult {
+    fn run(&self, ctx: &mut CommandExecCtx, args: &str) -> CommandResult {
         if ctx.session_id.is_none() {
             return CommandResult::Error("No active session".to_string());
         }
 
-        CommandResult::Action(Action::ShowContextInfo)
+        let detail = match args.trim() {
+            "" => false,
+            "detail" => true,
+            other => {
+                return CommandResult::Error(format!(
+                    "Unknown argument '{other}'. Usage: /context [detail]"
+                ));
+            }
+        };
+
+        CommandResult::Action(Action::ShowContextInfo { detail })
     }
 }
