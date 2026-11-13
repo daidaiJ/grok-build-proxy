@@ -27,6 +27,7 @@ pub mod gitignore;
 pub mod implementations;
 pub mod mcp_elicitation;
 pub mod media_gen_limits;
+pub mod cache_break;
 pub mod model_usage_ledger;
 pub mod normalization;
 pub mod notification;

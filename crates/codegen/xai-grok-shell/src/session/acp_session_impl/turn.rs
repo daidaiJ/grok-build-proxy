@@ -3514,6 +3514,28 @@ impl SessionActor {
                         duration_ms: model_duration_ms,
                     },
                 );
+                // LOCAL(token-economy): 缓存断崖检测——只记账与发事件，不改请求字节。
+                if let Some(record) = xai_grok_tools::cache_break::observe(
+                    self.session_info.id.0.as_ref(),
+                    &model_id,
+                    u64::from(usage.map(|u| u.prompt_tokens).unwrap_or(0)),
+                    u64::from(usage.map(|u| u.cached_prompt_tokens).unwrap_or(0)),
+                    xai_grok_tools::model_usage_ledger::ModelCallSample::now_unix_ms(),
+                ) {
+                    xai_grok_telemetry::unified_log::info(
+                        "session.cache_break",
+                        Some(self.session_info.id.0.as_ref()),
+                        Some(serde_json::json!({
+                            "model_id": record.model_id,
+                            "prompt_tokens": record.prompt_tokens,
+                            "cached_before": record.cached_before,
+                            "cached_after": record.cached_after,
+                            "hit_rate_before": record.hit_rate_before,
+                            "hit_rate_after": record.hit_rate_after,
+                            "reason": record.reason.as_str(),
+                        })),
+                    );
+                }
             }
             self.record_response_token_usage(&response, Some(model_duration_ms));
             let response_completed = self.response_completed_update(&response);

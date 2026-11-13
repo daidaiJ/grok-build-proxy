@@ -82,7 +82,17 @@ pub(crate) fn format_stats_text() -> String {
     let samples = model_usage_ledger::load_samples(Some(&home));
     let now = ModelCallSample::now_unix_ms();
     let pricing = model_catalog_store::snapshot();
-    format_usage_report(&samples, now, &Window::ALL, &pricing)
+    let mut text = format_usage_report(&samples, now, &Window::ALL, &pricing);
+    // 断崖记录是本地 JSONL，不与账本窗口对齐；极简模式只报最近 30 天一条。
+    let breaks = xai_grok_tools::cache_break::load(Some(&home));
+    if let Some(line) = crate::views::stats_modal::cache_break_summary_text(
+        &breaks,
+        now.saturating_sub(Window::Month.len_ms()),
+    ) {
+        text.push_str("\n\n");
+        text.push_str(&line);
+    }
+    text
 }
 
 /// 渲染按时间窗 × model 聚合的用量报表（纯函数，便于测试）。

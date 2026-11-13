@@ -51,6 +51,8 @@ pub struct StatsModalState {
     pub expanded: bool,
     /// 模型目录价（进程级 store 的克隆；打开时种子化，回包后由 dispatch 刷新）。
     pub pricing: CatalogPrices,
+    /// LOCAL(token-economy): 打开的会话断崖记录（按窗口过滤后汇总）。
+    pub cache_breaks: Vec<xai_grok_tools::cache_break::CacheBreakRecord>,
     /// 最近一帧的内容区几何。
     content_rect: Rect,
 }
@@ -65,8 +67,18 @@ impl StatsModalState {
             now_unix_ms: ModelCallSample::now_unix_ms(),
             expanded: false,
             pricing: CatalogPrices::new(),
+            cache_breaks: Vec::new(),
             content_rect: Rect::default(),
         }
+    }
+
+    /// 当前标签页窗口内的断崖次数（`/stats` 汇总行用）。
+    fn breaks_for(&self, window: Window) -> Vec<&xai_grok_tools::cache_break::CacheBreakRecord> {
+        let since = self.now_unix_ms.saturating_sub(window.len_ms());
+        self.cache_breaks
+            .iter()
+            .filter(|r| r.ts_unix_ms >= since)
+            .collect()
     }
 
     pub fn set_tab(&mut self, tab: Window) {
@@ -376,7 +388,43 @@ fn tab_lines(state: &StatsModalState, theme: &Theme, width: u16) -> Vec<Line<'st
         lines.push(Line::default());
         lines.push(muted_line(theme, summary));
     }
+    if let Some(breaks) = cache_break_summary_text(
+        &state.cache_breaks,
+        state.now_unix_ms.saturating_sub(state.active_tab.len_ms()),
+    ) {
+        lines.push(Line::default());
+        lines.push(muted_line(theme, breaks));
+    }
     lines
+}
+
+/// 缓存断崖汇总行：次数、无法解释的次数、断崖后未命中的 token 量。
+/// 模态与极简文本报表共用；窗口内无记录返回 `None`。
+pub(crate) fn cache_break_summary_text(
+    breaks: &[xai_grok_tools::cache_break::CacheBreakRecord],
+    since_ms: u64,
+) -> Option<String> {
+    let in_window: Vec<&xai_grok_tools::cache_break::CacheBreakRecord> = breaks
+        .iter()
+        .filter(|r| r.ts_unix_ms >= since_ms)
+        .collect();
+    if in_window.is_empty() {
+        return None;
+    }
+    let unknown = in_window
+        .iter()
+        .filter(|r| r.reason == xai_grok_tools::cache_break::CacheBreakReason::Unknown)
+        .count();
+    let uncached: u64 = in_window.iter().map(|r| r.uncached_tokens()).sum();
+    Some(format!(
+        "{} {} \u{00b7} {} {} \u{00b7} {} {}",
+        tr("cache breaks"),
+        in_window.len(),
+        tr("unexplained"),
+        unknown,
+        tr("uncached after break"),
+        fmt_tokens(uncached),
+    ))
 }
 
 /// 合计行的纯文本（渲染与复制共用；无行数据返回空串）。
@@ -1005,5 +1053,30 @@ mod tests {
         assert_eq!(Window::Day.len_ms(), WINDOW_DAY_MS);
         assert_eq!(Window::Week.len_ms(), WINDOW_WEEK_MS);
         assert_eq!(Window::Month.len_ms(), WINDOW_MONTH_MS);
+    }
+
+    #[test]
+    fn cache_break_summary_counts_unknown_and_uncached_tokens() {
+        use xai_grok_tools::cache_break::{CacheBreakReason, CacheBreakRecord};
+        let record = |reason| CacheBreakRecord {
+            ts_unix_ms: 1_000,
+            session_id: "s".into(),
+            model_id: "m".into(),
+            prompt_tokens: 120_000,
+            cached_before: 110_000,
+            cached_after: 10_000,
+            hit_rate_before: 0.98,
+            hit_rate_after: 0.08,
+            reason,
+        };
+        let breaks = vec![
+            record(CacheBreakReason::Unknown),
+            record(CacheBreakReason::ModelSwitch),
+        ];
+        let text = cache_break_summary_text(&breaks, 0).expect("summary");
+        assert!(text.contains("cache breaks 2"), "{text}");
+        assert!(text.contains("unexplained 1"), "{text}");
+        assert!(text.contains("uncached after break 220k"), "{text}");
+        assert!(cache_break_summary_text(&breaks, 2_000).is_none());
     }
 }
