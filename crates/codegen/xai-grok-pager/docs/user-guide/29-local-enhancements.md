@@ -273,6 +273,32 @@ ttl_secs = 3600
 
 ---
 
+## Usage ledger, cache breaks, and `/stats` grouping
+
+Every model call — the main turn plus recap, turn summary, title, goal, and
+compaction sidecars — appends one line to `~/.grok/cache/model-usage.jsonl`
+with the session id and a `purpose`. Rows written by older versions have
+neither field; they count as main-turn calls and as session `unknown`.
+
+`/stats` starts grouped by model. Press `g` to cycle through **model**,
+**purpose**, and **session** grouping (`1`–`4` switch the time window, `a`
+expands past the first eight groups, `y` copies the current tab). Cost is shown
+only in model grouping: the catalog prices a model, not a purpose or session.
+The default model view still counts main turns only.
+
+A sudden prompt-cache collapse is also recorded. After a main-turn request, the
+current `cached / prompt` ratio is compared with the previous request of the
+same session. A request is flagged when the previous hit rate was at least 90%
+and either cached tokens dropped by 20k or more, or the hit rate fell by 30
+points or more. The reason is classified as `model_switch` (the model changed),
+`history_rewrite` (the prompt got smaller), or `unknown`. Records go to
+`~/.grok/cache/cache-breaks.jsonl`, a `session.cache_break` event carries the
+same numbers to `unified.jsonl`, and `/stats` adds a line such as
+`cache breaks 2 · unexplained 1 · uncached after break 220k`. Detection only
+observes; it never changes a request.
+
+---
+
 ## LSP (language servers)
 
 **What it does.** Exposes language-server intelligence to the agent out of the box. The unified `lsp` tool — `goToDefinition` / `findReferences` / `hover` / `goToImplementation` / `documentSymbol` / `workspaceSymbol`, all read-only — is enabled by default (`[features] lsp_tools`; stock upstream defaults it off), and five well-known servers are detected on `PATH` with zero configuration: `rust-analyzer` (Rust), `gopls` (Go), `pyright-langserver` → `basedpyright-langserver` → `pylsp` (Python, first found wins), `jdtls` (Java), `clangd` (C/C++). Servers spawn in the background at session start, restart on crash, and replay open documents; after edits or patches their diagnostics are fed back passively, with a 150 ms debounce merging bursts into one injection.
