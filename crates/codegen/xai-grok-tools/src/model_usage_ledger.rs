@@ -223,6 +223,7 @@ pub fn load_samples(grok_home: Option<&Path>) -> Vec<ModelCallSample> {
 /// 单个 model 在一个窗口内的聚合结果。
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ModelUsageAggregate {
+    /// Model id, or the group label when aggregated by purpose/session.
     pub model_id: String,
     pub calls: u64,
     pub prompt_tokens: u64,
@@ -314,7 +315,7 @@ pub fn aggregate(
     window_ms: u64,
     now_unix_ms: u64,
 ) -> Vec<ModelUsageAggregate> {
-    aggregate_filtered(samples, window_ms, now_unix_ms, true)
+    aggregate_filtered(samples, window_ms, now_unix_ms, true, |s| s.model_id.clone())
 }
 
 /// 与 [`aggregate`] 相同，但包含 sidecar（recap / turn_summary / goal 等）调用。
@@ -323,7 +324,31 @@ pub fn aggregate_all(
     window_ms: u64,
     now_unix_ms: u64,
 ) -> Vec<ModelUsageAggregate> {
-    aggregate_filtered(samples, window_ms, now_unix_ms, false)
+    aggregate_filtered(samples, window_ms, now_unix_ms, false, |s| s.model_id.clone())
+}
+
+/// 按调用用途分组（含 sidecar；旧行没有 `purpose`，归入 `main`）。
+pub fn aggregate_by_purpose(
+    samples: &[ModelCallSample],
+    window_ms: u64,
+    now_unix_ms: u64,
+) -> Vec<ModelUsageAggregate> {
+    aggregate_filtered(samples, window_ms, now_unix_ms, false, |s| {
+        s.purpose
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_else(|| CallPurpose::Main.as_str().to_string())
+    })
+}
+
+/// 按会话分组（含 sidecar；旧行没有 `session_id`，归入 `unknown`）。
+pub fn aggregate_by_session(
+    samples: &[ModelCallSample],
+    window_ms: u64,
+    now_unix_ms: u64,
+) -> Vec<ModelUsageAggregate> {
+    aggregate_filtered(samples, window_ms, now_unix_ms, false, |s| {
+        s.session_id.clone().unwrap_or_else(|| "unknown".to_string())
+    })
 }
 
 fn aggregate_filtered(
@@ -331,15 +356,13 @@ fn aggregate_filtered(
     window_ms: u64,
     now_unix_ms: u64,
     main_only: bool,
+    key: impl Fn(&ModelCallSample) -> String,
 ) -> Vec<ModelUsageAggregate> {
     let cutoff = now_unix_ms.saturating_sub(window_ms);
     let mut by_model: indexmap::IndexMap<String, Vec<&ModelCallSample>> = indexmap::IndexMap::new();
     for sample in samples {
         if sample.ts_unix_ms >= cutoff && (!main_only || sample.is_main_turn()) {
-            by_model
-                .entry(sample.model_id.clone())
-                .or_default()
-                .push(sample);
+            by_model.entry(key(sample)).or_default().push(sample);
         }
     }
     let mut rows: Vec<ModelUsageAggregate> = by_model
@@ -406,6 +429,44 @@ mod tests {
             tps: Some(tps),
             duration_ms: 1000,
         }
+    }
+
+    #[test]
+    fn aggregate_by_purpose_splits_sidecars_and_keeps_legacy_rows_on_main() {
+        let now = 1_000_000_000_000;
+        let mut main = sample(now - 1000, "m", 1_000, 900, 100, 10.0);
+        main.purpose = Some(CallPurpose::Main);
+        main.session_id = Some("s1".into());
+        let mut summary = sample(now - 2_000, "m", 500, 0, 50, 5.0);
+        summary.purpose = Some(CallPurpose::TurnSummary);
+        summary.session_id = Some("s1".into());
+        let legacy = sample(now - 3_000, "m", 100, 100, 10, 1.0);
+
+        let rows = aggregate_by_purpose(
+            &[main.clone(), summary.clone(), legacy.clone()],
+            WINDOW_DAY_MS,
+            now,
+        );
+        let label = |name: &str| {
+            rows.iter()
+                .find(|r| r.model_id == name)
+                .unwrap_or_else(|| panic!("missing group {name}: {rows:?}"))
+        };
+        let main_row = label("main");
+        assert_eq!(main_row.calls, 2, "legacy rows count as main");
+        assert_eq!(main_row.prompt_tokens, 1_100);
+        assert_eq!(label("turn_summary").calls, 1);
+
+        let by_session = aggregate_by_session(&[main, summary, legacy], WINDOW_DAY_MS, now);
+        let session = by_session
+            .iter()
+            .find(|r| r.model_id == "s1")
+            .expect("s1 group");
+        assert_eq!(session.calls, 2);
+        assert!(
+            by_session.iter().any(|r| r.model_id == "unknown"),
+            "legacy rows land in the unknown session group"
+        );
     }
 
     #[test]
