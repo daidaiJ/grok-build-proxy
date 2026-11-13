@@ -4454,3 +4454,72 @@ release 构建 45 → 18 min（约 -60%）。
 
 `docs/user-guide/04-slash-commands.md`、`17-sessions.md`、`docs/tutorial/05-slash-commands.md`
 说明 `/compact [instructions]` 与 4,000 字符上限；i18n 表新增 usage 译文。
+
+## 七十一期：用量账本可观测性——purpose/session + 缓存断崖检测 + `/stats` 分组（2026-11-13，分支 feat/local-usage-ledger-purpose / feat/local-cache-break）
+
+> 背景：token 经济审计发现 206M 命中之外的 4.65M 未命中无法按会话/用途归因，
+> 且命中率骤降轮没有现场记录。本批只补观测面：账本加字段、断崖写事件与
+> JSONL、`/stats` 加分组维度；请求字节与采样路径零改动。
+
+### 改动（一：账本字段，`feat/local-usage-ledger-purpose`）
+
+- `xai-grok-tools/src/model_usage_ledger.rs`：`CallPurpose`
+  （`main` / `recap` / `turn_summary` / `compaction` / `title` / `goal` / `other`）
+  + `ModelCallSample.session_id` / `purpose`（均 `Option`、`#[serde(default)]`、
+  camelCase，旧账本行反序列化为 `None`）；`is_main_turn()` 把 `None` 视为
+  `main`，既有 `aggregate` 的「只看主回合」语义不变；新增
+  `aggregate_by_purpose` / `aggregate_by_session`（含 sidecar，旧行分别归入
+  `main` / `unknown`）。
+- `xai-grok-shell/src/session/acp_session_impl/side_call.rs`：
+  `record_side_call_sample(purpose, model_id, response, duration_ms)`；接线
+  `recap.rs`（`Recap` / `Other`）、`title_refresh.rs`（`Title`）、`goal.rs`
+  （`Goal`）、`turn_summary.rs`（`TurnSummary`）。主回合 append 补
+  `session_id` + `purpose: Main`（`turn.rs`）。
+- `turn_summary.rs` 的一处 `model` 移动在首次 CI 报 E0382，改为
+  `model: Some(model.clone())`（`de367ad6`）。
+
+### 改动（二：缓存断崖，`feat/local-cache-break`）
+
+- 新 `xai-grok-tools/src/cache_break.rs`（纯函数 + 进程内上一轮表）：
+  仅当上一轮命中率 ≥ 0.9 且「缓存 token 绝对下降 ≥ 20k 或命中率下降 ≥ 0.30」
+  才判为断崖；原因分类 `model_switch` / `history_rewrite`（prompt 变小）/
+  `unknown`。每个会话只留上一轮，进程重启从冷开始（resume 首轮本就冷）。
+- 记录写 `grok_home/cache/cache-breaks.jsonl`（camelCase 一行一条）；文件超过
+  1 MiB 时按 30 天保留期重写，缺失/坏行静默跳过。IO 失败不影响回合。
+- `turn.rs` 主回合 append 账本后调用 `observe(...)`，命中时发 unified 事件
+  `session.cache_break`（model / prompt / cached before-after / hit rate /
+  reason）。
+- `/stats`：模态每个时间窗在成本合计后追加
+  `缓存断崖 N · 无法解释 M · 断崖后未命中 X`；极简文本报表追加最近 30 天一条
+  （共用 `cache_break_summary_text`）。读盘在打开模态/生成文本报表时一次完成。
+
+### 改动（三：`/stats` 分组）
+
+- `StatsDimension { Model, Purpose, Session }`，`g` 循环切换并重置滚动；
+  页脚加 `g group`。非模型维度顶部显示 `按模型/用途/会话分组`，卡片头改用
+  分组标签（用途名 / 会话 id）；价格按模型目录归属，分组维度下整段省略
+  （卡片与合计行都不再显示 `–`）。`y` 复制的文本同样带分组说明、不带价格。
+- `copy_active_tab` / 模态渲染共用同一 `show_cost` 判定，避免两处口径漂移。
+
+### 测试
+
+- `cache_break`：小跌幅不触发、绝对跌幅触发、prompt 变小时命中率崩塌归为
+  `history_rewrite`、上一轮低命中率不触发、换模型优先于历史改写、首轮不触发、
+  camelCase 序列化与未命中 token 计数（7 例）。
+- `model_usage_ledger`：按用途拆分 sidecar 且旧行归 `main`；按会话分组且旧行
+  归 `unknown`（1 例）。
+- `stats_modal`：`g` 三态循环 + 滚动归零；用途/会话分组标签与复制文本无价格
+  （2 例）；断崖汇总计数（既有 1 例）。
+
+### 边界与兼容
+
+- 请求构造、采样、压缩路径零改动；账本与断崖文件都是 append-only 观测数据。
+- 旧账本行没有 `sessionId` / `purpose`，默认 `/stats` 仍是主回合口径，
+  分组视图里才出现 `unknown` / `main` 合并组。
+- 断崖阈值是观测初值，误报/漏报按 unified 事件与 `cache-breaks.jsonl` 复盘后
+  再调；首版不做任何自动动作（不换客户端、不重发请求）。
+
+### 验证
+
+- 按用户要求不在本机编译，全部由远程 CI 的 Linux/Windows job 验证；
+  结果回填本条目。

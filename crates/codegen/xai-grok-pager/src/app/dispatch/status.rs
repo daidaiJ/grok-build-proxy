@@ -225,6 +225,7 @@ pub(super) fn dispatch_show_stats(
     ids.dedup();
     let mut state = StatsModalState::new(tab, samples);
     state.pricing = model_catalog_store::snapshot();
+    state.cache_breaks = xai_grok_tools::cache_break::load(Some(&home));
     agent.active_modal = Some(ActiveModal::StatsInfo {
         state: Box::new(state),
     });
