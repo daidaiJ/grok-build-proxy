@@ -119,7 +119,7 @@ deepseek 条目实际走 chat_completions/responses——probe 门（dsh-port §
 
 | 顺位 | 候选 | 内容 | 依赖/关联 | 规模（C 级粗估） |
 |---|---|---|---|---|
-| P1 | dsh in-history 能力位（已有设计） | `system_prompt_update = "in-history"` per-model 能力位 + 三 backend probe + limit-probe A/B | dsh-port P1 设计原文，零新增设计 | 净开发 3–5 人天 |
+| P1 | dsh in-history 能力位（已有设计） | `system_prompt_update = "in_history"` per-model 能力位 + 三 backend probe + limit-probe A/B | dsh-port P1 设计原文，零新增设计 | 净开发 3–5 人天 |
 | P2 | **追加式裁剪改写**（本次新增） | 对 `prompt_cache_update` 类能力模型（或全局开关），工具结果裁剪从"原地替换"改为"追加失效标记块"（dsh addition-only 同构思想）：请求里旧 tool result 保留原字节，其失效声明作为后续追加块发送；50% 线之后缓存可续命 | 与 P1 共用放置/确定性设计（§3.3 派生式 vs journal 直记）；交互面：`[compaction.pruning]` 语义分叉 | +2–3 人天（叠在 P1 上） |
 | P3 | sidecar 串行化 + 共享头对齐 | title 等 sidecar 改主回复后串行（对齐 zcode V01 语义）；子代理稳定头共享面评估 | 纯 shell/pager 小件，收益集中在多子代理/多会话聚合场景 | ≤1 人天 |
 | P3' | 归因头实验 | `x-deepseek-harness-user-id`/`-session-id` 对齐 dsh 发送（作用未证实，纯跟随官方） | 待 probe：header 是否影响缓存路由/限额 | ≤0.5 人天 |

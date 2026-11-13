@@ -20,3 +20,4 @@
 | [compaction-dangling-toolcall-400.md](compaction-dangling-toolcall-400.md) | 压缩请求悬空 tool_call 400 已修（prep 补答兜底），验证记录在文内 | 2026-09-30 |
 | [mimo-v26-toolcall-loop-analysis.md](mimo-v26-toolcall-loop-analysis.md) | MiMo v2.6 工具调用洪水的根因分析；属上游/网关侧问题，本仓库侧（压缩 400）已修、其余无活跃工作流。留作 MiMo 系模型再接入时的对照 | 2026-09-30 |
 | [qwen-code-mimo-xml-400-source-study-2026-09-22.md](qwen-code-mimo-xml-400-source-study-2026-09-22.md) | 姊妹篇源码调研，随 mimo 分析同组归档。⚠️ 文内引用的 `third-party-model-toolcall-issues-2026-09-22.md` 从未入库且已不在工作区，链接是死的 | 2026-09-30 |
+| [agents-md-todo-handoff-snapshot-2026-11-13.md](agents-md-todo-handoff-snapshot-2026-11-13.md) | AGENTS.md 待办与交接历史快照（治理前原文，TODO 29 KB + Handoff 36 KB），防止每次会话读入历史流水 | 2026-11-13 |

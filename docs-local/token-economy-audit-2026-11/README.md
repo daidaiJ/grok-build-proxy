@@ -98,7 +98,7 @@ reasoning/tools，那会把整段 summarizer 输入从 cached 变 uncached。
 | 优先级 | 改动 | 预期效果 | 风险 |
 |---|---|---|---|
 | P0 配置 | `[toolset.bash] output_byte_limit = 40000` | 封顶单次 bash 输出；中段截断+全量日志路径已有（`bash/mod.rs:364`） | 极低，信息可从日志取回 |
-| P0 配置 | 模型加 `prune_mode = "append"` + `system_prompt_update = "in-history"` | 长会话越 500k 或提示词变更时避免整段断崖 | 低，relay probe 已过 |
+| P0 配置 | 模型加 `prune_mode = "append"` + `system_prompt_update = "in_history"` | 长会话越 500k 或提示词变更时避免整段断崖 | 低，relay probe 已过 |
 | P0 代码 | `send_feedback` 描述去掉会话路径，路径放进工具输出 | 新会话首轮可复用完整 tools 前缀（+6k 命中） | 无 |
 | P1 代码 | 无损压缩层：重复行折叠、JSON 精确去重、search 全量保留、往返自校验、CCR 可取回；跨轮 keep-earliest + 前缀单调 | 压缩新增工具字节且保语义、不破缓存 | 中，需要实现与回归 |
 | P2 | prune 门做成可配（默认不变） | 为不同价格/窗口调参留口 | 无 |
@@ -116,7 +116,7 @@ output_byte_limit = 40000
 
 [model."relay/deepseek-flash"]
 prune_mode = "append"
-system_prompt_update = "in-history"
+system_prompt_update = "in_history"
 ```
 
 ## 5. 不建议做
@@ -165,3 +165,24 @@ EOF
 - `default_output_byte_limit` — `crates/codegen/xai-grok-agent/src/config.rs`。
 - 压缩一期行为与二期无损层：
   [`docs-local/tool-output-compression-plan.md`](../tool-output-compression-plan.md)。
+
+## 8. 后续复核（2026-11-13）
+
+v1.0.74 修复合入后按同一口径重测：稳态命中 98.3%，首轮冷启动占未命中 13%，
+基座实测约 56k tokens/轮（旧估算低估了中文规则）；剩余风险与建议见
+[`follow-up-2026-11-13.md`](follow-up-2026-11-13.md)。同日完成的
+kimi-code / zcode / codex 设计对照见
+[`cli-design-port-eval-2026-11-13.md`](cli-design-port-eval-2026-11-13.md)。
+
+**待开工（2026-11-13 登记，详见
+[`cache-observability-plan.md`](cache-observability-plan.md)）**：
+
+- **P1 命中率口径**：`model-usage` 账本加 `sessionId` + `purpose`
+  （main/recap/turn_summary/compaction/title/btw），sidecar 也入账；
+  `/stats` 按会话/用途拆。验收：4.65M 未命中可按会话与用途归因、断崖轮可定位、
+  旧账本向后兼容。
+- **P1 断崖检测 + P2 闲置过期提示**：逐轮比较 `cached/prompt` 与上一轮，
+  命中率骤降且非已知原因（换模型/压缩/首轮）时写 unified 事件
+  `session.cache_break`（带 tools/msgs 前缀哈希与上下文大小）；闲置超过模型
+  缓存 TTL 且上下文达标时提示，按单价阈值门控，DS 默认静默。首版只观测，
+  不做任何自动动作。

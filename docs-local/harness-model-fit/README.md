@@ -133,7 +133,7 @@ Meta 对照只有第八。
 ```toml
 [model."<your-model-id>"]
 prune_mode = "append"
-system_prompt_update = "in-history"
+system_prompt_update = "in_history"
 ```
 
 - 适用面：`chat_completions` / `responses`；`messages` 后端自动回退

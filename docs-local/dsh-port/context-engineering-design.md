@@ -81,7 +81,7 @@ assistant 历史（**包括带工具调用的轮次**）的 thinking/reasoning �
 
 ```toml
 [model.<id>]
-system_prompt_update = "off" | "in-history"   # 默认 off
+system_prompt_update = "off" | "in_history"   # 默认 off
 tool_update           = "off" | "addition-only"  # 默认 off
 ```
 

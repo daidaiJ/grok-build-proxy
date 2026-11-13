@@ -43,7 +43,7 @@ spawn、客户端 `systemPromptOverride`（`mvp_agent/mod.rs:1050` → `ReplaceS
 和换模型（`model_switch.rs:484`）会换字节。也就是说跨进程/跨版本恢复**不会**重写
 system 前缀，Prompt Snapshot 的主要缓存收益在 fork 里已经由“保留旧 head”实现；
 代价是恢复后的提示词/日期可能陈旧，这属于新鲜度取舍，不是缓存缺口。
-`system_prompt_update = in-history`（`request_builder.rs:145`）补的是**会话内**变更。
+`system_prompt_update = in_history`（`request_builder.rs:145`）补的是**会话内**变更。
 真正剩下的缓存口子不在 system，而在 tools：`send_feedback` 描述嵌入本会话草稿路径
 （`send_feedback.rs:137`），使每个会话的 tools 前缀唯一（见 [token 经济审计](../token-economy-audit-2026-11/README.md)）。
 

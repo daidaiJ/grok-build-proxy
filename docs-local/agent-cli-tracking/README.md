@@ -62,6 +62,7 @@
 ## 文档导览
 
 - [ADOPTION.md](ADOPTION.md) — 引入评估（协议兼容性 / token 经济学 / TUI 易用性 / 稳定性 trick，含落点 crate 与优先级）
+- [TODO.md](TODO.md) — 2026-09-28 补充挖掘批次的引入待办（客户端循环检测恢复 / 工具批次防洪水 / 未提交提醒）
 - [notes/opencode.md](notes/opencode.md) · [notes/mimo-code.md](notes/mimo-code.md) · [notes/qwen-code.md](notes/qwen-code.md) · [notes/minimax-code.md](notes/minimax-code.md) · [notes/kimi-code.md](notes/kimi-code.md) · [notes/crush.md](notes/crush.md) · [notes/goose.md](notes/goose.md) · [notes/zcode.md](notes/zcode.md) — 分仓库机制笔记（含仓库相对路径 file:line 引用）
 - [zcode-317-port/README.md](../zcode-317-port/README.md) — zcode v3.17.x 移植专题（决策摘要 + 待办台账，2026-11-07 起）
 
