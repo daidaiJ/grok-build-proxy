@@ -1,14 +1,13 @@
 ---
 handoff_id: compact-instructions
-status: merged-awaiting-release
+status: released-awaiting-live-verification
 ---
 
 # Handoff：压缩指令 `/compact <instructions>`
 
-> 交接日期：2026-11-13。**已合 main**：merge `828d5f5e`（PR #11，分支
-> `feat/local-compact-instructions`），PR CI `43359242671` 双绿（Linux 27m28s /
-> Windows 9m37s）。GitHub token 无 `MergePullRequest` 权限，合入走本机
-> `git merge --no-ff` + 推 main。剩余：发版后做活体验收（§5 第一项）。
+> 交接日期：2026-11-13。**已发版并部署 v1.0.75**：merge `828d5f5e`（PR #11），
+> release run `43373939909` success（13m57s），本机 `D:\tool\cli\grok2.exe` =
+> `grok 1.0.75 (828d5f5e0486)`。剩余：活体验收（§5 第一项），需新会话。
 
 ## 1. 目标
 
@@ -17,7 +16,7 @@ status: merged-awaiting-release
 
 ## 2. 当前进度与状态
 
-- **当前阶段**：已合 main（`828d5f5e`），待发版后活体验收。
+- **当前阶段**：v1.0.75 已发版并部署，待活体验收。
 - **已完成**：pager 命令/effect、ACP 类型、shell handler/命令链路、prompt 合并、
   单元测试、用户文档、PATCHES 七十期、CI 过滤器扩展。
 - **额外覆盖（交接时未列）**：shell 自解析路径 `BuiltinAction::Compact` 也携带
@@ -140,6 +139,12 @@ status: merged-awaiting-release
   单测与 doctest 已通过、无失败用例；随后把该步骤上限提到 40 分钟
   （`8b3d6c8b`，merge `d42a8abb`），main build `43367116994` 双 job success
   （linux 39m56s，其中 Test touched crates 23m24s；pager 步骤 9m18s）。
+- 发版与部署：tag `v1.0.75`（指 `828d5f5e`），release run `43373939909`
+  success（13m57s），4 个资产；Windows zip sha256
+  `2ea66d927e6c99415070ff5914b86387d808c58c26a7dc2fd3be8f96d350b770`
+  与 `.sha256` 一致。本机替换 `D:\tool\cli\grok2.exe`，备份
+  `grok2.exe.1.0.74-aae2d5692699.bak`；`grok2.exe --version` =
+  `1.0.75 (828d5f5e0486)`。`~/.grok/bin/{grok,agent}.exe` 仍是官方 1.0.30，未动。
 - 未在本地编译（按本轮约定走远程 CI）：Linux `Test touched crates` success 覆盖
   新增 shell 单测；`Test pager additions` 新增
   `compact_drain compact_no_args compact_with_args compact_whitespace_only
