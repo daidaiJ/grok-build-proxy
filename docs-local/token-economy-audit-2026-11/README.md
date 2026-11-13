@@ -174,15 +174,19 @@ v1.0.74 修复合入后按同一口径重测：稳态命中 98.3%，首轮冷启
 kimi-code / zcode / codex 设计对照见
 [`cli-design-port-eval-2026-11-13.md`](cli-design-port-eval-2026-11-13.md)。
 
-**待开工（2026-11-13 登记，详见
-[`cache-observability-plan.md`](cache-observability-plan.md)）**：
+**已施工（2026-11-13，待 CI/合入；详见
+[`cache-observability-plan.md`](cache-observability-plan.md) 与 PATCHES 七十一期）**：
 
-- **P1 命中率口径**：`model-usage` 账本加 `sessionId` + `purpose`
-  （main/recap/turn_summary/compaction/title/btw），sidecar 也入账；
-  `/stats` 按会话/用途拆。验收：4.65M 未命中可按会话与用途归因、断崖轮可定位、
-  旧账本向后兼容。
-- **P1 断崖检测 + P2 闲置过期提示**：逐轮比较 `cached/prompt` 与上一轮，
-  命中率骤降且非已知原因（换模型/压缩/首轮）时写 unified 事件
-  `session.cache_break`（带 tools/msgs 前缀哈希与上下文大小）；闲置超过模型
-  缓存 TTL 且上下文达标时提示，按单价阈值门控，DS 默认静默。首版只观测，
-  不做任何自动动作。
+- **P1 命中率口径（已落地）**：`model-usage` 账本加 `sessionId` + `purpose`
+  （main/recap/turn_summary/title/goal/other），recap / turn_summary / title /
+  goal / prompt-suggestion 均入账；`/stats` 新增 `g` 分组（模型/用途/会话），
+  旧账本行默认按主回合与 `unknown` 会话显示。
+  **剩余**：压缩摘要调用（`xai-grok-compaction::sample_full_replace_summary`）
+  只返回文本、不带 usage，尚未入账；`/btw` 未单独识别（如发生会落在 `other`）。
+- **P1 断崖检测（已落地）**：逐轮比较 `cached/prompt`，上一轮命中率 ≥ 90% 且
+  缓存 token 降 ≥ 20k 或命中率降 ≥ 30 点即记 `session.cache_break`，原因分
+  `model_switch` / `history_rewrite` / `unknown`，同时写
+  `~/.grok/cache/cache-breaks.jsonl` 并在 `/stats` 汇总；只观测，不自动动作。
+  **剩余**：事件暂未带 tools/msgs 前缀哈希（首版用会话内前后轮对比替代）。
+- **P2 闲置过期提示（未开工）**：仍挂在
+  [`cache-observability-plan.md`](cache-observability-plan.md)。

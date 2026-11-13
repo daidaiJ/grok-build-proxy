@@ -1,6 +1,8 @@
 # 缓存可观测性两件（命中率口径 + 断崖检测）— 施工计划
 
-> 状态：待开工（2026-11-13 登记）。来源：kimi-code / zcode / codex 设计对照里
+> 状态：§1 与 §2.1 已落地（2026-11-13，分支 `feat/local-usage-ledger-purpose`
+> / `feat/local-cache-break`，PATCHES 七十一期）；§2.2 未开工。
+> 来源：kimi-code / zcode / codex 设计对照里
 > 唯二负收益为零的候选，见
 > [`cli-design-port-eval-2026-11-13.md`](cli-design-port-eval-2026-11-13.md) §2.1/§2.2。
 > 基线：fork v1.0.74，本机 10 天 1910 次主回合、98.3% 命中、4.65M 未命中。
@@ -30,8 +32,9 @@ turn_summary/recap/compaction 这些 sidecar 根本不进账本。断崖一次�
 ### 改动
 
 1. `ModelCallSample` 增两个可选字段：`session_id: Option<String>`、
-   `purpose: Option<String>`（`main` / `recap` / `turn_summary` / `compaction`
-   / `title` / `btw` / `other`）。旧行缺字段按 `unknown` 处理，读取侧向后兼容。
+   `purpose: Option<CallPurpose>`（`main` / `recap` / `turn_summary` /
+   `compaction` / `title` / `goal` / `other`）。旧行缺字段按 `None` 处理，
+   读取侧向后兼容（聚合时视作 `main` / `unknown`）。
 2. 主回合追加点填 `session_id` + `purpose=main`。
 3. sidecar 收口：在 `side_call` 与 turn_summary / compaction 的采样回包处补
    `append_sample`（与主回合同一函数，`purpose` 取调用方标记），避免每处各写一份。
@@ -53,7 +56,8 @@ turn_summary/recap/compaction 这些 sidecar 根本不进账本。断崖一次�
 
 ### 2.1 断崖检测（P1）
 
-判定（纯函数，放 shell 侧，便于单测）：
+判定（纯函数放 `xai-grok-tools/src/cache_break.rs`，便于单测；进程内每会话
+只留上一轮）：
 
 - 输入：本会话上一轮与本轮的 `promptTokens` / `cachedPromptTokens`、上下文大小、
   `tools_hash` / `msgs_hash`（limit-probe 已有同款 FNV 前缀哈希）、模型 id、
