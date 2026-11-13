@@ -4521,8 +4521,9 @@ release 构建 45 → 18 min（约 -60%）。
 
 ### 验证
 
-- 按用户要求不在本机编译，全部由远程 CI 的 Linux/Windows job 验证；
-  结果回填本条目。
+- 按用户要求不在本机编译，全部由远程 CI 的 Linux/Windows job 验证。与七十二期一起
+  折叠进 main（squash `9d8f3b53`），main build `43432927949` Linux/Windows 双绿
+  （首轮 `43430310339` 的 Linux 失败是七十二期的 `prompt.rs` E0308，与本条目无关）。
 
 ## 七十二期：`/compress-fast`——零模型调用的旧工具结果清理（2026-11-13，分支 feat/local-compress-fast）
 
@@ -4586,4 +4587,8 @@ release 构建 45 → 18 min（约 -60%）。
 
 ### 验证
 
-- 按用户要求不在本机编译，Linux/Windows CI 结果回填。
+- 按用户要求不在本机编译。与七十一期一起折叠进 main（squash `6fd59b0a`），
+  main build `43432927949` Linux/Windows 双绿。
+- 首轮 main build `43430310339` 的 Linux job 报 `prompt.rs:2034` E0308（`Ok` 臂返回
+  `EntryId`、`Err` 臂返回 `()`），已把 `Ok` 臂改成语句块（`02c22394`）；上一轮 Windows
+  CI 暴露的两个 `compress_fast_tests` 差一失败也已在同一批修正。

@@ -101,11 +101,11 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ### 施工中 / 待合
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
-- token 经济可观测性 — 账本 `sessionId`+`purpose` 已合 main；缓存断崖 + `/stats` 分组（PR #16）与 `/compress-fast`（PR #17，append 模式走「清理 + 失效标记」）待 CI 绿后合；`docs-local/token-economy-audit-2026-11/cache-observability-plan.md`。
 - grok-doctor 技能 — P1；`docs-local/agent-cli-tracking/skill-plugin-port-eval-2026-11-13.md`。
 
 ### 待活体验证（随新客户端）
 - 视觉桥（T1–T3+D8/D9）、空闲自动压缩（`shell.idle_compact.*` 事件 + 下一轮 TTFT）、cache P1/P2（触发点后首轮命中）、`/usage` 额度估算口径。
+- `/stats` 的 `g` 分组与缓存断崖汇总行；`/compress-fast` 在 `prune_mode = append` 模型上清掉旧结果并写入失效标记。
 - LSP 四项（诊断/懒启动/rename/面板）、`[api_dump]` 落盘、09-29 上游同步抽查、`/usage` 套餐块。
 
 ### 未开工 / 待拍板
@@ -118,11 +118,18 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 最新交接（2026-11）
 
-- **2026-11-13 token 经济波次**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；#16（断崖 + `/stats` 分组）、#17（`/compress-fast`，append 模式走「清理 + 失效标记」）CI 中，全绿后合并再发版（用户指定「等所有这几波需求都全绿后再发」）；交接卡 `.handoff/token-economy-wave-2026-11.md`。
+- **2026-11-13 token 经济波次完成**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；
+  #16（断崖 + `/stats` 分组）与 #17（`/compress-fast`）折叠进 main
+  （`9d8f3b53`/`6fd59b0a`），Linux E0308 修复 `02c22394`；main build `43432927949`
+  Linux/Windows 双绿；`v1.0.76` release run `43438765045` 双绿、4 资产，Windows zip
+  sha256 `c60809e5a98b58930d157fa3250c86921709b207ab5f00d6fa30baf5d8d097ec`；本机部署
+  `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.76 (02c22394fdfe)`，回滚
+  `grok2.exe.1.0.75-828d5f5e0486.bak`，`~/.grok/bin` 已刷新。交接卡
+  `.handoff/token-economy-wave-2026-11.md`。
 - **2026-11-13 分支口径变更**：后续直接在 `main` 施工，不再开 feature 分支（见「分支纪律」）。
 - **v1.0.75（11-13 发版）**：`/compact <instructions>` 手动压缩保留重点。PR #11
   merge `828d5f5e`；release run `43373939909` success，4 资产，Windows zip sha256
-  `2ea66d92…`；本机部署 `D:\tool\cli\grok2.exe` = `grok 1.0.75 (828d5f5e0486)`，
+  `2ea66d92…`；本机部署 `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.75 (828d5f5e0486)`，
   回滚点 `grok2.exe.1.0.74-aae2d5692699.bak`。活体验收待新会话。
 - **v1.0.74（11-12 发版）**：`send_feedback` 描述去掉会话路径；活体确认工具定义跨会话一致，首轮命中待新会话复测。
 - **2026-11-13**：token 经济配置已应用——4 个 1M 模型 `prune_mode=append` + `system_prompt_update=in_history`，窗口 300K + 80% 压缩（实测本会话 84 分钟 ≈ $1.0，同负载 1M 窗口 ≈ $2.1）；修正 `in-history` 非法拼写（此前能力位未生效）。变更说明在 `D:\pro\agent-teams-docs\grok-token-economy-config-changes.md`。
