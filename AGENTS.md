@@ -97,7 +97,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ### 施工中 / 待合
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
-- token 经济可观测性 — P1 账本 `sessionId`+`purpose`、断崖检测；`docs-local/token-economy-audit-2026-11/cache-observability-plan.md`。
+- token 经济可观测性 — 账本 `sessionId`+`purpose`、缓存断崖、`/stats` 分组已合 main；`/compress-fast` 待推 PR；`docs-local/token-economy-audit-2026-11/cache-observability-plan.md`。
 - grok-doctor 技能 — P1；`docs-local/agent-cli-tracking/skill-plugin-port-eval-2026-11-13.md`。
 
 ### 待活体验证（随新客户端）
@@ -114,12 +114,13 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 最新交接（2026-11）
 
+- **2026-11-13 token 经济波次**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；#16（断崖 + `/stats` 分组）CI 中；`/compress-fast` 待推（append 模式走「清理 + 失效标记」）；交接卡 `.handoff/token-economy-wave-2026-11.md`。
 - **v1.0.75（11-13 发版）**：`/compact <instructions>` 手动压缩保留重点。PR #11
   merge `828d5f5e`；release run `43373939909` success，4 资产，Windows zip sha256
   `2ea66d92…`；本机部署 `D:\tool\cli\grok2.exe` = `grok 1.0.75 (828d5f5e0486)`，
   回滚点 `grok2.exe.1.0.74-aae2d5692699.bak`。活体验收待新会话。
 - **v1.0.74（11-12 发版）**：`send_feedback` 描述去掉会话路径；活体确认工具定义跨会话一致，首轮命中待新会话复测。
-- **2026-11-13**：token 经济配置已应用——4 个 1M 模型 `prune_mode=append` + `system_prompt_update=in_history`，窗口封顶 500k + 80% 压缩；修正 `in-history` 非法拼写（此前能力位未生效）。变更说明在 `D:\pro\agent-teams-docs\grok-token-economy-config-changes.md`。
+- **2026-11-13**：token 经济配置已应用——4 个 1M 模型 `prune_mode=append` + `system_prompt_update=in_history`，窗口 300K + 80% 压缩（实测本会话 84 分钟 ≈ $1.0，同负载 1M 窗口 ≈ $2.1）；修正 `in-history` 非法拼写（此前能力位未生效）。变更说明在 `D:\pro\agent-teams-docs\grok-token-economy-config-changes.md`。
 - **v1.0.73**：release-warm 缓存预热、gash 后端、`inspect [privacy]` 修复。
 - 更早发版与交接原文见 `docs-local/archive/agents-md-todo-handoff-snapshot-2026-11-13.md`。
 
