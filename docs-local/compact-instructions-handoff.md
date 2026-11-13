@@ -1,13 +1,14 @@
 ---
 handoff_id: compact-instructions
-status: implemented-awaiting-merge
+status: merged-awaiting-release
 ---
 
 # Handoff：压缩指令 `/compact <instructions>`
 
-> 交接日期：2026-11-13。**实现完成**：PR #11（`feat/local-compact-instructions`）
-> CI 双绿（Linux 27m28s / Windows 9m37s，run `43359242671`），待仓库主合并后做
-> 活体验收（§5 最后一项）。GitHub token 无 `MergePullRequest` 权限。
+> 交接日期：2026-11-13。**已合 main**：merge `828d5f5e`（PR #11，分支
+> `feat/local-compact-instructions`），PR CI `43359242671` 双绿（Linux 27m28s /
+> Windows 9m37s）。GitHub token 无 `MergePullRequest` 权限，合入走本机
+> `git merge --no-ff` + 推 main。剩余：发版后做活体验收（§5 第一项）。
 
 ## 1. 目标
 
@@ -16,7 +17,7 @@ status: implemented-awaiting-merge
 
 ## 2. 当前进度与状态
 
-- **当前阶段**：实现完成，PR #11 待合（CI 双绿）。
+- **当前阶段**：已合 main（`828d5f5e`），待发版后活体验收。
 - **已完成**：pager 命令/effect、ACP 类型、shell handler/命令链路、prompt 合并、
   单元测试、用户文档、PATCHES 七十期、CI 过滤器扩展。
 - **额外覆盖（交接时未列）**：shell 自解析路径 `BuiltinAction::Compact` 也携带
@@ -133,7 +134,8 @@ status: implemented-awaiting-merge
 
 ### 实现落点（PR #11）
 - 远端分支 `feat/local-compact-instructions`（origin 与 `pandazhangS` fork 均有）；
-  PR https://github.com/daidaiJ/grok-build-proxy/pull/11 ，`mergeStateStatus: CLEAN`。
+  PR https://github.com/daidaiJ/grok-build-proxy/pull/11 已 MERGED，合入提交
+  `828d5f5e`（本机 `git merge --no-ff` + 推 main，token 无 PR merge 权限）。
 - 未在本地编译（按本轮约定走远程 CI）：Linux `Test touched crates` success 覆盖
   新增 shell 单测；`Test pager additions` 新增
   `compact_drain compact_no_args compact_with_args compact_whitespace_only
