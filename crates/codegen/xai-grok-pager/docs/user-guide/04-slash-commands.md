@@ -38,6 +38,14 @@ The instructions are added to the summarization prompt for this compaction only;
 
 Grok also auto-compacts once the context window hits 85% (tune it with `[session] auto_compact_threshold_percent`).
 
+### `/compress-fast`
+
+Clear the bodies of old tool results without asking a model to summarize anything. Saves context-window space and tokens in one round trip, at the cost of losing the raw output of earlier commands and file reads.
+
+The two most recent user turns keep their tool results verbatim. The command reports how many results it cleared and how many bytes it freed.
+
+It also works when the active model sets `prune_mode = "append"`. Each cleared result gets the same invalidation notice automatic pruning uses, written into the conversation, so the model knows the output is gone. Clearing changes the request prefix once at the cleared positions; the notice keeps it stable afterwards.
+
 ### `/context`
 
 Show the context window split into System prompt, Messages, Reasoning/overhead, and Free.

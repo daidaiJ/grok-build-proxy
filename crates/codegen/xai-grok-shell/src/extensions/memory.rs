@@ -15,13 +15,15 @@ use super::notification::{MemoryDisabledReason, MemoryFileInfo};
 use super::{ExtResult, parse_params, to_raw_response};
 use crate::agent::MvpAgent;
 use crate::session::{
-    CompactConversationRequest, CompactConversationResponse, SessionCommand, SessionHandle,
+    CompactConversationRequest, CompactConversationResponse, CompressFastRequest, SessionCommand,
+    SessionHandle,
 };
 
 #[tracing::instrument(skip_all, fields(method = %args.method))]
 pub async fn handle(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     match args.method.as_ref() {
         m if m.starts_with("x.ai/compact_conversation") => handle_compact(agent, args).await,
+        COMPRESS_FAST_METHOD => handle_compress_fast(agent, args).await,
         MEMORY_FLUSH_METHOD => handle_flush(agent, args).await,
         MEMORY_DREAM_METHOD => handle_dream(agent, args).await,
         MEMORY_REWRITE_METHOD => handle_rewrite(agent, args).await,
@@ -38,6 +40,8 @@ pub const MEMORY_REWRITE_METHOD: &str = "x.ai/memory/rewrite";
 pub const MEMORY_LIST_METHOD: &str = "x.ai/memory/list";
 pub const MEMORY_TOGGLE_METHOD: &str = "x.ai/memory/toggle";
 pub const MEMORY_FORGET_METHOD: &str = "x.ai/memory/forget";
+/// LOCAL(compress-fast): manual zero-model-call cleanup of old tool results.
+pub const COMPRESS_FAST_METHOD: &str = "x.ai/session/compressFast";
 
 /// How a `/dream` run ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -363,6 +367,28 @@ async fn handle_compact(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     rx.await
         .map_err(|_| acp::Error::internal_error().data("session failed to respond"))??;
     to_raw_response(&CompactConversationResponse {})
+}
+
+/// Tool results from this many most recent user turns stay verbatim on `/compress-fast`.
+const DEFAULT_KEEP_LAST_TURNS: usize = 2;
+const MAX_KEEP_LAST_TURNS: usize = 1_000;
+
+/// LOCAL(compress-fast): drop old tool-result bodies without calling a model.
+/// Under `prune_mode = "append"` the chat-state layer also writes the append-mode
+/// invalidation marker into history, so the wire never carries a bare omission.
+async fn handle_compress_fast(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
+    let req: CompressFastRequest = parse_params(args)?;
+    let session = resident_session(agent, req.session_id)?;
+    let keep = req
+        .keep_last_turns
+        .unwrap_or(DEFAULT_KEEP_LAST_TURNS)
+        .min(MAX_KEEP_LAST_TURNS);
+    let outcome = session
+        .chat_state_handle
+        .compress_fast(keep)
+        .await
+        .ok_or_else(|| acp::Error::internal_error().data("chat state actor unavailable"))?;
+    to_raw_response(&outcome)
 }
 
 /// Request body for `x.ai/memory/flush` and `x.ai/memory/dream` (snake_case, unlike the modal methods).

@@ -179,6 +179,12 @@ The instructions feed the summarization prompt for that compaction only. Auto-co
 
 Grok automatically compacts the conversation when the context window approaches its limit. You will see a notification when auto-compact triggers. The `context_window` setting on your model configuration controls when this threshold is reached.
 
+### The /compress-fast Command
+
+`/compress-fast` clears the bodies of old tool results without calling a model: no summary, no extra tokens. The two most recent user turns keep their tool results verbatim; anything older becomes a cleared-result placeholder. The command reports how many results it cleared and how many bytes it freed.
+
+Use it when a session is carrying stale command output you no longer need but you would rather not pay for a compaction summary. Under `prune_mode = "append"` each cleared result also gets the invalidation notice automatic pruning uses, written into the conversation: the request prefix changes once at the cleared positions and stays stable afterwards.
+
 ---
 
 ## The /session-info Command

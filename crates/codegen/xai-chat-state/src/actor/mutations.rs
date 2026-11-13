@@ -3,14 +3,14 @@
 use std::collections::HashMap;
 
 use xai_grok_sampling_types::{
-    ContentPart, ConversationItem, DanglingToolCallReason, dedup_duplicate_tool_results,
-    repair_dangling_tool_calls_with, synthetic_dangling_result_text,
+    ContentPart, ConversationItem, DanglingToolCallReason, SyntheticReason, SystemItem,
+    dedup_duplicate_tool_results, repair_dangling_tool_calls_with, synthetic_dangling_result_text,
 };
 
 use super::ChatStateActor;
-use super::request_builder::HARD_CLEAR_PLACEHOLDER;
+use super::request_builder::{HARD_CLEAR_PLACEHOLDER, append_prune_marker};
 use crate::events::ChatStateEvent;
-use crate::types::ChatStateSnapshot;
+use crate::types::{ChatStateSnapshot, CompressFastOutcome, CompressFastSkip};
 
 /// Static string label for tracing on `ConversationItem` (avoids pulling
 /// the `Role` enum into the format string).
@@ -351,51 +351,9 @@ impl ChatStateActor {
             return 0;
         }
 
-        // Synthetic User items are not real turns (they do not increment `prompt_index`).
-        // Raise the clearing threshold by their count so a result is never cleared before
-        // `hard_clear_age_turns` real turns have elapsed.
-        let total_user_items = self
-            .state
-            .conversation
-            .iter()
-            .filter(|i| matches!(i, ConversationItem::User(_)))
-            .count();
-        let synthetic_count = total_user_items.saturating_sub(self.state.prompt_index);
-        let effective_threshold = self
-            .pruning_config
-            .hard_clear_age_turns
-            .saturating_add(synthetic_count);
-
+        let keep_turns = self.hard_clear_keep_turns(self.pruning_config.hard_clear_age_turns);
         let before_bytes = self.conversation_content_bytes();
-        let (cleared, _) = self.rewrite_history(HistoryRewrite::RetainedPrune, |conversation| {
-            let mut cleared = 0usize;
-            let mut turn_from_end: usize = 0;
-            let mut seen_first_user = false;
-
-            for item in conversation.iter_mut().rev() {
-                if matches!(item, ConversationItem::User(_)) {
-                    if seen_first_user {
-                        turn_from_end += 1;
-                    }
-                    seen_first_user = true;
-                    continue;
-                }
-
-                let ConversationItem::ToolResult(tr) = item else {
-                    continue;
-                };
-
-                if turn_from_end < effective_threshold {
-                    continue;
-                }
-
-                if tr.content.as_ref() != HARD_CLEAR_PLACEHOLDER {
-                    tr.content = std::sync::Arc::<str>::from(HARD_CLEAR_PLACEHOLDER);
-                    cleared += 1;
-                }
-            }
-            cleared
-        });
+        let cleared = self.clear_tool_results_older_than(keep_turns);
 
         if cleared > 0 {
             let after_bytes = self.conversation_content_bytes();
@@ -408,6 +366,74 @@ impl ChatStateActor {
         }
 
         cleared
+    }
+
+    /// Number of most recent user turns whose tool results stay verbatim in the retained
+    /// conversation. Synthetic User items are not real turns (they do not increment
+    /// `prompt_index`), so their count is added back to keep the threshold measured in
+    /// real turns.
+    fn hard_clear_keep_turns(&self, keep_turns: usize) -> usize {
+        let total_user_items = self
+            .state
+            .conversation
+            .iter()
+            .filter(|i| matches!(i, ConversationItem::User(_)))
+            .count();
+        let synthetic_count = total_user_items.saturating_sub(self.state.prompt_index);
+        keep_turns.saturating_add(synthetic_count)
+    }
+
+    /// Hard-clear tool results outside the `keep_turns` most recent user turns.
+    /// Persistence goes through `rewrite_history`, so a resumed session sees the
+    /// cleared bodies. Callers gate on `prune_mode` themselves.
+    fn clear_tool_results_older_than(&mut self, keep_turns: usize) -> usize {
+        let (cleared, _) = self.rewrite_history(HistoryRewrite::RetainedPrune, |conversation| {
+            clear_old_tool_results(conversation, keep_turns)
+        });
+        cleared
+    }
+
+    /// LOCAL(compress-fast): manual zero-model-call cleanup.
+    ///
+    /// Clears tool results outside the `keep_last_n_turns` most recent user turns, even
+    /// when automatic pruning is disabled — the user asked for it explicitly. Under
+    /// `prune_mode = "append"` each cleared result also gets the append-mode invalidation
+    /// marker written into history, so the wire never carries a bare omission and the
+    /// marker text is byte-stable across requests and resume. That rewrite costs one
+    /// prefix-cache break at the cleared positions, which is what the manual action buys.
+    pub(super) fn compress_fast(&mut self, keep_last_n_turns: usize) -> CompressFastOutcome {
+        let append_mode =
+            self.state.sampling_config.prune_mode == xai_grok_sampling_types::PruneMode::Append;
+
+        let keep_turns = self.hard_clear_keep_turns(keep_last_n_turns);
+        let before_bytes = self.conversation_content_bytes();
+        let (cleared, _) = self.rewrite_history(HistoryRewrite::RetainedPrune, |conversation| {
+            let cleared = clear_old_tool_results(conversation, keep_turns);
+            if append_mode {
+                annotate_cleared_results(conversation);
+            }
+            cleared
+        });
+
+        if cleared == 0 {
+            return CompressFastOutcome {
+                skipped: Some(CompressFastSkip::NothingToClear),
+                ..Default::default()
+            };
+        }
+        let bytes_freed = before_bytes.saturating_sub(self.conversation_content_bytes()) as u64;
+        tracing::info!(
+            cleared,
+            bytes_freed,
+            keep_last_n_turns,
+            append_mode,
+            "ChatState: compress-fast cleared old tool results"
+        );
+        CompressFastOutcome {
+            cleared_tool_results: cleared,
+            bytes_freed,
+            skipped: None,
+        }
     }
 
     /// Approximate byte footprint of all string content in the conversation.
@@ -681,5 +707,142 @@ impl ChatStateActor {
             );
             &[]
         })
+    }
+}
+
+/// Clear tool-result bodies outside the `keep_turns` most recent user turns.
+/// Turn index runs backwards from 0 at the newest user item, so `keep_turns = 2`
+/// leaves the two most recent turns verbatim. Returns how many bodies changed.
+fn clear_old_tool_results(conversation: &mut [ConversationItem], keep_turns: usize) -> usize {
+    let mut cleared = 0usize;
+    let mut turn_from_end = 0usize;
+    let mut seen_first_user = false;
+    for item in conversation.iter_mut().rev() {
+        if matches!(item, ConversationItem::User(_)) {
+            if seen_first_user {
+                turn_from_end += 1;
+            }
+            seen_first_user = true;
+            continue;
+        }
+        let ConversationItem::ToolResult(tr) = item else {
+            continue;
+        };
+        if turn_from_end < keep_turns {
+            continue;
+        }
+        if tr.content.as_ref() != HARD_CLEAR_PLACEHOLDER {
+            tr.content = std::sync::Arc::<str>::from(HARD_CLEAR_PLACEHOLDER);
+            cleared += 1;
+        }
+    }
+    cleared
+}
+
+/// LOCAL(compress-fast): append-mode invalidation markers, written into history at clear
+/// time so the wire never carries a bare omission. Uses the same call-id-keyed text as
+/// automatic append pruning, and skips results that already carry their marker so running
+/// the command twice does not stack notices.
+fn annotate_cleared_results(conversation: &mut Vec<ConversationItem>) {
+    let mut idx = 0;
+    while idx < conversation.len() {
+        let marker = match &conversation[idx] {
+            ConversationItem::ToolResult(tr) if tr.content.as_ref() == HARD_CLEAR_PLACEHOLDER => {
+                Some(append_prune_marker(&tr.tool_call_id))
+            }
+            _ => None,
+        };
+        let Some(text) = marker else {
+            idx += 1;
+            continue;
+        };
+        let already = matches!(
+            conversation.get(idx + 1),
+            Some(ConversationItem::System(s)) if s.content.as_ref() == text.as_str()
+        );
+        if !already {
+            conversation.insert(
+                idx + 1,
+                ConversationItem::System(SystemItem {
+                    content: std::sync::Arc::<str>::from(text),
+                    synthetic_reason: SyntheticReason::InHistoryUpdate,
+                }),
+            );
+        }
+        idx += 2;
+    }
+}
+
+#[cfg(test)]
+mod compress_fast_tests {
+    use super::*;
+
+    fn bodies(conversation: &[ConversationItem]) -> Vec<String> {
+        conversation
+            .iter()
+            .filter_map(|item| match item {
+                ConversationItem::ToolResult(tr) => Some(tr.content.to_string()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn keeps_the_two_most_recent_turns() {
+        let mut conversation = vec![
+            ConversationItem::user("q1"),
+            ConversationItem::tool_result("c1", "old body"),
+            ConversationItem::user("q2"),
+            ConversationItem::tool_result("c2", "recent body"),
+            ConversationItem::user("q3"),
+            ConversationItem::tool_result("c3", "current body"),
+        ];
+        assert_eq!(clear_old_tool_results(&mut conversation, 2), 1);
+        assert_eq!(
+            bodies(&conversation),
+            vec![
+                HARD_CLEAR_PLACEHOLDER.to_string(),
+                "recent body".to_string(),
+                "current body".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn clearing_is_idempotent_and_a_wider_window_touches_nothing() {
+        let mut conversation = vec![
+            ConversationItem::user("q1"),
+            ConversationItem::tool_result("c1", "old body"),
+        ];
+        assert_eq!(clear_old_tool_results(&mut conversation, 1), 0);
+        assert_eq!(clear_old_tool_results(&mut conversation, 0), 1);
+        assert_eq!(clear_old_tool_results(&mut conversation, 0), 0);
+    }
+
+    #[test]
+    fn append_mode_markers_follow_each_cleared_result() {
+        let mut conversation = vec![
+            ConversationItem::user("q1"),
+            ConversationItem::tool_result("c1", "old body"),
+            ConversationItem::user("q2"),
+            ConversationItem::tool_result("c2", "recent body"),
+            ConversationItem::user("q3"),
+        ];
+        assert_eq!(clear_old_tool_results(&mut conversation, 2), 1);
+        annotate_cleared_results(&mut conversation);
+
+        // q1 / c1 / marker / q2 / c2 / q3
+        assert_eq!(conversation.len(), 6);
+        assert!(matches!(conversation[1], ConversationItem::ToolResult(_)));
+        let ConversationItem::System(marker) = &conversation[2] else {
+            panic!("marker must follow the cleared result");
+        };
+        assert_eq!(marker.content.as_ref(), append_prune_marker("c1").as_str());
+        assert_eq!(marker.synthetic_reason, SyntheticReason::InHistoryUpdate);
+
+        // Running again must not stack a second notice.
+        let before = conversation.len();
+        annotate_cleared_results(&mut conversation);
+        assert_eq!(conversation.len(), before);
     }
 }

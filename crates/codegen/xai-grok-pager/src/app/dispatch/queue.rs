@@ -600,6 +600,15 @@ pub(super) fn maybe_drain_queue(agent: &mut AgentView, notices: &mut Vec<String>
                         session_id,
                     },
                 ),
+                // LOCAL(compress-fast): zero-model-call cleanup of old tool results.
+                "compress-fast" => (
+                    AgentCommand::CompressFast,
+                    SessionEvent::CompressFastStarted,
+                    Effect::CompressFast {
+                        agent_id,
+                        session_id,
+                    },
+                ),
                 _ => (
                     AgentCommand::Compact,
                     SessionEvent::CompactStarted,

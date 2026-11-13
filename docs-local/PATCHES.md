@@ -4454,3 +4454,60 @@ release 构建 45 → 18 min（约 -60%）。
 
 `docs/user-guide/04-slash-commands.md`、`17-sessions.md`、`docs/tutorial/05-slash-commands.md`
 说明 `/compact [instructions]` 与 4,000 字符上限；i18n 表新增 usage 译文。
+
+## 七十二期：`/compress-fast`——零模型调用的旧工具结果清理（2026-11-13，分支 feat/local-compress-fast）
+
+> 背景：`/compact` 是回收上下文的唯一路径，每次都要付一次摘要调用（长会话触发点
+> 已在 240K 量级）。本命令把「保留最近两轮、其余工具结果体清成占位符」做成手动动作：
+> 不调模型、不产摘要，代价是丢掉旧命令与文件读取的原始输出。
+
+### 改动
+
+- chat-state `actor/mutations.rs`：把既有自动硬清理的反向遍历抽成
+  `clear_old_tool_results(conversation, keep_turns)` 自由函数，`prune_retained_conversation`
+  与新增 `compress_fast(keep_last_n_turns)` 共用；synthetic User 的阈值抬升抽成
+  `hard_clear_keep_turns`。`compress_fast` 走 `HistoryRewrite::RetainedPrune`
+  （`rewrite_history` → `persistence.replace_history`），resume 看到清理后的正文；
+  `prune_mode = "append"` 下额外调用 `annotate_cleared_results`，把与自动裁剪同文案的
+  call-id 失效标记写进历史（已有标记的结果跳过，重复执行不叠加），使 wire 上不会只剩
+  一条裸占位符；无旧结果返回 `nothing_to_clear`。
+- chat-state `actor/request_builder.rs`：`prune_conversation_append` 跳过已带标记的
+  占位结果，并给没有标记的占位结果补一条（旧历史/切换模式留下的现场）。
+- chat-state `commands.rs` / `actor/mod.rs` / `handle.rs` / `types.rs`：
+  `ChatStateCommand::CompressFast`、`ChatStateHandle::compress_fast`、
+  `CompressFastOutcome { cleared_tool_results, bytes_freed, skipped }`。
+- shell `session/acp_types.rs`：`CompressFastRequest { session_id, keep_last_turns }`
+  （别名 `sessionId` / `keepLastTurns`）。
+- shell `extensions/memory.rs`：`COMPRESS_FAST_METHOD = "x.ai/session/compressFast"` +
+  `handle_compress_fast`（缺省保留 2 轮，上限 1000）；`agent/mvp_agent/acp_agent.rs`
+  的分发表把该方法并入 memory 分支（漏登记会被当成未知方法拒绝）。
+- pager：新 `slash/commands/compress_fast.rs`（`QueueCommand`）、`AgentCommand::CompressFast`、
+  `Effect::CompressFast`、`TaskResult::CompressFastComplete`、queue 分支映射、
+  `handle_compress_fast_complete`、`SessionEvent::CompressFastStarted/Completed/Failed`
+  与会话事件文案，i18n 表新增描述与状态行译文。
+
+### 语义与边界
+
+- 保留最近 `keep_last_n_turns` 个用户回合的工具结果（缺省 2），其余替换为
+  `HARD_CLEAR_PLACEHOLDER`；命令在回合间排队执行，不打断进行中的回合。
+- 不看 `[compaction.pruning] enabled`：用户显式要求时即使自动裁剪关闭也执行。
+- append 模式下会改写前缀一次（清掉的结果位置 + 写入标记），此后保持稳定；这是手动
+  动作换来的代价，不是逐回合发生的。失败走 `CompressFastFailed` 横幅，不借用 TurnFailed。
+
+### 测试
+
+- chat-state `compress_fast_tests`：保留最近两轮只清更早的一条；窗口放大时不动作；
+  二次运行幂等；append 标记紧跟被清结果、二次标注不叠加。
+- chat-state `request_builder` 测试：无标记的占位结果被补一条标注；已带标记的结果不重复发。
+- pager：命令解析入队、队列映射、会话事件文案（`nothing_to_clear` 分支）随 crate 编译与
+  i18n 表用例覆盖。
+
+### 文档
+
+`docs/user-guide/04-slash-commands.md`（Session Management 节）、`17-sessions.md`
+（`/compress-fast` 小节，含 append 模式说明）、`docs/tutorial/05-slash-commands.md`
+命令表。
+
+### 验证
+
+- 按用户要求不在本机编译，Linux/Windows CI 结果回填。

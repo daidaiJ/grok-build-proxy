@@ -1899,6 +1899,11 @@ pub enum Effect {
         agent_id: AgentId,
         session_id: acp::SessionId,
     },
+    /// LOCAL(compress-fast): `x.ai/session/compressFast` as a tracked agent command.
+    CompressFast {
+        agent_id: AgentId,
+        session_id: acp::SessionId,
+    },
     /// Execute a hooks management action via ACP.
     HooksAction {
         agent_id: AgentId,
@@ -2884,6 +2889,11 @@ pub enum TaskResult {
     MemoryDreamComplete {
         agent_id: AgentId,
         result: Result<xai_grok_shell::extensions::memory::MemoryDreamResponse, String>,
+    },
+    /// LOCAL(compress-fast) finished.
+    CompressFastComplete {
+        agent_id: AgentId,
+        result: Result<crate::slash::commands::compress_fast::CompressFastResponse, String>,
     },
     /// Hooks action completed.
     HooksActionResult {

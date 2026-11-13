@@ -290,6 +290,13 @@ impl ChatStateActor {
                     }
                 }
             }
+            ChatStateCommand::CompressFast {
+                keep_last_n_turns,
+                reply,
+            } => {
+                let outcome = self.compress_fast(keep_last_n_turns);
+                let _ = reply.send(outcome);
+            }
             ChatStateCommand::ReplaceSystemHead { prompt, reply } => {
                 let changed = self.replace_system_head(&prompt);
                 let _ = reply.send(changed);

@@ -149,6 +149,16 @@ pub enum SessionEvent {
         succeeded: bool,
         elapsed: Duration,
     },
+    /// LOCAL(compress-fast): manual zero-model-call cleanup started.
+    CompressFastStarted,
+    /// LOCAL(compress-fast): manual cleanup finished. `skipped` is the shell's
+    /// machine-readable reason (`nothing_to_clear`), if any.
+    CompressFastCompleted {
+        cleared_tool_results: usize,
+        bytes_freed: u64,
+        skipped: Option<String>,
+        elapsed: Duration,
+    },
     /// Hook annotation, displayed inline after a tool call.
     /// The message comes from the agent via `XaiSessionUpdate::HookAnnotation`.
     HookAnnotation { message: String },
@@ -511,6 +521,26 @@ impl SessionEvent {
                     summary.clone()
                 }
             }
+            SessionEvent::CompressFastStarted => "Clearing old tool results…".to_string(),
+            SessionEvent::CompressFastCompleted {
+                cleared_tool_results,
+                bytes_freed,
+                skipped,
+                elapsed,
+            } => match skipped.as_deref() {
+                Some(_) => "No old tool results to clear.".to_string(),
+                None => {
+                    let freed = if *bytes_freed >= 1024 {
+                        format!("{:.1} KB", *bytes_freed as f64 / 1024.0)
+                    } else {
+                        format!("{bytes_freed} B")
+                    };
+                    format!(
+                        "Cleared {cleared_tool_results} old tool results ({freed} freed) in {}.",
+                        format_duration(*elapsed)
+                    )
+                }
+            },
             SessionEvent::HookAnnotation { message } | SessionEvent::HookOutcome { message } => {
                 message.clone()
             }

@@ -284,6 +284,10 @@ pub(crate) fn append_prune_marker(tool_call_id: &str) -> String {
 /// after each. Marker text is call-id-keyed and category-independent, so the
 /// emitted marker set only grows — the wire prefix stays append-only past the
 /// 50% context line instead of taking the in-place-rewrite cliff.
+///
+/// Results already cleared by `/compress-fast` carry their marker in history; a
+/// placeholder without one (older session, or a cleared-then-resumed history) is
+/// annotated here instead of being left bare.
 pub(crate) fn prune_conversation_append(
     conversation: &mut Vec<ConversationItem>,
     config: &PruningConfig,
@@ -308,15 +312,29 @@ pub(crate) fn prune_conversation_append(
         let ConversationItem::ToolResult(tool_result) = item else {
             continue;
         };
-        if turn_from_end < config.keep_last_n_turns {
+        // A manually cleared result (`/compress-fast`) already carries its marker in
+        // history. A placeholder that lacks one still gets annotated, but a second
+        // notice for the same call is pure noise.
+        let cleared = tool_result.content.as_ref() == HARD_CLEAR_PLACEHOLDER;
+        if !cleared {
+            if turn_from_end < config.keep_last_n_turns {
+                continue;
+            }
+            // Both arms prune; the content stays untouched in this mode.
+            let hard = turn_from_end >= config.hard_clear_age_turns;
+            let soft = !hard && tool_result.content.chars().count() > config.soft_trim_threshold;
+            if !hard && !soft {
+                continue;
+            }
+        }
+        let marker = append_prune_marker(&tool_result.tool_call_id);
+        if matches!(
+            conversation.get(idx + 1),
+            Some(ConversationItem::System(s)) if s.content.as_ref() == marker.as_str()
+        ) {
             continue;
         }
-        // Both arms prune; the content stays untouched in this mode.
-        let hard = turn_from_end >= config.hard_clear_age_turns;
-        let soft = !hard && tool_result.content.chars().count() > config.soft_trim_threshold;
-        if hard || soft {
-            markers.push((idx + 1, append_prune_marker(&tool_result.tool_call_id)));
-        }
+        markers.push((idx + 1, marker));
     }
     for (idx, text) in markers {
         conversation.insert(
@@ -673,5 +691,52 @@ mod tests {
             wire2.iter().any(|i| matches!(i, ConversationItem::System(s) if s.content.to_string() == turn1_marker)),
             "the emitted marker must persist byte-identical across turns"
         );
+    }
+
+    #[test]
+    fn append_prune_annotates_a_cleared_result_that_has_no_marker() {
+        // `/compress-fast` writes its marker at clear time; a placeholder left by an
+        // older history (or a mode switch) must still get one, even inside the
+        // keep window where ordinary pruning never fires.
+        let config = PruningConfig {
+            keep_last_n_turns: 9,
+            hard_clear_age_turns: 9,
+            ..Default::default()
+        };
+        let mut conv = vec![
+            ConversationItem::user("q1"),
+            ConversationItem::tool_result("c1", HARD_CLEAR_PLACEHOLDER),
+            ConversationItem::user("q2"),
+        ];
+        prune_conversation_append(&mut conv, &config);
+        assert_eq!(conv.len(), 4);
+        let ConversationItem::System(marker) = &conv[2] else {
+            panic!("marker must follow the cleared result");
+        };
+        assert_eq!(marker.content.as_ref(), append_prune_marker("c1").as_str());
+    }
+
+    #[test]
+    fn append_prune_does_not_stack_markers_on_cleared_results() {
+        let config = PruningConfig {
+            keep_last_n_turns: 0,
+            hard_clear_age_turns: 0,
+            ..Default::default()
+        };
+        let mut conv = vec![
+            ConversationItem::user("q1"),
+            ConversationItem::tool_result("c1", HARD_CLEAR_PLACEHOLDER),
+            ConversationItem::System(SystemItem {
+                content: std::sync::Arc::<str>::from(append_prune_marker("c1")),
+                synthetic_reason: SyntheticReason::InHistoryUpdate,
+            }),
+            ConversationItem::user("q2"),
+        ];
+        prune_conversation_append(&mut conv, &config);
+        let markers = conv
+            .iter()
+            .filter(|i| matches!(i, ConversationItem::System(_)))
+            .count();
+        assert_eq!(markers, 1, "a cleared result keeps exactly one notice");
     }
 }

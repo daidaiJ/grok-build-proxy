@@ -172,6 +172,15 @@ pub enum ChatStateCommand {
         reply: tokio::sync::oneshot::Sender<crate::StripOutcome>,
     },
 
+    /// LOCAL(compress-fast): clear old tool results without a model call.
+    /// Manual only. Under `prune_mode = "append"` the cleared results also get their
+    /// invalidation markers written into history in the same pass, so the stored bytes
+    /// stay stable after the one prefix break the command costs.
+    CompressFast {
+        keep_last_n_turns: usize,
+        reply: oneshot::Sender<crate::types::CompressFastOutcome>,
+    },
+
     /// Atomically align the leading `System` message with `prompt`, persisting inside the actor.
     /// Serializes with turn pushes so a mid-turn reconnect cannot lose updates the way RMW would.
     /// A changed head re-bases `total_tokens`; acceptable because it invalidates the KV prefix anyway.
