@@ -109,7 +109,7 @@ impl SessionActor {
                 ConversationItem::system(turn_summary::TURN_SUMMARY_SYSTEM),
                 ConversationItem::user(turn_summary::turn_summary_user_message(&user_text, &reply)),
             ],
-            model: Some(model),
+            model: Some(model.clone()),
             reasoning_effort,
             x_grok_conv_id: Some(format!("turn-summary-{}", uuid::Uuid::new_v4())),
             x_grok_req_id: Some(format!("xai-turn-summary-{}", uuid::Uuid::new_v4())),
