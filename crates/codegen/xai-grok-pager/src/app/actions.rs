@@ -1636,10 +1636,12 @@ pub enum Effect {
         /// Set only when the pager restored the prompt into the composer.
         rewind_prompt_id: Option<String>,
     },
-    /// Run a manual `/compact` command.
+    /// Run a manual `/compact [instructions]` command.
     Compact {
         agent_id: AgentId,
         session_id: acp::SessionId,
+        /// LOCAL(compact-instructions): text from `/compact <instructions>` that the summary must preserve.
+        instructions: Option<String>,
     },
     /// Kill a background task.
     KillBgTask {

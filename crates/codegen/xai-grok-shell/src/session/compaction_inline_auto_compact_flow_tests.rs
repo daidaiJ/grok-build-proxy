@@ -1329,7 +1329,7 @@ async fn bare_manual_compact_failure_does_not_suppress_auto() {
                 ConversationItem::system("sys"),
                 ConversationItem::user("hello"),
             ]);
-            let result = actor.run_compact().await;
+            let result = actor.run_compact(None).await;
             let err = result.expect_err("mock 400 must fail the compaction");
             assert_eq!(
                 crate::session::helpers::session_compact::compact_error_kind(&err),
@@ -1475,7 +1475,7 @@ async fn compaction_rearms_failed_server_announcements() {
             actor
                 .mcp_reminder_dirty
                 .store(false, std::sync::atomic::Ordering::Relaxed);
-            let result = actor.run_compact().await;
+            let result = actor.run_compact(None).await;
             assert!(result.is_ok(), "compaction should succeed: {result:?}");
             assert!(
                 actor.mcp_announcements.lock().failed.is_empty(),
@@ -1545,7 +1545,7 @@ async fn compaction_keeps_last_user_turn_images_and_paths() {
                 ]),
             ],
                 );
-            let result = actor.run_compact().await;
+            let result = actor.run_compact(None).await;
             assert!(result.is_ok(), "compaction should succeed: {result:?}");
             let conversation = actor.chat_state_handle.get_conversation().await;
             let carried = carried_image_item(&conversation)
@@ -1618,14 +1618,14 @@ async fn compaction_paths_note_survives_second_compaction_and_filters_missing_fi
                 ConversationItem::user("final query"),
             ],
                 );
-            let result = actor.run_compact().await;
+            let result = actor.run_compact(None).await;
             assert!(result.is_ok(), "first compaction should succeed: {result:?}");
             let mut conversation = actor.chat_state_handle.get_conversation().await;
             conversation
                 .push(ConversationItem::user("<user_query>\nnext task\n</user_query>"));
             conversation.push(ConversationItem::assistant("on it"));
             actor.chat_state_handle.replace_conversation(conversation);
-            let result = actor.run_compact().await;
+            let result = actor.run_compact(None).await;
             assert!(result.is_ok(), "second compaction should succeed: {result:?}");
             let conversation = actor.chat_state_handle.get_conversation().await;
             std::fs::remove_file(&existing).unwrap();
@@ -1681,7 +1681,7 @@ async fn forked_prefix_released_under_pressure_and_stays_released() {
                 before > threshold_tokens,
                 "seed must exceed threshold: {before} <= {threshold_tokens}"
             );
-            let result = actor.run_compact().await;
+            let result = actor.run_compact(None).await;
             assert!(result.is_ok(), "compaction should succeed: {result:?}");
             assert!(
                 actor.compaction.prefix_released.load(Relaxed),
@@ -1701,7 +1701,7 @@ async fn forked_prefix_released_under_pressure_and_stays_released() {
                 SUPPRESS_NONE,
                 "a shrunk conversation must not suppress AUTO"
             );
-            let result = actor.run_compact().await;
+            let result = actor.run_compact(None).await;
             assert!(
                 result.is_ok(),
                 "second compaction should succeed: {result:?}"
@@ -1748,7 +1748,7 @@ async fn forked_release_still_over_threshold_suppresses_auto() {
                 before > threshold_tokens,
                 "seed must exceed threshold: {before}"
             );
-            let result = actor.run_compact().await;
+            let result = actor.run_compact(None).await;
             assert!(result.is_ok(), "compaction should succeed: {result:?}");
             assert!(
                 actor.compaction.prefix_released.load(Relaxed),

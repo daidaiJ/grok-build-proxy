@@ -244,8 +244,36 @@ fn classify_response_event_error(code: Option<&str>, message: &str) -> CompactFa
     CompactFailure::Transient(acp_err)
 }
 
+/// LOCAL(compact-instructions): upper bound on `/compact <instructions>` text. The instructions
+/// ride inside the summarization prompt, so a runaway paste would eat the summary budget.
+pub const MAX_COMPACTION_INSTRUCTIONS_CHARS: usize = 4_000;
+
+/// Trim the user's `/compact` instructions; blank input means "no instructions".
+pub fn normalize_compaction_instructions(raw: Option<&str>) -> Option<String> {
+    raw.map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(str::to_owned)
+}
+
+/// Combine `/compact <instructions>` with the active goal's context for the summarizer.
+/// The instructions lead so they read as the priority; either side may be absent.
+pub(crate) fn merge_compaction_user_context(
+    instructions: Option<&str>,
+    goal_context: Option<String>,
+) -> Option<String> {
+    match (
+        normalize_compaction_instructions(instructions),
+        goal_context,
+    ) {
+        (Some(instructions), Some(goal)) => Some(format!("{instructions}\n\n{goal}")),
+        (Some(instructions), None) => Some(instructions),
+        (None, goal) => goal,
+    }
+}
+
 /// Build the bare summarization prompt text without appending it to history.
-/// `user_context` is the active goal's objective, from `goal_compaction_user_context`.
+/// `user_context` is the active goal's objective, from `goal_compaction_user_context`,
+/// merged with any manual `/compact` instructions.
 pub(crate) fn build_compaction_prompt(
     user_context: Option<&str>,
     use_short_prompt: bool,
@@ -864,3 +892,49 @@ mod reasoning_effort_tests;
 #[cfg(test)]
 #[path = "session_compact_retain_session_asset_files_tests.rs"]
 mod retain_session_asset_files_tests;
+
+#[cfg(test)]
+mod user_context_tests {
+    use super::*;
+
+    #[test]
+    fn instructions_lead_the_goal_context() {
+        let merged = merge_compaction_user_context(
+            Some("  keep the migration notes  "),
+            Some("Objective: ship it".to_owned()),
+        );
+        assert_eq!(
+            merged.as_deref(),
+            Some("keep the migration notes\n\nObjective: ship it")
+        );
+    }
+
+    #[test]
+    fn blank_instructions_leave_the_goal_context_untouched() {
+        assert_eq!(
+            merge_compaction_user_context(Some("   "), Some("Objective: ship it".to_owned())),
+            Some("Objective: ship it".to_owned())
+        );
+    }
+
+    #[test]
+    fn instructions_stand_alone_without_a_goal() {
+        assert_eq!(
+            merge_compaction_user_context(Some("keep failed commands"), None).as_deref(),
+            Some("keep failed commands")
+        );
+        assert_eq!(merge_compaction_user_context(None, None), None);
+    }
+
+    #[test]
+    fn instructions_reach_the_prompt_and_absence_leaves_it_clean() {
+        let prompt = build_compaction_prompt(
+            merge_compaction_user_context(Some("keep the migration notes"), None).as_deref(),
+            false,
+        );
+        assert!(prompt.contains("keep the migration notes"));
+
+        let bare = build_compaction_prompt(None, false);
+        assert!(!bare.contains("User-provided context"));
+    }
+}

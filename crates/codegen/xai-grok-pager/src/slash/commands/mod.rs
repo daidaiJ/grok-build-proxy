@@ -351,17 +351,33 @@ mod tests {
         }
     }
     #[test]
-    fn compact_with_args_is_refused() {
+    fn compact_with_args_queues_the_instructions_verbatim() {
         let models = ModelState::default();
         let mut ctx = make_ctx(&models);
         let cmd = compact::CompactCommand;
-        let result = cmd.run(&mut ctx, "focus on auth");
+        let result = cmd.run(&mut ctx, "  focus on auth  ");
         match result {
-            CommandResult::Error(text) => {
-                assert_eq!(text, "/compact takes no arguments.")
-            }
+            CommandResult::QueueCommand(text) => assert_eq!(text, "/compact focus on auth"),
+            other => panic!("expected QueueCommand, got {other:?}"),
+        }
+        assert_eq!(cmd.submission_refusal("focus on auth", false), None);
+    }
+
+    #[test]
+    fn compact_rejects_instructions_past_the_length_cap() {
+        let models = ModelState::default();
+        let mut ctx = make_ctx(&models);
+        let cmd = compact::CompactCommand;
+        let too_long = "x".repeat(4_001);
+        match cmd.run(&mut ctx, &too_long) {
+            CommandResult::Error(text) => assert!(text.contains("limited to 4000 characters")),
             other => panic!("expected Error, got {other:?}"),
         }
+        let at_cap = "x".repeat(4_000);
+        assert!(matches!(
+            cmd.run(&mut ctx, &at_cap),
+            CommandResult::QueueCommand(_)
+        ));
     }
     #[test]
     fn compact_whitespace_only_args_treated_as_no_args() {

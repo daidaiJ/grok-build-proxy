@@ -580,7 +580,8 @@ impl SessionActor {
             span.record("detail", tracing::field::display(detail));
         }
     }
-    /// Handle a manual `/compact`: summarize the conversation so the context shrinks.
+    /// Handle a manual `/compact [instructions]`: summarize the conversation so the context shrinks,
+    /// honoring any text the user asked the summary to preserve.
     #[tracing::instrument(
         name = "session.compact",
         skip_all,
@@ -595,7 +596,14 @@ impl SessionActor {
             error = tracing::field::Empty,
         )
     )]
-    pub(crate) async fn run_compact(self: &Arc<Self>) -> Result<(), acp::Error> {
+    pub(crate) async fn run_compact(
+        self: &Arc<Self>,
+        instructions: Option<String>,
+    ) -> Result<(), acp::Error> {
+        let instructions =
+            crate::session::helpers::session_compact::normalize_compaction_instructions(
+                instructions.as_deref(),
+            );
         let (_cancel, _cancel_scope) = self.compaction.cancel.enter();
         self.record_compaction_variant();
         let total_tokens = self.chat_state_handle.get_total_tokens().await;
@@ -612,6 +620,7 @@ impl SessionActor {
                 None,
                 xai_grok_telemetry::events::CompactionTrigger::Manual,
                 false,
+                instructions.as_deref(),
             )
             .await
         {
@@ -924,6 +933,7 @@ impl SessionActor {
         auto_continue: Option<crate::extensions::notification::AutoContinueInfo>,
         trigger: xai_grok_telemetry::events::CompactionTrigger,
         lossy_input: bool,
+        instructions: Option<&str>,
     ) -> Result<(), acp::Error> {
         let (cancel, _cancel_scope) = self.compaction.cancel.enter();
         let tokens_before = self.chat_state_handle.get_total_tokens().await;
@@ -978,7 +988,11 @@ impl SessionActor {
                 is_subagent: self.startup_hints.is_subagent,
             },
         );
-        let user_context = self.goal_compaction_user_context();
+        // LOCAL(compact-instructions): manual `/compact <instructions>` lead the goal context.
+        let user_context = crate::session::helpers::session_compact::merge_compaction_user_context(
+            instructions,
+            self.goal_compaction_user_context(),
+        );
         let compact_source = trigger_str;
         self.dispatch_hook(
             xai_grok_hooks::event::HookEventName::PreCompact,
@@ -2382,6 +2396,7 @@ impl SessionActor {
                 None,
                 xai_grok_telemetry::events::CompactionTrigger::Auto,
                 lossy_input,
+                None,
             )
             .await;
         let elapsed_ms = compact_start.elapsed().as_millis() as i64;

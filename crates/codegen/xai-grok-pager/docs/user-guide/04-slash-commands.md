@@ -28,6 +28,14 @@ Not `/config-agents` (alias `/agents`), which manages agent *definitions* and pe
 
 Compress conversation history to reclaim context-window space.
 
+Pass instructions after the command to tell the summary what to preserve:
+
+```
+/compact keep the database migration steps, failed commands, and open questions
+```
+
+The instructions are added to the summarization prompt for this compaction only; they are not saved or applied to auto-compaction. They are limited to 4,000 characters, and the active goal's objective (when a goal is running) is kept alongside them.
+
 Grok also auto-compacts once the context window hits 85% (tune it with `[session] auto_compact_threshold_percent`).
 
 ### `/context`

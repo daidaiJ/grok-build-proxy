@@ -576,7 +576,9 @@ pub(super) fn maybe_drain_queue(agent: &mut AgentView, notices: &mut Vec<String>
             }
         }
         QueueEntryKind::Command => {
-            let token = crate::slash::parse_invocation(&queued.text).map_or("", |inv| inv.token);
+            let invocation = crate::slash::parse_invocation(&queued.text);
+            let token = invocation.as_ref().map_or("", |inv| inv.token);
+            let args = invocation.as_ref().map_or("", |inv| inv.args);
             let (command, started, effect) = match token {
                 "flush" => (
                     AgentCommand::MemoryFlush,
@@ -604,6 +606,9 @@ pub(super) fn maybe_drain_queue(agent: &mut AgentView, notices: &mut Vec<String>
                     Effect::Compact {
                         agent_id,
                         session_id,
+                        instructions: xai_grok_shell::session::helpers::session_compact::normalize_compaction_instructions(
+                            Some(args),
+                        ),
                     },
                 ),
             };
@@ -1389,6 +1394,36 @@ mod tests {
                 },
             ] => assert_eq!(summary, "Dream merged 7 observations into 3 topics."),
             other => panic!("expected marker → outcome, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compact_drain_carries_the_invocation_instructions() {
+        let mut app = test_app_with_agent();
+        let id = AgentId(0);
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent
+            .session
+            .enqueue_command("/compact 保留数据库迁移".into());
+        let drain = maybe_drain_queue(agent, &mut app.pending_image_notices);
+        match drain.effects.as_slice() {
+            [Effect::Compact { instructions, .. }] => {
+                assert_eq!(instructions.as_deref(), Some("保留数据库迁移"))
+            }
+            other => panic!("expected one compact effect, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compact_drain_without_instructions_sends_none() {
+        let mut app = test_app_with_agent();
+        let id = AgentId(0);
+        let agent = app.agents.get_mut(&id).unwrap();
+        agent.session.enqueue_command("/compact".into());
+        let drain = maybe_drain_queue(agent, &mut app.pending_image_notices);
+        match drain.effects.as_slice() {
+            [Effect::Compact { instructions, .. }] => assert!(instructions.is_none()),
+            other => panic!("expected one compact effect, got {other:?}"),
         }
     }
 

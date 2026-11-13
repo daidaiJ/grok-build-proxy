@@ -519,6 +519,8 @@ pub enum SessionCommand {
     },
     CompactSession {
         respond_to: oneshot::Sender<acp::Result<()>>,
+        /// LOCAL(compact-instructions): text from `/compact <instructions>` the summary must preserve.
+        instructions: Option<String>,
     },
     /// Reload plugin hooks and registry mid-session.
     ReloadPlugins {

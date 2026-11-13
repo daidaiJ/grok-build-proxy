@@ -335,14 +335,29 @@ async fn handle_forget(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
 
 async fn handle_compact(agent: &MvpAgent, args: &acp::ExtRequest) -> ExtResult {
     let req: CompactConversationRequest = parse_params(args)?;
+    // LOCAL(compact-instructions): optional `/compact <instructions>` from the pager; capped so it
+    // cannot crowd out the summary budget.
+    let instructions = crate::session::helpers::session_compact::normalize_compaction_instructions(
+        req.instructions.as_deref(),
+    );
+    if let Some(text) = instructions.as_deref()
+        && text.chars().count()
+            > crate::session::helpers::session_compact::MAX_COMPACTION_INSTRUCTIONS_CHARS
+    {
+        return Err(acp::Error::invalid_params().data(format!(
+            "compaction instructions exceed {} characters",
+            crate::session::helpers::session_compact::MAX_COMPACTION_INSTRUCTIONS_CHARS
+        )));
+    }
     // send over the compact query here properly
     let sid: acp::SessionId = req.session_id.into();
     let session_handle = agent.resident_handle(&sid);
     let (tx, rx) = oneshot::channel();
     if let Some(session) = session_handle {
-        let _ = session
-            .cmd_tx
-            .send(SessionCommand::CompactSession { respond_to: tx });
+        let _ = session.cmd_tx.send(SessionCommand::CompactSession {
+            respond_to: tx,
+            instructions,
+        });
     }
     // Pass the session error through; rewrapping buries the detail in a Debug dump.
     rx.await
