@@ -18,8 +18,9 @@ A few worth knowing on day one:
 Two of those deserve a second look:
 
 - **`/compact`** compresses the conversation history to free up context.
-  Check context usage anytime with `/context` — Grok also auto-compacts
-  when the window fills up.
+  Add text after it (`/compact keep the migration steps`) to tell the summary
+  what to preserve. Check context usage anytime with `/context` — Grok also
+  auto-compacts when the window fills up.
 - **`/rewind`** (or **`/undo`**) rewinds the conversation to an earlier
   turn, dropping later turns (file changes are left as-is).
 

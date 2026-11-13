@@ -1737,7 +1737,7 @@
     }
 
     #[test]
-    fn compact_completable_with_no_args() {
+    fn compact_completable_with_optional_args() {
         let mut pw = PromptWidget::new();
         let models = crate::acp::model_state::ModelState::default();
 
@@ -1745,13 +1745,14 @@
         pw.textarea.insert_str("/comp");
         pw.refresh_slash(&models);
 
-        // Accepting makes the text "/compact" (no trailing space: the command takes no arguments)
+        // Accepting leaves the args separator for the optional instructions; bare `/compact` stays valid
         pw.accept_slash_completion(&models);
         let text = pw.textarea.text().to_string();
-        assert_eq!(text, "/compact");
+        assert_eq!(text, "/compact ");
 
+        pw.textarea.insert_str("keep the migration notes");
         let sent = pw.try_send();
-        assert!(sent.is_some(), "/compact should be sendable");
+        assert!(sent.is_some(), "/compact <instructions> should be sendable");
     }
 
     #[test]

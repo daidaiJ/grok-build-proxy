@@ -34,6 +34,10 @@ pub(crate) struct AllSessionOverviewResponse {
 pub struct CompactConversationRequest {
     #[serde(alias = "sessionId")]
     pub session_id: String,
+    /// LOCAL(compact-instructions): `/compact <instructions>` text the summary must preserve.
+    /// Older clients omit it, hence `serde(default)`.
+    #[serde(default)]
+    pub instructions: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -713,6 +717,27 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(subagent.take_mcp_reroot_traceparent(), None);
+    }
+
+    #[test]
+    fn compact_request_carries_optional_instructions() {
+        let with: CompactConversationRequest = serde_json::from_value(serde_json::json!({
+            "sessionId": "sess-1",
+            "instructions": "keep the migration notes",
+        }))
+        .unwrap();
+        assert_eq!(with.session_id, "sess-1");
+        assert_eq!(
+            with.instructions.as_deref(),
+            Some("keep the migration notes")
+        );
+
+        let without: CompactConversationRequest = serde_json::from_value(serde_json::json!({
+            "session_id": "sess-2",
+        }))
+        .expect("older clients omit instructions");
+        assert_eq!(without.session_id, "sess-2");
+        assert!(without.instructions.is_none());
     }
 
     #[test]

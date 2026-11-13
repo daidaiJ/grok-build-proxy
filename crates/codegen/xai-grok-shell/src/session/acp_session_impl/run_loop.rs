@@ -1186,10 +1186,13 @@ pub(super) async fn run_session(
                                 }
                             }
                         }
-                        SessionCommand::CompactSession { respond_to } => {
+                        SessionCommand::CompactSession {
+                            respond_to,
+                            instructions,
+                        } => {
                             let s = session.clone();
                             tokio::task::spawn_local(async move {
-                                let compact_session = s.run_compact().await;
+                                let compact_session = s.run_compact(instructions).await;
                                 let _ = respond_to.send(compact_session);
                             });
                         }

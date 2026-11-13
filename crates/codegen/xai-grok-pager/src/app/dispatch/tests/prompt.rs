@@ -3624,7 +3624,7 @@ fn palette_dispatch_preserves_prompt_draft() {
 }
 
 #[test]
-fn slash_compact_with_trailing_text_is_refused() {
+fn slash_compact_with_trailing_text_carries_instructions() {
     let mut app = test_app_with_agent();
     let id = AgentId(0);
 
@@ -3633,14 +3633,15 @@ fn slash_compact_with_trailing_text_is_refused() {
         &mut app,
     );
 
-    assert!(effects.is_empty(), "nothing runs, got {effects:?}");
-    assert_eq!(
-        agent_ref(&app, id)
-            .toast
-            .as_ref()
-            .map(|(text, _)| text.as_str()),
-        Some("/compact takes no arguments."),
-        "the send path refuses before the command runs"
+    match effects.as_slice() {
+        [Effect::Compact { instructions, .. }] => {
+            assert_eq!(instructions.as_deref(), Some("focus on auth"))
+        }
+        other => panic!("expected one compact with instructions, got {other:?}"),
+    }
+    assert!(
+        agent_ref(&app, id).toast.is_none(),
+        "the send path accepts the instructions"
     );
 }
 

@@ -335,7 +335,7 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Extended reasoning", "扩展推理"),
         ("Maximum reasoning", "最大强度推理"),
         // -- 用法字符串（只译自由文本，解析用关键字保留英文） --
-        ("/compact compaction instructions", "/compact 压缩指令"),
+        ("/compact [instructions]", "/compact [压缩指令]"),
         ("/effort <level>", "/effort <级别>"),
         ("/imagine <description>", "/imagine <描述>"),
         ("/imagine-video <description>", "/imagine-video <描述>"),

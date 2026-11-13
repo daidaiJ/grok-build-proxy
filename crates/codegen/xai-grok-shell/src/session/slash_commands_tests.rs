@@ -223,7 +223,7 @@ fn yolo_alias_resolves_to_always_approve() {
 // ── resolve ─────────────────────────────────────────────────────
 
 #[test]
-fn resolve_routes_builtin() {
+fn resolve_routes_builtin_with_instructions() {
     let outcome = resolve(
         vec![text_block("/compact preserve auth")],
         &[],
@@ -232,10 +232,12 @@ fn resolve_routes_builtin() {
         &[],
     )
     .unwrap_err();
-    assert!(matches!(
-        outcome,
-        SlashCommandOutcome::Builtin(BuiltinAction::Compact)
-    ));
+    match outcome {
+        SlashCommandOutcome::Builtin(BuiltinAction::Compact { instructions }) => {
+            assert_eq!(instructions.as_deref(), Some("preserve auth"))
+        }
+        other => panic!("expected the compact builtin, got {other:?}"),
+    }
 }
 
 #[test]
@@ -1303,7 +1305,7 @@ fn resolve_mixed_case_builtin() {
     .unwrap_err();
     assert!(matches!(
         outcome,
-        SlashCommandOutcome::Builtin(BuiltinAction::Compact)
+        SlashCommandOutcome::Builtin(BuiltinAction::Compact { .. })
     ));
 }
 

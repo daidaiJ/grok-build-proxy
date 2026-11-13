@@ -4404,3 +4404,53 @@ release 构建 45 → 18 min（约 -60%）。
   Windows zip sha256 `e1f4f1c8396923d409bd69fe6b4a76a1c7ada82eccfa975e647de85603813304`
   核对一致。本机部署 `grok 1.0.74 (aae2d5692699)`
   （`D:\tool-cli\grok2`），回滚点 `grok2.exe.1.0.73-a4f73dc8.bak`。
+
+## 七十期：`/compact <instructions>`——手动压缩保留重点（2026-11-13，分支 feat/local-compact-instructions）
+
+### 目标
+
+`/compact 保留数据库迁移、失败命令和未决问题`：把指令文本送进摘要 prompt 的
+`user_context` 槽位，摘要按重点保留。仅作用于本次手动压缩；自动压缩、切模型压缩
+（`SwitchModelCompact`）与 `run_compact_only` 路径不带指令。
+
+### 改动（同步文件，rebase 时按此重放）
+
+- pager `slash/commands/compact.rs`：删除 `NO_ARGS` 拒绝，改为 `takes_args: true` +
+  `usage: "/compact [instructions]"` + `arg_placeholder: "compaction instructions"`；
+  `run` 原样保留参数入队（`/compact <trimmed args>`），超 4,000 字符在本地拒绝。
+- pager `app/actions.rs` `Effect::Compact` 增加 `instructions: Option<String>`；
+  `app/effects/mod.rs` 在其为 `Some` 时向 `x.ai/compact_conversation` 参数追加
+  `"instructions"`（`None` 时不发，旧 shell 收到载荷与以前逐字节一致）。
+- pager `app/dispatch/queue.rs`：command 分支从 `parse_invocation` 取 args，
+  `normalize_compaction_instructions` 归一化后装进 effect。
+- shell `session/acp_types.rs`：`CompactConversationRequest.instructions`
+  （`#[serde(default)]`，旧客户端省略即 `None`）。
+- shell `extensions/memory.rs` `handle_compact`：归一化 + 长度校验
+  （超限 `invalid_params`），随 `SessionCommand::CompactSession { instructions }` 下传。
+- shell `session/commands.rs` / `acp_session_impl/run_loop.rs`：命令载荷与转发。
+- shell `session/compaction.rs`：`run_compact(instructions)` →
+  `run_compact_inner(..., instructions)`；`user_context` 改为
+  `merge_compaction_user_context(instructions, goal_compaction_user_context())`，
+  用户指令在前、goal 上下文在后，空串视为无指令。
+- shell `session/helpers/session_compact.rs`：新增
+  `MAX_COMPACTION_INSTRUCTIONS_CHARS = 4000`、`normalize_compaction_instructions`、
+  `merge_compaction_user_context`；`build_compaction_prompt` 语义不变。
+
+### 边界与兼容
+
+- 指令不持久化，不进自动压缩；`[compaction.pruning]` 与会话配置零改动。
+- 旧客户端不传 `instructions`：反序列化为 `None`，请求行为与发版前一致。
+- 4,000 字符上限在 pager（即时拒绝）与 shell（ACP 边界）各校验一次，共用同一常量。
+
+### 测试与交付
+
+- pager：命令解析（带参/空参/空白/超长）、drain 装配（带参→`Some`，裸命令→`None`）、
+  send 路径带参不再拒绝、补全插入 args 分隔符。
+- shell：合并优先级与 prompt 渲染、ACP 反序列化带/不带 `instructions`。
+- CI：`build.yml` 的 pager 过滤器新增上述用例；Linux 全量 shell 套件覆盖新增
+  `user_context_tests`。
+
+### 文档
+
+`docs/user-guide/04-slash-commands.md`、`17-sessions.md`、`docs/tutorial/05-slash-commands.md`
+说明 `/compact [instructions]` 与 4,000 字符上限；i18n 表新增 usage 译文。

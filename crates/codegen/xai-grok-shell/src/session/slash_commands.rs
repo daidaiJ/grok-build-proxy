@@ -50,12 +50,18 @@ pub(super) const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
     BuiltinCommand {
         name: "compact",
         description: "Compress conversation history to save context window",
-        argument_hint: None,
+        argument_hint: Some("instructions"),
         aliases: &[],
         model_authored_eligibility: ModelAuthoredEligibility::ExactCanonical,
         gate: BuiltinGate::AlwaysOn,
         workflow_projection: WorkflowProjection::None,
-        resolve: |_args| BuiltinAction::Compact,
+        // LOCAL(compact-instructions): clients that send `/compact ...` as prompt text keep the text.
+        resolve: |args| BuiltinAction::Compact {
+            instructions:
+                crate::session::helpers::session_compact::normalize_compaction_instructions(Some(
+                    args,
+                )),
+        },
     },
     BuiltinCommand {
         name: "always-approve",
@@ -1228,7 +1234,10 @@ pub(super) enum SlashCommandOutcome {
 }
 #[derive(Debug)]
 pub(super) enum BuiltinAction {
-    Compact,
+    /// LOCAL(compact-instructions): text from `/compact <instructions>`, kept for the summary.
+    Compact {
+        instructions: Option<String>,
+    },
     SetYolo {
         enabled: bool,
     },
@@ -1296,7 +1305,7 @@ pub(super) enum BuiltinAction {
 impl BuiltinAction {
     pub(crate) fn command_name(&self) -> &'static str {
         match self {
-            BuiltinAction::Compact => "compact",
+            BuiltinAction::Compact { .. } => "compact",
             BuiltinAction::SetYolo { .. } => "yolo",
             BuiltinAction::SetMinimalStyle { .. } => "style",
             BuiltinAction::FlushMemory => "flush",
@@ -1330,7 +1339,7 @@ impl BuiltinAction {
     }
     pub(crate) fn args_provided(&self) -> bool {
         match self {
-            BuiltinAction::Compact => false,
+            BuiltinAction::Compact { instructions } => instructions.is_some(),
             BuiltinAction::SetYolo { .. } => true,
             BuiltinAction::SetMinimalStyle { enabled } => enabled.is_some(),
             BuiltinAction::FlushMemory => false,

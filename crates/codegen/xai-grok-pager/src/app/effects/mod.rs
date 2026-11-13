@@ -1752,11 +1752,20 @@ pub(crate) fn execute(
                     }
                 });
         }
-        Effect::Compact { agent_id, session_id } => {
+        Effect::Compact {
+            agent_id,
+            session_id,
+            instructions,
+        } => {
             let tx = acp_tx.clone();
             tasks
                 .spawn(async move {
-                    let params = serde_json::json!({ "sessionId": session_id.0.to_string() });
+                    let mut params = serde_json::json!({ "sessionId": session_id.0.to_string() });
+                    // LOCAL(compact-instructions): omitted when absent, so the wire payload stays
+                    // identical to older clients' requests.
+                    if let Some(instructions) = instructions {
+                        params["instructions"] = serde_json::Value::String(instructions);
+                    }
                     let req = acp::ExtRequest::new(
                         "x.ai/compact_conversation",
                         serde_json::value::to_raw_value(&params)

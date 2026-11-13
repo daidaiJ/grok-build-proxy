@@ -167,6 +167,14 @@ When **Confirm before rewind** is on (default in `/settings`), every pick asks f
 /compact
 ```
 
+Add instructions to steer the summary toward what matters:
+
+```
+/compact keep the database migration plan, the commands that failed, and open questions
+```
+
+The instructions feed the summarization prompt for that compaction only. Auto-compaction and model-switch compaction stay uninstructed.
+
 ### Auto-Compact
 
 Grok automatically compacts the conversation when the context window approaches its limit. You will see a notification when auto-compact triggers. The `context_window` setting on your model configuration controls when this threshold is reached.
