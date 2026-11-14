@@ -8,23 +8,11 @@ use super::*;
 /// first-party only. Relay/BYOK gateways reject the call on every turn (observed
 /// 11/11 failures on `cli-chat-proxy`), so skip it there instead of paying a
 /// guaranteed-failed round trip.
-fn is_first_party_api_host(base_url: &str) -> bool {
-    let Some((_, rest)) = base_url.split_once("://") else {
-        // No scheme: leave unusual/explicit configs on their previous behavior.
-        return true;
-    };
-    let authority = rest.split('/').next().unwrap_or_default();
-    let host_port = authority.rsplit('@').next().unwrap_or(authority);
-    let host = if let Some(bracketed) = host_port.strip_prefix('[') {
-        bracketed.split(']').next().unwrap_or(bracketed)
-    } else {
-        host_port.split(':').next().unwrap_or(host_port)
-    };
-    if host.is_empty() {
-        return true;
-    }
-    let host = host.to_ascii_lowercase();
-    host == "x.ai" || host.ends_with(".x.ai") || host == "grok.com" || host.ends_with(".grok.com")
+///
+/// Reuses the shared xAI-route predicate, which also accepts loopback for local
+/// mock servers and co-located proxies.
+fn turn_summary_endpoint_allowed(base_url: &str) -> bool {
+    crate::util::is_xai_api_url(base_url)
 }
 
 impl SessionActor {
@@ -120,7 +108,7 @@ impl SessionActor {
         }
         let model = config.model.clone();
         let reasoning_effort = config.reasoning_effort;
-        if !is_first_party_api_host(&config.base_url) {
+        if !turn_summary_endpoint_allowed(&config.base_url) {
             tracing::debug!(
                 base_url = %config.base_url,
                 model = %model,
@@ -210,26 +198,23 @@ impl SessionActor {
 
 #[cfg(test)]
 mod tests {
-    use super::is_first_party_api_host;
+    use super::turn_summary_endpoint_allowed;
 
     #[test]
-    fn first_party_hosts_keep_turn_summary() {
-        assert!(is_first_party_api_host("https://api.x.ai/v1"));
-        assert!(is_first_party_api_host("https://x.ai/v1"));
-        assert!(is_first_party_api_host("https://api.grok.com/v1"));
-        assert!(is_first_party_api_host("api.x.ai/v1"));
-        // Empty/odd configs keep the pre-existing behavior.
-        assert!(is_first_party_api_host(""));
-        assert!(is_first_party_api_host("not-a-url"));
+    fn first_party_and_local_routes_keep_turn_summary() {
+        assert!(turn_summary_endpoint_allowed("https://api.x.ai/v1"));
+        assert!(turn_summary_endpoint_allowed("https://x.ai/v1"));
+        assert!(turn_summary_endpoint_allowed(
+            "https://cli-chat-proxy.grok.com/v1"
+        ));
+        assert!(turn_summary_endpoint_allowed("http://127.0.0.1:8080/v1"));
     }
 
     #[test]
-    fn relay_and_local_hosts_skip_turn_summary() {
-        assert!(!is_first_party_api_host(
-            "https://cli-chat-proxy.example.com/v1"
-        ));
-        assert!(!is_first_party_api_host("http://127.0.0.1:8080/v1"));
-        assert!(!is_first_party_api_host("http://[::1]:8080/v1"));
-        assert!(!is_first_party_api_host("https://notx.ai/v1"));
+    fn relay_hosts_skip_turn_summary() {
+        assert!(!turn_summary_endpoint_allowed("https://openrouter.ai/api/v1"));
+        assert!(!turn_summary_endpoint_allowed("https://api.deepseek.com/v1"));
+        assert!(!turn_summary_endpoint_allowed("https://api.openai.com/v1"));
+        assert!(!turn_summary_endpoint_allowed("https://notx.ai/v1"));
     }
 }
