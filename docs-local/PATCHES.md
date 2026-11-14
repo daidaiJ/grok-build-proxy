@@ -4717,3 +4717,21 @@ release 构建 45 → 18 min（约 -60%）。
 - MiMo 跨 turn 把循环梗段标 `ignored` 持久裁剪（改历史，要进前缀不变量测试）。
 - qwen 的全局非连续 duplicate、单 turn 工具数 cap、shell 命令停滞。
 - 请求级修复持久化（A 组另一条，等 dump 证据）。
+
+### 验证
+
+- 按用户要求不在本机编译。
+- main build `43584166283`（`59c36755`）Linux/Windows 双绿（Linux ≈ 28m43s，Windows ≈ 7m14s）。
+- `v1.0.79` release run `43586596066` 双绿，4 个非草稿资产；Windows zip
+  64,264,284 bytes，sha256 `a99e3ab45149af5a6c720ab15e5eb29bb64bffe644de0d403be8a91c0a0c37e0`；
+  Linux tar.gz 83,086,414 bytes，sha256 `d642fab5884b0f365c153383c223d80d7095ed43f0769b9ab7919eff4ba41a88`。
+- 本机部署 `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.79 (59c36755686d)`，回滚
+  `grok2.exe.1.0.78-b8a4f1d98363.bak`；`~/.grok/bin/{grok,agent}.exe` 同步刷新，
+  备份 `*.bak-1.0.78-fork`。已运行会话仍持有 `grok2.exe.running-1.0.78`。
+- 活体：`/loop-detect`、`/stats` 循环汇总、账本 `~/.grok/cache/loop-detect.jsonl`
+  待新会话验收。
+
+### 效果
+
+BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共用同一套催停/硬停，
+默认中止回合；`/loop-detect record` 只记账不中止。不改历史、不碰前缀不变量。

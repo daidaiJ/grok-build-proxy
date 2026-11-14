@@ -102,9 +102,9 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 - token 经济二轮 — A 组随 v1.0.77、零调用工具 deferred 搜索声明随 v1.0.78 发版；剩余 B 组（推理降级 A/B、调用合并 A/B、`search_tool` schema 上限）未开工。见 `docs-local/token-economy-port/deferred-builtin-tools-2026-11-14.md`、`.handoff/token-economy-next-round.md`。
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
-- grok-doctor 技能 — P1；`docs-local/agent-cli-tracking/skill-plugin-port-eval-2026-11-13.md`。
 
 ### 待活体验证（随新客户端）
+- 客户端循环检测（`/loop-detect abort|record`、`/stats` 汇总行、`~/.grok/cache/loop-detect.jsonl`）。
 - 视觉桥（T1–T3+D8/D9）、空闲自动压缩（`shell.idle_compact.*` 事件 + 下一轮 TTFT）、cache P1/P2（触发点后首轮命中）、`/usage` 额度估算口径。
 - `/stats` 的 `g` 分组与缓存断崖汇总行；`/compress-fast` 在 `prune_mode = append` 模型上清掉旧结果并写入失效标记。
 - LSP 四项（诊断/懒启动/rename/面板）、`[api_dump]` 落盘、09-29 上游同步抽查、`/usage` 套餐块。
@@ -112,12 +112,19 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ### 未开工 / 待拍板
 - workflow-pi-port P2 T2（deferred tools）；kimicode T2b（replay 双路径）；step-code P3/P4；dsh-port P1。
 - zcode 3.17.2 P1（provider-tool-rounds / foldReminders / post-compact 回补 / hooks `onError` / superpowers 三件 A/B）；opencode diff 面板；webdav sync；`/dump`；startup-perf 缓解；其余 21 套主题；harness-model-fit 建议；agent-cli-refresh P3（prompt snapshot）。
-- qwen 1.0 增补 — `/context detail`+idle cost（P0）、microcompaction 规格（并入 P1）、调度闸门（P2）；`docs-local/agent-cli-tracking/notes/qwen-code-1.0-2026-11.md`。
+- qwen 1.0 增补 — `/context [detail]` 已有（per-tool 明细）；idle cost（P0 余项）、microcompaction 规格（并入 P1）、调度闸门（P2）；`docs-local/agent-cli-tracking/notes/qwen-code-1.0-2026-11.md`。
 
 ### 长期挂起
 - Ctrl+Enter 幽灵气球（P2，`docs-local/issues/`）；quota 他机对账；limit-probe T3；dump 自动清理；model-picker T2。
 
 ## 🔄 Handoff 摘要
+
+### client-loop-detect — A 组循环检测已发版
+
+- **当前状态：** ABAB 工具轮转 + 正文/思考复读检测随 v1.0.79 发布并部署；连续相同工具的 action stationarity 原本就有。默认中止回合，`/loop-detect record` 只记账。
+- **剩余：** MiMo 跨 turn `ignored` 裁剪（改历史）；请求级修复持久化仍等 dump 证据。B/C 组未开工。
+- **验收：** 新会话触发循环后账本 `~/.grok/cache/loop-detect.jsonl` 有行，`/stats` 出现汇总；`/loop-detect record` 后继续跑、只计数。
+- **详情指针：** `docs-local/PATCHES.md` 七十五期、`docs-local/agent-cli-tracking/TODO.md` ①
 
 ### token-economy-next-round — A 组 + deferred 工具已发版
 
@@ -128,6 +135,13 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 最新交接（2026-11）
 
+- **2026-11-14 v1.0.79 发版并部署**：客户端循环检测——ABAB 工具轮转、正文/思考复读，
+  与已有 action stationarity 共用催停/硬停；`/loop-detect abort|record|default`
+  动态开关中止还是只记 `/stats`。main build `43584166283` 双绿，release
+  `43586596066` 双绿、4 资产（Windows zip 64,264,284 bytes，sha256
+  `a99e3ab45149af5a6c720ab15e5eb29bb64bffe644de0d403be8a91c0a0c37e0`）；本机
+  `grok 1.0.79 (59c36755686d)`，回滚 `grok2.exe.1.0.78-b8a4f1d98363.bak`，
+  `~/.grok/bin` 备份 `*.bak-1.0.78-fork`。详见 PATCHES 七十五期。
 - **2026-11-14 v1.0.78 发版并部署**：零调用内建工具改为 deferred——不再进初始声明，
   由 `search_tool` 的 `built-in` 组检索、`use_tool` 经 `InnerDispatch` 执行；
   `scheduler_create/delete/list` 本轮一并 deferred。main build `43571074230` 双绿，

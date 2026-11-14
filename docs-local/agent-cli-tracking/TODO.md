@@ -6,10 +6,11 @@
 
 ## ① 客户端循环检测 + 循环历史恢复 ⭐ P0（本批最高优先级）
 
-- **2026-11-14 部分落地（PATCHES 七十五期）**：reminder 工具调用循环检测
+- **2026-11-14 部分落地（PATCHES 七十五期，v1.0.79）**：reminder 工具调用循环检测
   **本来就有**（action stationarity：连续相同 step → reminder → 硬停）。
-  本轮补了它拦不住的三面：ABAB 轮转、正文复读、思考块复读。跨 turn 的
-  MiMo `ignored` 裁剪仍未做。
+  本轮补了它拦不住的三面：ABAB 轮转、正文复读、思考块复读；中止可由
+  `/loop-detect abort|record|default` 动态切换。跨 turn 的 MiMo `ignored`
+  裁剪仍未做。
 
 - **现状对照**：本仓库的循环防护是**服务端驱动**的——`doom_loop.rs` 只消费 xAI API 专属的 `response.doom_loop_check` SSE 事件（`crates/codegen/xai-grok-sampler/src/doom_loop.rs`，`abort_triggers_requires_confidence_and_honors_disarm` 用例可证）；`stream_classify.rs` 只做内容/错误分类，无循环语义。**BYOK 第三方模型（本 fork 的核心场景）跑长任务没有任何客户端循环兜底**——传输层有重试/断路器（`retry.rs`/`xai-circuit-breaker`），语义层是空白。ADOPTION.md 未覆盖此维度。
 - **来源**：
