@@ -37,6 +37,9 @@ use crate::session::helpers::session_compact::{
 struct SamplerState {
     last_success: Option<CompactOutput>,
     last_attempted_items: Option<Vec<ConversationItem>>,
+    /// Sum of every successful transport sample (including ones the engine later
+    /// rejects as degenerate), so retries are not invisible in the usage ledger.
+    usage_total: Option<xai_grok_sampling_types::TokenUsage>,
     /// The most recent transport attempt failed on the connection (not on the
     /// payload), so the caller may retry with a freshly built client.
     last_failure_transport: bool,
@@ -110,6 +113,12 @@ impl ShellCompactionSampler {
         self.state.lock().unwrap().last_success.take()
     }
 
+    /// Drain the accumulated usage of every sampled attempt (successful transport,
+    /// whether or not the engine accepted the summary).
+    pub(crate) fn take_usage_total(&self) -> Option<xai_grok_sampling_types::TokenUsage> {
+        self.state.lock().unwrap().usage_total.take()
+    }
+
     /// Take the exact image-budgeted items from the latest transport attempt.
     pub(crate) fn take_last_attempted_items(&self) -> Option<Vec<ConversationItem>> {
         self.state.lock().unwrap().last_attempted_items.take()
@@ -181,6 +190,9 @@ impl CompactionSampler for ShellCompactionSampler {
                 let response = output.content.clone();
                 let mut state = self.state.lock().unwrap();
                 state.last_failure_transport = false;
+                if let Some(usage) = output.usage.as_ref() {
+                    add_usage(&mut state.usage_total, usage);
+                }
                 state.last_success = Some(output);
                 Ok(LlmCompactionOutput {
                     response,
@@ -194,6 +206,27 @@ impl CompactionSampler for ShellCompactionSampler {
             }
         }
     }
+}
+
+/// Accumulate one sample into the running total; all fields are additive and
+/// `total_tokens` is recomputed so a provider's inconsistent total cannot drift.
+fn add_usage(
+    total: &mut Option<xai_grok_sampling_types::TokenUsage>,
+    usage: &xai_grok_sampling_types::TokenUsage,
+) {
+    let slot = total.get_or_insert_with(Default::default);
+    slot.prompt_tokens = slot.prompt_tokens.saturating_add(usage.prompt_tokens);
+    slot.completion_tokens = slot
+        .completion_tokens
+        .saturating_add(usage.completion_tokens);
+    slot.reasoning_tokens = slot.reasoning_tokens.saturating_add(usage.reasoning_tokens);
+    slot.cached_prompt_tokens = slot
+        .cached_prompt_tokens
+        .saturating_add(usage.cached_prompt_tokens);
+    slot.cache_creation_prompt_tokens = slot
+        .cache_creation_prompt_tokens
+        .saturating_add(usage.cache_creation_prompt_tokens);
+    slot.total_tokens = slot.prompt_tokens.saturating_add(slot.completion_tokens);
 }
 
 /// Map grok-build's [`CompactFailure`] onto the shared engine's [`CompactionSampleError`].

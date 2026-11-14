@@ -13,6 +13,11 @@ use crate::session::helpers::{session_recap, session_summary};
 /// Upper bound on the title-refresh model call so a hung backend cannot hold the one-at-a-time refresh slot indefinitely.
 const TITLE_REFRESH_MODEL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
 
+/// LOCAL(token-economy): cap the replayed conversation. The refresh runs at turns 3
+/// and 6, where a tool-heavy session can already be >200k tokens; a 5–10 word title
+/// never needed the whole prefix (>200k uncached input on `tools=[]`).
+const TITLE_REFRESH_INPUT_TOKEN_BUDGET: u64 = 10_000;
+
 impl SessionActor {
     /// Spawn a title refresh after a successful turn, unless the title is frozen or one is already running.
     /// No-op for subagents and when post-turn side-calls are disabled (title refresh shares the `turn_summary_enabled` gate).
@@ -122,11 +127,11 @@ impl SessionActor {
             }
         };
         let instruction = session_summary::title_refresh_instruction(self.reminder_wrapper_tag());
-        let items = session_recap::budget_instruction_items(
+        let items = session_recap::budget_instruction_items_to_tokens(
             conversation,
             instruction,
             setup.strip_reasoning,
-            setup.context_window,
+            TITLE_REFRESH_INPUT_TOKEN_BUDGET,
         );
         // Deliberately tool-free: unlike the turn summary, the request carries no tools
         // The model then can't spend the call on a tool invocation that would leave empty text and burn the checkpoint

@@ -181,6 +181,37 @@ pub(crate) fn budget_instruction_items(
     let prompt_budget = (effective_window.saturating_mul(RECAP_BUDGET_THRESHOLD_PERCENT) / 100)
         .saturating_sub(RECAP_BUDGET_HEADROOM_TOKENS);
 
+    let pre_tokens = estimate_conversation_tokens(&conversation);
+    let items = budget_instruction_items_to_tokens(
+        conversation,
+        instruction,
+        strip_reasoning,
+        prompt_budget,
+    );
+    let post_tokens = estimate_conversation_tokens(&items);
+    if pre_tokens > prompt_budget {
+        tracing::debug!(
+            context_window,
+            effective_window,
+            prompt_budget,
+            pre_tokens,
+            post_tokens,
+            "recap over budget: trimmed conversation to fit"
+        );
+    }
+    items
+}
+
+/// Same trimming contract as [`budget_instruction_items`], but the caller sets
+/// the prompt budget directly. Used by the title refresh, whose input is capped
+/// far below the model window: a whole-conversation replay re-sends the entire
+/// history on the first post-compaction turns and buys nothing for a 5–10 word title.
+pub(crate) fn budget_instruction_items_to_tokens(
+    conversation: Vec<ConversationItem>,
+    instruction: String,
+    strip_reasoning: bool,
+    prompt_budget: u64,
+) -> Vec<ConversationItem> {
     let instruction_item = ConversationItem::user(instruction.clone());
     let snapshot_budget = prompt_budget.saturating_sub(estimate_item_tokens(&instruction_item));
 
@@ -195,16 +226,6 @@ pub(crate) fn budget_instruction_items(
         compaction_utils::prepare_conversation_for_verbatim_summarization(conversation, true);
     pop_trailing_tool_run(&mut snapshot);
     let mut items = compaction_utils::fit_conversation_to_budget(snapshot, snapshot_budget);
-    let post_tokens = estimate_conversation_tokens(&items);
-    tracing::debug!(
-        context_window,
-        effective_window,
-        prompt_budget,
-        snapshot_budget,
-        pre_tokens,
-        post_tokens,
-        "recap over budget: trimmed conversation to fit"
-    );
     items.push(instruction_item);
     items
 }
@@ -734,6 +755,26 @@ mod tests {
         );
         assert!(matches!(out.first(), Some(ConversationItem::System(_))));
         assert!(matches!(out.last(), Some(ConversationItem::User(_))));
+    }
+
+    #[test]
+    fn direct_token_budget_trims_and_keeps_the_instruction_last() {
+        let conv = vec![
+            ConversationItem::system("sys"),
+            ConversationItem::user("old request"),
+            ConversationItem::assistant("z".repeat(40_000)),
+            ConversationItem::user("recent request"),
+        ];
+        let instruction = "title me".to_string();
+        let out = budget_instruction_items_to_tokens(conv, instruction, true, 1_000);
+        assert!(
+            estimate_conversation_tokens(&out) <= 1_000,
+            "title-refresh input must fit the direct token budget"
+        );
+        assert!(matches!(out.first(), Some(ConversationItem::System(_))));
+        assert!(matches!(out.last(), Some(ConversationItem::User(_))));
+        let last = out.last().map(|i| i.text_content()).unwrap_or_default();
+        assert_eq!(last, "title me");
     }
 
     #[test]

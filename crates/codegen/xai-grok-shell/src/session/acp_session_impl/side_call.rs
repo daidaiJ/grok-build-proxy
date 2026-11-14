@@ -111,6 +111,18 @@ impl SessionActor {
         let Some(usage) = response.usage.as_ref() else {
             return;
         };
+        self.record_usage_sample(purpose, model_id, usage, duration_ms);
+    }
+
+    /// LOCAL(token-economy): record a side call whose usage was collected outside a
+    /// `ConversationResponse` (compaction streams its summary instead of building one).
+    pub(crate) fn record_usage_sample(
+        &self,
+        purpose: xai_grok_tools::model_usage_ledger::CallPurpose,
+        model_id: &str,
+        usage: &xai_grok_sampling_types::TokenUsage,
+        duration_ms: u64,
+    ) {
         xai_grok_tools::model_usage_ledger::append_sample(
             &xai_grok_config::grok_home(),
             &xai_grok_tools::model_usage_ledger::ModelCallSample {

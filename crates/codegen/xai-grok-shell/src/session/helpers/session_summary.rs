@@ -262,7 +262,8 @@ pub(crate) fn title_refresh_instruction(tag: &str) -> String {
     format!(
         "<{tag}>Generate a session title for the conversation above. It should be a short and \
          distinctive 5-10 word descriptive title capturing what this session is actually about \
-         (the main task or topic), based on the WHOLE conversation — not just the first message. \
+         (the main task or topic). The transcript may be trimmed to its most recent part; when \
+         it is short, weight the user's stated requests over tool output. \
          Super info dense, no filler. User-role messages wrapped in reminder tags like this one \
          are injected context, not the user.\n\n\
          Output ONLY the title: plain text, no quotes, no labels, no markdown. Do NOT call any \

@@ -341,6 +341,9 @@ pub(crate) struct CompactOutput {
     pub stream_ms: Option<u64>,
     pub delta_count: u64,
     pub itl_max_ms: Option<u64>,
+    /// Provider-reported usage for this sample, when the backend reports it.
+    /// LOCAL(token-economy): the compaction call used to be invisible in the usage ledger.
+    pub usage: Option<xai_grok_sampling_types::TokenUsage>,
 }
 
 impl CompactOutput {
@@ -349,6 +352,37 @@ impl CompactOutput {
             (None, None) => None,
             (ttft, stream) => Some(ttft.unwrap_or(0).saturating_add(stream.unwrap_or(0))),
         }
+    }
+}
+
+/// Responses reports usage on the terminal `response.completed` event.
+fn response_usage_to_token_usage(
+    usage: &async_openai::types::responses::ResponseUsage,
+) -> xai_grok_sampling_types::TokenUsage {
+    xai_grok_sampling_types::TokenUsage {
+        prompt_tokens: usage.input_tokens,
+        completion_tokens: usage.output_tokens,
+        total_tokens: usage.total_tokens,
+        reasoning_tokens: usage.output_tokens_details.reasoning_tokens,
+        cached_prompt_tokens: usage.input_tokens_details.cached_tokens,
+        cache_creation_prompt_tokens: 0,
+    }
+}
+
+/// Messages splits input usage across `message_start` and the final `message_delta`.
+fn messages_usage_to_token_usage(
+    input_tokens: u32,
+    output_tokens: u32,
+    cache_read_input_tokens: u32,
+    cache_creation_input_tokens: u32,
+) -> xai_grok_sampling_types::TokenUsage {
+    xai_grok_sampling_types::TokenUsage {
+        prompt_tokens: input_tokens,
+        completion_tokens: output_tokens,
+        total_tokens: input_tokens.saturating_add(output_tokens),
+        reasoning_tokens: 0,
+        cached_prompt_tokens: cache_read_input_tokens,
+        cache_creation_prompt_tokens: cache_creation_input_tokens,
     }
 }
 
@@ -562,6 +596,7 @@ pub(crate) async fn generate_session_compact(
             let mut truncated = false;
             let mut stop_reason: Option<String> = None;
             let mut content = String::new();
+            let mut usage: Option<xai_grok_sampling_types::TokenUsage> = None;
             let mut last_progress_at = std::time::Instant::now();
             loop {
                 let idle_remaining = idle_timeout.saturating_sub(last_progress_at.elapsed());
@@ -589,6 +624,11 @@ pub(crate) async fn generate_session_compact(
                 }
                 match chunk_result {
                     Ok(chunk) => {
+                        // `stream_options.include_usage` puts usage on the terminal chunk,
+                        // which carries no `choices`.
+                        if let Some(raw_usage) = chunk.usage {
+                            usage = Some(raw_usage.into());
+                        }
                         if let Some(choice) = chunk.choices.first() {
                             let delta = &choice.delta;
                             if choice.finish_reason.is_some()
@@ -624,6 +664,7 @@ pub(crate) async fn generate_session_compact(
                 stream_ms: timing.stream_ms(),
                 delta_count: timing.count,
                 itl_max_ms: timing.itl_max_ms(),
+                usage,
             }
         }
         ApiBackend::Responses => {
@@ -653,6 +694,7 @@ pub(crate) async fn generate_session_compact(
             let mut truncated = false;
             let mut stop_reason: Option<String> = None;
             let mut content = String::new();
+            let mut usage: Option<xai_grok_sampling_types::TokenUsage> = None;
             let mut last_progress_at = std::time::Instant::now();
             loop {
                 let idle_remaining = idle_timeout.saturating_sub(last_progress_at.elapsed());
@@ -692,6 +734,13 @@ pub(crate) async fn generate_session_compact(
                             ResponseStreamEvent::ResponseOutputTextDelta(text_delta_event) => {
                                 timing.record_delta();
                                 content.push_str(&text_delta_event.delta);
+                            }
+                            ResponseStreamEvent::ResponseCompleted(completed_event) => {
+                                usage = completed_event
+                                    .response
+                                    .usage
+                                    .as_ref()
+                                    .map(response_usage_to_token_usage);
                             }
                             ResponseStreamEvent::ResponseFailed(failed_event) => {
                                 let event_error = failed_event.response.error.as_ref();
@@ -748,6 +797,7 @@ pub(crate) async fn generate_session_compact(
                 stream_ms: timing.stream_ms(),
                 delta_count: timing.count,
                 itl_max_ms: timing.itl_max_ms(),
+                usage,
             }
         }
         ApiBackend::Messages => {
@@ -778,6 +828,7 @@ pub(crate) async fn generate_session_compact(
             let mut truncated = false;
             let mut stop_reason: Option<String> = None;
             let mut content = String::new();
+            let mut usage: Option<xai_grok_sampling_types::TokenUsage> = None;
             let mut last_progress_at = std::time::Instant::now();
             loop {
                 let idle_remaining = idle_timeout.saturating_sub(last_progress_at.elapsed());
@@ -812,6 +863,14 @@ pub(crate) async fn generate_session_compact(
                             last_progress_at = std::time::Instant::now();
                         }
                         match event {
+                        xai_grok_sampling_types::messages::MessageStreamEvent::MessageStart { message } => {
+                            usage = Some(messages_usage_to_token_usage(
+                                message.usage.input_tokens,
+                                message.usage.output_tokens,
+                                message.usage.cache_read_input_tokens,
+                                message.usage.cache_creation_input_tokens,
+                            ));
+                        }
                         xai_grok_sampling_types::messages::MessageStreamEvent::ContentBlockDelta {
                             delta: xai_grok_sampling_types::messages::StreamDelta::TextDelta { text },
                             ..
@@ -819,7 +878,27 @@ pub(crate) async fn generate_session_compact(
                             timing.record_delta();
                             content.push_str(&text);
                         }
-                        xai_grok_sampling_types::messages::MessageStreamEvent::MessageDelta { delta, .. } => {
+                        xai_grok_sampling_types::messages::MessageStreamEvent::MessageDelta { delta, usage: delta_usage } => {
+                            let merged = usage.take().map(|prev| {
+                                messages_usage_to_token_usage(
+                                    delta_usage.input_tokens.unwrap_or(prev.prompt_tokens),
+                                    delta_usage.output_tokens,
+                                    delta_usage
+                                        .cache_read_input_tokens
+                                        .unwrap_or(prev.cached_prompt_tokens),
+                                    delta_usage
+                                        .cache_creation_input_tokens
+                                        .unwrap_or(prev.cache_creation_prompt_tokens),
+                                )
+                            });
+                            usage = merged.or_else(|| {
+                                Some(messages_usage_to_token_usage(
+                                    delta_usage.input_tokens.unwrap_or(0),
+                                    delta_usage.output_tokens,
+                                    delta_usage.cache_read_input_tokens.unwrap_or(0),
+                                    delta_usage.cache_creation_input_tokens.unwrap_or(0),
+                                ))
+                            });
                             if let Some(sr) = delta.stop_reason {
                                 truncated = matches!(
                                     sr,
@@ -843,6 +922,7 @@ pub(crate) async fn generate_session_compact(
                 stream_ms: timing.stream_ms(),
                 delta_count: timing.count,
                 itl_max_ms: timing.itl_max_ms(),
+                usage,
             }
         }
     };

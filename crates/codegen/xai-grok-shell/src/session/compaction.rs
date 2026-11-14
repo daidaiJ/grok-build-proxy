@@ -154,6 +154,8 @@ impl SessionActor {
             .wall_clock_budget_secs;
         let hosted_tools = self.hosted_tools_for_turn();
         let (cancel, _cancel_scope) = self.compaction.cancel.enter();
+        let estimated_prompt_tokens = xai_chat_state::estimate_conversation_tokens(&history);
+        let started = std::time::Instant::now();
         match generate_session_compact(
             history,
             compaction_tool_tokens,
@@ -169,12 +171,55 @@ impl SessionActor {
         )
         .await
         {
-            Ok(out) => Some(out),
+            Ok(out) => {
+                self.record_compaction_usage(
+                    &sampling_config.model,
+                    out.usage.as_ref(),
+                    estimated_prompt_tokens,
+                    &out.content,
+                    started.elapsed().as_millis() as u64,
+                );
+                Some(out)
+            }
             Err(e) => {
                 tracing::warn!(error = ?e, "two_pass: summarization sample failed");
                 None
             }
         }
+    }
+    /// LOCAL(token-economy): compaction sampling used to be invisible in the usage
+    /// ledger. Prefer provider-reported usage; fall back to the trigger-side input
+    /// estimate plus a chars/4 output estimate when the backend strips usage.
+    fn record_compaction_usage(
+        &self,
+        model_id: &str,
+        usage: Option<&xai_grok_sampling_types::TokenUsage>,
+        estimated_prompt_tokens: u64,
+        summary: &str,
+        duration_ms: u64,
+    ) {
+        let usage = match usage {
+            Some(usage) => usage.clone(),
+            None => {
+                let completion = (summary.chars().count() as u64 / 4).max(1);
+                let prompt = estimated_prompt_tokens.min(u32::MAX as u64) as u32;
+                let completion = completion.min(u32::MAX as u64) as u32;
+                xai_grok_sampling_types::TokenUsage {
+                    prompt_tokens: prompt,
+                    completion_tokens: completion,
+                    total_tokens: prompt.saturating_add(completion),
+                    reasoning_tokens: 0,
+                    cached_prompt_tokens: 0,
+                    cache_creation_prompt_tokens: 0,
+                }
+            }
+        };
+        self.record_usage_sample(
+            xai_grok_tools::model_usage_ledger::CallPurpose::Compaction,
+            model_id,
+            &usage,
+            duration_ms,
+        );
     }
     /// Per-turn prefire decision: usage has reached `threshold - lead` (so there is still runway before the hard auto-compact line at `threshold`).
     pub(crate) async fn should_prefire_two_pass(&self) -> bool {
@@ -1174,6 +1219,7 @@ impl SessionActor {
         let two_pass_used = two_pass_output.is_some();
         let mut compact_summary: Option<String> =
             two_pass_output.as_ref().map(|o| o.content.clone());
+        let compaction_started = std::time::Instant::now();
         while compact_summary.is_none() {
             match xai_grok_compaction::sample_full_replace_summary(
                 &sampler,
@@ -1315,6 +1361,11 @@ impl SessionActor {
             }
         }
         let telemetry = observer.into_telemetry();
+        let sampled_usage = if two_pass_used {
+            None
+        } else {
+            sampler.take_usage_total()
+        };
         if two_pass_output.is_none()
             && let Some(request_chat_history) = sampler.take_last_attempted_items()
         {
@@ -1363,11 +1414,30 @@ impl SessionActor {
                 if let Some(reason) = last_failure_reason {
                     span.record("compaction_failure_reason", reason.as_ref());
                 }
+                // Tokens spent on rejected samples are real spend; record what the
+                // provider reported before surfacing the failure.
+                if let Some(usage) = sampled_usage.as_ref() {
+                    self.record_usage_sample(
+                        xai_grok_tools::model_usage_ledger::CallPurpose::Compaction,
+                        &sampling_config.model,
+                        usage,
+                        compaction_started.elapsed().as_millis() as u64,
+                    );
+                }
                 return Err(last_error.unwrap_or_else(|| {
                     acp::Error::internal_error().data("compaction failed: unknown error")
                 }));
             }
         };
+        if !two_pass_used {
+            self.record_compaction_usage(
+                &sampling_config.model,
+                sampled_usage.as_ref(),
+                estimated_input_tokens,
+                &compact_output.content,
+                compaction_started.elapsed().as_millis() as u64,
+            );
+        }
         let generate_session_compact = compact_output.content.clone();
         let user_message_prefix = self.build_user_message_prefix().await;
         let conversation = self.chat_state_handle.get_conversation().await;
