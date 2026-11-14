@@ -1,14 +1,41 @@
-use xai_grok_sampling_types::{SearchDateBound, ToolOverrides, WebSearchOptions, XSearchOptions};
+use xai_grok_sampling_types::{
+    SearchDateBound, ToolDefinition, ToolOverrides, WebSearchOptions, XSearchOptions,
+};
 
 use super::{
     CLASSIFIER_REQUEST_TOKEN_RESERVE, LengthSalvageAction, LengthSalvageStreak,
-    MAX_OUTPUT_TOKEN_LIMIT_RETRIES, classifier_request_fits_context, resolve_configured_cutoff,
+    MAX_OUTPUT_TOKEN_LIMIT_RETRIES, classifier_request_fits_context, filter_hidden_builtin_tools,
+    resolve_configured_cutoff,
 };
 
 fn x_cut(to: &str) -> XSearchOptions {
     XSearchOptions {
         date_bound: Some(SearchDateBound::new(None, Some(to.into())).unwrap()),
     }
+}
+
+#[test]
+fn hidden_builtin_tools_drop_zero_use_schemas_and_keep_core_tools() {
+    let defs = [
+        "workflow",
+        "run_terminal_command",
+        "reference_to_video",
+        "read_file",
+        "lsp",
+        "image_gen",
+        "grep",
+        "scheduler_create",
+    ]
+    .into_iter()
+    .map(|name| {
+        ToolDefinition::function(name, None::<String>, serde_json::json!({"type": "object"}))
+    })
+    .collect();
+    let kept: Vec<String> = filter_hidden_builtin_tools(defs)
+        .into_iter()
+        .map(|def| def.function.name)
+        .collect();
+    assert_eq!(kept, vec!["run_terminal_command", "read_file", "grep"]);
 }
 
 /// When every sample ends with finish reason Length while tools are active, the turn salvages up to the cap and then fails.

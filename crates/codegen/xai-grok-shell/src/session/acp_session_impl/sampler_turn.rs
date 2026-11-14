@@ -9,6 +9,35 @@ use xai_grok_telemetry::region::Parent;
 
 const CLASSIFIER_REQUEST_TOKEN_RESERVE: u64 = 16_384;
 
+/// LOCAL(token-economy): built-in tools that were declared on every turn but had
+/// zero calls in the last 30 days (112 sessions, ~9k tool calls). Their schemas
+/// are a fixed cost on every request: `reference_to_video` 1,320 tokens,
+/// `send_feedback` 985, `lsp` 555, `scheduler_*` 681, `image_*` 1,126,
+/// `workflow` 1,385 — 6,052 of the 11,481-token tool prefix.
+/// `scripts-local/compaction_baseline_audit.py` reproduces the selection.
+///
+/// Static on purpose: the tool surface stays byte-identical across turns, so the
+/// prefix cache is unaffected. A per-turn dynamic list would invalidate it.
+/// Remove a name here to restore that tool.
+const HIDDEN_BUILTIN_TOOLS: &[&str] = &[
+    "workflow",
+    "reference_to_video",
+    "send_feedback",
+    "lsp",
+    "scheduler_create",
+    "scheduler_delete",
+    "scheduler_list",
+    "image_gen",
+    "image_edit",
+    "image_to_video",
+];
+
+fn filter_hidden_builtin_tools(defs: Vec<ToolDefinition>) -> Vec<ToolDefinition> {
+    defs.into_iter()
+        .filter(|def| !HIDDEN_BUILTIN_TOOLS.contains(&def.function.name.as_str()))
+        .collect()
+}
+
 fn classifier_request_fits_context(input_tokens: u64, context_window: u64) -> bool {
     input_tokens <= context_window.saturating_sub(CLASSIFIER_REQUEST_TOKEN_RESERVE)
 }
@@ -527,7 +556,7 @@ impl SessionActor {
         };
 
         let plan_active = self.plan_mode.lock().is_active();
-        filter_cursor_tools_by_plan_mode(defs, plan_active)
+        filter_hidden_builtin_tools(filter_cursor_tools_by_plan_mode(defs, plan_active))
     }
 
     /// Messages-backed models never see `use_tool`'s file forms: the Anthropic Messages API rejects the schema's
