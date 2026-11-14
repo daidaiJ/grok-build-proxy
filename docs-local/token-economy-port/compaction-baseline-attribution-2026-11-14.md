@@ -76,8 +76,9 @@ TODO/Handoff 历史（74.3k 字符）；治理把过程记录移入 `docs-local/
 处置（2026-11-14）：
 
 - `workflow` 由 `[workflows] enabled = false` 关闭（同时下线两个内置工作流）。
-- 其余零调用工具中，除计划模式两个（188 token，保留）外，全部加入
-  `sampler_turn.rs` 的 `HIDDEN_BUILTIN_TOOLS` 静态清单：`reference_to_video`、
-  `send_feedback`、`lsp`、`scheduler_*`、`image_*`。工具声明面从 11,481 降到
-  **约 5,429 token**（−53%）；清单静态，工具面前缀逐轮稳定，不影响缓存。
+- `scheduler_*` 与计划模式两个工具保留（用户明确保留定时任务；计划模式仅 188 token）。
+- 其余零调用工具加入 `sampler_turn.rs` 的 `HIDDEN_BUILTIN_TOOLS` 静态清单：
+  `reference_to_video`、`send_feedback`、`lsp`、`image_*`、`workflow`。工具声明面从
+  11,481 降到 **约 6,110 token**（−47%，隐藏 5,371）；清单静态，工具面前缀逐轮稳定，
+  不影响缓存。
 - 列表是编译期常量；需要恢复某个工具时删掉对应名字即可。

@@ -35,7 +35,15 @@ fn hidden_builtin_tools_drop_zero_use_schemas_and_keep_core_tools() {
         .into_iter()
         .map(|def| def.function.name)
         .collect();
-    assert_eq!(kept, vec!["run_terminal_command", "read_file", "grep"]);
+    assert_eq!(
+        kept,
+        vec![
+            "run_terminal_command",
+            "read_file",
+            "grep",
+            "scheduler_create"
+        ]
+    );
 }
 
 /// When every sample ends with finish reason Length while tools are active, the turn salvages up to the cap and then fails.

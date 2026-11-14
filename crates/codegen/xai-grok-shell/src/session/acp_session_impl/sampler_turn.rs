@@ -12,8 +12,9 @@ const CLASSIFIER_REQUEST_TOKEN_RESERVE: u64 = 16_384;
 /// LOCAL(token-economy): built-in tools that were declared on every turn but had
 /// zero calls in the last 30 days (112 sessions, ~9k tool calls). Their schemas
 /// are a fixed cost on every request: `reference_to_video` 1,320 tokens,
-/// `send_feedback` 985, `lsp` 555, `scheduler_*` 681, `image_*` 1,126,
-/// `workflow` 1,385 — 6,052 of the 11,481-token tool prefix.
+/// `send_feedback` 985, `lsp` 555, `image_*` 1,126, `workflow` 1,385 —
+/// 5,371 of the 11,481-token tool prefix. `scheduler_*` stays declared (the user
+/// keeps scheduled tasks available even though the model did not call them).
 /// `scripts-local/compaction_baseline_audit.py` reproduces the selection.
 ///
 /// Static on purpose: the tool surface stays byte-identical across turns, so the
@@ -24,9 +25,6 @@ const HIDDEN_BUILTIN_TOOLS: &[&str] = &[
     "reference_to_video",
     "send_feedback",
     "lsp",
-    "scheduler_create",
-    "scheduler_delete",
-    "scheduler_list",
     "image_gen",
     "image_edit",
     "image_to_video",
