@@ -4592,3 +4592,46 @@ release 构建 45 → 18 min（约 -60%）。
 - 首轮 main build `43430310339` 的 Linux job 报 `prompt.rs:2034` E0308（`Ok` 臂返回
   `EntryId`、`Err` 臂返回 `()`），已把 `Ok` 臂改成语句块（`02c22394`）；上一轮 Windows
   CI 暴露的两个 `compress_fast_tests` 差一失败也已在同一批修正。
+
+## 七十三期：token 经济 A 组 + 零调用工具静态隐藏（2026-11-14，main 直推）
+
+> 背景：压缩后基线归因确认 19 个 checkpoint 都只保留 5 条消息，四档基线差异来自
+> `user_info`/AGENTS.md 的体积；剩余最大固定成本是 26 个内建工具声明（11,481 tokens）。
+> 本批把压缩调用纳入计量、消掉 relay 上注定失败的 turn_summary、给 title 刷新加输入
+> 上限，并静态隐藏 30 天内零调用的 7 个工具。
+
+### 改动
+
+- `session_compact.rs`：三套后端都捕获压缩调用的 `usage`（Chat 终块、Responses
+  `ResponseCompleted`、Messages `MessageStart` + `MessageDelta` 合并），
+  `CompactOutput` 新增 `usage` 字段。
+- `compaction.rs` / `full_replace_compaction.rs`：`record_compaction_usage` 以
+  `purpose=compaction` 写入用量账本；两遍压缩、单遍成功、失败带 usage 三条路径都记账。
+- `turn_summary.rs`：只在 xAI 路由上生成回合摘要；relay/BYOK 网关每轮都会拒绝该调用
+  （实测 11/11 失败），直接跳过。判定复用 `crate::util::is_xai_api_url`（接受
+  `*.x.ai`、`cli-chat-proxy.grok.com` 与 loopback），第三方 host 一律跳过。
+- `title_refresh.rs` / `session_recap.rs`：title 刷新输入预算固定 10,000 tokens，
+  超长会话按预算裁剪，避免把整段会话重复送进摘要调用。
+- `sampler_turn.rs`：`HIDDEN_BUILTIN_TOOLS` 静态过滤 `workflow`、`reference_to_video`、
+  `send_feedback`、`lsp`、`image_gen`、`image_edit`、`image_to_video` 的 schema
+  （合计 5,371 tokens）；`scheduler_*` 按用户要求保留。列表静态，工具面跨回合字节一致，
+  不影响前缀缓存。
+- `scripts-local/compaction_baseline_audit.py`：只读审计脚本，复现「每个工具声明 token
+  vs 30 天调用次数」的筛选依据。
+
+### 验证
+
+- 首轮 main build `43561605834`（`a2abc433`）Linux 单测
+  `turn_summary_generate_persists_and_broadcasts` 失败：初版 gate 把本地 mock 的
+  `127.0.0.1` 判成非 xAI；`7b7925b8` 改用共享 `is_xai_api_url`（loopback 放行）。
+- main build `43563259558`（`7b7925b8`）Linux/Windows 双绿。
+- `v1.0.77` release run `43567249488` 双绿，4 个非草稿资产；Windows zip
+  64,225,451 bytes，sha256 `9d67c8f369117dd6578089f1ff54db079eee3f523fd955e7e6f4065eae4e3843`。
+- 本机部署 `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.77 (7b7925b8cf86)`，回滚
+  `grok2.exe.1.0.76-02c22394fdfe.bak`；`~/.grok/bin/{grok,agent}.exe` 同步刷新，
+  备份 `*.bak-1.0.76-fork`。
+
+### 效果
+
+工具声明前缀 11,481 → 约 6,110 tokens，每个请求的固定成本下降约 5.4k tokens；
+压缩调用从此出现在账本 `/stats` 中，不再约 5% 漏计。

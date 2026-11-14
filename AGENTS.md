@@ -99,6 +99,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ## 活跃待办（2026-11-13）
 
 ### 施工中 / 待合
+- token 经济二轮 — A 组已随 v1.0.77 发版，剩余 B 组（推理降级 A/B、调用合并 A/B、`search_tool` schema 上限）未开工；交接卡 `.handoff/token-economy-next-round.md`。
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 - grok-doctor 技能 — P1；`docs-local/agent-cli-tracking/skill-plugin-port-eval-2026-11-13.md`。
@@ -116,16 +117,31 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ### 长期挂起
 - Ctrl+Enter 幽灵气球（P2，`docs-local/issues/`）；quota 他机对账；limit-probe T3；dump 自动清理；model-picker T2。
 
+## 🔄 Handoff 摘要
+
+### token-economy-next-round — A 组已发版
+
+- **当前状态：** 压缩基线归因完成（报告 `docs-local/token-economy-port/compaction-baseline-attribution-2026-11-14.md`）；A 组与工具隐藏随 v1.0.77 发布并部署，工具声明 11,481 → 约 6,110 tokens。
+- **剩余：** B 组——subagent 推理降级 A/B、调用合并 A/B、`search_tool` MCP schema 字节上限。
+- **验收：** 账本出现 `purpose=compaction`；relay 会话 0 次 turn_summary；title 刷新输入约 10k；隐藏工具不在 `tool_definitions.json`。
+- **详情指针：** [`.handoff/token-economy-next-round.md`](.handoff/token-economy-next-round.md)
+
 ## 最新交接（2026-11）
 
+- **2026-11-14 v1.0.77 发版并部署**：token 经济 A 组（压缩用量入账、非 xAI 跳过
+  turn_summary、title 刷新 10k 截断）+ 零调用工具静态隐藏（`scheduler_*` 保留）；
+  main build `43563259558` 双绿，release `43567249488` 双绿、4 资产，Windows zip
+  sha256 `9d67c8f369117dd6578089f1ff54db079eee3f523fd955e7e6f4065eae4e3843`；本机
+  `grok 1.0.77 (7b7925b8cf86)`，回滚 `grok2.exe.1.0.76-02c22394fdfe.bak`，
+  `~/.grok/bin` 已刷新（`*.bak-1.0.76-fork`）。Linux 单测失败与修复见 PATCHES 七十三期。
 - **2026-11-13 token 经济波次完成**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；
   #16（断崖 + `/stats` 分组）与 #17（`/compress-fast`）折叠进 main
   （`9d8f3b53`/`6fd59b0a`），Linux E0308 修复 `02c22394`；main build `43432927949`
   Linux/Windows 双绿；`v1.0.76` release run `43438765045` 双绿、4 资产，Windows zip
   sha256 `c60809e5a98b58930d157fa3250c86921709b207ab5f00d6fa30baf5d8d097ec`；本机部署
   `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.76 (02c22394fdfe)`，回滚
-  `grok2.exe.1.0.75-828d5f5e0486.bak`，`~/.grok/bin` 已刷新。交接卡
-  `.handoff/token-economy-wave-2026-11.md`。
+  `grok2.exe.1.0.75-828d5f5e0486.bak`，`~/.grok/bin` 已刷新。交接卡已归档
+  `.handoff/archive/token-economy-wave-2026-11.md`。
 - **2026-11-13 分支口径变更**：后续直接在 `main` 施工，不再开 feature 分支（见「分支纪律」）。
 - **v1.0.75（11-13 发版）**：`/compact <instructions>` 手动压缩保留重点。PR #11
   merge `828d5f5e`；release run `43373939909` success，4 资产，Windows zip sha256
