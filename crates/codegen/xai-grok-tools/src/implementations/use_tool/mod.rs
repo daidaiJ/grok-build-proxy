@@ -1,4 +1,4 @@
-//! `use_tool` — dispatch to a discovered MCP tool.
+//! `use_tool` — dispatch to a discovered MCP tool or a deferred built-in tool.
 
 mod input;
 pub use input::{InlineMcpInvocation, UseToolInput, parse_arguments_file};
@@ -67,6 +67,21 @@ async fn dispatch_local_mcp(
     let typed = dispatch.0.call_terminal(tool_id, tool_input, ctx).await?;
     serde_json::from_value(typed.value)
         .map_err(|e| xai_tool_runtime::ToolError::custom("output_decoding", e.to_string()))
+}
+
+/// True when the target is a built-in kept out of the direct declaration and exposed through
+/// the search catalog. Such names have no `server__tool` prefix but are still callable here.
+async fn is_deferred_builtin_target(
+    ctx: &xai_tool_runtime::ToolCallContext,
+    tool_name: &str,
+) -> bool {
+    let Some(resources) = crate::types::tool_metadata::shared_resources(ctx).ok() else {
+        return false;
+    };
+    let guard = resources.lock().await;
+    guard
+        .get::<crate::types::tool_index::ToolIndex>()
+        .is_some_and(|index| index.0.is_deferred_builtin(tool_name))
 }
 
 fn gateway_result_is_error(result: &serde_json::Value) -> bool {
@@ -205,6 +220,16 @@ pub async fn dispatch_mcp_tool(
         )));
     }
 
+    if is_deferred_builtin_target(ctx, tool_name).await {
+        let Some(dispatch) = dispatch.clone() else {
+            return Err(xai_tool_runtime::ToolError::custom(
+                "deferred_builtin_unavailable",
+                format!("Deferred built-in tool '{tool_name}' has no inner dispatch target."),
+            ));
+        };
+        return dispatch_local_mcp(dispatch, tool_name, tool_input, ctx.clone()).await;
+    }
+
     if let Some(source) = gateway_source {
         // A gateway-catalog name can collide with a local `server__tool` MCP tool. Local wins on a name clash: probe local dispatch first and only
         // fall through to the gateway when the local side reports the tool as not found, or rejects the catalog-derived name as an invalid local
@@ -261,36 +286,41 @@ pub async fn dispatch_mcp_tool(
 /// Check MCP routing eligibility without dispatching or probing a remote tool.
 ///
 /// # Errors
-/// Rejects native or unqualified targets not present in the managed catalog.
+/// Rejects native or unqualified targets that are neither in the managed catalog nor among the
+/// deferred built-ins exposed by the search index.
 pub async fn validate_mcp_target(
     resources: Option<&crate::types::resources::SharedResources>,
     tool_name: &str,
 ) -> Result<(), xai_tool_runtime::ToolError> {
     use crate::types::resources::{EnabledNativeToolNames, ManagedGatewayToolCatalog, Params};
 
-    let (gateway_source, is_native, search_tool_name) = if let Some(resources) = resources {
-        let guard = resources.lock().await;
-        let gateway_source = guard
-            .get::<ManagedGatewayToolCatalog>()
-            .and_then(|catalog| catalog.get(tool_name).cloned());
-        let correction_enabled = guard
-            .get::<Params<UseToolParams>>()
-            .is_none_or(|p| p.0.native_tool_correction);
-        let native = correction_enabled
-            && guard
-                .get::<EnabledNativeToolNames>()
-                .is_some_and(|set| set.contains(tool_name));
-        let st = guard
-            .get::<crate::types::template_renderer::TemplateRenderer>()
-            .and_then(|r| r.tool_for_kind(ToolKind::SearchTool))
-            .map(str::to_string)
-            .unwrap_or_else(|| "search_tool".to_string());
-        (gateway_source, native, st)
-    } else {
-        (None, false, "search_tool".to_string())
-    };
+    let (gateway_source, is_native, is_deferred, search_tool_name) =
+        if let Some(resources) = resources {
+            let guard = resources.lock().await;
+            let gateway_source = guard
+                .get::<ManagedGatewayToolCatalog>()
+                .and_then(|catalog| catalog.get(tool_name).cloned());
+            let correction_enabled = guard
+                .get::<Params<UseToolParams>>()
+                .is_none_or(|p| p.0.native_tool_correction);
+            let native = correction_enabled
+                && guard
+                    .get::<EnabledNativeToolNames>()
+                    .is_some_and(|set| set.contains(tool_name));
+            let deferred = guard
+                .get::<crate::types::tool_index::ToolIndex>()
+                .is_some_and(|index| index.0.is_deferred_builtin(tool_name));
+            let st = guard
+                .get::<crate::types::template_renderer::TemplateRenderer>()
+                .and_then(|r| r.tool_for_kind(ToolKind::SearchTool))
+                .map(str::to_string)
+                .unwrap_or_else(|| "search_tool".to_string());
+            (gateway_source, native, deferred, st)
+        } else {
+            (None, false, false, "search_tool".to_string())
+        };
 
-    if !tool_name.contains("__") && gateway_source.is_none() {
+    if !tool_name.contains("__") && gateway_source.is_none() && !is_deferred {
         return Err(if is_native {
             tracing::info!(
                 tool_name = %tool_name,
@@ -325,8 +355,9 @@ impl crate::types::tool_metadata::ToolMetadata for UseTool {
     }
 
     fn description_template(&self) -> &str {
-        "Call a discovered MCP integration tool with `${{ params.use_tool.tool_name }}` and \
-         `${{ params.use_tool.tool_input }}`. Arguments must match the discovered schema\
+        "Call a discovered MCP integration tool or a deferred built-in tool with \
+         `${{ params.use_tool.tool_name }}` and `${{ params.use_tool.tool_input }}`. Arguments must \
+         match the discovered schema\
          ${%- if tools.by_kind.search_tool %} from `${{ tools.by_kind.search_tool }}`${%- endif %}."
     }
 
@@ -363,7 +394,7 @@ impl crate::types::tool_metadata::ToolMetadata for UseTool {
     }
 }
 
-const FILE_INPUT_DESCRIPTION: &str = "Call a discovered MCP integration tool.\n\n\
+const FILE_INPUT_DESCRIPTION: &str = "Call a discovered MCP integration tool or a deferred built-in tool.\n\n\
          Supply exactly one form: `${{ params.use_tool.tool_name }}` plus `${{ params.use_tool.tool_input }}` inline; \
          `${{ params.use_tool.tool_name }}` plus `${{ params.use_tool.tool_input_file }}` for a UTF-8 JSON arguments-only object; \
          or `${{ params.use_tool.file }}` for a UTF-8 JSON document with canonical `tool_name` and object `tool_input`. \

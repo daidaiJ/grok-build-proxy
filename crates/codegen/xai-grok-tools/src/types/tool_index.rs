@@ -57,6 +57,12 @@ pub trait ToolSearchIndex: Send + Sync {
     /// Search and return results + metadata from a single consistent snapshot.
     fn search_snapshot(&self, query: &str, limit: usize) -> SearchSnapshot;
 
+    /// Whether `tool_name` is a built-in tool that is declared only on demand through
+    /// `search_tool` / `use_tool` rather than in the per-request tool declaration.
+    fn is_deferred_builtin(&self, _tool_name: &str) -> bool {
+        false
+    }
+
     /// List the unique MCP servers in the index with their tool counts. Used to build the
     /// system-reminder listing connected servers, so the model knows which integrations are
     /// available.

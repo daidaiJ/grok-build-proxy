@@ -12,6 +12,7 @@ fn make_snapshot_with_servers(
         tools,
         servers,
         mcp_initialized: true,
+        deferred_builtins: vec![],
     }))
 }
 
@@ -331,6 +332,7 @@ fn gateway_only_snapshot_can_stay_partial() {
         }],
         servers: vec![],
         mcp_initialized: false,
+        deferred_builtins: vec![],
     })));
 
     let snap = index.search_snapshot("grafana", 5);
@@ -2277,4 +2279,57 @@ fn score_comparison_combined_best() {
              combined score should be > 0 (was {combined:.3})"
         );
     }
+}
+
+fn deferred_builtin(name: &str) -> ToolMetadata {
+    ToolMetadata {
+        qualified_name: name.into(),
+        server_name: "built-in".into(),
+        tool_name: name.into(),
+        description: "Deferred built-in tool".into(),
+        parameters: vec![],
+        input_schema: serde_json::json!({"type": "object"}),
+    }
+}
+
+#[test]
+fn deferred_builtins_are_searchable_but_not_announced_as_mcp_servers() {
+    let index = Bm25ToolSearchIndex::new(Arc::new(Mutex::new(ToolMetadataSnapshot {
+        tools: linear_tools(),
+        servers: vec![],
+        mcp_initialized: true,
+        deferred_builtins: vec![deferred_builtin("scheduler_create")],
+    })));
+
+    let exact = index.search_snapshot("scheduler_create", 5);
+    assert_eq!(
+        exact.results.first().map(|r| r.tool_name.as_str()),
+        Some("scheduler_create")
+    );
+    assert_eq!(exact.total_hidden_tools, linear_tools().len() + 1);
+    assert!(index.is_deferred_builtin("scheduler_create"));
+    assert!(!index.is_deferred_builtin("linear__save_issue"));
+    assert!(index.list_server_summaries().iter().all(|s| s.name != "built-in"));
+}
+
+#[test]
+fn deferred_builtin_metadata_follows_the_shared_name_list() {
+    use xai_grok_sampling_types::ToolDefinition;
+
+    let defs = ["scheduler_create", "run_terminal_command", "lsp"]
+        .into_iter()
+        .map(|name| {
+            ToolDefinition::function(
+                name,
+                Some(format!("{name} description")),
+                serde_json::json!({"type": "object", "properties": {"a": {"type": "string"}}}),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let metadata = deferred_builtin_metadata(&defs);
+    let names: Vec<&str> = metadata.iter().map(|m| m.qualified_name.as_str()).collect();
+    assert_eq!(names, vec!["scheduler_create", "lsp"]);
+    assert_eq!(metadata[0].server_name, "built-in");
+    assert_eq!(metadata[0].parameters, vec!["a".to_string()]);
 }

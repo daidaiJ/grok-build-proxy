@@ -886,3 +886,55 @@ async fn native_and_unknown_names_never_dispatch() {
         assert!(captured.lock().unwrap().is_none());
     }
 }
+
+struct DeferredBuiltinIndex;
+
+impl crate::types::tool_index::ToolSearchIndex for DeferredBuiltinIndex {
+    fn search_snapshot(
+        &self,
+        _query: &str,
+        _limit: usize,
+    ) -> crate::types::tool_index::SearchSnapshot {
+        crate::types::tool_index::SearchSnapshot {
+            results: vec![],
+            total_hidden_tools: 1,
+            is_ready: true,
+        }
+    }
+
+    fn is_deferred_builtin(&self, tool_name: &str) -> bool {
+        tool_name == "scheduler_create"
+    }
+
+    fn list_server_summaries(&self) -> Vec<crate::types::tool_index::ServerSummary> {
+        vec![]
+    }
+}
+
+#[tokio::test]
+async fn deferred_builtin_invocation_routes_through_inner_dispatch() {
+    let mut resources = crate::types::resources::Resources::new();
+    resources.insert(crate::types::tool_index::ToolIndex(Arc::new(
+        DeferredBuiltinIndex,
+    )));
+    let ctx = ctx_with_dispatch_and_resources(
+        MockToolDispatch {
+            expected_tool_name: "scheduler_create".to_string(),
+            return_output: ToolOutput::Text("scheduled".into()),
+        },
+        Arc::new(tokio::sync::Mutex::new(resources)),
+    );
+
+    let result = xai_tool_runtime::Tool::run(
+        &UseTool,
+        ctx,
+        UseToolInput::Inline(InlineMcpInvocation {
+            tool_name: "scheduler_create".into(),
+            tool_input: serde_json::json!({"prompt": "ping"}),
+        }),
+    )
+    .await
+    .expect("deferred builtin should dispatch");
+
+    assert!(matches!(result, ToolOutput::Text(_)));
+}

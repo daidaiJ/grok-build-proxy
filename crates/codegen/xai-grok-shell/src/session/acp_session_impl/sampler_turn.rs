@@ -9,30 +9,18 @@ use xai_grok_telemetry::region::Parent;
 
 const CLASSIFIER_REQUEST_TOKEN_RESERVE: u64 = 16_384;
 
-/// LOCAL(token-economy): built-in tools that were declared on every turn but had
-/// zero calls in the last 30 days (112 sessions, ~9k tool calls). Their schemas
-/// are a fixed cost on every request: `reference_to_video` 1,320 tokens,
-/// `send_feedback` 985, `lsp` 555, `image_*` 1,126, `workflow` 1,385 —
-/// 5,371 of the 11,481-token tool prefix. `scheduler_*` stays declared (the user
-/// keeps scheduled tasks available even though the model did not call them).
-/// `scripts-local/compaction_baseline_audit.py` reproduces the selection.
+/// LOCAL(token-economy): keep the deferred built-ins out of the direct declaration. The names
+/// live in `session::tool_index::DEFERRED_BUILTIN_TOOLS`; the same list feeds the search catalog,
+/// so a tool dropped here is still reachable through `search_tool` + `use_tool`.
 ///
 /// Static on purpose: the tool surface stays byte-identical across turns, so the
 /// prefix cache is unaffected. A per-turn dynamic list would invalidate it.
-/// Remove a name here to restore that tool.
-const HIDDEN_BUILTIN_TOOLS: &[&str] = &[
-    "workflow",
-    "reference_to_video",
-    "send_feedback",
-    "lsp",
-    "image_gen",
-    "image_edit",
-    "image_to_video",
-];
-
-fn filter_hidden_builtin_tools(defs: Vec<ToolDefinition>) -> Vec<ToolDefinition> {
+fn filter_deferred_builtin_tools(defs: Vec<ToolDefinition>) -> Vec<ToolDefinition> {
     defs.into_iter()
-        .filter(|def| !HIDDEN_BUILTIN_TOOLS.contains(&def.function.name.as_str()))
+        .filter(|def| {
+            !crate::session::tool_index::DEFERRED_BUILTIN_TOOLS
+                .contains(&def.function.name.as_str())
+        })
         .collect()
 }
 
@@ -554,7 +542,17 @@ impl SessionActor {
         };
 
         let plan_active = self.plan_mode.lock().is_active();
-        filter_hidden_builtin_tools(filter_cursor_tools_by_plan_mode(defs, plan_active))
+        let defs = filter_cursor_tools_by_plan_mode(defs, plan_active);
+        // Publish the deferred built-ins into the shared search snapshot before dropping them
+        // from the declaration. Filling lazily here also covers sessions that never refresh MCP.
+        {
+            let mut snapshot = self.tool_metadata_snapshot.lock().unwrap();
+            if snapshot.deferred_builtins.is_empty() {
+                snapshot.deferred_builtins =
+                    crate::session::tool_index::deferred_builtin_metadata(&defs);
+            }
+        }
+        filter_deferred_builtin_tools(defs)
     }
 
     /// Messages-backed models never see `use_tool`'s file forms: the Anthropic Messages API rejects the schema's

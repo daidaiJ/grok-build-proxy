@@ -4,8 +4,8 @@ use xai_grok_sampling_types::{
 
 use super::{
     CLASSIFIER_REQUEST_TOKEN_RESERVE, LengthSalvageAction, LengthSalvageStreak,
-    MAX_OUTPUT_TOKEN_LIMIT_RETRIES, classifier_request_fits_context, filter_hidden_builtin_tools,
-    resolve_configured_cutoff,
+    MAX_OUTPUT_TOKEN_LIMIT_RETRIES, classifier_request_fits_context,
+    filter_deferred_builtin_tools, resolve_configured_cutoff,
 };
 
 fn x_cut(to: &str) -> XSearchOptions {
@@ -15,7 +15,7 @@ fn x_cut(to: &str) -> XSearchOptions {
 }
 
 #[test]
-fn hidden_builtin_tools_drop_zero_use_schemas_and_keep_core_tools() {
+fn deferred_builtin_tools_drop_zero_use_schemas_and_keep_core_tools() {
     let defs = [
         "workflow",
         "run_terminal_command",
@@ -25,25 +25,18 @@ fn hidden_builtin_tools_drop_zero_use_schemas_and_keep_core_tools() {
         "image_gen",
         "grep",
         "scheduler_create",
+        "scheduler_list",
     ]
     .into_iter()
     .map(|name| {
         ToolDefinition::function(name, None::<String>, serde_json::json!({"type": "object"}))
     })
     .collect();
-    let kept: Vec<String> = filter_hidden_builtin_tools(defs)
+    let kept: Vec<String> = filter_deferred_builtin_tools(defs)
         .into_iter()
         .map(|def| def.function.name)
         .collect();
-    assert_eq!(
-        kept,
-        vec![
-            "run_terminal_command",
-            "read_file",
-            "grep",
-            "scheduler_create"
-        ]
-    );
+    assert_eq!(kept, vec!["run_terminal_command", "read_file", "grep"]);
 }
 
 /// When every sample ends with finish reason Length while tools are active, the turn salvages up to the cap and then fails.

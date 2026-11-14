@@ -1,4 +1,4 @@
-//! `search_tool` — discover MCP tools via BM25 keyword search.
+//! `search_tool` — discover MCP tools and deferred built-in tools via BM25 keyword search.
 
 pub mod types;
 
@@ -215,7 +215,8 @@ impl crate::types::tool_metadata::ToolMetadata for SearchTool {
     }
 
     fn description_template(&self) -> &str {
-        "Search for MCP tools by keyword and retrieve their input schemas.\n\n\
+        "Search for MCP tools and deferred built-in tools by keyword and retrieve their input \
+         schemas.\n\n\
          If status is \"partial\", some servers may still be connecting."
     }
 }
@@ -326,7 +327,7 @@ impl xai_tool_runtime::Tool for SearchTool {
             // off" from a query that simply matched nothing. Wording is
             // source-agnostic: search_tool runs in parent and subagent sessions.
             Some(
-                "No MCP tools are available in this session. Connect MCP servers here, or if this is a subagent, check the agent's mcpInheritance.",
+                "No searchable tools are available in this session. Connect MCP servers here, or if this is a subagent, check the agent's mcpInheritance.",
             )
         } else {
             None

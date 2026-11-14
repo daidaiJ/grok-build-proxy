@@ -12,6 +12,43 @@ use xai_grok_tools::types::tool_index::{
 
 use super::mcp_servers::MCP_TOOL_NAME_DELIMITER;
 
+/// LOCAL(token-economy): built-in tools that stay out of the per-request declaration and are
+/// declared on demand through `search_tool` / `use_tool`.
+///
+/// Zero calls in a 30-day window (112 sessions, ~9k tool calls) except `scheduler_*`, which the
+/// user explicitly deferred on 2026-11-14. The list is static so the declared tool surface stays
+/// byte-identical across turns; removing a name restores that tool as a direct declaration.
+pub(crate) const DEFERRED_BUILTIN_TOOLS: &[&str] = &[
+    "workflow",
+    "reference_to_video",
+    "send_feedback",
+    "lsp",
+    "image_gen",
+    "image_edit",
+    "image_to_video",
+    "scheduler_create",
+    "scheduler_delete",
+    "scheduler_list",
+];
+
+/// Snapshot entries for deferred built-ins, using the same shape as MCP tools so the BM25 index
+/// can search both with one corpus. `server_name` is the fixed search group shown to the model.
+pub(crate) fn deferred_builtin_metadata(
+    defs: &[xai_grok_sampling_types::ToolDefinition],
+) -> Vec<ToolMetadata> {
+    defs.iter()
+        .filter(|def| DEFERRED_BUILTIN_TOOLS.contains(&def.function.name.as_str()))
+        .map(|def| ToolMetadata {
+            qualified_name: def.function.name.clone(),
+            server_name: "built-in".to_string(),
+            tool_name: def.function.name.clone(),
+            description: def.function.description.clone().unwrap_or_default(),
+            parameters: extract_parameter_names(&def.function.parameters),
+            input_schema: def.function.parameters.clone(),
+        })
+        .collect()
+}
+
 /// Handles `__` (qualified-name delimiter), `_` (snake_case), `-` (kebab-case), and camelCase / PascalCase boundaries.
 fn split_identifier(s: &str) -> Vec<&str> {
     let mut words: Vec<&str> = Vec::new();
@@ -127,6 +164,9 @@ pub(crate) struct ToolMetadataSnapshot {
     pub tools: Vec<ToolMetadata>,
     pub servers: Vec<ServerMetadata>,
     pub mcp_initialized: bool,
+    /// Built-ins that are only declared on demand. Kept outside `tools` so MCP refreshes, which
+    /// replace the MCP tool list wholesale, never drop them.
+    pub deferred_builtins: Vec<ToolMetadata>,
 }
 
 /// Holds a shared snapshot of MCP tool metadata behind a `std::sync::Mutex`.
@@ -147,9 +187,11 @@ impl ToolSearchIndex for Bm25ToolSearchIndex {
         let snapshot = self.snapshot.lock().unwrap().clone();
 
         let is_ready = snapshot.mcp_initialized;
-        let total_hidden_tools = snapshot.tools.len();
+        let mut tools = snapshot.tools;
+        tools.extend(snapshot.deferred_builtins);
+        let total_hidden_tools = tools.len();
 
-        if snapshot.tools.is_empty() {
+        if tools.is_empty() {
             return SearchSnapshot {
                 results: Vec::new(),
                 total_hidden_tools,
@@ -160,7 +202,7 @@ impl ToolSearchIndex for Bm25ToolSearchIndex {
         // Fast path: exact match on qualified name or bare tool name.
         // When the model already knows the tool name (e.g. "grafana-ai__SearchDashboards" or "SearchDashboards"), skip BM25 entirely.
         let query_lower = query.trim().to_lowercase();
-        if let Some(exact) = snapshot.tools.iter().find(|t| {
+        if let Some(exact) = tools.iter().find(|t| {
             t.qualified_name.to_lowercase() == query_lower
                 || t.tool_name.to_lowercase() == query_lower
         }) {
@@ -178,7 +220,7 @@ impl ToolSearchIndex for Bm25ToolSearchIndex {
             };
         }
 
-        let documents: Vec<String> = snapshot.tools.iter().map(|t| t.to_document()).collect();
+        let documents: Vec<String> = tools.iter().map(|t| t.to_document()).collect();
 
         let search_engine =
             SearchEngineBuilder::<u32>::with_corpus(Language::English, documents).build();
@@ -189,7 +231,7 @@ impl ToolSearchIndex for Bm25ToolSearchIndex {
         let results = bm25_results
             .into_iter()
             .filter_map(|sr| {
-                let meta = snapshot.tools.get(sr.document.id as usize)?;
+                let meta = tools.get(sr.document.id as usize)?;
                 Some(ToolSearchResult {
                     tool_name: meta.qualified_name.clone(),
                     server_name: meta.server_name.clone(),
@@ -206,6 +248,15 @@ impl ToolSearchIndex for Bm25ToolSearchIndex {
             total_hidden_tools,
             is_ready,
         }
+    }
+
+    fn is_deferred_builtin(&self, tool_name: &str) -> bool {
+        self.snapshot
+            .lock()
+            .unwrap()
+            .deferred_builtins
+            .iter()
+            .any(|tool| tool.qualified_name == tool_name)
     }
 
     fn list_server_summaries(&self) -> Vec<ServerSummary> {
