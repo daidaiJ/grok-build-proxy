@@ -99,7 +99,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ## 活跃待办（2026-11-13）
 
 ### 施工中 / 待合
-- token 经济二轮 — A 组已随 v1.0.77 发版，剩余 B 组（推理降级 A/B、调用合并 A/B、`search_tool` schema 上限）未开工；交接卡 `.handoff/token-economy-next-round.md`。
+- token 经济二轮 — A 组随 v1.0.77、零调用工具 deferred 搜索声明随 v1.0.78 发版；剩余 B 组（推理降级 A/B、调用合并 A/B、`search_tool` schema 上限）未开工。见 `docs-local/token-economy-port/deferred-builtin-tools-2026-11-14.md`、`.handoff/token-economy-next-round.md`。
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 - grok-doctor 技能 — P1；`docs-local/agent-cli-tracking/skill-plugin-port-eval-2026-11-13.md`。
@@ -119,15 +119,23 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 🔄 Handoff 摘要
 
-### token-economy-next-round — A 组已发版
+### token-economy-next-round — A 组 + deferred 工具已发版
 
-- **当前状态：** 压缩基线归因完成（报告 `docs-local/token-economy-port/compaction-baseline-attribution-2026-11-14.md`）；A 组与工具隐藏随 v1.0.77 发布并部署，工具声明 11,481 → 约 6,110 tokens。
+- **当前状态：** A 组随 v1.0.77 发布；零调用内建工具（含 `scheduler_*`）已改为 deferred 搜索声明，随 v1.0.78 发布并部署。声明面维持 ~5.1–5.7k tokens。
 - **剩余：** B 组——subagent 推理降级 A/B、调用合并 A/B、`search_tool` MCP schema 字节上限。
-- **验收：** 账本出现 `purpose=compaction`；relay 会话 0 次 turn_summary；title 刷新输入约 10k；隐藏工具不在 `tool_definitions.json`。
-- **详情指针：** [`.handoff/token-economy-next-round.md`](.handoff/token-economy-next-round.md)
+- **验收：** 账本出现 `purpose=compaction`；relay 会话 0 次 turn_summary；title 刷新输入约 10k；deferred 工具不在 `tool_definitions.json`，但 `search_tool` 可搜到、`use_tool` 可执行。
+- **详情指针：** [`.handoff/token-economy-next-round.md`](.handoff/token-economy-next-round.md)、`docs-local/token-economy-port/deferred-builtin-tools-2026-11-14.md`
 
 ## 最新交接（2026-11）
 
+- **2026-11-14 v1.0.78 发版并部署**：零调用内建工具改为 deferred——不再进初始声明，
+  由 `search_tool` 的 `built-in` 组检索、`use_tool` 经 `InnerDispatch` 执行；
+  `scheduler_create/delete/list` 本轮一并 deferred。main build `43571074230` 双绿，
+  release `43573279031` 双绿、4 资产（Windows zip 64,128,622 bytes）；本机
+  `grok 1.0.78 (b8a4f1d98363)`，回滚 `grok2.exe.1.0.77-7b7925b8cf86.bak`，
+  `~/.grok/bin` 备份 `*.bak-1.0.77-fork`。实测 `search_tool("scheduler_create")`
+  返回完整 schema，`use_tool("scheduler_list")` 返回 “No scheduled tasks.”；详见
+  PATCHES 七十四期。
 - **2026-11-14 v1.0.77 发版并部署**：token 经济 A 组（压缩用量入账、非 xAI 跳过
   turn_summary、title 刷新 10k 截断）+ 零调用工具静态隐藏（`scheduler_*` 保留）；
   main build `43563259558` 双绿，release `43567249488` 双绿、4 资产，Windows zip

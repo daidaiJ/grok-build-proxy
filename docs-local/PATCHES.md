@@ -4635,3 +4635,47 @@ release 构建 45 → 18 min（约 -60%）。
 
 工具声明前缀 11,481 → 约 6,110 tokens，每个请求的固定成本下降约 5.4k tokens；
 压缩调用从此出现在账本 `/stats` 中，不再约 5% 漏计。
+
+## 七十四期：零调用内建工具改为 deferred 搜索声明（2026-11-14，main 直推）
+
+> 背景：v1.0.77 把 7 个零调用内建工具的 schema 直接隐藏，省下每个请求约 3.7k
+> tokens，但也让这些工具彻底不可达。用户要求改成“deferred”：不出现在初始声明里，
+> 但可以由 `search_tool` 搜到、由 `use_tool` 调用；本轮把 `scheduler_*` 也纳入。
+
+### 改动
+
+- `session/tool_index.rs`：新增 `DEFERRED_BUILTIN_TOOLS`（workflow、
+  reference_to_video、send_feedback、lsp、image_gen/edit/to_video，
+  scheduler_create/delete/list）与 `deferred_builtin_metadata()`；
+  `ToolMetadataSnapshot` 增加独立的 `deferred_builtins` 分区，MCP 刷新只替换
+  `tools`/`servers`，不会清掉这一块。
+- `Bm25ToolSearchIndex::search_snapshot`：把 MCP 工具与 deferred 内建工具合并成
+  一个 BM25 语料，`server_name` 固定为 `built-in`；`list_server_summaries` 仍只列
+  MCP server，不伪造“built-in server”。
+- `ToolSearchIndex` 增加默认 `is_deferred_builtin()`；`use_tool` 校验放行 deferred
+  名字，并在 `dispatch_mcp_tool` 里优先走 `InnerDispatch`（不要求 `server__tool`）。
+  已声明的 native 工具仍返回“直接调用”纠错。
+- `sampler_turn.rs`：`filter_deferred_builtin_tools` 继续把它们从声明里过滤掉；
+  首次 `prepare_tool_definitions_inner` 时从过滤前的定义填充搜索快照。
+- `search_tool` / `use_tool` 描述改为同时提及 deferred 内建工具。
+
+### 验证
+
+- main build `43571074230`（`b8a4f1d9`）Linux/Windows 双绿（Linux 27m53s，
+  Windows 10m41s）。
+- 单测覆盖：deferred 条目可按精确名搜索、`is_deferred_builtin` 判定、
+  server 摘要不含 `built-in`、`deferred_builtin_metadata` 跟随共享名单、
+  `use_tool` 经 `InnerDispatch` 执行 deferred 名字。
+- `v1.0.78` release run `43573279031` 双绿，4 个非草稿资产；Windows zip
+  64,128,622 bytes，sha256 见资产文件。
+- 本机部署 `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.78 (b8a4f1d98363)`，回滚
+  `grok2.exe.1.0.77-7b7925b8cf86.bak`；`~/.grok/bin/{grok,agent}.exe` 同步刷新，
+  备份 `*.bak-1.0.77-fork`。
+- 活体：`-p` 单轮会话的 `tool_definitions.json` 17 工具 / 5,070 tokens，无
+  deferred 名字；`search_tool("scheduler_create")` 返回 `built-in` 组与完整 schema；
+  `use_tool("scheduler_list")` 返回 “No scheduled tasks.”。
+
+### 效果
+
+声明的工具面维持在约 5.1–5.7k tokens（随会话模式略有差异），不新增固定成本；
+零调用工具需要时多一次 `search_tool` 往返即可调用。列表静态，前缀缓存不受影响。
