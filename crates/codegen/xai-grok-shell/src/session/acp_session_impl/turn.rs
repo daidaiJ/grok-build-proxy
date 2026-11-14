@@ -1190,9 +1190,7 @@ impl SessionActor {
                     // D4: failure-tolerant; counts drive the user disclosure.
                     let mut all_images = user_images.clone();
                     all_images.extend(extra_images.iter().cloned());
-                    let outcome = self
-                        .transcribe_user_images(user_message, &all_images)
-                        .await;
+                    let outcome = self.transcribe_user_images(user_message, &all_images).await;
                     let notice = super::vision_bridge::render_vision_bridge_notice(
                         outcome.described,
                         outcome.failed,
@@ -2770,6 +2768,10 @@ impl SessionActor {
         let mut tool_turn_count: usize = 1;
         let mut loop_index: u32 = 0;
         let mut identical_tool_calls = IdenticalToolCallRun::default();
+        // LOCAL: BYOK client loop detect (ABAB + content/thinking streaks).
+        let mut alternating_tool_calls = super::loop_detect::AlternatingToolCallRun::default();
+        let mut content_streak = super::loop_detect::TextStreak::default();
+        let mut thinking_streak = super::loop_detect::TextStreak::default();
         let mut todo_gate_fires: u32 = 0;
         let mut length_salvage_streak = LengthSalvageStreak::default();
         let mut auth_retry_schedule = AuthRetrySchedule::new();
@@ -2812,7 +2814,92 @@ impl SessionActor {
         loop {
             self.emit_event(crate::session::events::Event::LoopStarted { loop_index });
             loop_index += 1;
-            if identical_tool_calls.run_len >= identical_tool_calls.hard_stop_threshold() {
+            let content_stop = content_streak.take_stop();
+            let thinking_stop = thinking_streak.take_stop();
+            if content_stop || thinking_stop {
+                let kind = if content_stop {
+                    super::loop_detect::LoopKind::Content
+                } else {
+                    super::loop_detect::LoopKind::Thinking
+                };
+                let run_len = if kind == super::loop_detect::LoopKind::Content {
+                    content_streak.run_len()
+                } else {
+                    thinking_streak.run_len()
+                };
+                let model_id = self.current_model_id().await;
+                let abort = super::loop_detect::record_crossing(
+                    self.session_info.id.0.as_ref(),
+                    &model_id,
+                    kind.as_str(),
+                    xai_grok_tools::loop_detect_ledger::LoopDetectPhase::Stop,
+                    run_len,
+                );
+                tracing::warn!(
+                    session_id = %self.session_info.id,
+                    kind = kind.as_str(),
+                    run_len,
+                    abort,
+                    "loop detect: stop threshold after repeated model output"
+                );
+                xai_grok_telemetry::unified_log::warn(
+                    "shell.turn.loop_detect_stop",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "loop_index": loop_index,
+                        "kind": kind.as_str(),
+                        "run_len": run_len,
+                        "abort": abort,
+                    })),
+                );
+                if abort {
+                    self.finalize_turn_bookkeeping(
+                        req_id,
+                        std::mem::take(&mut turn_span_totals),
+                        turn_sampling,
+                    )
+                    .await;
+                    return Ok(TurnOutcome::StationarityEnded);
+                }
+            }
+            if alternating_tool_calls.take_stop() {
+                let cycles = alternating_tool_calls.cycle_count();
+                let model_id = self.current_model_id().await;
+                let abort = super::loop_detect::record_crossing(
+                    self.session_info.id.0.as_ref(),
+                    &model_id,
+                    super::loop_detect::LoopKind::Alternating.as_str(),
+                    xai_grok_tools::loop_detect_ledger::LoopDetectPhase::Stop,
+                    cycles,
+                );
+                tracing::warn!(
+                    session_id = %self.session_info.id,
+                    kind = super::loop_detect::LoopKind::Alternating.as_str(),
+                    cycles,
+                    abort,
+                    "loop detect: stop threshold after alternating tool-call pattern"
+                );
+                xai_grok_telemetry::unified_log::warn(
+                    "shell.turn.loop_detect_stop",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "loop_index": loop_index,
+                        "kind": super::loop_detect::LoopKind::Alternating.as_str(),
+                        "run_len": cycles,
+                        "abort": abort,
+                    })),
+                );
+                if abort {
+                    self.finalize_turn_bookkeeping(
+                        req_id,
+                        std::mem::take(&mut turn_span_totals),
+                        turn_sampling,
+                    )
+                    .await;
+                    return Ok(TurnOutcome::StationarityEnded);
+                }
+            }
+            if identical_tool_calls.take_stop() {
                 let run_len = identical_tool_calls.run_len;
                 let tool_name = identical_tool_calls.tool_name.clone();
                 let true_noop = identical_tool_calls.is_true_noop_run;
@@ -2843,13 +2930,23 @@ impl SessionActor {
                         tool_name: tool_name.clone(),
                     },
                 );
-                self.finalize_turn_bookkeeping(
-                    req_id,
-                    std::mem::take(&mut turn_span_totals),
-                    turn_sampling,
-                )
-                .await;
-                return Ok(TurnOutcome::StationarityEnded);
+                let model_id = self.current_model_id().await;
+                let abort = super::loop_detect::record_crossing(
+                    self.session_info.id.0.as_ref(),
+                    &model_id,
+                    "identical_tool_calls",
+                    xai_grok_tools::loop_detect_ledger::LoopDetectPhase::Stop,
+                    run_len,
+                );
+                if abort {
+                    self.finalize_turn_bookkeeping(
+                        req_id,
+                        std::mem::take(&mut turn_span_totals),
+                        turn_sampling,
+                    )
+                    .await;
+                    return Ok(TurnOutcome::StationarityEnded);
+                }
             }
             if identical_tool_calls.take_nudge() {
                 let run_len = identical_tool_calls.run_len;
@@ -2878,18 +2975,58 @@ impl SessionActor {
                         tool_name: tool_name.clone(),
                     },
                 );
-                let reminder = self
-                    .tool_bridge_handle()
-                    .render_prompt(
-                        ACTION_STATIONARITY_NUDGE_TEMPLATE,
-                        &serde_json::json!({
-                            "tool_name": tool_name,
-                            "run_len": run_len,
-                        }),
-                    )
-                    .await
-                    .unwrap_or_else(|| ACTION_STATIONARITY_NUDGE_TEMPLATE.to_string());
-                self.push_system_reminder(&reminder);
+                let model_id = self.current_model_id().await;
+                let abort = super::loop_detect::record_crossing(
+                    self.session_info.id.0.as_ref(),
+                    &model_id,
+                    "identical_tool_calls",
+                    xai_grok_tools::loop_detect_ledger::LoopDetectPhase::Nudge,
+                    run_len,
+                );
+                if abort {
+                    let reminder = self
+                        .tool_bridge_handle()
+                        .render_prompt(
+                            ACTION_STATIONARITY_NUDGE_TEMPLATE,
+                            &serde_json::json!({
+                                "tool_name": tool_name,
+                                "run_len": run_len,
+                            }),
+                        )
+                        .await
+                        .unwrap_or_else(|| ACTION_STATIONARITY_NUDGE_TEMPLATE.to_string());
+                    self.push_system_reminder(&reminder);
+                }
+            }
+            if alternating_tool_calls.take_nudge() {
+                let cycles = alternating_tool_calls.cycle_count();
+                let model_id = self.current_model_id().await;
+                let abort = super::loop_detect::record_crossing(
+                    self.session_info.id.0.as_ref(),
+                    &model_id,
+                    super::loop_detect::LoopKind::Alternating.as_str(),
+                    xai_grok_tools::loop_detect_ledger::LoopDetectPhase::Nudge,
+                    cycles,
+                );
+                tracing::warn!(
+                    session_id = %self.session_info.id,
+                    cycles,
+                    abort,
+                    "loop detect: nudging model to break alternating tool-call pattern"
+                );
+                xai_grok_telemetry::unified_log::warn(
+                    "shell.turn.loop_detect_nudge",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "loop_index": loop_index,
+                        "kind": super::loop_detect::LoopKind::Alternating.as_str(),
+                        "run_len": cycles,
+                        "abort": abort,
+                    })),
+                );
+                if abort {
+                    self.push_system_reminder(super::loop_detect::LoopKind::Alternating.reminder());
+                }
             }
             if !salvage.awaiting_continuation() {
                 self.drain_interjections_at_safe_point().await;
@@ -3493,9 +3630,7 @@ impl SessionActor {
                             xai_grok_tools::model_usage_ledger::ModelCallSample::now_unix_ms(),
                         model_id: model_id.clone(),
                         session_id: Some(self.session_info.id.0.to_string()),
-                        purpose: Some(
-                            xai_grok_tools::model_usage_ledger::CallPurpose::Main,
-                        ),
+                        purpose: Some(xai_grok_tools::model_usage_ledger::CallPurpose::Main),
                         prompt_tokens: u64::from(usage.map(|u| u.prompt_tokens).unwrap_or(0)),
                         completion_tokens: u64::from(
                             usage.map(|u| u.completion_tokens).unwrap_or(0),
@@ -3506,9 +3641,7 @@ impl SessionActor {
                         cache_creation_tokens: u64::from(
                             usage.map(|u| u.cache_creation_prompt_tokens).unwrap_or(0),
                         ),
-                        reasoning_tokens: u64::from(
-                            usage.map(|u| u.reasoning_tokens).unwrap_or(0),
-                        ),
+                        reasoning_tokens: u64::from(usage.map(|u| u.reasoning_tokens).unwrap_or(0)),
                         ttft_ms,
                         tps: tokens_per_sec,
                         duration_ms: model_duration_ms,
@@ -3570,6 +3703,15 @@ impl SessionActor {
                 ));
             }
             let mut tool_calls = response.tool_calls().to_vec();
+            let assistant_text = response.assistant_text();
+            let thinking_text: String = response
+                .reasoning_items()
+                .map(xai_grok_sampling_types::conversation::reasoning_item_text)
+                .filter(|t| !t.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n");
+            content_streak.observe(&assistant_text);
+            thinking_streak.observe(&thinking_text);
             let over_cap = self.media_gen_over_cap(&tool_calls);
             if xai_grok_tools::media_gen_limits::should_resample_egregious(
                 &over_cap,
@@ -3694,6 +3836,101 @@ impl SessionActor {
                 .await;
             }
             self.send_buffered_xai_update(response_completed).await;
+            if tool_calls.is_empty() {
+                let content_stop = content_streak.take_stop();
+                let thinking_stop = thinking_streak.take_stop();
+                if content_stop || thinking_stop {
+                    let kind = if content_stop {
+                        super::loop_detect::LoopKind::Content
+                    } else {
+                        super::loop_detect::LoopKind::Thinking
+                    };
+                    let run_len = if content_stop {
+                        content_streak.run_len()
+                    } else {
+                        thinking_streak.run_len()
+                    };
+                    let model_id = self.current_model_id().await;
+                    let abort = super::loop_detect::record_crossing(
+                        self.session_info.id.0.as_ref(),
+                        &model_id,
+                        kind.as_str(),
+                        xai_grok_tools::loop_detect_ledger::LoopDetectPhase::Stop,
+                        run_len,
+                    );
+                    tracing::warn!(
+                        session_id = %self.session_info.id,
+                        kind = kind.as_str(),
+                        run_len,
+                        abort,
+                        "loop detect: stop threshold after repeated model output"
+                    );
+                    xai_grok_telemetry::unified_log::warn(
+                        "shell.turn.loop_detect_stop",
+                        Some(self.session_info.id.0.as_ref()),
+                        Some(serde_json::json!({
+                            "loop_index": loop_index,
+                            "kind": kind.as_str(),
+                            "run_len": run_len,
+                            "abort": abort,
+                        })),
+                    );
+                    if abort {
+                        self.finalize_turn_bookkeeping(
+                            req_id,
+                            std::mem::take(&mut turn_span_totals),
+                            turn_sampling,
+                        )
+                        .await;
+                        return Ok(TurnOutcome::StationarityEnded);
+                    }
+                }
+            }
+            let content_nudge = content_streak.take_nudge();
+            let thinking_nudge = thinking_streak.take_nudge();
+            if content_nudge || thinking_nudge {
+                let kind = if content_nudge {
+                    super::loop_detect::LoopKind::Content
+                } else {
+                    super::loop_detect::LoopKind::Thinking
+                };
+                let run_len = if content_nudge {
+                    content_streak.run_len()
+                } else {
+                    thinking_streak.run_len()
+                };
+                let model_id = self.current_model_id().await;
+                let abort = super::loop_detect::record_crossing(
+                    self.session_info.id.0.as_ref(),
+                    &model_id,
+                    kind.as_str(),
+                    xai_grok_tools::loop_detect_ledger::LoopDetectPhase::Nudge,
+                    run_len,
+                );
+                tracing::warn!(
+                    session_id = %self.session_info.id,
+                    kind = kind.as_str(),
+                    run_len,
+                    abort,
+                    "loop detect: nudging model to break repeated model output"
+                );
+                xai_grok_telemetry::unified_log::warn(
+                    "shell.turn.loop_detect_nudge",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "loop_index": loop_index,
+                        "kind": kind.as_str(),
+                        "run_len": run_len,
+                        "abort": abort,
+                    })),
+                );
+                if abort {
+                    self.push_system_reminder(kind.reminder());
+                    if tool_calls.is_empty() {
+                        continue;
+                    }
+                }
+            }
             let schema_complete_at_cap = if stop_reason
                 == Some(xai_grok_sampling_types::StopReason::Length)
                 && tool_calls.is_empty()
@@ -3932,6 +4169,7 @@ impl SessionActor {
                 step_problematic,
                 is_true_noop,
             );
+            alternating_tool_calls.observe(&step_signature);
             if is_true_noop {
                 xai_grok_telemetry::session_ctx::log_event(
                     xai_grok_telemetry::events::ShellTrueNoop {
@@ -4111,6 +4349,7 @@ struct IdenticalToolCallRun {
     run_len: u32,
     is_true_noop_run: bool,
     nudged: bool,
+    stop_noted: bool,
 }
 impl IdenticalToolCallRun {
     fn observe(
@@ -4132,6 +4371,7 @@ impl IdenticalToolCallRun {
             self.last_signature_hash = Some(hash);
             self.is_true_noop_run = is_true_noop;
             self.nudged = false;
+            self.stop_noted = false;
         }
         self.tool_name = tool_name.to_string();
         self.problematically_repeating_step = problematically_repeating_step;
@@ -4164,6 +4404,11 @@ impl IdenticalToolCallRun {
         } else {
             MAX_CONSECUTIVE_IDENTICAL_TOOL_CALLS
         }
+    }
+    fn take_stop(&mut self) -> bool {
+        let fire = self.run_len >= self.hard_stop_threshold() && !self.stop_noted;
+        self.stop_noted |= fire;
+        fire
     }
 }
 #[cfg(test)]

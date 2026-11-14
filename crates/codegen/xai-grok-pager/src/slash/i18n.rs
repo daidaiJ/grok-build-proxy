@@ -119,7 +119,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "旁路提问，不打断当前任务",
         ),
         ("Compact conversation history", "压缩对话历史"),
-        ("Clear old tool results without a model call", "清理旧工具结果（零模型调用）"),
+        (
+            "Clear old tool results without a model call",
+            "清理旧工具结果（零模型调用）",
+        ),
         ("Clearing old tool results", "清理旧工具结果中"),
         (
             "Change the working directory for new agents",
@@ -303,6 +306,42 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("cache breaks", "缓存断崖"),
         ("unexplained", "无法解释"),
         ("uncached after break", "断崖后未命中"),
+        ("loop detects", "循环检测"),
+        ("aborted", "已中止"),
+        ("recorded only", "仅记账"),
+        (
+            "Loop detect: abort the turn or only record to /stats",
+            "循环检测：中止回合或只记入 /stats",
+        ),
+        (
+            "/loop-detect [abort|record|default]",
+            "/loop-detect [abort|record|default]",
+        ),
+        ("abort|record|default", "abort|record|default"),
+        (
+            "Loop detect: abort the turn when a loop is detected (this process).",
+            "循环检测：发现循环时中止本回合（仅本次进程）。",
+        ),
+        (
+            "Loop detect: record to /stats only; the turn continues (this process).",
+            "循环检测：只记入 /stats，不中止回合（仅本次进程）。",
+        ),
+        (
+            "Loop detect: follow [features] loop_detect_abort / GROK_LOOP_DETECT_ABORT.",
+            "循环检测：跟随 [features] loop_detect_abort / GROK_LOOP_DETECT_ABORT。",
+        ),
+        (
+            "Loop detect mode: abort (process override)",
+            "循环检测模式：中止（进程覆盖）",
+        ),
+        (
+            "Loop detect mode: record-only (process override)",
+            "循环检测模式：仅记账（进程覆盖）",
+        ),
+        (
+            "Loop detect mode: config default (abort unless [features] loop_detect_abort = false)",
+            "循环检测模式：配置默认（除非 loop_detect_abort = false，否则中止）",
+        ),
         ("grouped by model", "按模型分组"),
         ("grouped by purpose", "按用途分组"),
         ("grouped by session", "按会话分组"),
@@ -819,7 +858,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("Logged in with API key", "已用 API key 登录"),
         ("Login with {}", "使用 {} 登录"),
         // LOCAL (T0 onboarding): 零配置首启 BYOK 引导文案
-        ("No model provider configured yet.", "尚未配置任何模型供应商。"),
+        (
+            "No model provider configured yet.",
+            "尚未配置任何模型供应商。",
+        ),
         (
             "Press a to configure a provider, or add a [model.<id>] entry to ~/.grok/config.toml.",
             "按 a 配置供应商，或直接在 ~/.grok/config.toml 添加 [model.<id>] 条目。",
@@ -1896,7 +1938,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ),
         ("Credits", "积分"),
         ("Pay as you go: Enabled", "按量付费：已启用"),
-        ("Usage: ${used} / ${cap} per month", "每月用量：${used} / ${cap}"),
+        (
+            "Usage: ${used} / ${cap} per month",
+            "每月用量：${used} / ${cap}",
+        ),
         // -- LOCAL (T2 /auth): 供应商配置面板（auth_modal） --
         ("Provider setup", "供应商配置"),
         ("1/5 Protocol", "1/5 协议"),
@@ -1904,24 +1949,48 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("3/5 API key", "3/5 API key"),
         ("4/5 Models", "4/5 模型"),
         ("5/5 Confirm", "5/5 确认"),
-        ("Pick the API protocol your provider speaks:", "选择供应商使用的 API 协议："),
-        ("Provider base URL (e.g. https://api.x.ai/v1):", "供应商 base URL（如 https://api.x.ai/v1）："),
-        ("Must start with http:// or https://", "必须以 http:// 或 https:// 开头"),
+        (
+            "Pick the API protocol your provider speaks:",
+            "选择供应商使用的 API 协议：",
+        ),
+        (
+            "Provider base URL (e.g. https://api.x.ai/v1):",
+            "供应商 base URL（如 https://api.x.ai/v1）：",
+        ),
+        (
+            "Must start with http:// or https://",
+            "必须以 http:// 或 https:// 开头",
+        ),
         (
             "Provider API key (stored in plain text in config.toml):",
             "供应商 API key（以明文写入 config.toml）：",
         ),
-        ("Leave empty for gateways that need no auth. Ctrl+U clears.", "免鉴权网关可留空。Ctrl+U 清空。"),
+        (
+            "Leave empty for gateways that need no auth. Ctrl+U clears.",
+            "免鉴权网关可留空。Ctrl+U 清空。",
+        ),
         ("Fetching model list…", "正在拉取模型列表…"),
         ("Fetch failed", "拉取失败"),
-        ("Press r to retry, or a to add a model slug manually.", "按 r 重试，或按 a 手填模型 slug。"),
+        (
+            "Press r to retry, or a to add a model slug manually.",
+            "按 r 重试，或按 a 手填模型 slug。",
+        ),
         ("No models fetched yet.", "尚未拉取到模型列表。"),
         ("space toggle", "空格 勾选"),
-        ("Model slug (Enter to add, Esc to cancel):", "模型 slug（回车添加，Esc 取消）："),
-        ("Entries to write to ~/.grok/config.toml:", "将写入 ~/.grok/config.toml 的条目："),
+        (
+            "Model slug (Enter to add, Esc to cancel):",
+            "模型 slug（回车添加，Esc 取消）：",
+        ),
+        (
+            "Entries to write to ~/.grok/config.toml:",
+            "将写入 ~/.grok/config.toml 的条目：",
+        ),
         ("Write failed", "写入失败"),
         ("  (id taken)", "（id 已被占用）"),
-        ("Resolve highlighted id conflicts before writing (e to edit).", "写入前请先解决标红的 id 冲突（按 e 编辑）。"),
+        (
+            "Resolve highlighted id conflicts before writing (e to edit).",
+            "写入前请先解决标红的 id 冲突（按 e 编辑）。",
+        ),
         ("edit id", "编辑 id"),
         ("write", "写入"),
         ("save id", "保存 id"),
@@ -1935,7 +2004,10 @@ fn translations() -> &'static [(&'static str, &'static str)] {
             "重启后 /model 即见新模型。",
         ),
         ("Config written.", "配置已写入。"),
-        ("The new models are available via /model (hot reload).", "新模型已热加载，可通过 /model 选择。"),
+        (
+            "The new models are available via /model (hot reload).",
+            "新模型已热加载，可通过 /model 选择。",
+        ),
         ("Writing…", "写入中…"),
         ("Writing config.toml…", "正在写入 config.toml…"),
         ("Step", "步骤"),
@@ -1944,10 +2016,22 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("tokens / week", "tokens / 周"),
         ("tokens / month", "tokens / 月"),
         ("tokens / period", "tokens / 周期"),
-        ("Basis: {from} → {to} (Δ{pct}%)", "依据：{from} → {to}（Δ{pct}%）"),
-        ("This device only; with multiple devices take the max across devices.", "仅计本机；多设备请以各机最大值为准。"),
-        ("No xAI-direct usage on this device in the window; cannot infer.", "窗口内本机无 xAI 直连消耗，无法反推。"),
-        ("Not enough billing samples yet; keep using to accumulate.", "计费采样不足，继续使用以积累。"),
+        (
+            "Basis: {from} → {to} (Δ{pct}%)",
+            "依据：{from} → {to}（Δ{pct}%）",
+        ),
+        (
+            "This device only; with multiple devices take the max across devices.",
+            "仅计本机；多设备请以各机最大值为准。",
+        ),
+        (
+            "No xAI-direct usage on this device in the window; cannot infer.",
+            "窗口内本机无 xAI 直连消耗，无法反推。",
+        ),
+        (
+            "Not enough billing samples yet; keep using to accumulate.",
+            "计费采样不足，继续使用以积累。",
+        ),
         ("Couldn't load session info", "无法加载会话信息"),
         ("Loading session info\u{2026}", "正在加载会话信息…"),
         ("click or drag to copy", "点击或拖拽即可复制"),
@@ -2218,14 +2302,20 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("not started", "未启动"),
         ("starting", "启动中"),
         ("failed", "失败"),
-        ("No active session or no LSP backend in this session.", "当前无活动会话或本会话未装配 LSP 后端。"),
+        (
+            "No active session or no LSP backend in this session.",
+            "当前无活动会话或本会话未装配 LSP 后端。",
+        ),
         // LOCAL /lsp select 遗留键（面板化后仅存档）
         ("LSP servers", "LSP 语言服务器"),
         (
             "Space to select servers to enable in this workspace; unchecked ones are disabled.",
             "空格勾选本工作区要启用的 server；未勾选的将被禁用。",
         ),
-        ("No language servers detected or configured.", "未检测到也未配置任何语言服务器。"),
+        (
+            "No language servers detected or configured.",
+            "未检测到也未配置任何语言服务器。",
+        ),
         ("(command not found)", "（命令未找到）"),
         ("value", "切换值"),
         ("labels", "标签行"),

@@ -22,12 +22,13 @@ pub mod attribution;
 pub mod billing_samples;
 
 pub mod bridge;
+pub mod cache_break;
 pub mod computer;
 pub mod gitignore;
 pub mod implementations;
+pub mod loop_detect_ledger;
 pub mod mcp_elicitation;
 pub mod media_gen_limits;
-pub mod cache_break;
 pub mod model_usage_ledger;
 pub mod normalization;
 pub mod notification;

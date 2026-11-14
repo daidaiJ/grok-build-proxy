@@ -15,9 +15,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use unicode_width::UnicodeWidthStr;
 
+use crate::app::model_catalog_store::{self, CatalogPrices};
 use crate::slash::i18n::tr;
 use crate::theme::Theme;
-use crate::app::model_catalog_store::{self, CatalogPrices};
 use crate::views::modal_window::{
     self as mw, ModalSizing, ModalWindowConfig, ModalWindowState, Shortcut,
 };
@@ -82,6 +82,8 @@ pub struct StatsModalState {
     pub pricing: CatalogPrices,
     /// LOCAL(token-economy): 打开的会话断崖记录（按窗口过滤后汇总）。
     pub cache_breaks: Vec<xai_grok_tools::cache_break::CacheBreakRecord>,
+    /// LOCAL: client loop-detect crossings for the `/stats` summary line.
+    pub loop_detects: Vec<xai_grok_tools::loop_detect_ledger::LoopDetectRecord>,
     /// 最近一帧的内容区几何。
     content_rect: Rect,
 }
@@ -98,6 +100,7 @@ impl StatsModalState {
             dimension: StatsDimension::Model,
             pricing: CatalogPrices::new(),
             cache_breaks: Vec::new(),
+            loop_detects: Vec::new(),
             content_rect: Rect::default(),
         }
     }
@@ -438,7 +441,13 @@ fn tab_lines(state: &StatsModalState, theme: &Theme, width: u16) -> Vec<Line<'st
         if i > 0 {
             lines.push(Line::default());
         }
-        lines.extend(model_card_lines(row, theme, width, &state.pricing, show_cost));
+        lines.extend(model_card_lines(
+            row,
+            theme,
+            width,
+            &state.pricing,
+            show_cost,
+        ));
     }
     if shown < rows.len() {
         lines.push(Line::default());
@@ -467,6 +476,13 @@ fn tab_lines(state: &StatsModalState, theme: &Theme, width: u16) -> Vec<Line<'st
         lines.push(Line::default());
         lines.push(muted_line(theme, breaks));
     }
+    if let Some(loops) = loop_detect_summary_text(
+        &state.loop_detects,
+        state.now_unix_ms.saturating_sub(state.active_tab.len_ms()),
+    ) {
+        lines.push(Line::default());
+        lines.push(muted_line(theme, loops));
+    }
     lines
 }
 
@@ -476,10 +492,8 @@ pub(crate) fn cache_break_summary_text(
     breaks: &[xai_grok_tools::cache_break::CacheBreakRecord],
     since_ms: u64,
 ) -> Option<String> {
-    let in_window: Vec<&xai_grok_tools::cache_break::CacheBreakRecord> = breaks
-        .iter()
-        .filter(|r| r.ts_unix_ms >= since_ms)
-        .collect();
+    let in_window: Vec<&xai_grok_tools::cache_break::CacheBreakRecord> =
+        breaks.iter().filter(|r| r.ts_unix_ms >= since_ms).collect();
     if in_window.is_empty() {
         return None;
     }
@@ -496,6 +510,29 @@ pub(crate) fn cache_break_summary_text(
         unknown,
         tr("uncached after break"),
         fmt_tokens(uncached),
+    ))
+}
+
+/// Loop-detect summary: total crossings, how many aborted the turn, how many were record-only.
+pub(crate) fn loop_detect_summary_text(
+    rows: &[xai_grok_tools::loop_detect_ledger::LoopDetectRecord],
+    since_ms: u64,
+) -> Option<String> {
+    let in_window: Vec<&xai_grok_tools::loop_detect_ledger::LoopDetectRecord> =
+        rows.iter().filter(|r| r.ts_unix_ms >= since_ms).collect();
+    if in_window.is_empty() {
+        return None;
+    }
+    let aborted = in_window.iter().filter(|r| r.aborted).count();
+    let recorded = in_window.len() - aborted;
+    Some(format!(
+        "{} {} \u{00b7} {} {} \u{00b7} {} {}",
+        tr("loop detects"),
+        in_window.len(),
+        tr("aborted"),
+        aborted,
+        tr("recorded only"),
+        recorded,
     ))
 }
 
@@ -803,11 +840,7 @@ mod tests {
         for _ in 0..3 {
             handle_stats_modal_key(&mut state, &key(KeyCode::Tab));
         }
-        assert_eq!(
-            state.active_tab,
-            Window::FiveHours,
-            "循环"
-        );
+        assert_eq!(state.active_tab, Window::FiveHours, "循环");
         handle_stats_modal_key(&mut state, &key(KeyCode::BackTab));
         assert_eq!(state.active_tab, Window::Month, "反向循环");
     }
@@ -949,8 +982,8 @@ mod tests {
     /// $15 + 65.31m 缓存读 × $0.3 ≈ $28.66）。
     #[test]
     fn cost_column_shows_priced_value_when_catalog_hits() {
-        use xai_grok_shell::extensions::model_catalog::CatalogMatch;
         use xai_grok_model_catalog::{CatalogSource, ModelPricing};
+        use xai_grok_shell::extensions::model_catalog::CatalogMatch;
         let row = wide_card_row();
         let mut pricing = CatalogPrices::new();
         pricing.insert(
@@ -970,7 +1003,7 @@ mod tests {
                 context_length: Some(163_840),
                 max_completion_tokens: Some(163_840),
                 reasoning: None,
-            accepts_images: None,
+                accepts_images: None,
             }),
         );
         let lines = model_card_lines(&row, &Theme::current(), 80, &pricing, true)
@@ -979,7 +1012,10 @@ mod tests {
             .collect::<Vec<_>>();
         // billed_input = 66_215_043 − 65_314_304 = 900_739；900_739/1e6×3 = 2.702217
         // 424_085/1e6×15 = 6.361275；65_314_304/1e6×0.3 = 19.5942912 → 28.6577832
-        assert_eq!(lines[2], "cost         $28.66  reasoning      270k  cache hit     98.6%");
+        assert_eq!(
+            lines[2],
+            "cost         $28.66  reasoning      270k  cache hit     98.6%"
+        );
     }
 
     /// 数值列宽按卡片内实际最宽的数值放宽；面板再窄也不许把数值挤到边框外。
@@ -1056,7 +1092,10 @@ mod tests {
         assert!(text.contains("m-a · 2 calls"), "{text}");
         // 其它标签页的段头与样本不许混进当前页的摘录
         for other in ["== Last day ==", "== Last week ==", "== Last month =="] {
-            assert!(!text.contains(other), "{other} 不该出现在 5h 页的复制文本: {text}");
+            assert!(
+                !text.contains(other),
+                "{other} 不该出现在 5h 页的复制文本: {text}"
+            );
         }
         assert!(!text.contains("m-b"), "日窗样本不该出现在 5h 页: {text}");
         assert!(!text.contains("m-c"), "周窗样本不该出现在 5h 页: {text}");
@@ -1155,6 +1194,26 @@ mod tests {
         assert!(text.contains("unexplained 1"), "{text}");
         assert!(text.contains("uncached after break 220k"), "{text}");
         assert!(cache_break_summary_text(&breaks, 2_000).is_none());
+    }
+
+    #[test]
+    fn loop_detect_summary_counts_aborted_and_recorded() {
+        use xai_grok_tools::loop_detect_ledger::{LoopDetectPhase, LoopDetectRecord};
+        let record = |aborted| LoopDetectRecord {
+            ts_unix_ms: 1_000,
+            session_id: "s".into(),
+            model_id: "m".into(),
+            kind: "content_streak".into(),
+            phase: LoopDetectPhase::Stop,
+            run_len: 5,
+            aborted,
+        };
+        let rows = vec![record(true), record(false), record(false)];
+        let text = loop_detect_summary_text(&rows, 0).expect("summary");
+        assert!(text.contains("loop detects 3"), "{text}");
+        assert!(text.contains("aborted 1"), "{text}");
+        assert!(text.contains("recorded only 2"), "{text}");
+        assert!(loop_detect_summary_text(&rows, 2_000).is_none());
     }
 
     #[test]

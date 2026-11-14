@@ -44,6 +44,8 @@ pub mod grok;
 pub mod auth;
 pub mod logout;
 pub mod loop_cmd;
+// LOCAL: client loop-detect abort vs record-only
+pub mod loop_detect;
 pub mod mcps;
 pub mod memory;
 pub mod memory_ops;
@@ -63,9 +65,9 @@ pub mod resume;
 pub mod rewind;
 pub mod screen_mode_switch;
 pub mod session_info;
-pub mod stats;
 pub mod settings_cmd;
 pub mod share;
+pub mod stats;
 pub mod tasks;
 pub mod theme;
 pub mod timeline;
@@ -106,6 +108,7 @@ pub fn builtin_commands() -> Vec<Arc<dyn SlashCommand>> {
         Arc::new(resume::ResumeCommand),
         // Steering the work in front of you.
         Arc::new(loop_cmd::LoopCommand),
+        Arc::new(loop_detect::LoopDetectCommand),
         Arc::new(plan::PlanCommand),
         Arc::new(view_plan::ViewPlanCommand),
         Arc::new(remember::RememberCommand),

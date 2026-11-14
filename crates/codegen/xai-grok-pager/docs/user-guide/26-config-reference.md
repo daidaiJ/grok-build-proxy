@@ -223,6 +223,7 @@ User-level configuration lives in `$GROK_HOME/config.toml` (default `~/.grok/con
 | `features.image_gen` | `boolean` | `pin` | `user` | Enable image_gen / `/imagine`. |
 | `features.image_gen_model_override` | `string` | `yes` | `user` | Imagine model id for image_gen. Empty defers to the remotely configured default. |
 | `features.idle_auto_compact` | `boolean` | `—` | `user` | LOCAL experimental: auto-compact the main context while the session is idle (after a successful turn, before your next prompt) instead of only inline at the next model call. Default false. Also `GROK_IDLE_AUTO_COMPACT`. Read per turn; takes effect without a restart. |
+| `features.loop_detect_abort` | `boolean` | `—` | `user` | LOCAL: when a client loop is detected, abort the turn (`true`, default) or only record the crossing to `/stats` (`false`). Also `GROK_LOOP_DETECT_ABORT`. `/loop-detect abort` / `record` / `default` overrides for this process without a restart. |
 | `features.lsp_tools` | `boolean` | `pin` | `user` | Enable or disable `lsp_tools`. Default true. Also `GROK_LSP_TOOLS`. |
 | `features.managed_config` | `boolean` | `yes` | `user` | Fetch managed_config.toml and requirements.toml from the deployment. |
 | `features.mcp_auto_restart` | `boolean` | `yes` | `user` | Auto-restart stdio MCP servers after transport failure. Also GROK_MCP_AUTO_RESTART. |

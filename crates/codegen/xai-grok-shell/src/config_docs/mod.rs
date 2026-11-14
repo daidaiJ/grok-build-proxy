@@ -235,6 +235,7 @@ fn unmirrored_requirements(key: &str) -> &'static str {
         "remember_mode" => "—",
         // LOCAL experimental: no deployment pin surface.
         "idle_auto_compact" => "—",
+        "loop_detect_abort" => "—",
         other => {
             panic!("UNMIRRORED_BOOLEAN_FEATURES key `{other}` has no Requirements expectation")
         }

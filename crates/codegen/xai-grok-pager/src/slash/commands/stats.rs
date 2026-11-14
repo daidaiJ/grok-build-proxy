@@ -92,6 +92,14 @@ pub(crate) fn format_stats_text() -> String {
         text.push_str("\n\n");
         text.push_str(&line);
     }
+    let loops = xai_grok_tools::loop_detect_ledger::load(Some(&home));
+    if let Some(line) = crate::views::stats_modal::loop_detect_summary_text(
+        &loops,
+        now.saturating_sub(Window::Month.len_ms()),
+    ) {
+        text.push_str("\n\n");
+        text.push_str(&line);
+    }
     text
 }
 
@@ -326,7 +334,10 @@ mod tests {
         assert!(report.contains("cache read 1.3k"));
         // 冷 store（未取价）→ 成本列显示 `–`
         assert!(report.contains("cost –"), "{report}");
-        assert!(!report.contains("cache write"), "缓存写列已被成本列替换: {report}");
+        assert!(
+            !report.contains("cache write"),
+            "缓存写列已被成本列替换: {report}"
+        );
         assert!(report.contains("cache hit 86.7%"));
         // m-b / m-c 各只有一次调用：冷启动算不出命中率，显示 n/a 而不是 0.0%
         assert!(report.contains("cache hit n/a"), "{report}");

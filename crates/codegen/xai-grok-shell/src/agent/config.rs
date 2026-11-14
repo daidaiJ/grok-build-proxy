@@ -16,11 +16,11 @@ use xai_grok_config::{Capability, Distribution};
 use xai_grok_login::{AuthManager, GrokComConfig};
 use xai_grok_sampler::{AuthScheme, SamplerConfig};
 use xai_grok_sampling_types::{
-    CONTEXT_WINDOWS_META_KEY, CompactionAtTokens, CompactionsRemaining, ExperimentalSamplingOptions,
-    MODEL_NOTICE_META_KEY,
-    ModelNotice, PruneMode, REASONING_EFFORT_META_KEY, REASONING_EFFORTS_META_KEY, ReasoningEffort,
-    ReasoningEffortOption, ReasoningSummary, SystemPromptUpdate, context_windows_meta_value,
-    reasoning_effort_meta_value, reasoning_efforts_meta_value,
+    CONTEXT_WINDOWS_META_KEY, CompactionAtTokens, CompactionsRemaining,
+    ExperimentalSamplingOptions, MODEL_NOTICE_META_KEY, ModelNotice, PruneMode,
+    REASONING_EFFORT_META_KEY, REASONING_EFFORTS_META_KEY, ReasoningEffort, ReasoningEffortOption,
+    ReasoningSummary, SystemPromptUpdate, context_windows_meta_value, reasoning_effort_meta_value,
+    reasoning_efforts_meta_value,
 };
 use xai_grok_tools::types::compat::{CompatConfig, CompatConfigToml};
 /// Determines behavior like relay sync enablement.
@@ -276,7 +276,6 @@ pub struct NotificationsConfig {
 fn is_zero(value: &u64) -> bool {
     *value == 0
 }
-
 
 /// The default is `context_window`, else the first listed window; the choices keep list order and include it.
 pub(crate) fn context_window_choices(
@@ -1437,6 +1436,8 @@ pub(crate) const UNMIRRORED_BOOLEAN_FEATURES: &[&str] = &[
     "zdr_access_enabled",
     // LOCAL experimental: idle-time auto-compact ([features] idle_auto_compact).
     "idle_auto_compact",
+    // LOCAL: client loop-detect abort vs record-only ([features] loop_detect_abort).
+    "loop_detect_abort",
 ];
 /// A value written where a boolean was meant.
 /// Only these fail the load, so a key carrying some later release's typed value does not stop an older build from starting on the same config.
@@ -2321,8 +2322,10 @@ impl Config {
             );
             return pinned;
         }
-        let workspace_override =
-            workspace_overrides::read_workspace_override(cwd, workspace_overrides::LSP_TOOLS_OVERRIDE_KEY);
+        let workspace_override = workspace_overrides::read_workspace_override(
+            cwd,
+            workspace_overrides::LSP_TOOLS_OVERRIDE_KEY,
+        );
         self.resolve_lsp_tools_with_override(workspace_override)
     }
     /// Decision core of [`Self::resolve_lsp_tools_for_cwd`] with the workspace
@@ -3157,8 +3160,7 @@ pub(crate) fn resolve_model_list(
                 // the built-in entry knows — inherit the donor; otherwise D1
                 // defaults a silent remote entry to vision-capable.
                 if entry.info.accepts_images.is_none() {
-                    entry.info.accepts_images =
-                        Some(donor.info.accepts_images.unwrap_or(true));
+                    entry.info.accepts_images = Some(donor.info.accepts_images.unwrap_or(true));
                 }
             }
             if resolved.contains_key(key) {
@@ -3166,7 +3168,8 @@ pub(crate) fn resolve_model_list(
             }
         }
         resolved = prefetched;
-    }    let mut explicit_api_backend_keys = std::collections::HashSet::new();
+    }
+    let mut explicit_api_backend_keys = std::collections::HashSet::new();
     let mut explicit_supports_effort_false_keys = std::collections::HashSet::new();
     let mut explicit_menu_keys = std::collections::HashSet::new();
     for (key, model_override) in &cfg.config_models {
@@ -3569,7 +3572,7 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 // LOCAL (vision bridge): the built-in grok family defaults to
                 // vision-capable (concretized again in `default_model_entries`).
                 accepts_images: Some(true),
-    };
+            };
             (key, config)
         })
         .collect()

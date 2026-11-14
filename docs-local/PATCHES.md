@@ -4679,3 +4679,41 @@ release 构建 45 → 18 min（约 -60%）。
 
 声明的工具面维持在约 5.1–5.7k tokens（随会话模式略有差异），不新增固定成本；
 零调用工具需要时多一次 `search_tool` 往返即可调用。列表静态，前缀缓存不受影响。
+
+## 七十五期：BYOK 客户端循环检测——ABAB 工具轮转 + 正文/思考重复（2026-11-14，main 直推）
+
+> 背景：A 组「客户端循环检测」。连续相同工具调用已经有 action stationarity
+> （reminder 催停 + 硬停）。xAI `doom_loop` SSE 只在官方后端有效；BYOK 上
+> A,B,A,B 轮转和正文/思考复读没有任何客户端兜底。本轮补这三面，仍走
+> `TurnOutcome::StationarityEnded` 静默收尾，不改历史、不碰前缀不变量。
+
+### 已有（不重做）
+
+- `IdenticalToolCallRun`：连续相同 step signature → 4/8 次 system-reminder，
+  8/12 次硬停；Read/Plan 更紧；`true` keepalive 不催停。
+- 催停文案走 `ACTION_STATIONARITY_NUDGE_TEMPLATE`（`push_system_reminder`）。
+
+### 改动
+
+- 新模块 `session/acp_session_impl/loop_detect.rs`：
+  - `AlternatingToolCallRun`：后缀 ABAB，3 个周期催停、4 个周期硬停；
+    窗口看后缀，前导无关 step 不会把 ABABAB 藏掉。
+  - `TextStreak`：连续相同正文或 reasoning（≥50 字）3 次催停、5 次硬停；
+    短文本重置。
+- `turn.rs` 主循环接线：工具步观察 ABAB；采样后观察 `assistant_text` 与
+  `reasoning_item_text`；无工具时催停后 `continue` 再采样，避免把复读当
+  正常 EndTurn。
+- 事件：`shell.turn.loop_detect_nudge` / `shell.turn.loop_detect_stop`
+  （`kind` = `alternating_tool_calls` / `content_streak` / `thinking_streak`）。
+- **中止开关**：检测一律写入 `~/.grok/cache/loop-detect.jsonl`，`/stats` 汇总
+  行显示次数。是否中止回合由
+  `/loop-detect abort|record|default`（进程覆盖，立刻生效）>
+  `GROK_LOOP_DETECT_ABORT` > `[features] loop_detect_abort`（默认 `true` 中止）
+  决定。`record` 模式不注入 reminder、不 `StationarityEnded`。
+  action stationarity（连续相同工具）走同一开关。
+
+### 不做（本轮）
+
+- MiMo 跨 turn 把循环梗段标 `ignored` 持久裁剪（改历史，要进前缀不变量测试）。
+- qwen 的全局非连续 duplicate、单 turn 工具数 cap、shell 命令停滞。
+- 请求级修复持久化（A 组另一条，等 dump 证据）。

@@ -15,6 +15,7 @@ This build of Grok carries a set of local enhancements on top of upstream: an eg
 | A third-party model returns 400/5xx, garbled streaming, or "decode response body" failures | `~/.grok/dump/` evidence (see [API failure dumps](#api-failure-dumps)) |
 | User wants hover / go-to-definition / find-references from language servers, or asks why the `lsp` tool is (not) active | `/lsp` + builtin detection (see [LSP](#lsp-language-servers)) |
 | Long tool output (build logs, grep, diffs) inflates context or trips auto-compact | `[tool_output_compression]` (see [Tool-output compression](#tool-output-compression)) |
+| A BYOK model repeats the same tool calls or chants the same text/thinking | `/loop-detect` + `[features] loop_detect_abort` (see [Loop detect](#loop-detect)) |
 
 ---
 
@@ -296,6 +297,22 @@ points or more. The reason is classified as `model_switch` (the model changed),
 same numbers to `unified.jsonl`, and `/stats` adds a line such as
 `cache breaks 2 · unexplained 1 · uncached after break 220k`. Detection only
 observes; it never changes a request.
+
+Client loop detection (identical tool steps, ABAB rotation, repeated assistant
+text or reasoning) writes `~/.grok/cache/loop-detect.jsonl`. `/stats` adds a
+line such as `loop detects 3 · aborted 1 · recorded only 2`. Whether a
+crossing aborts the turn is a switch: `/loop-detect abort` (default),
+`/loop-detect record` (keep going, only count), `/loop-detect default`
+(drop the process override). Persistent default:
+
+```toml
+[features]
+loop_detect_abort = true    # false = record only; also GROK_LOOP_DETECT_ABORT
+```
+
+The slash command takes effect on the next crossing in this process; the
+config key is re-read on every crossing, so a file edit also applies without
+a restart.
 
 ---
 

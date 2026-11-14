@@ -31,6 +31,36 @@ pub(crate) fn idle_auto_compact_from_toml(v: Option<&TomlValue>) -> Option<bool>
     v?.get("features")?.get("idle_auto_compact")?.as_bool()
 }
 
+pub(crate) fn loop_detect_abort_from_toml(v: Option<&TomlValue>) -> Option<bool> {
+    v?.get("features")?.get("loop_detect_abort")?.as_bool()
+}
+
+pub(crate) const ENV_LOOP_DETECT_ABORT: &str = "GROK_LOOP_DETECT_ABORT";
+
+/// Whether a detected loop should abort the turn.
+///
+/// `/loop-detect abort|record` overrides the process for the rest of this run.
+/// Then `GROK_LOOP_DETECT_ABORT`, then `[features] loop_detect_abort`, default
+/// true (abort). Re-read on every crossing so a config edit takes effect without
+/// a restart.
+pub(crate) fn resolve_loop_detect_abort() -> bool {
+    if let Some(v) = xai_grok_tools::loop_detect_ledger::abort_override() {
+        return v;
+    }
+    if let Ok(v) = std::env::var(ENV_LOOP_DETECT_ABORT) {
+        match v.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" | "abort" => return true,
+            "0" | "false" | "no" | "off" | "record" => return false,
+            _ => {}
+        }
+    }
+    crate::config::load_effective_config()
+        .ok()
+        .as_ref()
+        .and_then(|v| loop_detect_abort_from_toml(Some(v)))
+        .unwrap_or(true)
+}
+
 pub(crate) const ENV_IDLE_AUTO_COMPACT: &str = "GROK_IDLE_AUTO_COMPACT";
 
 /// Experimental: auto-compact the main context while the session is idle
@@ -124,5 +154,19 @@ mod turn_transient_retry_toml_tests {
         let empty: toml::Value = toml::toml! { [features] }.into();
         assert_eq!(turn_transient_retry_from_toml(Some(&empty)), None);
         assert_eq!(turn_transient_retry_from_toml(None), None);
+    }
+}
+
+#[cfg(test)]
+mod loop_detect_abort_toml_tests {
+    use super::loop_detect_abort_from_toml;
+
+    #[test]
+    fn reads_the_features_key() {
+        let v: toml::Value = toml::toml! { [features] loop_detect_abort = false }.into();
+        assert_eq!(loop_detect_abort_from_toml(Some(&v)), Some(false));
+        let empty: toml::Value = toml::toml! { [features] }.into();
+        assert_eq!(loop_detect_abort_from_toml(Some(&empty)), None);
+        assert_eq!(loop_detect_abort_from_toml(None), None);
     }
 }
