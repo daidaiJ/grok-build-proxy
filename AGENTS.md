@@ -94,11 +94,13 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 - 引用文件/链接前先核对真实存在。
 - 本文件超过约 15 KB 或待办超过 50 条时做一次治理（归档 + 合并）。
 - 治理前快照：`docs-local/archive/agents-md-todo-handoff-snapshot-2026-11-13.md`
-  （2026-09~11 的全部待办与交接原文）。
+  （2026-09~11 的全部待办与交接原文）；`docs-local/archive/agents-md-snapshot-2026-11-16.md`
+  （2026-11-16 治理前全文）。
 
-## 活跃待办（2026-11-13）
+## 活跃待办（2026-11-16）
 
 ### 施工中 / 待合
+- 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪（改历史）、请求级修复持久化仍等 dump 证据；B/C 组未开工。见 PATCHES 七十五期、`docs-local/agent-cli-tracking/TODO.md` ①。
 - token 经济二轮 — A 组随 v1.0.77、零调用工具 deferred 搜索声明随 v1.0.78 发版；剩余 B 组（推理降级 A/B、调用合并 A/B、`search_tool` schema 上限）未开工。见 `docs-local/token-economy-port/deferred-builtin-tools-2026-11-14.md`、`.handoff/token-economy-next-round.md`。
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
@@ -117,62 +119,12 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ### 长期挂起
 - Ctrl+Enter 幽灵气球（P2，`docs-local/issues/`）；quota 他机对账；limit-probe T3；dump 自动清理；model-picker T2。
 
-## 🔄 Handoff 摘要
+## 当前版本与最近发布（2026-11-16）
 
-### client-loop-detect — A 组循环检测已发版
-
-- **当前状态：** ABAB 工具轮转 + 正文/思考复读检测随 v1.0.79 发布并部署；连续相同工具的 action stationarity 原本就有。默认中止回合，`/loop-detect record` 只记账。
-- **剩余：** MiMo 跨 turn `ignored` 裁剪（改历史）；请求级修复持久化仍等 dump 证据。B/C 组未开工。
-- **验收：** 新会话触发循环后账本 `~/.grok/cache/loop-detect.jsonl` 有行，`/stats` 出现汇总；`/loop-detect record` 后继续跑、只计数。
-- **详情指针：** `docs-local/PATCHES.md` 七十五期、`docs-local/agent-cli-tracking/TODO.md` ①
-
-### token-economy-next-round — A 组 + deferred 工具已发版
-
-- **当前状态：** A 组随 v1.0.77 发布；零调用内建工具（含 `scheduler_*`）已改为 deferred 搜索声明，随 v1.0.78 发布并部署。声明面维持 ~5.1–5.7k tokens。
-- **剩余：** B 组——subagent 推理降级 A/B、调用合并 A/B、`search_tool` MCP schema 字节上限。
-- **验收：** 账本出现 `purpose=compaction`；relay 会话 0 次 turn_summary；title 刷新输入约 10k；deferred 工具不在 `tool_definitions.json`，但 `search_tool` 可搜到、`use_tool` 可执行。
-- **详情指针：** [`.handoff/token-economy-next-round.md`](.handoff/token-economy-next-round.md)、`docs-local/token-economy-port/deferred-builtin-tools-2026-11-14.md`
-
-## 最新交接（2026-11）
-
-- **2026-11-14 v1.0.79 发版并部署**：客户端循环检测——ABAB 工具轮转、正文/思考复读，
-  与已有 action stationarity 共用催停/硬停；`/loop-detect abort|record|default`
-  动态开关中止还是只记 `/stats`。main build `43584166283` 双绿，release
-  `43586596066` 双绿、4 资产（Windows zip 64,264,284 bytes，sha256
-  `a99e3ab45149af5a6c720ab15e5eb29bb64bffe644de0d403be8a91c0a0c37e0`）；本机
-  `grok 1.0.79 (59c36755686d)`，回滚 `grok2.exe.1.0.78-b8a4f1d98363.bak`，
-  `~/.grok/bin` 备份 `*.bak-1.0.78-fork`。详见 PATCHES 七十五期。
-- **2026-11-14 v1.0.78 发版并部署**：零调用内建工具改为 deferred——不再进初始声明，
-  由 `search_tool` 的 `built-in` 组检索、`use_tool` 经 `InnerDispatch` 执行；
-  `scheduler_create/delete/list` 本轮一并 deferred。main build `43571074230` 双绿，
-  release `43573279031` 双绿、4 资产（Windows zip 64,128,622 bytes）；本机
-  `grok 1.0.78 (b8a4f1d98363)`，回滚 `grok2.exe.1.0.77-7b7925b8cf86.bak`，
-  `~/.grok/bin` 备份 `*.bak-1.0.77-fork`。实测 `search_tool("scheduler_create")`
-  返回完整 schema，`use_tool("scheduler_list")` 返回 “No scheduled tasks.”；详见
-  PATCHES 七十四期。
-- **2026-11-14 v1.0.77 发版并部署**：token 经济 A 组（压缩用量入账、非 xAI 跳过
-  turn_summary、title 刷新 10k 截断）+ 零调用工具静态隐藏（`scheduler_*` 保留）；
-  main build `43563259558` 双绿，release `43567249488` 双绿、4 资产，Windows zip
-  sha256 `9d67c8f369117dd6578089f1ff54db079eee3f523fd955e7e6f4065eae4e3843`；本机
-  `grok 1.0.77 (7b7925b8cf86)`，回滚 `grok2.exe.1.0.76-02c22394fdfe.bak`，
-  `~/.grok/bin` 已刷新（`*.bak-1.0.76-fork`）。Linux 单测失败与修复见 PATCHES 七十三期。
-- **2026-11-13 token 经济波次完成**：#12/#13/#14 已合（`797b9365`/`6741d1a6`/`b84bb71c`）；
-  #16（断崖 + `/stats` 分组）与 #17（`/compress-fast`）折叠进 main
-  （`9d8f3b53`/`6fd59b0a`），Linux E0308 修复 `02c22394`；main build `43432927949`
-  Linux/Windows 双绿；`v1.0.76` release run `43438765045` 双绿、4 资产，Windows zip
-  sha256 `c60809e5a98b58930d157fa3250c86921709b207ab5f00d6fa30baf5d8d097ec`；本机部署
-  `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.76 (02c22394fdfe)`，回滚
-  `grok2.exe.1.0.75-828d5f5e0486.bak`，`~/.grok/bin` 已刷新。交接卡已归档
-  `.handoff/archive/token-economy-wave-2026-11.md`。
-- **2026-11-13 分支口径变更**：后续直接在 `main` 施工，不再开 feature 分支（见「分支纪律」）。
-- **v1.0.75（11-13 发版）**：`/compact <instructions>` 手动压缩保留重点。PR #11
-  merge `828d5f5e`；release run `43373939909` success，4 资产，Windows zip sha256
-  `2ea66d92…`；本机部署 `D:\tool-cli\grok2\grok2.exe` = `grok 1.0.75 (828d5f5e0486)`，
-  回滚点 `grok2.exe.1.0.74-aae2d5692699.bak`。活体验收待新会话。
-- **v1.0.74（11-12 发版）**：`send_feedback` 描述去掉会话路径；活体确认工具定义跨会话一致，首轮命中待新会话复测。
-- **2026-11-13**：token 经济配置已应用——4 个 1M 模型 `prune_mode=append` + `system_prompt_update=in_history`，窗口 300K + 80% 压缩（实测本会话 84 分钟 ≈ $1.0，同负载 1M 窗口 ≈ $2.1）；修正 `in-history` 非法拼写（此前能力位未生效）。变更说明在 `D:\pro\agent-teams-docs\grok-token-economy-config-changes.md`。
-- **v1.0.73**：release-warm 缓存预热、gash 后端、`inspect [privacy]` 修复。
-- 更早发版与交接原文见 `docs-local/archive/agents-md-todo-handoff-snapshot-2026-11-13.md`。
+- 本机 `grok 1.0.79 (59c36755686d)`，部署 `D:\tool-cli\grok2\grok2.exe`；回滚 `grok2.exe.1.0.78-b8a4f1d98363.bak`，`~/.grok/bin` 备份 `*.bak-1.0.78-fork`。
+- v1.0.79：客户端循环检测（ABAB 工具轮转、正文/思考复读，action stationarity 原有）；默认中止回合，`/loop-detect record` 只记账。
+- v1.0.78：零调用内建工具 deferred（`search_tool` 检索、`use_tool` 执行）；v1.0.77：token 经济 A 组。
+- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~七十五期；治理前原文快照：`docs-local/archive/agents-md-snapshot-2026-11-16.md`。
 
 ## 文档地图（docs-local）
 
