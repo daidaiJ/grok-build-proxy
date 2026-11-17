@@ -64,6 +64,8 @@ pub struct QueuedPrompt {
     pub chip_elements: Vec<ChipElement>,
     /// Combined-turn display segments (always at least two); drain paints one bubble each.
     pub combined_texts: Vec<String>,
+    /// When the user submitted this entry; `prompt.drain` reports the wait as `queue_ms`.
+    pub queued_at: Option<Instant>,
 }
 impl QueuedPrompt {
     /// Base row with every optional field at its default.
@@ -80,6 +82,7 @@ impl QueuedPrompt {
             skill_token_ranges: Vec::new(),
             chip_elements: Vec::new(),
             combined_texts: Vec::new(),
+            queued_at: None,
         }
     }
     /// Whether the wire payload is exactly the display text.
@@ -1003,6 +1006,7 @@ impl AgentSession {
         self.next_queue_id += 1;
         let entry = QueuedPrompt {
             skill_token_ranges,
+            queued_at: Some(Instant::now()),
             ..QueuedPrompt::plain(id, text, kind)
         };
         if front {

@@ -415,6 +415,7 @@ pub(super) fn maybe_drain_queue(agent: &mut AgentView, notices: &mut Vec<String>
             "kind": queued.kind.as_label(),
             "remaining_in_queue": agent.session.pending_prompts.len(),
             "prompt_len": queued.text.len(),
+            "queue_ms": queued.queued_at.map(|queued_at| queued_at.elapsed().as_millis() as u64),
         })),
     );
     // qtrace: a local drip-feed drain promotes this prompt to the running turn client-side (renders a scrollback block and sets current_prompt_id)

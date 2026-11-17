@@ -260,7 +260,15 @@ pub fn extract_user_guide_docs(grok_home: &std::path::Path) {
         return;
     }
     for doc in USER_GUIDE {
-        if let Err(e) = std::fs::write(docs_dir.join(doc.filename), doc.content) {
+        // LOCAL: skip the rewrite when the on-disk copy already matches. Windows antivirus rescans
+        // every replaced file, and this runs before the first frame on every launch.
+        let path = docs_dir.join(doc.filename);
+        if std::fs::read_to_string(&path)
+            .is_ok_and(|existing| existing == doc.content)
+        {
+            continue;
+        }
+        if let Err(e) = std::fs::write(path, doc.content) {
             tracing::debug!(error = %e, filename = doc.filename, "Failed to extract user-guide doc");
         }
     }

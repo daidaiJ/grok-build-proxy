@@ -100,6 +100,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ## 活跃待办（2026-11-16）
 
 ### 施工中 / 待合
+- 订阅到期体验 + 启动/退出 span — 代码完成，等 main CI、v1.0.80 发版与活体验收；见 PATCHES 七十六期、`docs-local/startup-perf/span-plan.md` §10。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪（改历史）、请求级修复持久化仍等 dump 证据；B/C 组未开工。见 PATCHES 七十五期、`docs-local/agent-cli-tracking/TODO.md` ①。
 - token 经济二轮 — A 组随 v1.0.77、零调用工具 deferred 搜索声明随 v1.0.78 发版；剩余 B 组（推理降级 A/B、调用合并 A/B、`search_tool` schema 上限）未开工。见 `docs-local/token-economy-port/deferred-builtin-tools-2026-11-14.md`、`.handoff/token-economy-next-round.md`。
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。

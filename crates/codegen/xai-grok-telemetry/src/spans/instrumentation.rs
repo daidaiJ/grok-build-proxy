@@ -580,6 +580,11 @@ impl InstrumentationTimer {
         }
     }
 
+    /// Elapsed time so far; lets a call site record its lane before the timer drops.
+    pub fn elapsed(&self) -> std::time::Duration {
+        self.start.elapsed()
+    }
+
     pub fn with_field(&mut self, key: impl Into<String>, value: impl Into<Value>) -> &mut Self {
         // Startup keeps fields in every mode: the `unified.jsonl` mirror needs them.
         if (self.mode != InstrumentationMode::Disabled && self.mode != InstrumentationMode::Chrome)
@@ -622,6 +627,9 @@ impl Drop for InstrumentationTimer {
             tracing::Span::none(),
         ));
         crate::startup::record_sub_timing(self.name, elapsed);
+        // Session-create/load lanes are collected independently of the startup window: session creation often
+        // finishes after the first frame, exactly where the old mirror stopped.
+        crate::session_timing::record_timer(self.name, elapsed);
         // Mirror into `unified.jsonl` while startup is active, so a slow-launch report needs no env vars or repro
         // The first usable session latches this off
         if crate::startup::is_active() {

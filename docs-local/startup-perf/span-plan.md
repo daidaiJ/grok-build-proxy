@@ -1,9 +1,17 @@
 # 启动 span 细化专题（方案）
 
-> **状态：方案（2026-11-12），未开工。** 基线 `grok2 1.0.73 (a4f73dc8)`。
+> **状态：P0 已实现（2026-11-17，v1.0.80 候选），待活体验收与聚合报告。** 基线 `grok2 1.0.73 (a4f73dc8)`。
 > 目标：把「进程启动 → TUI 首帧 → 会话就绪 → 首条 prompt → 首 token」和
 > 「quit → 进程退出」的每一段补成可回归的 span/事件；先消盲区，再谈优化。
 > 现场数据与复现流程见 [`README.md`](README.md)，本文件只定义测量面与施工切片。
+>
+> 实现落地（详见 §11）：
+> - `session.create.breakdown`（含 pre-spawn / spawn / agent_build / skills 分层与 `other_ms` 兜底）
+> - `session.load.breakdown`（resume 的 load / spawn / replay / reconcile / finalize）
+> - `session.mcp_ready`（per-server `initialize_ms` / `list_tools_ms` / `tool_count` / `outcome`）
+> - `turn.first_prompt`（首轮 `turn_start_to_prep_ms` / `mcp_wait_ms` / `prep_ms`）
+> - `prompt.drain.queue_ms`（用户提交 → 本地发出）
+> - `exit.teardown.{start,terminal_restore,worker,done}`（flush / drain / runtime / join 拆分）
 
 ## 1. 为什么现在补
 
@@ -359,7 +367,41 @@ Defender 扫描会把 first-run 拉高，混在一起会误判。
 5. 是否把 `session.create.done` 的计时起点前移到 MCP 配置发现之前？
    现在 `discover_mcp_servers` 在计时外，用户感知的总时长会略大于字段值。
 
-## 10. 代码锚点
+## 10. 实现记录（2026-11-17）
+
+### 10.1 事件与字段（已落地）
+
+| 事件 | 位置 | 关键字段 | 说明 |
+|---|---|---|---|
+| `session.create.breakdown` | shell `session_setup.rs` | `total_ms`、`workspace_ms`、`persistence_ms`、`spawn_and_register_ms`、`git_discovery_ms`、`finalize_ms`、`pre_spawn.{lsp_build,trust,envrc,other}_ms`、`spawn.{agent_build,tool_setup,history_persist,hooks_discovery,workflow_restore,config_load,git_scan,other}_ms`、`agent_build.{skills,tool_registry,agents_md,gitignore,prompt_render,subagent_discovery,other}_ms`、`skills.{walk,parse}_ms`、`skills_count`、`skills_disabled_count`、`skills_sources` | 顶层四桶相加 = `total_ms`；`workspace_ms` 是四桶之外的入口开销。仅首会话必发，后续会话同样发（用于观察多会话成本）。 |
+| `session.load.breakdown` | shell `session_setup.rs` | `total_ms`、`load_ms`、`spawn_and_register_ms`、`replay_ms`、`reconcile_ms`、`restore_model_ms`、`git_scan_ms`、`finalize_ms` | resume 的大 `updates.jsonl` 回放单独成桶。 |
+| `session.mcp_ready` | shell `mcp_init.rs` | `total_ms`、`init_ms`、`server_count`、`ok/failed/auth_required`、`tool_count`、`reinit`、`servers_truncated`、`servers[]`（`name/transport/initialize_ms/list_tools_ms/tool_count/outcome`） | 最多 16 条，失败与慢的优先保留。`initialize_ms` 是 connect+initialize，`list_tools_ms` 是首次分页列工具。 |
+| `turn.first_prompt` | shell `sampler_turn.rs` | `turn_start_to_prep_ms`、`mcp_wait_ms`、`prep_ms`、`tool_count` | 每会话首轮、非 subagent 发一次。 |
+| `prompt.drain.queue_ms` | pager `dispatch/queue.rs` | `queue_ms`（新增字段） | 用户提交 → 本地队列发出；与 shell 的 `turn_start_to_prep_ms` 拼出用户感知的等待。 |
+| `exit.teardown.start` | pager `app/mod.rs` | `reason`（quit/update/relaunch/error） | 事件循环返回后立即发。 |
+| `exit.teardown.terminal_restore` | pager `app/mod.rs` | `elapsed_ms` | 终端恢复段。 |
+| `exit.teardown.worker` | pager `acp/spawn.rs` | `join_ms`、`flush_ms`、`drain_ms`、`runtime_ms`、`outcome`、`notice_shown` | 与现有 `session_end.worker_join` 并存；后者保留兼容。 |
+| `exit.teardown.done` | pager `app/mod.rs` | `total_ms`、`reason`、`terminal_restore_ms`、`log_flush_ms`、`join_done_ms`、`join_ms`、`flush_ms`、`drain_ms`、`runtime_ms`、`process_drain_ms`、`outcome`、`notice_shown` | quit → 进程退出总账。 |
+
+### 10.2 采集机制
+
+- 新增 `xai_grok_telemetry::session_timing`：一个有界（256 lane）的进程级 waterfall，`begin()` 在
+  `session/new` / `session/load` 入口清空并开启，`take()` 在发出 breakdown 时消费并关闭。
+- `InstrumentationTimer::drop` 自动把 `startup.*` / `session.*` 计时写入 waterfall（`session_timing::record_timer`），
+  无需在每个 spawn 子步骤手写计时；`startup.` 与 `session.` 前缀归一化，首帧前后的命名差异不会拆成两条 lane。
+- skills 发现额外记录 `skills_walk_ms` / `skills_parse_ms` 与来源计数（local/repo/user/server/bundled/plugin）。
+- MCP 客户端在 `list_tool_registrations` 内记录 connect+initialize 与首次 `tools/list` 的分段；shell 的
+  `run_handshake` 读取 `last_handshake_timings_ms()` 并汇入 `session.mcp_ready`。
+- 新事件全部直接走 `unified_log::info`，不依赖 `startup::is_active()`，因此首帧之后照常落盘；
+  现有 `startup phase/timing/complete/interactive` 的名称与语义未改。
+
+### 10.3 已知边界
+
+- `initialize_ms` 包含传输建立与 MCP initialize，未再拆 TCP/子进程启动；需要时在 `McpClient::ensure_initialized` 内继续细分。
+- `session.create.breakdown` 的 lane 不带 session id；同一进程并发创建多个会话时可能互相覆盖（TUI 单会话场景不受影响）。
+- MCP grace 的实际等待上限仍由 `MCP_STARTUP_GRACE` / delivery 策略决定；`turn.first_prompt.mcp_wait_ms` 记录实际等待值。
+
+## 11. 代码锚点
 
 - 启动阶段与事件名：`crates/codegen/xai-grok-telemetry/src/spans/startup.rs:25-33`
 - 阶段预算（`SessionCreate` 3s）：`crates/codegen/xai-grok-telemetry/src/spans/startup.rs:52-60`

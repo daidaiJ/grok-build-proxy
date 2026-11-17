@@ -450,8 +450,12 @@ fn parse_esc_ttl(raw: Option<String>) -> Duration {
 /// Slash commands unavailable on the free and X Basic subscription tiers.
 /// To restrict another command for these tiers, add its canonical name (no leading `/`) here.
 /// Matching covers aliases automatically via [`crate::slash::registry::CommandRegistry::set_restricted_commands`].
-pub(crate) const TIER_RESTRICTED_COMMANDS: &[&str] =
-    &["usage", "imagine", "imagine-video", "voice"];
+///
+/// LOCAL: `/usage` is deliberately not restricted. On BYOK/provider models its Usage limit tab is
+/// the local provider-plan view (`provider_usage_lines` runs before the xAI billing gate), and on an
+/// expired subscription the xAI block is still the fastest way to see the reset time. Blocking it
+/// behind the SuperGrok upsell turns a read-only diagnostic into a dead end.
+pub(crate) const TIER_RESTRICTED_COMMANDS: &[&str] = &["imagine", "imagine-video", "voice"];
 /// Whether a subscription-tier display name is a tier with restricted commands: the free tier and X Basic.
 /// Free covers no subscription (`None`) or an explicit "Free"; X Basic covers CCP display name "X Basic" with JWT claim fallback "x_basic".
 /// The pager's *cosmetic* slash-command gate treats an absent tier (`None`) as restricted (it recovers live on the next settings update).
@@ -1681,9 +1685,7 @@ impl AppView {
     /// Sync the deny list into every slash surface (welcome prompt, all agents, dashboard) so restricted commands hide/show in lockstep.
     /// A mid-session upgrade thus lifts the restrictions without a restart.
     pub fn apply_tier_restrictions(&mut self) {
-        let restricted = self.team_name.is_none()
-            && self.consumer_account()
-            && is_restricted_tier(self.subscription_tier.as_deref());
+        let restricted = self.tier_is_restricted();
         let names: Vec<String> = if restricted {
             TIER_RESTRICTED_COMMANDS
                 .iter()
@@ -1700,6 +1702,24 @@ impl AppView {
             dashboard.set_restricted_commands(&names);
         }
         self.tier_restricted_commands = names;
+    }
+    /// Whether the current consumer account sits on a restricted (free / X Basic) tier.
+    /// The same predicate drives the slash deny list and the background-poll cadences.
+    pub(crate) fn tier_is_restricted(&self) -> bool {
+        self.team_name.is_none()
+            && self.consumer_account()
+            && is_restricted_tier(self.subscription_tier.as_deref())
+    }
+    /// Like [`Self::tier_is_restricted`], but only for a tier the server actually named.
+    /// An unknown tier is fail-closed for slash gates, while poll cadences keep their fast default
+    /// until auth meta lands.
+    pub(crate) fn tier_is_explicitly_restricted(&self) -> bool {
+        self.team_name.is_none()
+            && self.consumer_account()
+            && self
+                .subscription_tier
+                .as_deref()
+                .is_some_and(xai_grok_shell::tier::is_restricted_tier_name)
     }
     /// A personal subscription login. API keys, external auth providers, and backend-billed accounts carry no subscription tier
     pub(super) fn consumer_account(&self) -> bool {

@@ -240,7 +240,10 @@ pub async fn resolve_boot_startup_settings(
         },
         async {
             match models_load {
-                Some(load) => load.join(cancel, crate::http::STARTUP_FETCH_TIMEOUT).await,
+                Some(load) => {
+                    load.join(cancel, crate::agent::remote_config::MODELS_BOOT_WAIT)
+                        .await
+                }
                 None => None,
             }
         },

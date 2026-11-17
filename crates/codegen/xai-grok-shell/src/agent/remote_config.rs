@@ -17,7 +17,7 @@ pub(in crate::agent::remote_config) use model_fetch_auth::{
 };
 pub(in crate::agent::remote_config) use prefetch::resolve_startup_endpoints;
 pub(crate) use prefetch::{
-    ResolvedModels, fetch_initial_models_blocking, start_initial_models_load,
+    MODELS_BOOT_WAIT, ResolvedModels, fetch_initial_models_blocking, start_initial_models_load,
 };
 pub(crate) use resolution::{
     CatalogSource, allowlist_denied_message, allowlist_excludes_all_message,

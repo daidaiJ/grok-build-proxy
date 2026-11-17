@@ -1207,20 +1207,64 @@ pub async fn run(
         Ok(_) => Some(0),
         Err(_) => Some(1),
     };
+    let exit_reason = match &result {
+        Ok(run_result) if run_result.quit_for_update => "update",
+        Ok(run_result) if run_result.relaunch.is_some() => "relaunch",
+        Ok(_) => "quit",
+        Err(_) => "error",
+    };
     if let Some(code) = forced_exit_code {
         exit_timeout::arm(code);
         exit_timeout::hold_teardown_for_test();
     }
+    let exit_started_at = std::time::Instant::now();
+    crate::unified_log::write_direct_info(
+        "exit.teardown.start",
+        Some(serde_json::json!({ "reason": exit_reason })),
+    );
+    let restore_started_at = std::time::Instant::now();
     let restore_result = restore_terminal(
         terminal,
         writer_thread,
         reader_thread,
         current_screen_mode(),
     );
+    let terminal_restore_ms =
+        u64::try_from(restore_started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
+    crate::unified_log::write_direct_info(
+        "exit.teardown.terminal_restore",
+        Some(serde_json::json!({ "elapsed_ms": terminal_restore_ms })),
+    );
+    let log_flush_started_at = std::time::Instant::now();
     crate::unified_log::flush_blocking().await;
+    let log_flush_ms =
+        u64::try_from(log_flush_started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
     drop(agent_guard);
+    let join_done_ms = u64::try_from(exit_started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
+    let process_drain_started_at = std::time::Instant::now();
     xai_grok_telemetry::session_ctx::drain_at_process_exit().await;
     xai_tty_utils::global_process_scope().kill_all();
+    let process_drain_ms =
+        u64::try_from(process_drain_started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
+    let teardown = crate::acp::spawn::exit_teardown_snapshot();
+    crate::unified_log::write_direct_info(
+        "exit.teardown.done",
+        Some(serde_json::json!({
+            "total_ms": u64::try_from(exit_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+            "reason": exit_reason,
+            "terminal_restore_ms": terminal_restore_ms,
+            "log_flush_ms": log_flush_ms,
+            "join_done_ms": join_done_ms,
+            "join_ms": teardown.join_ms,
+            "flush_ms": teardown.flush_ms,
+            "drain_ms": teardown.drain_ms,
+            "runtime_ms": teardown.runtime_ms,
+            "process_drain_ms": process_drain_ms,
+            "outcome": teardown.outcome,
+            "notice_shown": teardown.notice_shown,
+        })),
+    );
+    crate::unified_log::flush_blocking().await;
     crate::app::status_line::metrics::global().report_health();
     let terminal_reading = !matches!(restore_result, Ok(WriterJoin::TimedOut));
     if let Err(cleanup_error) = &restore_result {

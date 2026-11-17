@@ -4267,6 +4267,7 @@ impl MvpAgent {
             prefetch,
         } = spec;
         let _timer = crate::instrumentation_timer!("session.spawn_and_register");
+        let pre_spawn_started = std::time::Instant::now();
         reject_direct_hub_cloud_meta(session_meta)?;
         let spawn_remote_settings = self.cfg.borrow().remote_settings.clone();
         let mut prefetch = match prefetch {
@@ -4280,8 +4281,13 @@ impl MvpAgent {
                 )
             }
         };
+        let trust_started = std::time::Instant::now();
         let project_env_trusted = prefetch
             .resolve_trust(cwd.as_path(), spawn_remote_settings.as_ref());
+        xai_grok_telemetry::session_timing::record(
+            "pre_spawn.trust_ms",
+            trust_started.elapsed(),
+        );
         let load_envrc = self.cfg.borrow().session.load_envrc.unwrap_or(true);
         let envrc = envrc
             .unwrap_or_else(|| xai_grok_workspace::envrc::spawn_envrc_load(
@@ -4444,7 +4450,12 @@ impl MvpAgent {
             cwd.as_path(),
             project_env_trusted,
         );
+        let envrc_load_started = std::time::Instant::now();
         session_env.extend(envrc.join().await);
+        xai_grok_telemetry::session_timing::record(
+            "pre_spawn.envrc_ms",
+            envrc_load_started.elapsed(),
+        );
         drop(session_env_timer);
         if no_color {
             session_env.extend(crate::terminal::no_color_env());
@@ -4670,10 +4681,15 @@ impl MvpAgent {
             .borrow()
             .resolve_lsp_tools_for_cwd(tool_ctx.cwd.as_path());
         if lsp_tools_enabled && tool_ctx.lsp.is_none() {
-            if let Some((backend, server_names)) = self
+            let lsp_started = std::time::Instant::now();
+            let built_lsp = self
                 .build_lsp_backend(tool_ctx.cwd.as_path(), tool_ctx.process_scope.clone(), false)
-                .await
-            {
+                .await;
+            xai_grok_telemetry::session_timing::record(
+                "pre_spawn.lsp_build_ms",
+                lsp_started.elapsed(),
+            );
+            if let Some((backend, server_names)) = built_lsp {
                 tool_ctx.lsp_server_names = server_names;
                 tool_ctx.lsp = Some(backend);
             }
@@ -4798,6 +4814,10 @@ impl MvpAgent {
                 );
             }
         }
+        xai_grok_telemetry::session_timing::record(
+            "pre_spawn_ms",
+            pre_spawn_started.elapsed(),
+        );
         let (init, session_thread) = {
             let _timer = crate::instrumentation_timer!("session.spawn_actor_call");
             let session_key = self.auth_manager.current_or_expired().map(|a| a.key);

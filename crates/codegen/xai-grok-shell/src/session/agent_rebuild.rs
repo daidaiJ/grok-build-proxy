@@ -400,6 +400,7 @@ impl AgentRebuildSpec {
         let agent = builder.build().await?;
         crate::waterfall::mark(session_id_str, crate::waterfall::stage::SB_BUILDER_DONE);
         let agent_build_elapsed = build_phase_start.elapsed();
+        xai_grok_telemetry::session_timing::record("agent_build_ms", agent_build_elapsed);
         task_model_selection.set(presentation.selection);
         xai_grok_telemetry::session_ctx::log_event(presentation_applied_event(
             &presentation,

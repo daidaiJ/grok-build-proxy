@@ -208,6 +208,178 @@ fn log_session_started(
         ),
     );
 }
+
+static FIRST_SESSION_CREATED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Emits the lane waterfall collected while `session/new` ran. Top-level buckets sum to `total_ms`; each
+/// `other_ms` is the parent minus its named children, so a missing instrument never disappears from the total.
+fn emit_session_create_breakdown(
+    session_id: &acp::SessionId,
+    total_ms: u64,
+    workspace_ms: u64,
+    first_session: bool,
+    is_git_repo: bool,
+) {
+    let lanes = xai_grok_telemetry::session_timing::take();
+    let get = |key: &str| lanes.get(key).copied().unwrap_or(0);
+
+    let persistence_ms = get("persistence_init");
+    let spawn_and_register_ms = get("spawn_and_register");
+    let git_discovery_ms = get("new_session.git_discovery");
+    let finalize_ms = total_ms.saturating_sub(
+        persistence_ms
+            .saturating_add(spawn_and_register_ms)
+            .saturating_add(git_discovery_ms),
+    );
+
+    let pre_spawn_ms = get("pre_spawn_ms");
+    let lsp_build_ms = get("pre_spawn.lsp_build_ms");
+    let trust_ms = get("pre_spawn.trust_ms");
+    let envrc_ms = get("pre_spawn.envrc_ms");
+    let pre_spawn_other_ms = pre_spawn_ms.saturating_sub(
+        lsp_build_ms
+            .saturating_add(trust_ms)
+            .saturating_add(envrc_ms),
+    );
+
+    let spawn_actor_call_ms = get("spawn_actor_call");
+    let agent_build_ms = {
+        let timed = get("agent_build_ms");
+        if timed > 0 {
+            timed
+        } else {
+            get("spawn_actor.agent_build")
+        }
+    };
+    let tool_setup_ms = get("spawn_actor.tool_setup");
+    let history_persist_ms = get("spawn_actor.history_persist");
+    let hooks_discovery_ms = get("spawn_actor.hooks_discovery");
+    let workflow_restore_ms = get("spawn_actor.workflow_restore");
+    let config_load_ms = get("spawn_actor.config_load");
+    let git_scan_ms = get("spawn_actor.git_scan");
+    let spawn_other_ms = spawn_actor_call_ms.saturating_sub(
+        agent_build_ms
+            .saturating_add(tool_setup_ms)
+            .saturating_add(history_persist_ms)
+            .saturating_add(hooks_discovery_ms)
+            .saturating_add(workflow_restore_ms)
+            .saturating_add(config_load_ms)
+            .saturating_add(git_scan_ms),
+    );
+
+    let skills_ms = get("agent_build.skills_discovery");
+    let tool_registry_ms = get("agent_build.tool_registry");
+    let agents_md_ms = get("agent_build.agents_md_load");
+    let gitignore_ms = get("agent_build.gitignore_compile");
+    let prompt_render_ms = get("agent_build.prompt_render");
+    let subagent_discovery_ms = get("agent_build.subagent_discovery");
+    let agent_build_other_ms = agent_build_ms.saturating_sub(
+        skills_ms
+            .saturating_add(tool_registry_ms)
+            .saturating_add(agents_md_ms)
+            .saturating_add(gitignore_ms)
+            .saturating_add(prompt_render_ms)
+            .saturating_add(subagent_discovery_ms),
+    );
+
+    let skills_breakdown = serde_json::json!({
+        "skills_ms": skills_ms,
+        "skills_walk_ms": get("skills_walk_ms"),
+        "skills_parse_ms": get("skills_parse_ms"),
+        "skills_count": get("skills.count"),
+        "skills_files_walked": get("skills.files_walked"),
+        "skills_disabled_count": get("skills.disabled_count"),
+        "skills_sources": {
+            "local": get("skills.local_count"),
+            "repo": get("skills.repo_count"),
+            "user": get("skills.user_count"),
+            "server": get("skills.server_count"),
+            "bundled": get("skills.bundled_count"),
+            "plugin": get("skills.plugin_count"),
+        },
+        "tool_registry_ms": tool_registry_ms,
+        "agents_md_ms": agents_md_ms,
+        "gitignore_ms": gitignore_ms,
+        "prompt_render_ms": prompt_render_ms,
+        "subagent_discovery_ms": subagent_discovery_ms,
+        "other_ms": agent_build_other_ms,
+    });
+
+    let payload = serde_json::json!({
+        "kind": "new",
+        "first_session": first_session,
+        "cwd_kind": if is_git_repo { "project" } else { "non_git" },
+        "total_ms": total_ms,
+        "workspace_ms": workspace_ms,
+        "persistence_ms": persistence_ms,
+        "spawn_and_register_ms": spawn_and_register_ms,
+        "git_discovery_ms": git_discovery_ms,
+        "finalize_ms": finalize_ms,
+        "spawn_and_register": {
+            "pre_spawn_ms": pre_spawn_ms,
+            "spawn_actor_call_ms": spawn_actor_call_ms,
+            "pre_spawn": {
+                "lsp_build_ms": lsp_build_ms,
+                "trust_ms": trust_ms,
+                "envrc_ms": envrc_ms,
+                "other_ms": pre_spawn_other_ms,
+            },
+            "spawn": {
+                "agent_build_ms": agent_build_ms,
+                "tool_setup_ms": tool_setup_ms,
+                "history_persist_ms": history_persist_ms,
+                "hooks_discovery_ms": hooks_discovery_ms,
+                "workflow_restore_ms": workflow_restore_ms,
+                "config_load_ms": config_load_ms,
+                "git_scan_ms": git_scan_ms,
+                "other_ms": spawn_other_ms,
+                "agent_build": skills_breakdown,
+            },
+        },
+    });
+    xai_grok_telemetry::unified_log::info(
+        "session.create.breakdown",
+        Some(session_id.0.as_ref()),
+        Some(payload),
+    );
+}
+
+/// Resume counterpart of [`emit_session_create_breakdown`]. Replay dominates a large history, so it is a named
+/// bucket rather than part of `finalize_ms`.
+fn emit_session_load_breakdown(session_id: &acp::SessionId, total_ms: u64) {
+    let lanes = xai_grok_telemetry::session_timing::take();
+    let get = |key: &str| lanes.get(key).copied().unwrap_or(0);
+
+    let load_ms = get("load");
+    let spawn_and_register_ms = get("spawn_and_register");
+    let replay_ms = get("delta_flush_replay");
+    let reconcile_ms = get("reconcile_stale_tasks");
+    let restore_model_ms = get("restore_model");
+    let git_scan_ms = get("git_divergence");
+    let named = load_ms
+        .saturating_add(spawn_and_register_ms)
+        .saturating_add(replay_ms)
+        .saturating_add(reconcile_ms)
+        .saturating_add(restore_model_ms)
+        .saturating_add(git_scan_ms);
+    let payload = serde_json::json!({
+        "kind": "load",
+        "total_ms": total_ms,
+        "load_ms": load_ms,
+        "spawn_and_register_ms": spawn_and_register_ms,
+        "replay_ms": replay_ms,
+        "reconcile_ms": reconcile_ms,
+        "restore_model_ms": restore_model_ms,
+        "git_scan_ms": git_scan_ms,
+        "finalize_ms": total_ms.saturating_sub(named),
+    });
+    xai_grok_telemetry::unified_log::info(
+        "session.load.breakdown",
+        Some(session_id.0.as_ref()),
+        Some(payload),
+    );
+}
 impl MvpAgent {
     /// Read this client's capabilities, falling back to the agent's own state where the request says nothing.
     fn resolve_client_caps(
@@ -390,6 +562,7 @@ impl MvpAgent {
         arguments: acp::NewSessionRequest,
     ) -> Result<acp::NewSessionResponse, acp::Error> {
         let session_started_at = std::time::Instant::now();
+        xai_grok_telemetry::session_timing::begin();
         reject_chat_kind_without_feature(arguments.meta.as_ref())?;
         tracing::debug!(config = ?self.sampling_config, "Received new session request {arguments:?}");
         let init = self.initialize_request.get().ok_or_else(|| {
@@ -413,6 +586,9 @@ impl MvpAgent {
                 arguments.meta.as_ref(),
             )
             .await?;
+        // The breakdown's four top-level buckets start after workspace resolution; `workspace_ms` keeps the
+        // pre-create cost visible without breaking the sum.
+        let create_started_at = std::time::Instant::now();
         let client_session_id = arguments
             .meta
             .as_ref()
@@ -913,6 +1089,16 @@ impl MvpAgent {
             session_started_at.elapsed(),
             false,
         );
+        let first_session = !FIRST_SESSION_CREATED.swap(true, std::sync::atomic::Ordering::Relaxed);
+        emit_session_create_breakdown(
+            &session_id,
+            xai_grok_telemetry::session_timing::duration_ms(create_started_at.elapsed()),
+            xai_grok_telemetry::session_timing::duration_ms(
+                create_started_at.saturating_duration_since(session_started_at),
+            ),
+            first_session,
+            is_git_repo,
+        );
         let config_options = self.acp_config_options(Some(&session_id), &models);
         self.report_setup_phase(SessionSetupPhase::ResponseReady);
         Ok(acp::NewSessionResponse::new(session_id)
@@ -932,6 +1118,7 @@ impl MvpAgent {
         op: AttachOperation,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
         let attach_started_at = std::time::Instant::now();
+        xai_grok_telemetry::session_timing::begin();
         let load_guard = self.begin_session_load(&arguments.session_id);
         reject_chat_kind_without_feature(arguments.meta.as_ref())?;
         let live_cwd = AbsPathBuf::new(arguments.cwd.clone())
@@ -1416,6 +1603,10 @@ impl MvpAgent {
             op.start_kind(),
             attach_started_at.elapsed(),
             restored_from_disk,
+        );
+        emit_session_load_breakdown(
+            &session_id,
+            xai_grok_telemetry::session_timing::duration_ms(attach_started_at.elapsed()),
         );
         Ok(response)
     }

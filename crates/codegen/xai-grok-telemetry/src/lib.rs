@@ -38,7 +38,9 @@ pub use session::session_ctx::{
     log_session_event_with_origin, spawn_local_in_session_ctx, with_session_ctx,
 };
 pub use session::{activity, session_ctx, session_end, session_metrics, subagent_spawn};
-pub use spans::{instrumentation, prompt_timing, region, span_profile, startup, turn_phases};
+pub use spans::{
+    instrumentation, prompt_timing, region, session_timing, span_profile, startup, turn_phases,
+};
 pub(crate) use xai_grok_otel::otlp;
 pub(crate) use xai_grok_otel::redact_common;
 pub use xai_grok_otel::redact_common::redact_error_detail;

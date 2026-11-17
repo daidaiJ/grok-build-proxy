@@ -134,6 +134,11 @@ pub(crate) fn start_initial_models_load(
 /// Poll slice bounding the sync models wait so a bootstrap cancel is observed promptly.
 const MODELS_WAIT_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
 
+/// LOCAL: cap the boot wait for the model catalog. The fetch thread keeps running and commits the
+/// cache after this expires, so the next launch is fast; paying the full network latency before the
+/// composer appears is worse than starting with the bundled/configured catalog for one session.
+pub(crate) const MODELS_BOOT_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// Synchronous catalog prefetch for a bootstrap that had no async pre-resolve.
 /// A cancel or the fetch timeout ends the wait; the thread still lands its monotonic commit.
 pub(crate) fn fetch_initial_models_blocking(
@@ -145,7 +150,7 @@ pub(crate) fn fetch_initial_models_blocking(
     fetch_catalog_blocking(
         "grok-models-prefetch-sync",
         cancel,
-        crate::http::STARTUP_FETCH_TIMEOUT,
+        MODELS_BOOT_WAIT,
         MODELS_WAIT_POLL_INTERVAL,
         move |cancel| run_models_prefetch(plan, cancel),
     )

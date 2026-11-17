@@ -2747,6 +2747,18 @@ impl SessionActor {
                 "elapsed_since_turn_start_ms": conv_turn_start.elapsed().as_millis() as u64,
             })),
         );
+        if self.current_turn_number.get() == 0 && !self.startup_hints.is_subagent {
+            xai_grok_telemetry::unified_log::info(
+                "turn.first_prompt",
+                Some(self.session_info.id.0.as_ref()),
+                Some(serde_json::json!({
+                    "turn_start_to_prep_ms": conv_turn_start.elapsed().as_millis() as u64,
+                    "mcp_wait_ms": mcp_wait_ms,
+                    "prep_ms": total_prep_ms,
+                    "tool_count": tool_definitions.len(),
+                })),
+            );
+        }
         if let Some(ref gcs_config) = trace_gcs_config {
             let gcs_cfg = gcs_config.clone();
             let tool_defs = tool_definitions.clone();

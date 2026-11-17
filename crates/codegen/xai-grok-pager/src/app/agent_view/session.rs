@@ -1348,7 +1348,7 @@ impl AgentView {
             .slash_controller
             .set_usage_command_visible(visible);
     }
-    /// Replace the restricted slash-command deny list in this agent's registry (e.g. `/usage` denied on the free / X Basic tiers).
+    /// Replace the restricted slash-command deny list in this agent's registry (e.g. `/imagine` denied on the free / X Basic tiers).
     /// Deny wins over every `set_*_visible` gate.
     pub fn set_restricted_commands(&mut self, names: &[String]) {
         self.prompt.set_restricted_commands(names);

@@ -3169,6 +3169,10 @@ pub struct McpClient {
     /// `Some` after [`Self::arm_liveness_watcher`] succeeds; `None` initially.
     /// `parking_lot::Mutex` is sufficient because the lock is only ever held for the duration of a slot swap.
     liveness_handle: Arc<parking_lot::Mutex<Option<crate::liveness::TransportLivenessHandle>>>,
+    /// Last handshake split for diagnostics: connect+initialize and the first `tools/list` pagination.
+    /// Written by [`Self::list_tool_registrations`], read by the caller after `get_tool_registrations`.
+    handshake_initialize_ms: std::sync::atomic::AtomicU64,
+    handshake_list_tools_ms: std::sync::atomic::AtomicU64,
 }
 
 /// Shared sender slot: the same Arc lives on the [`McpClient`] and the [`GrokClientHandler`] it constructs during [`McpClient::try_handshake`].
@@ -3280,6 +3284,8 @@ impl McpClient {
             elicitation_tx: Arc::new(parking_lot::Mutex::new(None)),
             request_tracker: Arc::default(),
             liveness_handle: Arc::new(parking_lot::Mutex::new(None)),
+            handshake_initialize_ms: std::sync::atomic::AtomicU64::new(0),
+            handshake_list_tools_ms: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -4431,6 +4437,17 @@ impl McpClient {
         }
     }
 
+    /// Last handshake split in milliseconds: `(connect+initialize, first tools/list)`.
+    /// Zero when no handshake has completed on this client yet.
+    pub fn last_handshake_timings_ms(&self) -> (u64, u64) {
+        (
+            self.handshake_initialize_ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+            self.handshake_list_tools_ms
+                .load(std::sync::atomic::Ordering::Relaxed),
+        )
+    }
+
     async fn list_tool_registrations(
         &self,
         mcp_state: Arc<Mutex<McpState>>,
@@ -4438,7 +4455,13 @@ impl McpClient {
         // No timers across the initialize / list awaits: `InstrumentationTimer`
         // holds a Chrome-mode span guard that must not cross an await
         // (`!Send`, and tracing's span stack is per-thread).
-        let mcp_service = self.ensure_initialized().await?;
+        let initialize_start = std::time::Instant::now();
+        let initialize_result = self.ensure_initialized().await;
+        self.handshake_initialize_ms.store(
+            u64::try_from(initialize_start.elapsed().as_millis()).unwrap_or(u64::MAX),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        let mcp_service = initialize_result?;
 
         let list_tools_start = std::time::Instant::now();
         let list_tools_span = xai_grok_telemetry::region::Region::from_span(tracing::info_span!(
@@ -4450,20 +4473,24 @@ impl McpClient {
         let mut all_tools = Vec::new();
         let mut cursor: Option<String> = None;
 
-        loop {
-            let list_tools_result = mcp_service
-                .list_tools(Some(
-                    PaginatedRequestParams::default().with_cursor(cursor.clone()),
-                ))
-                .await?;
+        let list_result: Result<(), McpError> = async {
+            loop {
+                let list_tools_result = mcp_service
+                    .list_tools(Some(
+                        PaginatedRequestParams::default().with_cursor(cursor.clone()),
+                    ))
+                    .await?;
 
-            all_tools.extend(list_tools_result.tools);
+                all_tools.extend(list_tools_result.tools);
 
-            match list_tools_result.next_cursor {
-                Some(next) => cursor = Some(next),
-                None => break,
+                match list_tools_result.next_cursor {
+                    Some(next) => cursor = Some(next),
+                    None => break,
+                }
             }
+            Ok(())
         }
+        .await;
         list_tools_span
             .span()
             .record("tools_count", all_tools.len() as i64);
@@ -4471,6 +4498,11 @@ impl McpClient {
             .span()
             .record("elapsed_ms", list_tools_start.elapsed().as_millis() as i64);
         list_tools_span.close();
+        self.handshake_list_tools_ms.store(
+            u64::try_from(list_tools_start.elapsed().as_millis()).unwrap_or(u64::MAX),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        list_result?;
 
         let event_writer = mcp_state.lock().await.event_writer().clone();
         let listed_count = all_tools.len();

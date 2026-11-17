@@ -50,6 +50,8 @@ struct HandshakeSuccess {
     server: String,
     registrations: Vec<crate::session::mcp_servers::McpToolRegistration>,
     elapsed: std::time::Duration,
+    initialize_ms: u64,
+    list_tools_ms: u64,
     timeout_sec: u64,
 }
 
@@ -58,10 +60,23 @@ struct HandshakeFailure {
     error: crate::session::mcp_servers::McpError,
     needs_auth: bool,
     elapsed: std::time::Duration,
+    initialize_ms: u64,
+    list_tools_ms: u64,
     timeout_sec: u64,
 }
 
 type HandshakeOutcome = Result<HandshakeSuccess, HandshakeFailure>;
+
+/// One row of `session.mcp_ready`; bounded to the slowest/failed servers when the set is large.
+#[derive(Clone)]
+struct ServerTiming {
+    name: String,
+    transport: &'static str,
+    initialize_ms: u64,
+    list_tools_ms: u64,
+    tool_count: u32,
+    outcome: &'static str,
+}
 
 #[derive(Default)]
 pub(super) struct InitTally {
@@ -119,6 +134,7 @@ pub(super) struct InitPass {
     inserted_servers: Vec<String>,
     ui_tools_by_server:
         std::collections::HashMap<String, Vec<crate::extensions::mcp::McpToolEntry>>,
+    server_timings: Vec<ServerTiming>,
     tally: InitTally,
 }
 
@@ -168,6 +184,7 @@ impl InitPass {
             is_reinit: !claim.existing_client_names.is_empty(),
             inserted_servers: Vec::new(),
             ui_tools_by_server: std::collections::HashMap::new(),
+            server_timings: Vec::new(),
             tally: InitTally::default(),
         }
     }
@@ -186,7 +203,21 @@ impl Drop for InitPass {
 impl InitPass {
     /// A server that never spawned counts in the completion event like a failed handshake.
     pub(super) fn tally_spawn_failure(&mut self, server: String, needs_auth: bool) {
+        self.server_timings.push(ServerTiming {
+            name: server.clone(),
+            transport: self.transport_or_unknown(&server),
+            initialize_ms: 0,
+            list_tools_ms: 0,
+            tool_count: 0,
+            outcome: if needs_auth { "auth_required" } else { "spawn_failed" },
+        });
         self.tally.add_failed(server, needs_auth);
+    }
+
+    fn transport_or_unknown(&self, server: &str) -> &'static str {
+        self.servers
+            .get(server)
+            .map_or("unknown", |info| info.transport)
     }
 
     pub(super) async fn run(mut self, refresher: SnapshotRefresher) {
@@ -259,6 +290,8 @@ impl InitPass {
                         )),
                         needs_auth: false,
                         elapsed: std::time::Duration::ZERO,
+                        initialize_ms: 0,
+                        list_tools_ms: 0,
                         timeout_sec: 0,
                     })
                 }
@@ -340,6 +373,8 @@ impl InitPass {
             server,
             registrations,
             elapsed,
+            initialize_ms,
+            list_tools_ms,
             timeout_sec,
         } = success;
         tracing::info!(
@@ -420,6 +455,14 @@ impl InitPass {
             Some(tool_count as i64),
             None,
         );
+        self.server_timings.push(ServerTiming {
+            name: server.clone(),
+            transport: self.transport_or_unknown(&server),
+            initialize_ms,
+            list_tools_ms,
+            tool_count,
+            outcome: "ok",
+        });
         self.tally.add_connected(tool_count);
         Ok(())
     }
@@ -430,6 +473,8 @@ impl InitPass {
             error,
             needs_auth,
             elapsed,
+            initialize_ms,
+            list_tools_ms,
             timeout_sec,
         } = failure;
         let client = self.arm_liveness_watcher(&server).await;
@@ -489,6 +534,14 @@ impl InitPass {
                 duration_ms: Some(elapsed.as_millis() as u64),
                 timeout_sec: Some(timeout_sec),
             });
+        self.server_timings.push(ServerTiming {
+            name: server.clone(),
+            transport: self.transport_or_unknown(&server),
+            initialize_ms,
+            list_tools_ms,
+            tool_count: 0,
+            outcome: if needs_auth { "auth_required" } else { "failed" },
+        });
         self.tally.add_failed(server, needs_auth);
         Ok(())
     }
@@ -529,6 +582,44 @@ impl InitPass {
                 is_reinit: self.is_reinit,
                 failed_servers: std::mem::take(&mut self.tally.failed_servers),
             });
+        let mut servers = self.server_timings.clone();
+        servers.sort_by_key(|timing| {
+            (
+                timing.outcome == "ok",
+                std::cmp::Reverse(timing.initialize_ms.saturating_add(timing.list_tools_ms)),
+            )
+        });
+        let truncated = servers.len() > 16;
+        servers.truncate(16);
+        let servers: Vec<serde_json::Value> = servers
+            .iter()
+            .map(|timing| {
+                serde_json::json!({
+                    "name": &timing.name,
+                    "transport": timing.transport,
+                    "initialize_ms": timing.initialize_ms,
+                    "list_tools_ms": timing.list_tools_ms,
+                    "tool_count": timing.tool_count,
+                    "outcome": timing.outcome,
+                })
+            })
+            .collect();
+        xai_grok_telemetry::unified_log::info(
+            "session.mcp_ready",
+            Some(&self.session_id),
+            Some(serde_json::json!({
+                "total_ms": started.elapsed().as_millis() as u64,
+                "init_ms": started.saturating_duration_since(self.mcp_init_start).as_millis() as u64,
+                "server_count": self.server_count,
+                "ok": self.tally.succeeded,
+                "failed": self.tally.failed,
+                "auth_required": self.tally.auth_required,
+                "tool_count": self.tally.tools_registered,
+                "reinit": self.is_reinit,
+                "servers_truncated": truncated,
+                "servers": servers,
+            })),
+        );
         Ok(())
     }
 
@@ -617,13 +708,19 @@ async fn run_handshake(
     }
     super::mcp::attach_elicitation_tx(&*mcp_state.lock().await, &client);
     match client.get_tool_registrations(mcp_state).await {
-        Ok(registrations) => Ok(HandshakeSuccess {
-            server,
-            registrations,
-            elapsed: start.elapsed(),
-            timeout_sec,
-        }),
+        Ok(registrations) => {
+            let (initialize_ms, list_tools_ms) = client.last_handshake_timings_ms();
+            Ok(HandshakeSuccess {
+                server,
+                registrations,
+                elapsed: start.elapsed(),
+                initialize_ms,
+                list_tools_ms,
+                timeout_sec,
+            })
+        }
         Err(error) => {
+            let (initialize_ms, list_tools_ms) = client.last_handshake_timings_ms();
             // Login can only rebuild HTTP clients; other transports keep init_failed.
             let needs_auth = client.has_auth()
                 || (client.is_http() && !client.has_configured_auth() && error.is_auth_rejection());
@@ -640,6 +737,8 @@ async fn run_handshake(
                 error,
                 needs_auth,
                 elapsed: start.elapsed(),
+                initialize_ms,
+                list_tools_ms,
                 timeout_sec,
             })
         }

@@ -196,6 +196,12 @@ pub fn usage_warning_for_session(
         if pct > 90.0 {
             // "Left" is the complement of floored usage, so it agrees with the floored summary: 99.994% shows "1% left", not "0%"
             let remaining = (100 - pct.floor() as i64).max(0);
+            // LOCAL: at 100% used there is nothing actionable to warn about; the credit-limit upsell
+            // (or the plan's reset) carries the message. A permanent "Weekly limit left: 0%" on the
+            // prompt line is pure noise, especially on an expired subscription using BYOK models.
+            if remaining == 0 {
+                return None;
+            }
             let label = balance.usage_label();
             return Some((
                 format!("{}: {remaining}%", tr_str(&format!("{label} left"))),
@@ -458,11 +464,24 @@ mod tests {
             usage_warning(&almost, None, true),
             Some(("Weekly limit left: 1%".to_string(), true))
         );
-        // A true 100% (no credits) shows "0% left"
+        // A true 100% (no credits) has no actionable warning left; the credit-limit upsell carries it.
         let full = bal_period(100.0, "USAGE_PERIOD_TYPE_WEEKLY");
+        assert_eq!(usage_warning(&full, None, true), None);
+    }
+
+    #[test]
+    fn warning_hidden_at_exhaustion() {
+        // 100% used on the plain usage model must not paint a permanent "Weekly limit left: 0%".
+        let weekly = bal_period(100.0, "USAGE_PERIOD_TYPE_WEEKLY");
+        assert_eq!(usage_warning(&weekly, None, true), None);
+        // The credits model still warns, because a positive prepaid balance is actionable.
+        let credits = CreditBalance {
+            prepaid_balance_cents: Some(500),
+            ..bal(100.0)
+        };
         assert_eq!(
-            usage_warning(&full, None, true),
-            Some(("Weekly limit left: 0%".to_string(), true))
+            usage_warning(&credits, Some(&topup(false, None, None)), true),
+            Some(("Credits left: $5".to_string(), true))
         );
     }
 

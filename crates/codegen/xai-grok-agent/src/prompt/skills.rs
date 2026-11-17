@@ -128,6 +128,25 @@ pub async fn list_skills_with_plugins(
         }
     }
 
+    xai_grok_telemetry::session_timing::record_ms("skills.count", merged.len() as u64);
+    xai_grok_telemetry::session_timing::record_ms(
+        "skills.disabled_count",
+        merged.iter().filter(|skill| !skill.enabled).count() as u64,
+    );
+    for (key, scope) in [
+        ("skills.local_count", SkillScope::Local),
+        ("skills.repo_count", SkillScope::Repo),
+        ("skills.user_count", SkillScope::User),
+        ("skills.server_count", SkillScope::Server),
+        ("skills.bundled_count", SkillScope::Bundled),
+        ("skills.plugin_count", SkillScope::Plugin),
+    ] {
+        xai_grok_telemetry::session_timing::record_ms(
+            key,
+            merged.iter().filter(|skill| skill.scope == scope).count() as u64,
+        );
+    }
+
     merged
 }
 
@@ -287,6 +306,7 @@ async fn list_skills_with_options(
     let mut skill_files: Vec<(PathBuf, SkillScope)> = Vec::new();
     let mut seen_canonical_paths = HashSet::new();
 
+    let walk_started = std::time::Instant::now();
     for config_dir in &config_dirs {
         let scope = scope_for_config_dir(config_dir, cwd.as_deref(), git_root);
 
@@ -312,8 +332,18 @@ async fn list_skills_with_options(
         &mut seen_canonical_paths,
         &mut skill_files,
     );
+    xai_grok_telemetry::session_timing::record(
+        "skills_walk_ms",
+        walk_started.elapsed(),
+    );
+    xai_grok_telemetry::session_timing::record_ms(
+        "skills.files_walked",
+        skill_files.len() as u64,
+    );
 
+    let parse_started = std::time::Instant::now();
     let skills = parse_skill_files(skill_files);
+    xai_grok_telemetry::session_timing::record("skills_parse_ms", parse_started.elapsed());
     tracing::Span::current().record("skill_count", skills.len() as i64);
     skills
 }

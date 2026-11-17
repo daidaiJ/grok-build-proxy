@@ -35,6 +35,64 @@ const UPLOAD_DRAIN_AT_CANCEL: Duration = Duration::from_secs(1);
 /// long detached archive build would otherwise hold `/quit` for its duration.
 const WORKER_RUNTIME_SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
 
+/// Exit phases written by the worker/join and read once by the pager for `exit.teardown.done`.
+/// `AtomicU32` milliseconds: a teardown that takes more than 49 days has bigger problems.
+static EXIT_FLUSH_MS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static EXIT_DRAIN_MS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static EXIT_RUNTIME_MS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static EXIT_JOIN_MS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static EXIT_JOIN_OUTCOME: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+static EXIT_NOTICE_SHOWN: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn store_ms(cell: &std::sync::atomic::AtomicU32, elapsed: Duration) {
+    cell.store(
+        u32::try_from(elapsed.as_millis()).unwrap_or(u32::MAX),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+fn join_outcome_code(outcome: &JoinOutcome) -> u8 {
+    match outcome {
+        JoinOutcome::Joined => 0,
+        JoinOutcome::Failed(_) => 1,
+        JoinOutcome::Panicked(_) => 2,
+        JoinOutcome::TimedOut => 3,
+        JoinOutcome::HelperLost => 4,
+    }
+}
+
+fn join_outcome_label(code: u8) -> &'static str {
+    match code {
+        0 => "joined",
+        1 => "failed",
+        2 => "panicked",
+        3 => "timed_out",
+        _ => "helper_lost",
+    }
+}
+
+/// Snapshot read by `exit.teardown.done` after the agent guard has joined.
+pub(crate) struct ExitTeardownSnapshot {
+    pub flush_ms: u32,
+    pub drain_ms: u32,
+    pub runtime_ms: u32,
+    pub join_ms: u32,
+    pub outcome: &'static str,
+    pub notice_shown: bool,
+}
+
+pub(crate) fn exit_teardown_snapshot() -> ExitTeardownSnapshot {
+    ExitTeardownSnapshot {
+        flush_ms: EXIT_FLUSH_MS.load(std::sync::atomic::Ordering::Relaxed),
+        drain_ms: EXIT_DRAIN_MS.load(std::sync::atomic::Ordering::Relaxed),
+        runtime_ms: EXIT_RUNTIME_MS.load(std::sync::atomic::Ordering::Relaxed),
+        join_ms: EXIT_JOIN_MS.load(std::sync::atomic::Ordering::Relaxed),
+        outcome: join_outcome_label(EXIT_JOIN_OUTCOME.load(std::sync::atomic::Ordering::Relaxed)),
+        notice_shown: EXIT_NOTICE_SHOWN.load(std::sync::atomic::Ordering::Relaxed),
+    }
+}
+
 /// Cancels `token` unless disarmed. Held across the bootstrap join so a
 /// connect-timeout drop (which does not abort `spawn_blocking`) stops the worker.
 struct BootstrapCancelGuard {
@@ -90,6 +148,7 @@ pub(super) fn shutdown_worker_runtime(rt: tokio::runtime::Runtime) {
     ));
     let started = std::time::Instant::now();
     rt.shutdown_timeout(WORKER_RUNTIME_SHUTDOWN_GRACE);
+    store_ms(&EXIT_RUNTIME_MS, started.elapsed());
     shutdown_span
         .span()
         .record("elapsed_ms", started.elapsed().as_millis() as i64);
@@ -208,12 +267,30 @@ fn join_agent_thread(handle: thread::JoinHandle<Result<()>>, timeout: Duration) 
     let outcome_label: &'static str = (&outcome).into();
     let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
     xai_grok_telemetry::session_end::record_join(&span, outcome_label, elapsed_ms, notice_shown);
+    store_ms(&EXIT_JOIN_MS, start.elapsed());
+    EXIT_JOIN_OUTCOME.store(
+        join_outcome_code(&outcome),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    EXIT_NOTICE_SHOWN.store(notice_shown, std::sync::atomic::Ordering::Relaxed);
     crate::unified_log::write_direct_info(
         "session_end.worker_join",
         Some(serde_json::json!({
             "elapsed_ms": elapsed_ms,
             "outcome": outcome_label,
             "notice_shown": notice_shown,
+        })),
+    );
+    let snapshot = exit_teardown_snapshot();
+    crate::unified_log::write_direct_info(
+        "exit.teardown.worker",
+        Some(serde_json::json!({
+            "join_ms": snapshot.join_ms,
+            "flush_ms": snapshot.flush_ms,
+            "drain_ms": snapshot.drain_ms,
+            "runtime_ms": snapshot.runtime_ms,
+            "outcome": snapshot.outcome,
+            "notice_shown": snapshot.notice_shown,
         })),
     );
     outcome
@@ -386,11 +463,15 @@ async fn spawn_agent_thread_direct(
             ));
 
             cancel.cancelled().await;
+            let flush_started = std::time::Instant::now();
             agent_rc.flush_all_sessions(SESSION_FLUSH_GRACE).await;
+            store_ms(&EXIT_FLUSH_MS, flush_started.elapsed());
+            let drain_started = std::time::Instant::now();
             tokio::join!(
                 xai_grok_shell::upload::drain_pending_uploads(UPLOAD_DRAIN_AT_CANCEL),
                 xai_grok_telemetry::session_ctx::drain_at_process_exit(),
             );
+            store_ms(&EXIT_DRAIN_MS, drain_started.elapsed());
             anyhow::Result::Ok(())
         });
         // LocalSet before runtime, as an implicit scope-end drop would do; the agent last.

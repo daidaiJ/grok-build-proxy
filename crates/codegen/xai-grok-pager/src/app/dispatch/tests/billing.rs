@@ -1011,6 +1011,17 @@ fn billing_fetched_high_usage_enables_poll() {
 }
 
 #[test]
+fn billing_fetched_full_usage_disables_poll() {
+    let mut app = test_app_with_agent();
+    app.billing_poll_wanted = true;
+    dispatch_billing(&mut app, Some(test_bal(100.0)), true, None);
+    assert!(
+        !app.billing_poll_wanted,
+        "100% usage hides the warning, so the 30s poll must stop"
+    );
+}
+
+#[test]
 fn billing_fetched_low_usage_disables_poll() {
     let mut app = test_app_with_agent();
     app.billing_poll_wanted = true;

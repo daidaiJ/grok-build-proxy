@@ -8,6 +8,12 @@
 > （`startup.fetch_models_blocking` 0ms）；当前主卡点是新会话创建
 > （中位 4675ms）与首轮 MCP grace（2s），空闲退出 join 76–203ms。
 > span/事件细化方案见 [`span-plan.md`](span-plan.md)。
+>
+> **2026-11-17（v1.0.80 候选）：** 测量面已补齐（`session.create.breakdown` /
+> `session.load.breakdown` / `session.mcp_ready` / `turn.first_prompt` /
+> `exit.teardown.*`，见 span-plan §10）。同批启动缓解：模型目录缓存 TTL 300s → 24h、
+> 阻塞预取等待上限 5s → 1s（后台线程继续拉取并写缓存）、用户指南文档仅在内容变化时重写。
+> 下一步用新事件定位会话创建与首轮 MCP 的具体慢段。
 
 ## 结论（TL;DR）
 
@@ -69,8 +75,8 @@ startup.fetch_models_blocking` 与 `startup.worker_spawn → …` 两行。
   `ModelsCacheManager::load_fresh(&scope)`（按 auth-method/origin 分域），
   新鲜缓存直接返回；过期/缺失才走阻塞 `source.fetch(auth)`。
   span 计时在 fetch.rs:117。
-- `crates/codegen/xai-grok-shell/src/agent/remote_config/cache.rs:11`
-  `CACHE_TTL = 300s`——冷启动频率的决定参数。
+- `crates/codegen/xai-grok-cloud-config/src/remote_settings/cache.rs`
+  `CACHE_TTL = 24h`（2026-11-17 前为 300s）——冷启动频率的决定参数。
 - 总开关：`features.remote_fetch = false`（`util/config/resolve/features.rs:58`
   `resolve_remote_fetch_enabled`；键名常量 `REMOTE_FETCH_CONFIG_PATH`）。注意
   **managed 层优先于用户层**（防部署侧被用户复活），本机无 managed 配置时用户
@@ -80,14 +86,17 @@ startup.fetch_models_blocking` 与 `startup.worker_spawn → …` 两行。
   `xai-grok-pager/src/acp/spawn.rs:293` `ensure_managed_policy_present`
   （在 session spawn 关键路径上，先于 composer 就绪）。
 
-## 缓解选项与状态（待拍板）
+## 缓解选项与状态（2026-11-17 更新）
 
-1. **零代码**：用户 config.toml 加 `features.remote_fetch = false`。BYOK 用户
+1. **已落地（v1.0.80 候选）**：`CACHE_TTL` 放长到 24h；启动阻塞等待上限
+   `MODELS_BOOT_WAIT = 1s`（`xai-grok-shell/src/agent/remote_config/prefetch.rs`），
+   超时后先用手头目录起 TUI，后台线程继续拉取并提交缓存；用户指南文档内容未变时
+   跳过重写（Windows AV 不再每次扫描）。
+2. **零代码**：用户 config.toml 加 `features.remote_fetch = false`。BYOK 用户
    （模型全在 `[model.*]`，不需要 xAI 远端目录）安全；订阅用户会失去远端模型
-   列表。候选写进 README「常用坑」。
-2. **代码级**（需立 `feat/local-*` 分支）：`CACHE_TTL` 放长到小时/天级；或把
-   fetch 移出阻塞路径改异步预热（订阅用户也受益，但动 managed_config 语义，
-   需要评估 `ensure_managed_policy_present` 的消费方对"目录暂缺"的容忍度）。
+   列表。
+3. **仍可选**：把 `ensure_managed_policy_present` 也移出 spawn 关键路径（需要评估
+   消费方对"目录暂缺"的容忍度）。
 
 ## 复测清单
 

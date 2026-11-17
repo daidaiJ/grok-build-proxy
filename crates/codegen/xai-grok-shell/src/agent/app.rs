@@ -381,15 +381,19 @@ pub async fn run_headless(
     let auth_for_prefetch = auth.clone();
     let endpoints_for_prefetch = agent_config.endpoints.clone();
     let fetch_auth_for_prefetch = ModelFetchAuth::resolve(&endpoints_for_prefetch, true);
-    let prefetched_models = tokio::task::spawn_blocking(move || {
-        prefetch_models_blocking(
-            &endpoints_for_prefetch,
-            Some(&auth_for_prefetch),
-            fetch_auth_for_prefetch,
-        )
-    })
+    let prefetched_models = tokio::time::timeout(
+        crate::agent::remote_config::MODELS_BOOT_WAIT,
+        tokio::task::spawn_blocking(move || {
+            prefetch_models_blocking(
+                &endpoints_for_prefetch,
+                Some(&auth_for_prefetch),
+                fetch_auth_for_prefetch,
+            )
+        }),
+    )
     .await
     .ok()
+    .and_then(|joined| joined.ok())
     .flatten();
     tracing::info!("Prefetched models: {:?}", prefetched_models);
     let (ws_to_agent_tx, mut ws_to_agent_rx) = mpsc::unbounded_channel::<String>();

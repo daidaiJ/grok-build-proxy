@@ -2212,7 +2212,15 @@ fn assert_tier_restricted_commands_absent(app: &AppView) {
             "/{name} must be denied on a restricted tier"
         );
     }
-    assert!(reg.get("cost").is_none(), "/cost alias must be denied");
+    // LOCAL: /usage (and its /cost alias) stay available on restricted tiers; see TIER_RESTRICTED_COMMANDS.
+    assert!(
+        reg.get("usage").is_some(),
+        "/usage must stay available on a restricted tier"
+    );
+    assert!(
+        reg.get("cost").is_some(),
+        "/cost alias must stay available on a restricted tier"
+    );
 }
 fn assert_tier_restricted_commands_present(app: &AppView) {
     let reg = app.welcome_prompt.slash_controller.registry();
@@ -2224,7 +2232,7 @@ fn assert_tier_restricted_commands_present(app: &AppView) {
     }
 }
 #[test]
-fn apply_auth_meta_restricts_usage_for_free_tier() {
+fn apply_auth_meta_restricts_media_and_voice_for_free_tier() {
     let mut app = test_app();
     advertise_media_tools(&mut app);
     app.apply_auth_meta(&xai_grok_login::AuthMeta::default());
@@ -2236,7 +2244,7 @@ fn apply_auth_meta_restricts_usage_for_free_tier() {
     assert!(app.usage_visible);
 }
 #[test]
-fn apply_auth_meta_restricts_usage_for_x_basic_tier() {
+fn apply_auth_meta_restricts_media_and_voice_for_x_basic_tier() {
     let mut app = test_app();
     advertise_media_tools(&mut app);
     let meta = xai_grok_login::AuthMeta {
@@ -2249,6 +2257,19 @@ fn apply_auth_meta_restricts_usage_for_x_basic_tier() {
         expected_tier_restricted_commands()
     );
     assert_tier_restricted_commands_absent(&app);
+}
+#[test]
+fn usage_command_stays_available_on_a_restricted_tier() {
+    let mut app = test_app();
+    advertise_media_tools(&mut app);
+    app.apply_auth_meta(&xai_grok_login::AuthMeta::default());
+    let reg = app.welcome_prompt.slash_controller.registry();
+    assert!(reg.get("usage").is_some(), "/usage must stay executable");
+    assert!(reg.get("cost").is_some(), "/cost alias must stay executable");
+    assert!(!reg.is_restricted("usage"));
+    assert!(!reg.is_restricted("cost"));
+    assert!(reg.is_restricted("imagine"), "media stays gated");
+    assert!(reg.is_restricted("voice"), "voice stays gated");
 }
 #[test]
 fn apply_auth_meta_lifts_restrictions_for_paid_tiers_and_teams() {

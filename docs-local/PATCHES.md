@@ -4735,3 +4735,59 @@ release 构建 45 → 18 min（约 -60%）。
 
 BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共用同一套催停/硬停，
 默认中止回合；`/loop-detect record` 只记账不中止。不改历史、不碰前缀不变量。
+
+## 七十六期：订阅到期体验修复 + 启动/退出细粒度 span（2026-11-17，main 直推）
+
+> 背景：Grok 订阅到期、周额度 0% 后，`/usage` 被 SuperGrok 升级弹窗堵死，输入栏
+> 右下常驻「每周限额剩余: 0%」；同时按 `docs-local/startup-perf/span-plan.md`
+> 补齐进入 TUI / 会话创建 / 首轮 / 退出拆解。BYOK 模型公开可用，但这两处
+> 遥测/门禁把只读诊断变成了死胡同。
+
+### 订阅体验
+
+- `/usage` 移出 `TIER_RESTRICTED_COMMANDS`（仅保留 `imagine` / `imagine-video` /
+  `voice`）。Free / X Basic 档仍可打开 Usage 面板：BYOK 档先走本地 provider-plan
+  视图，xAI 块保留重置时间；`/cost` 别名同步放开。
+- `usage_warning_for_session` 在剩余 0%（floor 后）时不再返回 warning：
+  已用尽时没有可操作信息，credit-limit upsell 或套餐重置承担提示。
+- 100% 用尽时停止 30s billing 轮询（`billing_poll_wanted` 只在
+  `99.0 <= usage_pct < 100.0` 时开）；回合结束的 fetch 与 `/usage` 手动刷新仍可
+  发现重置/升级。
+- 明确受限档（Free / X Basic）的订阅巡检 60s → 300s；未知档位保持 60s，
+  升级检测不丢。
+
+### 启动速度
+
+- 模型目录缓存 `CACHE_TTL` 300s → 24h（`xai-grok-cloud-config`）。目录本身很少变，
+  `grok_version` 变化仍会使缓存失效。
+- 阻塞预取等待上限 `STARTUP_FETCH_TIMEOUT` 5s → `MODELS_BOOT_WAIT` 1s；
+  超时先用手头目录起 TUI，后台线程继续拉取并提交缓存。
+- 用户指南文档内容与磁盘一致时跳过重写（Windows AV 不再每次启动重扫）。
+
+### 细粒度 span（P0 + 部分 P1）
+
+- 新增 `xai_grok_telemetry::session_timing` 有界 waterfall，`InstrumentationTimer`
+  自动写入 `startup.*` / `session.*` 计时；`session/new`、`session/load` 结束时
+  发 `session.create.breakdown` / `session.load.breakdown`。
+  - 顶层四桶相加 = `total_ms`，`workspace_ms` 单列；`pre_spawn` / `spawn` /
+    `agent_build` / `skills` 每层都有命名子项与 `other_ms` 兜底。
+  - skills 记录 walk/parse 与 local/repo/user/server/bundled/plugin 来源计数。
+- MCP：`McpClient` 记录 connect+initialize 与首次 `tools/list` 分段；
+  `session.mcp_ready` 输出 `ok/failed/auth_required/tool_count` 与最多 16 条
+  per-server `initialize_ms/list_tools_ms/tool_count/outcome`。
+- 首轮：`turn.first_prompt` 记录 `turn_start_to_prep_ms` / `mcp_wait_ms` /
+  `prep_ms` / `tool_count`；pager `prompt.drain` 增加 `queue_ms`（提交 → 本地发出）。
+- 退出：`exit.teardown.start` / `.terminal_restore` / `.worker` / `.done`；
+  flush、upload/session-ctx drain、worker runtime shutdown、join、process drain
+  各自成字段，保留 `session_end.worker_join` 兼容。
+- 新事件直接走 `unified_log::info`，不依赖 `startup::is_active()`，首帧之后不再截断。
+
+### 验证
+
+- 按用户要求不在本机编译；main build 与 `v1.0.80` release 结果待回填。
+- 单测：`/usage` 在 restricted tier 仍可执行、`/cost` 别名不受限、
+  billing 100% 停止轮询、订阅巡检 Free 300s / SuperGrok 60s、0% 隐藏 warning
+  且 credit 余额仍告警。
+- 验收：裸启动 + resume + 会话刚建好立即 `/quit` 各一次，`unified.jsonl` 中
+  应同时出现 `startup interactive`、`session.create.breakdown`、
+  `session.mcp_ready`、`turn.first_prompt`、`exit.teardown.*`。

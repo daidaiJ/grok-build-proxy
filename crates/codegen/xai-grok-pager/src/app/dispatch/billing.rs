@@ -188,7 +188,7 @@ pub(super) fn open_free_usage_upsell(agent: &mut AgentView, auth_method: Option<
     open_supergrok_upsell(agent, UpsellReason::FreeUsageLimit, auth_method);
 }
 
-/// Open the SuperGrok upsell for a tier-restricted slash command (`/usage`, `/imagine`, …).
+/// Open the SuperGrok upsell for a tier-restricted slash command (`/imagine`, `/voice`, …).
 /// Returns whether the modal opened (`false` when another question modal is already up).
 /// The caller uses that to decide whether to consume the input that triggered it.
 pub(super) fn open_restricted_command_upsell(
@@ -316,7 +316,10 @@ pub(super) fn handle_billing_fetched(
     apply_auto_topup(&mut app.auto_topup, &autotopup);
     app.billing_poll_wanted = balance
         .as_ref()
-        .map(|b| b.usage_pct >= 99.0)
+        // LOCAL: poll only in the last percent before exhaustion. At 100% the warning is hidden
+        // (`usage_warning_for_session`), so a 30s poll would fetch forever for a line that is not
+        // painted; the next turn-end fetch or `/usage` picks up the reset.
+        .map(|b| b.usage_pct >= 99.0 && b.usage_pct < 100.0)
         .unwrap_or(false);
     // LOCAL: 仅在用量模态打开的拉取（nonce != 0）时重算周额度估算；
     // turn 结束的静默刷新不触发（模态每次打开都会重新拉计费，估算随之新鲜）。

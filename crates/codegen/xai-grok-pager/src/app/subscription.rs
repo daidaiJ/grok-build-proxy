@@ -18,6 +18,13 @@ use super::app_view::{AppView, AuthState};
 pub(crate) const SUBSCRIPTION_WATCH_INTERVAL: std::time::Duration =
     std::time::Duration::from_secs(60);
 
+/// LOCAL: cadence for an explicitly restricted tier (free / X Basic).
+/// The 60s default exists to notice a mid-session upgrade quickly, but an expired subscription can
+/// sit on Free for days; polling four times less often keeps upgrade detection while cutting the
+/// idle `/user` + settings traffic. A server-supplied interval or the env override still wins.
+pub(crate) const SUBSCRIPTION_WATCH_RESTRICTED_INTERVAL: std::time::Duration =
+    std::time::Duration::from_secs(300);
+
 /// Floor for the server-supplied cadence: a fat-fingered remote settings value must not make the whole fleet poll rapidly.
 /// `0` means "disabled" and is special-cased before this clamp.
 pub(crate) const SUBSCRIPTION_WATCH_MIN_INTERVAL_SECS: u64 = 30;
@@ -70,7 +77,11 @@ impl AppView {
             Some(secs) => Some(std::time::Duration::from_secs(
                 secs.max(SUBSCRIPTION_WATCH_MIN_INTERVAL_SECS),
             )),
-            None => Some(SUBSCRIPTION_WATCH_INTERVAL),
+            None => Some(if self.tier_is_explicitly_restricted() {
+                SUBSCRIPTION_WATCH_RESTRICTED_INTERVAL
+            } else {
+                SUBSCRIPTION_WATCH_INTERVAL
+            }),
         }
     }
 
@@ -309,6 +320,17 @@ mod tests {
         assert!(
             !app.subscription_watch_wanted(),
             "interval 0 must disable the watch even on the free tier"
+        );
+        // LOCAL: an explicitly restricted tier uses the slower default cadence.
+        app.subscription_watch_interval_secs = None;
+        assert_eq!(
+            app.subscription_watch_interval(),
+            Some(SUBSCRIPTION_WATCH_RESTRICTED_INTERVAL)
+        );
+        app.subscription_tier = Some("SuperGrok".into());
+        assert_eq!(
+            app.subscription_watch_interval(),
+            Some(SUBSCRIPTION_WATCH_INTERVAL)
         );
     }
 

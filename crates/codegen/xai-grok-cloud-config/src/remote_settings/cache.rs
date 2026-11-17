@@ -9,7 +9,10 @@ use xai_grok_config::cache_file::{
 };
 
 pub const MODELS_CACHE_FILE: &str = "models_cache.json";
-pub const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+// LOCAL: the catalog changes rarely and the blocking fetch sits on the TUI boot path. 5 minutes
+// made every "open after a coffee break" pay 2s; 24 hours keeps the first launch of the day as the
+// only refresh, and `grok_version` still invalidates the cache on every release.
+pub const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 const MODELS_CACHE_MAX_BYTES: u64 = 4 << 20;
 
 // One lock covers read, check, and write so an older fetch cannot win.
