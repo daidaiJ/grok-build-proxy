@@ -4871,8 +4871,14 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
 
 ### 验证
 
-- 按用户要求不在本机编译；main CI 与 v1.0.82 release 结果待回填。
-- 活体验收：session 创建期 debug log 不再出现 `builtin LSP server detected`；
-  首次编辑后出现 `lazy workspace LSP backend resolved`（或 shell 侧
-  `session.lsp.lazy_build`）；`session.create.breakdown` 的
-  `pre_spawn.other_ms` 明显下降。
+- main CI：build run `44134584006` 双 job 全绿（linux/windows）；release run
+  `44145346646` 全绿，v1.0.82 资产齐备，Windows zip sha256
+  `539a22893092c2c1239632b7fa005da2b221041619911be2bf49643ffb96b00d` 已核对。
+- 活体验收（本机 Windows，v1.0.82，非 git 目录）：
+  - `session.create.breakdown`：total 380–390ms → **304–305ms**；
+    `pre_spawn_ms` 111ms → **11–12ms**（`lsp_build_ms` 0，`other_ms` 11–12）。
+  - 首次 `write` 后出现统一事件 `session.lsp.lazy_build`：`build_ms=103`、
+    `servers=3`；v1.0.82 会话期间 `builtin LSP server detected` 计数为 0。
+  - TUI：`startup complete` 193ms、`startup.first_frame` render 2ms / ack 203ms，
+    `startup interactive` 203ms；session 创建在首帧之后异步完成，不阻塞进入 TUI。
+  - `subscription.check.fired` 为 `gated=false, tier=null`，无远端请求。

@@ -101,7 +101,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ### 施工中 / 待合
 - 订阅到期体验 + 启动/退出 span — v1.0.80 已发版部署；活体验收项见「待活体验证」；见 PATCHES 七十六期、`docs-local/startup-perf/span-plan.md` §10。
-- 启动 500ms 目标 — `remote_fetch` 硬跳过计费/订阅、LSP 懒构建、首帧分段已实现，等 main CI 与 v1.0.81；见 PATCHES 七十七期、`docs-local/startup-perf/README.md`。
+- 启动 500ms 目标 — v1.0.82 已发版部署：首帧 193ms / interactive 203ms，session 创建 304ms（workspace 诊断 LSP 也懒构建）。剩余 `tool_registry` 130–151ms 与 `skills` 42–63ms；见 PATCHES 七十八期、`docs-local/startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪（改历史）、请求级修复持久化仍等 dump 证据；B/C 组未开工。见 PATCHES 七十五期、`docs-local/agent-cli-tracking/TODO.md` ①。
 - token 经济二轮 — A 组随 v1.0.77、零调用工具 deferred 搜索声明随 v1.0.78 发版；剩余 B 组（推理降级 A/B、调用合并 A/B、`search_tool` schema 上限）未开工。见 `docs-local/token-economy-port/deferred-builtin-tools-2026-11-14.md`、`.handoff/token-economy-next-round.md`。
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
@@ -121,12 +121,13 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 ### 长期挂起
 - Ctrl+Enter 幽灵气球（P2，`docs-local/issues/`）；quota 他机对账；limit-probe T3；dump 自动清理；model-picker T2。
 
-## 当前版本与最近发布（2026-11-16）
+## 当前版本与最近发布（2026-11-18）
 
-- 本机 `grok 1.0.79 (59c36755686d)`，部署 `D:\tool-cli\grok2\grok2.exe`；回滚 `grok2.exe.1.0.78-b8a4f1d98363.bak`，`~/.grok/bin` 备份 `*.bak-1.0.78-fork`。
-- v1.0.79：客户端循环检测（ABAB 工具轮转、正文/思考复读，action stationarity 原有）；默认中止回合，`/loop-detect record` 只记账。
-- v1.0.78：零调用内建工具 deferred（`search_tool` 检索、`use_tool` 执行）；v1.0.77：token 经济 A 组。
-- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~七十五期；治理前原文快照：`docs-local/archive/agents-md-snapshot-2026-11-16.md`。
+- 本机 `grok 1.0.82 (12cce666b3f5)`，部署 `D:\tool-cli\grok2\grok2.exe`；回滚 `grok2.exe.1.0.81-7374bc42.bak`，`~/.grok/bin` 备份 `*.bak-1.0.81-fork`。
+- v1.0.82：workspace 诊断 LSP 懒构建（session 创建不再扫 PATH / 拉 server）+ `session.lsp.lazy_build` 统一事件；`pre_spawn_ms` 111ms → 11ms，session 创建 380ms → 304ms。
+- v1.0.81：`features.remote_fetch = false` 硬跳过计费/订阅巡检、shell 侧 LSP 懒构建、首帧分段（`startup.first_frame`）。
+- v1.0.79：客户端循环检测（ABAB 工具轮转、正文/思考复读）；默认中止回合，`/loop-detect record` 只记账。
+- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~七十八期；治理前原文快照：`docs-local/archive/agents-md-snapshot-2026-11-16.md`。
 
 ## 文档地图（docs-local）
 

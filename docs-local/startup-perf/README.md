@@ -106,9 +106,16 @@ startup.fetch_models_blocking` 与 `startup.worker_spawn → …` 两行。
    同样改为懒构建。此前 workspace 层在 session 创建期扫描 PATH 并拉起
    clangd/gopls/rust-analyzer（约 91ms，计入 `pre_spawn.other_ms`）；现在只在首次
    文件事件/诊断/`lsp` 调用时由工厂构建，`ensure_started_background` 仍异步。
-   预期 `pre_spawn.other_ms` 111ms → ~20ms，session create 380–390ms → ~290–300ms。
-   懒构建结果通过 `session.lsp.lazy_build` 统一事件可查（不再受
+   实测（v1.0.82，本机非 git 目录）：`pre_spawn.other_ms` 111ms → **11–12ms**，
+   session create 380–390ms → **304–305ms**；首次 write 后
+   `session.lsp.lazy_build` 记录 `build_ms=103, servers=3`，会话创建期不再出现
+   `builtin LSP server detected`。懒构建结果通过该统一事件可查（不再受
    `session_timing::take()` 影响）。
+5. **剩余关键路径（v1.0.82 实测）**：首帧 193ms、interactive 203ms 已达成；
+   session 就绪约 500ms。剩余大头在 `spawn.agent_build.tool_registry_ms`
+   （130–151ms）、`skills_ms`（42–63ms，其中 walk 34–50ms）、
+   `pre_spawn.other_ms` 余下 ~11ms，以及 MCP 首连（`codebase-memory`
+   initialize ~4.9s，仅在首轮 prompt 前等待，不影响进入 TUI）。
 4. **归因澄清**：`managed_policy` 是团队/部署策略检查，个人账号是 no-op；历史上
    看到的 0.4–2.0s 实际是模型目录阻塞预取落在该 phase 窗口内，不是策略本身。
    消费方对 `ensure_managed_policy_present` 无需再做迁移。
