@@ -1348,7 +1348,8 @@ fn reload_from_disk_cache_ignores_stale_cache() {
     let cache = test_cache_manager(tmp.path());
     let scope = mgr.cache_scope();
     let stale = ModelsCache {
-        fetched_at: Utc::now() - ChronoDuration::seconds(3600),
+        // LOCAL: the fork's CACHE_TTL is 24h; a hard-coded hour is still fresh.
+        fetched_at: Utc::now() - ChronoDuration::seconds((CACHE_TTL.as_secs() + 60) as i64),
         renewed_at: None,
         grok_version: Some(xai_grok_version::VERSION.to_string()),
         auth_method: Some(scope.auth_method.clone()),
