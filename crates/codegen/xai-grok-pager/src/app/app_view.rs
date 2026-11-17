@@ -4309,7 +4309,11 @@ impl AppView {
     }
     /// Render the current view to the terminal.
     pub fn draw(&mut self, terminal: &mut PagerTerminal) {
+        let render_started_at = std::time::Instant::now();
         self.draw_inner(terminal);
+        xai_grok_telemetry::startup::record_first_draw_render_ms(
+            u64::try_from(render_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+        );
         xai_grok_telemetry::startup::record_first_draw();
         crate::memory_release::run_deferred_release();
     }

@@ -382,6 +382,11 @@ Defender 扫描会把 first-run 拉高，混在一起会误判。
 | `exit.teardown.terminal_restore` | pager `app/mod.rs` | `elapsed_ms` | 终端恢复段。 |
 | `exit.teardown.worker` | pager `acp/spawn.rs` | `join_ms`、`flush_ms`、`drain_ms`、`runtime_ms`、`outcome`、`notice_shown` | 与现有 `session_end.worker_join` 并存；后者保留兼容。 |
 | `exit.teardown.done` | pager `app/mod.rs` | `total_ms`、`reason`、`terminal_restore_ms`、`log_flush_ms`、`join_done_ms`、`join_ms`、`flush_ms`、`drain_ms`、`runtime_ms`、`process_drain_ms`、`outcome`、`notice_shown` | quit → 进程退出总账。 |
+| `startup.first_frame` | telemetry `startup.rs`（ack 时） | `render_ms`、`draw_total_ms`、`ack_ms`、`draw_to_ack_ms` | 首帧渲染耗时与 writer ack 延迟；`draw_total_ms` = `startup complete` 的进程耗时。 |
+| `startup.materialize_startup_ms` | pager `app/mod.rs` | session_timing lane | resume/fork 的会话解析（new auto 通常 ~0ms）。 |
+| `startup.terminal_init_ms` / `startup.writer_thread_ms` | pager `app/mod.rs` | session_timing lane | 首帧前的终端初始化与 writer 线程启动。 |
+| `pre_spawn.hooks_at_ms` / `pre_spawn.tail_at_ms` | shell `agent_ops.rs` | 相对 pre_spawn 起点的累计值 | 把 pre_spawn 的 `other_ms` 夹在 hooks 与 spawn 调用之间。 |
+| `session.lsp.lazy_build_ms` / `session.lsp.lazy_servers` | shell `agent_ops.rs`（懒构建时） | session_timing lane | LSP 首次真实使用时的构建成本与探测到的 server 数。 |
 
 ### 10.2 采集机制
 
@@ -395,7 +400,15 @@ Defender 扫描会把 first-run 拉高，混在一起会误判。
 - 新事件全部直接走 `unified_log::info`，不依赖 `startup::is_active()`，因此首帧之后照常落盘；
   现有 `startup phase/timing/complete/interactive` 的名称与语义未改。
 
-### 10.3 已知边界
+### 10.3 LSP 懒构建（2026-11-17）
+
+- 会话 spawn 只安装 `LazyLspBackend` 句柄：LSP 工具照常注册，但 `load_servers_with_builtins_sourced`、
+  文件夹信任过滤、`LspManager` 构建与 server 探测延后到首次真实调用（文件变更通知、诊断拉取、
+  `lsp` 工具）。
+- `pre_spawn.lsp_build_ms` 从 ~100ms 降到接近 0；首次使用记录 `session.lsp.lazy_build_ms`。
+- 代价：`session` telemetry 的 `lsp_server_names` 在懒构建前为空；首次 LSP 调用多付一次构建延迟。
+
+### 10.4 已知边界
 
 - `initialize_ms` 包含传输建立与 MCP initialize，未再拆 TCP/子进程启动；需要时在 `McpClient::ensure_initialized` 内继续细分。
 - `session.create.breakdown` 的 lane 不带 session id；同一进程并发创建多个会话时可能互相覆盖（TUI 单会话场景不受影响）。

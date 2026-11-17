@@ -4791,3 +4791,49 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
 - 验收：裸启动 + resume + 会话刚建好立即 `/quit` 各一次，`unified.jsonl` 中
   应同时出现 `startup interactive`、`session.create.breakdown`、
   `session.mcp_ready`、`turn.first_prompt`、`exit.teardown.*`。
+
+## 七十七期：xAI 远程调用硬开关扩展 + LSP 懒构建 + 首帧分段（2026-11-17，main 直推）
+
+> 背景：订阅到期不再续费后，用户要求把能跳过/禁用的 xAI 远程调用做成配置硬跳过，
+> 并把启动到进入 TUI 的剩余潜力挖出来（目标 ~500ms）。上一期已把模型目录/settings
+> 挂到 `features.remote_fetch`，本期把计费与订阅巡检也接上，并把 LSP 构建移出 spawn
+> 关键路径。
+
+### `features.remote_fetch = false` 的覆盖面
+
+- `x.ai/billing`（`extensions/billing.rs`）：开关关闭时直接返回空 `config`，不发网络；
+  pager 收到后清空缓存余额并停止 30s 轮询，`/usage` 显示既有「No billing data」路径。
+- `retry_subscription_check`（`agent/mvp_agent/mod.rs`）：开关关闭时直接返回，不再请求
+  `/user?include=subscription`；pager 的巡检仍读缓存 auth meta，`/usage` 的 tier 检测
+  不再产生远端流量。
+- 既有覆盖不变：模型目录（`models_fetch_enabled`）、远端 settings（`settings_get`）、
+  后台 managed-config sync。BYOK 模型、会话、工具、MCP、marketplace 本地源不受影响。
+- 本地 `~/.grok/config.toml` 已加 `[features] remote_fetch = false`（本机部署配置）。
+
+### LSP 懒构建
+
+- 新增 `xai-grok-tools/src/implementations/lsp/lazy.rs`：`LazyLspBackend` 实现
+  `LspBackend`，首次真实调用才执行工厂（配置探测 + folder-trust + `LspManager`）。
+- shell spawn 改走 `lazy_lsp_backend`：LSP 工具照常注册（`builder.lsp.is_some()`），
+  `pre_spawn.lsp_build_ms` 从 ~100ms 降到接近 0；首次使用记录
+  `session.lsp.lazy_build_ms` / `session.lsp.lazy_servers`。
+- 首次文件变更/诊断/LSP 工具调用会一次性付构建成本；`ensure_started_background`
+  由后台任务触发，不阻塞调用方。
+- 代价：session telemetry 的 `lsp_server_names` 在懒构建前为空。
+
+### 首帧剩余 ~100ms 的分段
+
+- `startup.first_frame`（ack 时）：`render_ms`（`draw_inner` 首次渲染）、
+  `draw_total_ms`（= `startup complete` 的进程耗时）、`ack_ms`、`draw_to_ack_ms`。
+- `startup.materialize_startup_ms` / `startup.terminal_init_ms` /
+  `startup.writer_thread_ms`：首帧前的三个可拆段。
+- `pre_spawn.hooks_at_ms` / `pre_spawn.tail_at_ms`：把 pre_spawn 的 `other_ms`
+  夹到 hooks 与 spawn 调用之间。
+
+### 验证
+
+- 按用户要求不在本机编译；main build 与 v1.0.81 release 结果待回填。
+- 单测：`remote_disabled_billing_response_carries_no_data`；shell 全量测试由 CI 跑。
+- 活体验收（部署后）：`remote_fetch = false` 下 `/usage` 应走「No billing data」，
+  unified log 出现 `billing fetch skipped`，不出现新的 `billing: fetched credits config`；
+  `pre_spawn.lsp_build_ms` 接近 0，首次编辑后出现 `session.lsp.lazy_build_ms`。

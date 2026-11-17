@@ -383,6 +383,71 @@ impl MvpAgent {
         Vec<String>,
     )> {
         let registry = self.plugin_registry_for_cwd(None).await;
+        Self::build_lsp_backend_from_registry(cwd, process_scope, registry, eager).await
+    }
+
+    /// LOCAL: session-spawn handle whose language-server discovery and manager construction run on
+    /// the first real use (edit notification, diagnostics pull, or `lsp` tool call). The tool stays
+    /// advertised because a lazy handle is still a backend, and spawn no longer pays the probe.
+    pub(crate) fn lazy_lsp_backend(
+        &self,
+        cwd: &std::path::Path,
+        process_scope: Option<xai_tty_utils::ProcessScope>,
+    ) -> std::sync::Arc<dyn xai_grok_tools::implementations::lsp::LspBackend> {
+        let cwd = cwd.to_path_buf();
+        let handle = self.plugin_registry_handle.clone();
+        let launch_cwd = self.launch_cwd.clone();
+        let remote_settings = self.cfg.borrow().remote_settings.clone();
+        xai_grok_tools::implementations::lsp::LazyLspBackend::new(Box::new(move || {
+            let cwd = cwd.clone();
+            let process_scope = process_scope.clone();
+            let handle = handle.clone();
+            let launch_cwd = launch_cwd.clone();
+            let remote_settings = remote_settings.clone();
+            Box::pin(async move {
+                if handle.snapshot().is_none() {
+                    let handle = handle.clone();
+                    let launch_cwd = launch_cwd.clone();
+                    let remote_settings = remote_settings.clone();
+                    let _ = tokio::task::spawn_blocking(move || {
+                        let (trusted, disk_config) =
+                            Self::registry_build_inputs(&launch_cwd, remote_settings.as_ref());
+                        handle.reload(Some(&launch_cwd), &disk_config, trusted, false);
+                    })
+                    .await;
+                }
+                let started = std::time::Instant::now();
+                let built = Self::build_lsp_backend_from_registry(
+                    &cwd,
+                    process_scope,
+                    handle.snapshot(),
+                    false,
+                )
+                .await;
+                xai_grok_telemetry::session_timing::record(
+                    "session.lsp.lazy_build_ms",
+                    started.elapsed(),
+                );
+                built.map(|(backend, names)| {
+                    xai_grok_telemetry::session_timing::record_ms(
+                        "session.lsp.lazy_servers",
+                        names.len() as u64,
+                    );
+                    backend
+                })
+            })
+        }))
+    }
+
+async fn build_lsp_backend_from_registry(
+    cwd: &std::path::Path,
+    process_scope: Option<xai_tty_utils::ProcessScope>,
+    registry: Option<std::sync::Arc<xai_grok_agent::plugins::PluginRegistry>>,
+    eager: bool,
+) -> Option<(
+    std::sync::Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>,
+    Vec<String>,
+)> {
         let active: Vec<_> = registry
             .as_ref()
             .map(|r| r.active_plugins())
@@ -4682,17 +4747,16 @@ impl MvpAgent {
             .resolve_lsp_tools_for_cwd(tool_ctx.cwd.as_path());
         if lsp_tools_enabled && tool_ctx.lsp.is_none() {
             let lsp_started = std::time::Instant::now();
-            let built_lsp = self
-                .build_lsp_backend(tool_ctx.cwd.as_path(), tool_ctx.process_scope.clone(), false)
-                .await;
+            // LOCAL: discovery and manager construction now run on first use. Server names for
+            // the session telemetry mirror stay empty rather than paying the probe at spawn.
+            tool_ctx.lsp = Some(self.lazy_lsp_backend(
+                tool_ctx.cwd.as_path(),
+                tool_ctx.process_scope.clone(),
+            ));
             xai_grok_telemetry::session_timing::record(
                 "pre_spawn.lsp_build_ms",
                 lsp_started.elapsed(),
             );
-            if let Some((backend, server_names)) = built_lsp {
-                tool_ctx.lsp_server_names = server_names;
-                tool_ctx.lsp = Some(backend);
-            }
         }
         let inference_idle_timeout_secs = {
             let models = self.models_manager.models();
@@ -4754,6 +4818,10 @@ impl MvpAgent {
                     .is_feature_enabled(crate::agent::config::Feature::AskUserQuestion)
             });
         let client_hooks = crate::extensions::hooks::parse_client_hooks(session_meta);
+        xai_grok_telemetry::session_timing::record(
+            "pre_spawn.hooks_at_ms",
+            pre_spawn_started.elapsed(),
+        );
         let disable_web_search = self.cfg.borrow().disable_web_search;
         let todo_gate = self.cfg.borrow().todo_gate;
         let remote_settings_for_spawn = self.cfg.borrow().remote_settings.clone();
@@ -4814,6 +4882,10 @@ impl MvpAgent {
                 );
             }
         }
+        xai_grok_telemetry::session_timing::record(
+            "pre_spawn.tail_at_ms",
+            pre_spawn_started.elapsed(),
+        );
         xai_grok_telemetry::session_timing::record(
             "pre_spawn_ms",
             pre_spawn_started.elapsed(),

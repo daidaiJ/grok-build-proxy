@@ -473,11 +473,22 @@ impl StartupTimer {
 }
 static CURRENT: Mutex<Option<Arc<StartupTimer>>> = Mutex::new(None);
 static DONE: AtomicBool = AtomicBool::new(false);
+/// Time the first frame spent inside the render function, measured by its caller.
+static FIRST_DRAW_RENDER_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static FIRST_DRAW_RENDER_RECORDED: AtomicBool = AtomicBool::new(false);
 static PROCESS_START: LazyLock<Instant> = LazyLock::new(Instant::now);
 static INTERACTIVE: AtomicBool = AtomicBool::new(false);
 static STARTUP_AUTH_MODE: Mutex<AuthMode> = Mutex::new(AuthMode::Unknown);
 /// The first paint. Stamps time-to-first-frame once and opens the settle span; the acknowledged
 /// frame that ends the launch is [`record_interactive_frame`].
+pub fn record_first_draw_render_ms(render_ms: u64) {
+    if FIRST_DRAW_RENDER_RECORDED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    FIRST_DRAW_RENDER_MS.store(render_ms, Ordering::Relaxed);
+    crate::session_timing::record_ms("startup.first_frame.render_ms", render_ms);
+}
+
 pub fn record_first_draw() {
     if DONE.load(Ordering::Relaxed) {
         return;
@@ -506,8 +517,21 @@ pub fn record_interactive_frame() -> bool {
         timer.close_root_span(RootClose::Reported(StartupOutcome::Ok));
     }
     record_first_frame_gap();
+    let interactive_ms = duration_ms(process_elapsed());
+    if let Some(draw_total_ms) = subphases().startup_total_ms {
+        crate::unified_log::info(
+            "startup.first_frame",
+            None,
+            Some(serde_json::json!({
+                "render_ms": FIRST_DRAW_RENDER_MS.load(Ordering::Relaxed),
+                "draw_total_ms": draw_total_ms,
+                "ack_ms": interactive_ms,
+                "draw_to_ack_ms": interactive_ms.saturating_sub(draw_total_ms),
+            })),
+        );
+    }
     let event = crate::events::StartupInteractive {
-        interactive_ms: duration_ms(process_elapsed()),
+        interactive_ms,
         startup_total_ms: subphases().startup_total_ms,
         spawn_to_first_frame_ms: spawn_to_first_frame_ms(),
         auth_mode: *STARTUP_AUTH_MODE.lock().unwrap_or_else(|e| e.into_inner()),
@@ -611,6 +635,8 @@ pub(crate) fn reset_for_tests() {
     INTERACTIVE.store(false, Ordering::Relaxed);
     *STARTUP_AUTH_MODE.lock().unwrap_or_else(|e| e.into_inner()) = AuthMode::Unknown;
     PROCESS_INIT_RECORDED.store(false, Ordering::Relaxed);
+    FIRST_DRAW_RENDER_MS.store(0, Ordering::Relaxed);
+    FIRST_DRAW_RENDER_RECORDED.store(false, Ordering::Relaxed);
     reset_frame_gap();
 }
 /// Lazily installs an agent-owned timer, covering the standalone leader and agent server; a no-op once startup is done.

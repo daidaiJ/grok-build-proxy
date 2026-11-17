@@ -1492,6 +1492,11 @@ impl MvpAgent {
     /// Queries `/user?include=subscription` for the live tier from the subscription API. If a qualifying tier is found, does a best-effort JWT refresh and settings re-fetch, then lifts the gate.
     /// The match test is [`jwt_claim_matches_user_subscription_tier`]; a bare `refresh_chain` Ok or any older paid claim is not enough. Catalog refresh is not awaited so gate lift / auth meta are not blocked on `/v1/models`.
     pub(crate) async fn retry_subscription_check(&self) {
+        // LOCAL: `features.remote_fetch = false` opts out of every xAI backend call, including the
+        // `/user?include=subscription` poll. Cached auth meta still answers the pager's checks.
+        if !crate::util::config::resolve_remote_fetch_enabled() {
+            return;
+        }
         use std::sync::atomic::Ordering;
         if self
             .tier_recheck_in_flight

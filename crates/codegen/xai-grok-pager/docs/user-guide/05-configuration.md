@@ -96,9 +96,11 @@ lsp_tools = true                       # expose the lsp tool (default: true; bui
                                        # servers auto-detected on PATH — see LSP servers)
 codebase_indexing = true               # code graph indexing (default: true)
 two_pass_compaction = true             # prefire two-pass compaction (default: true)
-remote_fetch = true                    # allow optional online model-catalog fetches (default: true;
-                                       # set false for firewalled/air-gapped deployments; background
-                                       # managed-config sync has its own switch: managed_config)
+remote_fetch = true                    # allow xAI backend fetches: model catalog, remote settings,
+                                       # billing, and subscription checks (default: true; set false for
+                                       # BYOK-only/firewalled setups — configured models, sessions, and
+                                       # tools keep working; background managed-config sync has its own
+                                       # switch: managed_config)
 
 [session]
 auto_compact_threshold_percent = 85    # auto-compact at this % of context window (default: 85)

@@ -179,7 +179,23 @@ fn billing_unified_log_ctx(billing: &BillingConfigResponse) -> serde_json::Value
     })
 }
 
+/// The answer when `features.remote_fetch = false`: no config reaches the pager, so it clears
+/// the cached balance and stops polling instead of retrying an opted-out backend.
+fn remote_disabled_billing_response() -> BillingConfigResponse {
+    BillingConfigResponse {
+        config: None,
+        on_demand_enabled: None,
+        subscription_tier: None,
+    }
+}
+
 async fn handle_get_billing(agent: &MvpAgent) -> ExtResult {
+    // LOCAL: `features.remote_fetch = false` opts out of every xAI backend call. Answer with an
+    // empty config so the pager clears its cached balance and stops polling instead of retrying.
+    if !crate::util::config::resolve_remote_fetch_enabled() {
+        tracing::info!("billing fetch skipped: features.remote_fetch = false");
+        return to_raw_response(&remote_disabled_billing_response());
+    }
     let auth = super::auth_gate::require_xai_auth(
         &agent.auth_manager,
         "Authentication required to fetch billing data",
@@ -347,6 +363,14 @@ async fn handle_get_auto_topup_rule(agent: &MvpAgent) -> ExtResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_disabled_billing_response_carries_no_data() {
+        let resp = remote_disabled_billing_response();
+        assert!(resp.config.is_none());
+        assert!(resp.on_demand_enabled.is_none());
+        assert!(resp.subscription_tier.is_none());
+    }
 
     #[test]
     fn auto_topup_disabled_rule_omits_enabled_field() {

@@ -94,9 +94,17 @@ startup.fetch_models_blocking` 与 `startup.worker_spawn → …` 两行。
    跳过重写（Windows AV 不再每次扫描）。
 2. **零代码**：用户 config.toml 加 `features.remote_fetch = false`。BYOK 用户
    （模型全在 `[model.*]`，不需要 xAI 远端目录）安全；订阅用户会失去远端模型
-   列表。
-3. **仍可选**：把 `ensure_managed_policy_present` 也移出 spawn 关键路径（需要评估
-   消费方对"目录暂缺"的容忍度）。
+   列表。2026-11-17 起该开关同时硬跳过 `x.ai/billing`（返回空 config，pager 清
+   缓存并停轮询）与 `retry_subscription_check`（不再请求
+   `/user?include=subscription`，巡检只用缓存 auth meta），不再只是抑制。
+3. **已落地（2026-11-17，v1.0.81 候选）**：LSP 改为懒构建。spawn 只装
+   `LazyLspBackend` 句柄，server 探测/配置加载/manager 构建延后到首次文件变更或
+   LSP 调用；`pre_spawn.lsp_build_ms` 从 ~100ms 降到接近 0。首帧路径新增
+   `startup.first_frame`（render/ack）与 materialize/terminal/writer 计时，用于
+   定位剩余约 100ms。
+4. **归因澄清**：`managed_policy` 是团队/部署策略检查，个人账号是 no-op；历史上
+   看到的 0.4–2.0s 实际是模型目录阻塞预取落在该 phase 窗口内，不是策略本身。
+   消费方对 `ensure_managed_policy_present` 无需再做迁移。
 
 ## 复测清单
 

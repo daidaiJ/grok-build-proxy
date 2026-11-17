@@ -866,7 +866,12 @@ pub async fn run(
     let mut materialize_ctx = session_startup::MaterializeCtx::from_pager_args(&args);
     materialize_ctx.restore_progress_on_stdout =
         std::io::IsTerminal::is_terminal(&std::io::stdout());
+    let materialize_started_at = std::time::Instant::now();
     let materialized = session_startup::materialize_startup(materialize_ctx, intent).await?;
+    xai_grok_telemetry::session_timing::record(
+        "startup.materialize_startup_ms",
+        materialize_started_at.elapsed(),
+    );
     if args.chat()
         && let session_startup::MaterializedStartup::Resume { session_id, .. } = &materialized
     {
@@ -1028,10 +1033,16 @@ pub async fn run(
     ));
     engage_startup_theme(screen_mode);
     let minimal_live_rows = config_watcher.current().minimal_live_rows;
+    let writer_started_at = std::time::Instant::now();
     let (frame_tx, writer_sync, writer_event_rx, writer_thread) =
         crate::render::draw::spawn_writer_thread()
             .context("failed to spawn the term-writer thread")?;
+    xai_grok_telemetry::session_timing::record(
+        "startup.writer_thread_ms",
+        writer_started_at.elapsed(),
+    );
     let cursor_blink = event_loop::load_initial_ui_config().cursor_blink;
+    let terminal_init_started_at = std::time::Instant::now();
     let TerminalInit {
         mut terminal,
         screen_mode,
@@ -1044,6 +1055,10 @@ pub async fn run(
         writer_sync,
         cursor_blink,
     )?;
+    xai_grok_telemetry::session_timing::record(
+        "startup.terminal_init_ms",
+        terminal_init_started_at.elapsed(),
+    );
     MINIMAL_SHOW_SWITCH_BACK_TO_FULLSCREEN.store(
         relaunched_into_minimal && screen_mode.is_minimal(),
         Ordering::Release,

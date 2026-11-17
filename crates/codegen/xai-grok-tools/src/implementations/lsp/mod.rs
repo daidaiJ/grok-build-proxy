@@ -6,6 +6,7 @@ pub mod diagnostics;
 pub mod dispatch;
 pub mod documents;
 pub mod format;
+pub mod lazy;
 pub mod manager;
 pub mod pending;
 pub mod pull;
@@ -20,6 +21,7 @@ pub mod workspace_open;
 mod tests;
 
 pub use dispatch::LspBackendAdapter;
+pub use lazy::{LazyLspBackend, LspBackendFactory};
 pub use manager::{DiagnosticsSummary, LspManager, drain_lsp_diagnostics};
 pub use restart::restart_monitor;
 pub use types::{
