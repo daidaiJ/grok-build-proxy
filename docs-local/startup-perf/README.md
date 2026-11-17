@@ -97,11 +97,18 @@ startup.fetch_models_blocking` 与 `startup.worker_spawn → …` 两行。
    列表。2026-11-17 起该开关同时硬跳过 `x.ai/billing`（返回空 config，pager 清
    缓存并停轮询）与 `retry_subscription_check`（不再请求
    `/user?include=subscription`，巡检只用缓存 auth meta），不再只是抑制。
-3. **已落地（2026-11-17，v1.0.81 候选）**：LSP 改为懒构建。spawn 只装
+3. **已落地（2026-11-17，v1.0.81）**：shell 侧 LSP 改为懒构建。spawn 只装
    `LazyLspBackend` 句柄，server 探测/配置加载/manager 构建延后到首次文件变更或
    LSP 调用；`pre_spawn.lsp_build_ms` 从 ~100ms 降到接近 0。首帧路径新增
    `startup.first_frame`（render/ack）与 materialize/terminal/writer 计时，用于
    定位剩余约 100ms。
+4. **已落地（2026-11-18，v1.0.82 候选）**：`WorkspaceHandle::build` 的诊断 LSP
+   同样改为懒构建。此前 workspace 层在 session 创建期扫描 PATH 并拉起
+   clangd/gopls/rust-analyzer（约 91ms，计入 `pre_spawn.other_ms`）；现在只在首次
+   文件事件/诊断/`lsp` 调用时由工厂构建，`ensure_started_background` 仍异步。
+   预期 `pre_spawn.other_ms` 111ms → ~20ms，session create 380–390ms → ~290–300ms。
+   懒构建结果通过 `session.lsp.lazy_build` 统一事件可查（不再受
+   `session_timing::take()` 影响）。
 4. **归因澄清**：`managed_policy` 是团队/部署策略检查，个人账号是 no-op；历史上
    看到的 0.4–2.0s 实际是模型目录阻塞预取落在该 phase 窗口内，不是策略本身。
    消费方对 `ensure_managed_policy_present` 无需再做迁移。

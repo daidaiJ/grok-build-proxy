@@ -560,35 +560,68 @@ impl WorkspaceHandle {
             (registry, errors)
         };
         let lsp: Option<Arc<dyn xai_grok_tools::implementations::lsp::LspBackend>> = {
-            let sourced =
-                xai_grok_tools::implementations::lsp::config::load_servers_with_builtins_sourced(
-                    &config.root_cwd,
-                    &[],
-                    &[],
-                    &[],
-                    &[],
-                );
-            let servers =
-                xai_grok_tools::implementations::lsp::config::filter_project_lsp_when_untrusted(
-                    sourced,
-                    config.project_lsp_trusted,
-                );
-            if servers.is_empty() {
-                None
-            } else {
-                use xai_grok_tools::implementations::lsp::{
-                    LspBackend, LspBackendAdapter, LspManager,
-                };
-                let mgr = Arc::new(tokio::sync::Mutex::new(LspManager::new(
-                    servers,
-                    config.root_cwd.clone(),
-                    true,
-                    xai_grok_tools::notification::ToolNotificationHandle::noop(),
-                )));
-                let adapter = Arc::new(LspBackendAdapter::new(mgr));
-                adapter.ensure_started_background();
-                Some(adapter)
-            }
+            // LOCAL(lazy LSP): builtin PATH probes and server handshakes move to the first
+            // edit, diagnostics pull, or explicit `lsp` call; workspace build keeps a handle.
+            let root_cwd = config.root_cwd.clone();
+            let project_lsp_trusted = config.project_lsp_trusted;
+            Some(xai_grok_tools::implementations::lsp::LazyLspBackend::new(
+                Box::new(move || {
+                    Box::pin(async move {
+                        let started = std::time::Instant::now();
+                        let built = tokio::task::spawn_blocking(move || {
+                            let sourced =
+                                xai_grok_tools::implementations::lsp::config::load_servers_with_builtins_sourced(
+                                    &root_cwd,
+                                    &[],
+                                    &[],
+                                    &[],
+                                    &[],
+                                );
+                            let servers =
+                                xai_grok_tools::implementations::lsp::config::filter_project_lsp_when_untrusted(
+                                    sourced,
+                                    project_lsp_trusted,
+                                );
+                            if servers.is_empty() {
+                                return None;
+                            }
+                            use xai_grok_tools::implementations::lsp::{
+                                LspBackend, LspBackendAdapter, LspManager,
+                            };
+                            let count = servers.len();
+                            let mgr = Arc::new(tokio::sync::Mutex::new(LspManager::new(
+                                servers,
+                                root_cwd.clone(),
+                                true,
+                                xai_grok_tools::notification::ToolNotificationHandle::noop(),
+                            )));
+                            let adapter = Arc::new(LspBackendAdapter::new(mgr));
+                            adapter.ensure_started_background();
+                            Some((adapter as Arc<dyn LspBackend>, count))
+                        })
+                        .await
+                        .ok()
+                        .flatten();
+                        match built {
+                            Some((backend, servers)) => {
+                                tracing::info!(
+                                    elapsed_ms = started.elapsed().as_millis() as u64,
+                                    servers,
+                                    "lazy workspace LSP backend resolved"
+                                );
+                                Some(backend)
+                            }
+                            None => {
+                                tracing::debug!(
+                                    elapsed_ms = started.elapsed().as_millis() as u64,
+                                    "lazy workspace LSP backend resolved with no servers"
+                                );
+                                None
+                            }
+                        }
+                    })
+                }),
+            ))
         };
         let session_event_writers: Arc<
             dashmap::DashMap<String, xai_grok_session_events::EventWriter>,

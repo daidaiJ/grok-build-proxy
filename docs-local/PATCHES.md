@@ -4837,3 +4837,42 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
 - 活体验收（部署后）：`remote_fetch = false` 下 `/usage` 应走「No billing data」，
   unified log 出现 `billing fetch skipped`，不出现新的 `billing: fetched credits config`；
   `pre_spawn.lsp_build_ms` 接近 0，首次编辑后出现 `session.lsp.lazy_build_ms`。
+
+## 七十八期：workspace 诊断 LSP 懒构建 + 懒构建可观测（2026-11-18，main 直推）
+
+> 背景：v1.0.81 把 shell 的 `tool_ctx.lsp` 改成 `LazyLspBackend` 后，活体
+> debug log 仍显示 session 创建期有一次 eager LSP：`xai_grok_workspace::handle`
+> 在 `WorkspaceHandle::build` 里扫描 PATH（rust-analyzer/gopls/clangd）并拉起
+> 三个 server，约 91ms，落在 `pre_spawn.other_ms`（111ms）内。本期把这条也懒化。
+
+### workspace LSP 懒构建
+
+- `xai-grok-workspace/src/handle.rs`：`WorkspaceHandle::build` 不再同步执行
+  `load_servers_with_builtins_sourced`；改为构造 `LazyLspBackend`，工厂在首次
+  文件变更/诊断读取/`lsp` 调用时执行：
+  - `spawn_blocking` 里做配置层 + builtin PATH 探测 + folder-trust 过滤；
+  - 无 server 时返回 `None`（工具调用得到统一 unavailable 文案）；
+  - 有 server 时建 `LspManager` + `LspBackendAdapter`，并触发
+    `ensure_started_background`（server 启动仍异步，不阻塞调用方）。
+- 日志：工厂完成后输出 `lazy workspace LSP backend resolved`（debug 级记录无
+  server 的情况），带 `elapsed_ms` 与 `servers` 数。
+- 语义不变：`lsp` 工具仍按 `ctx.lsp.is_some()` 注册；未配置 server 的机器会多
+  一个可用但返回 unavailable 的 `lsp` 工具（与 shell 侧懒句柄一致）。
+- shell 侧 `lazy_lsp_backend` 增加统一事件 `session.lsp.lazy_build`
+  （`build_ms` + `servers`）：`session_timing::take()` 之后发生的懒构建不会再
+  被 breakdown 丢弃，可直接在 `unified.jsonl` 验证。
+
+### 预期收益
+
+- `pre_spawn.other_ms` 约 111ms → ~20ms；`session.create.breakdown.total_ms`
+  约 380–390ms → ~290–300ms（本机实测基线：v1.0.81，非 git 目录）。
+- 代价：首次编辑/诊断多付约 90–110ms 的构建，server 初始化在后台继续；
+  与 v1.0.81 shell 侧懒构建的取舍一致。
+
+### 验证
+
+- 按用户要求不在本机编译；main CI 与 v1.0.82 release 结果待回填。
+- 活体验收：session 创建期 debug log 不再出现 `builtin LSP server detected`；
+  首次编辑后出现 `lazy workspace LSP backend resolved`（或 shell 侧
+  `session.lsp.lazy_build`）；`session.create.breakdown` 的
+  `pre_spawn.other_ms` 明显下降。

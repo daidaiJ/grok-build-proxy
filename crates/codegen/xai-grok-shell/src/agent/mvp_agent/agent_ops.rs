@@ -424,9 +424,18 @@ impl MvpAgent {
                     false,
                 )
                 .await;
+                let elapsed = started.elapsed();
                 xai_grok_telemetry::session_timing::record(
                     "session.lsp.lazy_build_ms",
-                    started.elapsed(),
+                    elapsed,
+                );
+                xai_grok_telemetry::unified_log::info(
+                    "session.lsp.lazy_build",
+                    None,
+                    Some(serde_json::json!({
+                        "build_ms": elapsed.as_millis() as u64,
+                        "servers": built.as_ref().map_or(0, |(_, names)| names.len()),
+                    })),
                 );
                 built.map(|(backend, names)| {
                     xai_grok_telemetry::session_timing::record_ms(
