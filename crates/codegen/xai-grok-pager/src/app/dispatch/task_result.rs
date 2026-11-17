@@ -2289,6 +2289,7 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
                             chip_elements: Vec::new(),
                             skill_token_ranges: Vec::new(),
                             combined_texts: Vec::new(),
+                            queued_at: Some(std::time::Instant::now()),
                         });
                 }
                 agent.show_toast(&format!("Interjection failed. Requeued: {error}"));
