@@ -103,7 +103,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 - 订阅到期体验 + 启动/退出 span — v1.0.80 已发版部署；活体验收项见「待活体验证」；见 PATCHES 七十六期、`docs-local/startup-perf/span-plan.md` §10。
 - 启动 500ms 目标 — v1.0.82 已发版部署：首帧 193ms / interactive 203ms，session 创建 304ms（workspace 诊断 LSP 也懒构建）。剩余 `tool_registry` 130–151ms 与 `skills` 42–63ms；见 PATCHES 七十八期、`docs-local/startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪（改历史）、请求级修复持久化仍等 dump 证据；B/C 组未开工。见 PATCHES 七十五期、`docs-local/agent-cli-tracking/TODO.md` ①。
-- token 经济二轮 — A 组随 v1.0.77、零调用工具 deferred 搜索声明随 v1.0.78 发版；剩余 B 组（推理降级 A/B、调用合并 A/B、`search_tool` schema 上限）未开工。见 `docs-local/token-economy-port/deferred-builtin-tools-2026-11-14.md`、`.handoff/token-economy-next-round.md`。
+- token 经济二轮 — 2026-11-20 路线已下钻：P0 观测（账本 `reasoningReplayTokens`/`toolResultTokens` + `/stats` composition 行）随首批提交待 CI；P1 冷窗口 replay diet 为下一批主施工面。见 `docs-local/token-economy-port/harness-cost-roadmap-2026-11-20.md`、`harness-cost-drilldown-2026-11-20.md`。
 - 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
 - IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 

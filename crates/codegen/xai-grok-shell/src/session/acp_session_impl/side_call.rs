@@ -135,6 +135,8 @@ impl SessionActor {
                 cached_prompt_tokens: u64::from(usage.cached_prompt_tokens),
                 cache_creation_tokens: u64::from(usage.cache_creation_prompt_tokens),
                 reasoning_tokens: u64::from(usage.reasoning_tokens),
+                reasoning_replay_tokens: 0,
+                tool_result_tokens: 0,
                 ttft_ms: None,
                 tps: None,
                 duration_ms,

@@ -132,6 +132,12 @@ pub struct ModelCallSample {
     pub cached_prompt_tokens: u64,
     pub cache_creation_tokens: u64,
     pub reasoning_tokens: u64,
+    /// 请求中跨轮 reasoning 回放的估算 token（bytes/4）；旧行缺失为 0。
+    #[serde(default)]
+    pub reasoning_replay_tokens: u64,
+    /// 请求中工具结果的估算 token（bytes/4）；旧行缺失为 0。
+    #[serde(default)]
+    pub tool_result_tokens: u64,
     /// Time-to-first-token（流式首 token 延迟）；非流式或未测量时缺省。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ttft_ms: Option<u64>,
@@ -231,6 +237,10 @@ pub struct ModelUsageAggregate {
     pub cached_read_tokens: u64,
     pub cache_creation_tokens: u64,
     pub reasoning_tokens: u64,
+    /// Σ 请求中 reasoning 回放估算 token。
+    pub reasoning_replay_tokens: u64,
+    /// Σ 请求中工具结果估算 token。
+    pub tool_result_tokens: u64,
     /// 平均缓存命中率 = Σcached_read / Σprompt（prompt 为 0 时为 0）。
     pub cache_hit_rate: f64,
     pub ttft_p50_ms: Option<u64>,
@@ -384,6 +394,8 @@ fn aggregate_filtered(
                 cached_read_tokens: cached,
                 cache_creation_tokens: sum(|s| s.cache_creation_tokens),
                 reasoning_tokens: sum(|s| s.reasoning_tokens),
+                reasoning_replay_tokens: sum(|s| s.reasoning_replay_tokens),
+                tool_result_tokens: sum(|s| s.tool_result_tokens),
                 cache_hit_rate: (cached as f64) / (prompt.max(1) as f64),
                 ttft_p50_ms: percentile(&ttft, 0.50),
                 ttft_p90_ms: percentile(&ttft, 0.90),
@@ -425,6 +437,8 @@ mod tests {
             cached_prompt_tokens: cached,
             cache_creation_tokens: 0,
             reasoning_tokens: 0,
+            reasoning_replay_tokens: 0,
+            tool_result_tokens: 0,
             ttft_ms: Some(ttft),
             tps: Some(tps),
             duration_ms: 1000,
@@ -502,11 +516,30 @@ mod tests {
     #[test]
     fn legacy_rows_without_new_fields_parse_as_main_turn() {
         let original = sample(1_000, "m-a", 100, 50, 900, 50.0);
-        let json = serde_json::to_string(&original).unwrap();
-        let parsed: ModelCallSample = serde_json::from_str(&json).unwrap();
+        let mut json = serde_json::to_value(&original).unwrap();
+        let object = json.as_object_mut().expect("sample is an object");
+        object.remove("reasoningReplayTokens");
+        object.remove("toolResultTokens");
+        let parsed: ModelCallSample = serde_json::from_value(json).unwrap();
         assert_eq!(parsed.session_id, None);
         assert_eq!(parsed.purpose, None);
+        assert_eq!(parsed.reasoning_replay_tokens, 0);
+        assert_eq!(parsed.tool_result_tokens, 0);
         assert!(parsed.is_main_turn());
+    }
+
+    #[test]
+    fn aggregate_sums_reasoning_replay_and_tool_result_tokens() {
+        let now = 1_000_000_000_000;
+        let mut first = sample(now - 1000, "m-a", 1_000, 800, 900, 50.0);
+        first.reasoning_replay_tokens = 250;
+        first.tool_result_tokens = 700;
+        let mut second = sample(now - 2000, "m-a", 500, 400, 800, 40.0);
+        second.reasoning_replay_tokens = 50;
+        second.tool_result_tokens = 300;
+        let rows = aggregate(&[first, second], WINDOW_DAY_MS, now);
+        assert_eq!(rows[0].reasoning_replay_tokens, 300);
+        assert_eq!(rows[0].tool_result_tokens, 1_000);
     }
 
     #[test]

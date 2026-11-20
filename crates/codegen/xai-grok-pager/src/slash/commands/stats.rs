@@ -221,6 +221,8 @@ mod tests {
             cached_prompt_tokens: cached,
             cache_creation_tokens: 200,
             reasoning_tokens: 10,
+            reasoning_replay_tokens: 0,
+            tool_result_tokens: 0,
             ttft_ms: Some(ttft),
             tps: Some(tps),
             duration_ms: 2000,

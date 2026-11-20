@@ -41,8 +41,8 @@ pub mod usage;
 // Re-export main types for convenience
 pub use actor::ChatStateActor;
 pub use actor::state::{
-    estimate_conversation_tokens, estimate_item_tokens, estimate_messages_tokens,
-    estimate_system_message_tokens, estimate_tool_definition_tokens,
+    ContextComposition, context_composition, estimate_conversation_tokens, estimate_item_tokens,
+    estimate_messages_tokens, estimate_system_message_tokens, estimate_tool_definition_tokens,
     estimate_tool_definitions_tokens, estimate_tool_specs_tokens,
 };
 pub use commands::{ModelMetadata, StrictAppendAck, StrictAppendError};

@@ -100,6 +100,32 @@ pub fn estimate_conversation_tokens(items: &[ConversationItem]) -> u64 {
     items.iter().map(estimate_item_tokens).sum()
 }
 
+/// Replayable-context split for one request: cross-turn reasoning and tool
+/// results, both bytes/4 estimates over the items handed to the wire layer.
+/// Observation only; it never changes the request.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ContextComposition {
+    pub reasoning_tokens: u64,
+    pub tool_result_tokens: u64,
+}
+
+/// Sum [`estimate_item_tokens`] over `Reasoning` and `ToolResult` items only.
+pub fn context_composition(items: &[ConversationItem]) -> ContextComposition {
+    let mut out = ContextComposition::default();
+    for item in items {
+        match item {
+            ConversationItem::Reasoning(_) => {
+                out.reasoning_tokens += estimate_item_tokens(item);
+            }
+            ConversationItem::ToolResult(_) => {
+                out.tool_result_tokens += estimate_item_tokens(item);
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 /// grok-build's token counter for the shared compaction engine.
 /// Exposes the same bytes/4 estimate the triggers already use, so budgeting stays consistent.
 /// Other hosts may plug a real BPE tokenizer into the same seam.
@@ -425,6 +451,21 @@ mod tests {
     fn estimate_messages_tokens_zero_when_only_system() {
         let items = vec![ConversationItem::system("x".repeat(4000).as_str())];
         assert_eq!(estimate_messages_tokens(&items), 0);
+    }
+
+    #[test]
+    fn context_composition_splits_reasoning_and_tool_results() {
+        let items = vec![
+            ConversationItem::system("s".repeat(4000).as_str()),
+            ConversationItem::Reasoning(
+                xai_grok_sampling_types::synthesized_reasoning_item("r".repeat(4000)),
+            ),
+            ConversationItem::tool_result("call-1", "t".repeat(8000).as_str()),
+            ConversationItem::assistant("a".repeat(4000).as_str()),
+        ];
+        let composition = context_composition(&items);
+        assert_eq!(composition.reasoning_tokens, 1000);
+        assert_eq!(composition.tool_result_tokens, 2000);
     }
 
     #[test]

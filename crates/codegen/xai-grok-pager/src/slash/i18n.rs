@@ -302,6 +302,8 @@ fn translations() -> &'static [(&'static str, &'static str)] {
         ("cost total", "成本合计"),
         ("unpriced", "无价"),
         ("reasoning", "推理"),
+        ("reasoning replay", "推理回放"),
+        ("tool results", "工具结果"),
         ("cache hit", "缓存命中率"),
         ("cache breaks", "缓存断崖"),
         ("unexplained", "无法解释"),

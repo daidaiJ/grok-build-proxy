@@ -3611,6 +3611,7 @@ impl SessionActor {
             let model_duration_ms = model_timer.elapsed().as_millis() as u64;
             {
                 let model_id = self.current_model_id().await;
+                let context_composition = xai_chat_state::context_composition(&request.items);
                 xai_grok_telemetry::session_ctx::log_event(
                     xai_grok_telemetry::events::ModelResponseReceived {
                         model_id: model_id.clone(),
@@ -3654,6 +3655,8 @@ impl SessionActor {
                             usage.map(|u| u.cache_creation_prompt_tokens).unwrap_or(0),
                         ),
                         reasoning_tokens: u64::from(usage.map(|u| u.reasoning_tokens).unwrap_or(0)),
+                        reasoning_replay_tokens: context_composition.reasoning_tokens,
+                        tool_result_tokens: context_composition.tool_result_tokens,
                         ttft_ms,
                         tps: tokens_per_sec,
                         duration_ms: model_duration_ms,

@@ -625,11 +625,28 @@ fn model_card_lines(
         (tr("tps p50"), fmt_tps(row.tps_p50, na)),
         (tr("tps p90"), fmt_tps(row.tps_p90, na)),
     ];
+    // LOCAL(token-economy): request composition drill-down; older rows report 0
+    // and stay hidden so the existing card layout is unchanged.
+    let context_pairs: Vec<(&'static str, String)> = [
+        ("reasoning replay", row.reasoning_replay_tokens),
+        ("tool results", row.tool_result_tokens),
+    ]
+    .into_iter()
+    .filter(|(_, tokens)| *tokens > 0)
+    .map(|(label, tokens)| (tr(label), fmt_tokens(tokens)))
+    .collect();
 
-    // 两段共用同一份列几何：数值右边缘才会落在同一批列上
-    let grid = MetricGrid::new(token_pairs.iter().chain(perf_pairs.iter()), width);
+    // 各段共用同一份列几何：数值右边缘才会落在同一批列上
+    let grid = MetricGrid::new(
+        token_pairs
+            .iter()
+            .chain(perf_pairs.iter())
+            .chain(context_pairs.iter()),
+        width,
+    );
     lines.extend(grid.lines(&token_pairs, usize::MAX, theme));
     lines.extend(grid.lines(&perf_pairs, PERF_COLS, theme));
+    lines.extend(grid.lines(&context_pairs, PERF_COLS, theme));
     lines
 }
 
@@ -724,6 +741,20 @@ fn model_card_text(row: &ModelUsageAggregate, pricing: &CatalogPrices, show_cost
             fmt_tokens(row.reasoning_tokens)
         ));
     }
+    if row.reasoning_replay_tokens > 0 {
+        tokens.push(format!(
+            "{} {}",
+            tr("reasoning replay"),
+            fmt_tokens(row.reasoning_replay_tokens)
+        ));
+    }
+    if row.tool_result_tokens > 0 {
+        tokens.push(format!(
+            "{} {}",
+            tr("tool results"),
+            fmt_tokens(row.tool_result_tokens)
+        ));
+    }
     tokens.push(format!(
         "{} {}",
         tr("cache hit"),
@@ -773,6 +804,8 @@ mod tests {
             cached_prompt_tokens: cached,
             cache_creation_tokens: 200,
             reasoning_tokens: 10,
+            reasoning_replay_tokens: 0,
+            tool_result_tokens: 0,
             ttft_ms: Some(900),
             tps: Some(50.0),
             duration_ms: 2000,
@@ -951,12 +984,27 @@ mod tests {
             cached_read_tokens: 65_314_304,
             cache_creation_tokens: 0,
             reasoning_tokens: 270_095,
+            reasoning_replay_tokens: 0,
+            tool_result_tokens: 0,
             cache_hit_rate: 0.986_396_761_835_524_3,
             ttft_p50_ms: Some(4536),
             ttft_p90_ms: Some(12_324),
             tps_p50: Some(98.8),
             tps_p90: Some(230.4),
         }
+    }
+
+    /// P0（token-economy）观测字段只在有采样时出现，旧账本行保持原卡片布局。
+    #[test]
+    fn context_composition_rows_appear_when_observed() {
+        let mut row = wide_card_row();
+        row.reasoning_replay_tokens = 1_230_000;
+        row.tool_result_tokens = 2_340_000;
+        let text = card_lines(&row, 80).join("\n");
+        assert!(text.contains("reasoning replay"), "{text}");
+        assert!(text.contains("tool results"), "{text}");
+        assert!(text.contains("1.23m"), "{text}");
+        assert!(text.contains("2.34m"), "{text}");
     }
 
     /// p50/p90 拆成独立指标格后，性能段与 token 段共用一份列几何：

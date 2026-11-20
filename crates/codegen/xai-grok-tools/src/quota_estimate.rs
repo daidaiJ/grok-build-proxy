@@ -276,6 +276,8 @@ mod tests {
             cached_prompt_tokens: 0,
             cache_creation_tokens: 0,
             reasoning_tokens: 0,
+            reasoning_replay_tokens: 0,
+            tool_result_tokens: 0,
             ttft_ms: None,
             tps: None,
             duration_ms: 0,

@@ -1,6 +1,7 @@
 # 下一阶段 harness 成本优化路线（2026-11-20）
 
-> 状态：**评估完成，路线待拍板**；本文只定路线，不含代码改动。
+> 状态：**路线已下钻，P0 观测已落地**；任务拆分见
+> [`harness-cost-drilldown-2026-11-20.md`](harness-cost-drilldown-2026-11-20.md)。
 >
 > **2026-11-20 拍板：压缩阈值不再调整。** 后续优化不涉及 `context_window` 与
 > `auto_compact_threshold_percent`，`next-steps-2026-11-14.md` 里的 400K/72%
