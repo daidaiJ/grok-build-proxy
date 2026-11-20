@@ -190,3 +190,6 @@ kimi-code / zcode / codex 设计对照见
   **剩余**：事件暂未带 tools/msgs 前缀哈希（首版用会话内前后轮对比替代）。
 - **P2 闲置过期提示（未开工）**：仍挂在
   [`cache-observability-plan.md`](cache-observability-plan.md)。
+
+> 2026-11-20 起的下一阶段成本优化路线与缓存 TTL 口径，见
+> [`../token-economy-port/harness-cost-roadmap-2026-11-20.md`](../token-economy-port/harness-cost-roadmap-2026-11-20.md)。

@@ -1,5 +1,10 @@
 # Token 经济性下一步（2026-11-14 实账驱动）
 
+> **已被 2026-11-20 路线取代**：本文的 400K 窗口 × 72% 触发实验作废，压缩阈值
+> 保持现状不再调整。现行路线见
+> [`harness-cost-roadmap-2026-11-20.md`](harness-cost-roadmap-2026-11-20.md)；
+> 本文保留为实账与结论出处。
+>
 > 数据窗口：2026-11-13 18:00 → 2026-11-14 11:24（本机，单用户）。
 > 数据源：`~/.grok/cache/model-usage.jsonl`（1,865 条采样，含 `sessionId`/`purpose`）、
 > `~/.grok/cache/cache-breaks.jsonl`、`<session>/usage.json`、`<session>/chat_history.jsonl`、

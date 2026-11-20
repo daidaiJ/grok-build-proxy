@@ -131,7 +131,7 @@ grep/Read 退居补充。进入本仓库没探索过的子系统（如 permissio
 
 ## 文档地图（docs-local）
 
-- 经济性/缓存：`token-economy-audit-2026-11/`、`cache-strategy-port/`、`status-line-perf-wiki.md`、`limit-inference.md`、`usage/`、`usage-quota-estimate-todo.md`。
+- 经济性/缓存：`token-economy-audit-2026-11/`、`token-economy-port/`（含现行路线 `harness-cost-roadmap-2026-11-20.md` 与缓存 TTL 口径）、`cache-strategy-port/`、`status-line-perf-wiki.md`、`limit-inference.md`、`usage/`、`usage-quota-estimate-todo.md`。
 - harness/模型：`harness-model-fit/`、`agent-cli-refresh-2026-11/`、`agent-cli-tracking/`、`model-limits-config.md`、`dsh-port/`。
 - 移植/特性：`workflow-pi-port/`、`kimicode-port/`、`step-code-port/`、`opencode-port/`、`lsp-port/`、`vision-bridge/`、`subagent-model-group-todo.md`、`port-roadmap.md`、`fork-feature-inventory.md`。
 - 上游/兼容：`sync-upstream-2026-09-29.md`、`sync-upstream-2026-09-23.md`、`upstream-responses-event-compat.md`、`PATCHES.md`。
