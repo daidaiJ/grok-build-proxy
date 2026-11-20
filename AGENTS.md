@@ -1,10 +1,25 @@
 # 项目工作规则（LOCAL fork）
 
+## 🔄 Handoff 摘要
+
+### harness-cost-p0-p1 — in-progress
+- **当前状态：** P0 已随 v1.0.83 发版并部署（`grok 1.0.83 (534af67a90eb)`）；P1 未开工。
+- **关键证据：** `docs-local/token-economy-port/harness-cost-drilldown-2026-11-20.md`；release 44729663180 双绿，Windows zip sha256 `fba769d8…` 已核对；PATCHES 七十九期。
+- **验收标准：** 新会话账本 composition 字段与 `/stats` 行可见；P1 按 §3.5 验收。
+- **详情指针：** [`.handoff/harness-cost-p0-p1.md`](.handoff/harness-cost-p0-p1.md)
+
+### 未验证事项
+- [x] release 44729663180 成功、Windows zip sha256 核对
+- [x] 本机部署 v1.0.83 并保留 1.0.82 回滚
+- [ ] 新会话账本 composition 字段落盘、`/stats` 行显示
+
 ## 代码理解（2026-10-03）
 
 优先 cbm（`codebase-memory-mcp cli`，项目 `D-CODE-ai-grok-build-proxy`）：进入陌生子系统先
 `get_architecture` 或 `query_graph` 拿结构地图，再读代码；grep/Read 补充。
-用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`。
+codegraph 全量索引在本机（HDD）试跑过慢、已清理；需要时按 crate 临时建
+scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
+`docs-local/code-index-setup.md`。
 
 ## 分支与推送（MANDATORY）
 
@@ -74,7 +89,7 @@
 - 订阅到期体验 + 启动/退出 span — v1.0.80 已部署，待活体验收；PATCHES 76、`startup-perf/span-plan.md` §10。
 - 启动 500ms 目标 — v1.0.82：首帧 193/203ms、session 304ms；余 `tool_registry` 130–151ms、`skills` 42–63ms；PATCHES 78、`startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪、请求级修复持久化等 dump；B/C 组未开工；PATCHES 75、`agent-cli-tracking/TODO.md` ①。
-- token 经济二轮 — P0 观测（账本 composition + `/stats` 行）已随 887dabc2 推送，build 44725198196 双绿；P1 冷窗口 replay diet 为下一批；`token-economy-port/harness-cost-drilldown-2026-11-20.md`。
+- token 经济二轮 — P0 观测已随 v1.0.83 发版部署（账本 composition + `/stats` 行）；P1 冷窗口 replay diet 为下一批；`token-economy-port/harness-cost-drilldown-2026-11-20.md`。
 - IP 端点自签证书放行 — `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 
 ### 待活体验证
@@ -94,8 +109,8 @@
 
 ## 当前版本
 
-- 本机 `grok 1.0.82 (12cce666b3f5)`，部署 `D:\tool-cli\grok2\grok2.exe`；回滚 `grok2.exe.1.0.81-7374bc42.bak`。
-- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~七十八期。最近：v1.0.82 lazy LSP、v1.0.81 `remote_fetch` 硬跳过 + 首帧分段、v1.0.79 loop detect。
+- 本机 `grok 1.0.83 (534af67a90eb)`，三处部署同 hash `73f22e45…`；回滚 `grok2.exe.1.0.82-12cce666b3f5.bak`。
+- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~七十九期。最近：v1.0.83 harness 成本 P0 观测、v1.0.82 lazy LSP、v1.0.81 `remote_fetch` 硬跳过 + 首帧分段。
 
 ## 文档地图（docs-local）
 
@@ -103,4 +118,4 @@
 - harness/模型：`harness-model-fit/`、`agent-cli-refresh-2026-11/`、`agent-cli-tracking/`、`model-limits-config.md`、`dsh-port/`。
 - 移植/特性：`workflow-pi-port/`、`kimicode-port/`、`step-code-port/`、`opencode-port/`、`lsp-port/`、`vision-bridge/`、`subagent-model-group-todo.md`、`port-roadmap.md`、`fork-feature-inventory.md`。
 - 上游/兼容：`sync-upstream-2026-09-29.md`、`sync-upstream-2026-09-23.md`、`upstream-responses-event-compat.md`、`PATCHES.md`。
-- 运维/取证：`startup-perf/`、`stats-modal-todo.md`、`webdav-sync-todo.md`、`quota-pct-jump-audit.md`、`compaction-failure-rca.md`、`inspect-config-keys-todo.md`、`issues/`、`archive/`。
+- 运维/取证：`startup-perf/`、`code-index-setup.md`、`stats-modal-todo.md`、`webdav-sync-todo.md`、`quota-pct-jump-audit.md`、`compaction-failure-rca.md`、`inspect-config-keys-todo.md`、`issues/`、`archive/`。

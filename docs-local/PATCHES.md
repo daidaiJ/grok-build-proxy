@@ -4882,3 +4882,48 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
   - TUI：`startup complete` 193ms、`startup.first_frame` render 2ms / ack 203ms，
     `startup interactive` 203ms；session 创建在首帧之后异步完成，不阻塞进入 TUI。
   - `subscription.check.fired` 为 `gated=false, tier=null`，无远端请求。
+
+## 七十九期：harness 成本 P0 观测 + AGENTS 治理 + v1.0.83（2026-11-20，main 直推）
+
+> 背景：`docs-local/token-economy-port/harness-cost-roadmap-2026-11-20.md` 的
+> P0 要求先看见每轮请求里 reasoning 回放与工具结果各占多少 token，再决定
+> P1 冷窗口 replay diet 的清理边界。本期只加观测，不改请求内容。
+
+### P0 观测
+
+- `xai-chat-state`：新增 `ContextComposition { reasoning_tokens,
+  tool_result_tokens }` 与纯函数 `context_composition(items)`；按现有
+  `estimate_item_tokens`（bytes/4）只统计 `Reasoning` / `ToolResult` 两类 item。
+- `xai-grok-tools/model_usage_ledger`：`ModelCallSample` 新增
+  `reasoningReplayTokens` / `toolResultTokens`（`serde(default)`，旧行可读）；
+  `ModelUsageAggregate` 同步累加，`aggregate_filtered` 输出两列。
+- shell `turn.rs`：主回合写账本时用 `request.items` 估算 composition；
+  侧调用（recap/title/turn_summary 等）暂记 0，归因留待后续。
+- pager `/stats`：模型卡仅在观测值 >0 时追加 `reasoning replay` / `tool results`
+  两行，复制文本同步；中英 i18n 已补。
+- 单测：`context_composition_splits_reasoning_and_tool_results`、
+  `aggregate_sums_reasoning_replay_and_tool_result_tokens`、
+  `context_composition_rows_appear_when_observed`；现有结构体字面量补零。
+
+### AGENTS 治理
+
+- AGENTS.md 13.4 KB → 8.3 KB（含 handoff 块约 9.2 KB），过程记录归档到
+  `docs-local/archive/agents-md-snapshot-2026-11-20.md`；预算 ≤10 KB。
+
+### CI / release / 部署
+
+- main build `44725198196` 双绿：linux 30m47s（冷缓存），windows 9m35s。
+- release `44729663180` 双绿：linux 24m20s，windows 22m48s；
+  Linux tar.gz 83,190,922 B；Windows zip 64,250,213 B，sha256
+  `fba769d8e6166b03e6dbb576585d34d5be87865f24c9279e30dbf4ecae36eac4` 已核对。
+- 本机部署 `grok 1.0.83 (534af67a90eb)`，三处二进制同 hash
+  `73f22e45b483bce1ea41aac62949589587b5943bc5b5fb6d355d694ca46ad504`：
+  `D:\tool-cli\grok2\grok2.exe`、`~/.grok/bin/grok.exe`、`~/.grok/bin/agent.exe`。
+- 回滚备份：`grok2.exe.1.0.82-12cce666b3f5.bak`（旧 hash `435747a0…`）、
+  `~/.grok/bin/grok.exe.bak-1.0.82-fork`、`agent.exe.bak-1.0.82-fork`。
+- 当前会话仍跑旧 1.0.82，重启后生效。
+
+### 待活体验收
+
+- 新会话账本出现两个 camelCase 字段；`/stats` 能看到 composition 行；
+  下一批 P1 按 drilldown §3.5 验收冷窗口触发与缓存断崖。
