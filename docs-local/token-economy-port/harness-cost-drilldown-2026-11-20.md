@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | P0-A | 账本每条主回合采样新增 `reasoningReplayTokens` / `toolResultTokens`，按请求实际下发的 `ConversationRequest.items` 做 bytes/4 估算 | `xai-grok-tools/src/model_usage_ledger.rs:122`；`xai-chat-state/src/actor/state.rs:107`；`xai-grok-shell/src/session/acp_session_impl/turn.rs:3614` |
 | P0-B | `/stats` 卡片新增 composition 行：`reasoning replay` / `tool results`；旧行字段为 0 时整行隐藏，卡片布局保持原样 | `xai-grok-pager/src/views/stats_modal.rs:584`；`xai-grok-tools/src/model_usage_ledger.rs:375` |
-| P0-C | 规划文档与任务状态（本文） | — |
+| 文档 | 规划文档与任务状态（本文） | — |
 
 口径说明：
 
@@ -43,7 +43,7 @@
 | P0-E | P0 | 工具轮次 reminder（合并独立调用） | prompt/reminder 注入点 | 缓存追加规则 | `calls/turn` 与 `$/turn` 可量 | 待开工 |
 | P1-A | P1 | 冷窗口判定（TTL、模型切换、压缩后、鉴权重试） | 会话层 | P0-A 数据 | 触发次数与节省可归因 | 待开工 |
 | P1-B | P1 | replay diet 纯函数：旧 reasoning / 旧 tool result 替换 | `xai-chat-state` | P1-A | 单测覆盖配对与幂等 | 待开工 |
-| P1-C | P1 | 持久化与闩锁：一次改写，后续请求前缀稳定 | `mutations.rs` / `HistoryRewrite` | P1-B | 触发后不再新增断崖 | 待开工 |
+| P1-C | P1 | 持久化与稳定前缀：一次改写，后续请求沿用 | `mutations.rs` / `HistoryRewrite` | P1-B | 触发后不再新增断崖 | 待开工 |
 | P1-D | P1 | 事件与验收：`session.replay_diet.*` | 会话事件 / 账本 | P1-C | 触发次数 × 节省可回归 | 待开工 |
 | P2-A | P2 | 长 turn 门控（上一 turn >20 调用才裁） | 会话层 | P0-A | 长 turn 降 ≥10%，短 turn 不升 | 数据门控 |
 | P2-B | P2 | 中点裁剪 A/B，Responses 三元组整体处理 | `xai-chat-state` | P2-A | 缓存断崖可解释、配对不破 | 待开工 |
@@ -145,7 +145,7 @@ pub fn apply_replay_diet(
 - 保留 `/compress-fast` 的语义：`prune_mode = "append"` 下同时写入失效 marker，
   保证线上字节稳定。
 
-### 3.4 持久化与闩锁
+### 3.4 持久化与稳定前缀
 
 - 走 `HistoryRewrite::RetainedPrune` 持久化，`rewrite_history` 负责磁盘替换；
   resume 后仍是 diet 后的历史。
@@ -201,7 +201,7 @@ pub fn apply_replay_diet(
 
 | 批次 | 内容 | 验收 |
 | --- | --- | --- |
-| Batch 1（本次推送） | P0-A、P0-B、本文 | CI build 双绿；字段落盘；`/stats` 行显示 |
+| Batch 1（887dabc2） | P0-A、P0-B、本文 | build 44725198196 双绿；字段落盘；`/stats` 行显示 |
 | Batch 2 | P1-A/B/C/D，默认关 | 单测 + 冷窗口 A/B；触发后无新增断崖 |
 | Batch 3 | P0-E + P3-A，配置门控 | `calls/turn`、返工率、$/turn |
 | Batch 4 | P3-B（数据门控） | 批量工具成功率、返工率 |

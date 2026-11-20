@@ -1,137 +1,105 @@
 # 项目工作规则（LOCAL fork）
 
-## 代码理解工具优先级（2026-10-03 定）
+## 代码理解（2026-10-03）
 
-**理解代码优先用 cbm**（`codebase-memory-mcp cli`，项目名 `D-CODE-ai-grok-build-proxy`），
-grep/Read 退居补充。进入本仓库没探索过的子系统（如 permission / workflow / sampler 内部）
-时，先跑 `cbm cli get_architecture`（hotspots/clusters）或 `query_graph`（Cypher 查调用链、
-复杂度），一次拿到结构地图再读代码，禁止上来就连环 grep。用法与陷阱见 `~/.zcode/skills/cbm/SKILL.md`。
+优先 cbm（`codebase-memory-mcp cli`，项目 `D-CODE-ai-grok-build-proxy`）：进入陌生子系统先
+`get_architecture` 或 `query_graph` 拿结构地图，再读代码；grep/Read 补充。
+用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`。
 
-## 分支纪律（MANDATORY，2026-11-13 改口径）
+## 分支与推送（MANDATORY）
 
-- **直接在 `main` 上施工，不再开新分支**：功能/修复/重构一律提交到 main，靠
-  GitHub Actions 的 build 结果验收，通过后按 `vX.Y.Z` 打 tag 发版。
-- **一次推送一批**：main 的 push 会触发 `build.yml`（docs-only 改动被 `paths-ignore`
-  跳过、不跑 CI），因此仍按「攒一批改动 → 一次推送 → 红就修完再推」执行，
-  禁止一个提交一次 build。
-- **main 红了当班修**：没有 PR 门禁兜底，CI 失败就是 main 失败；拿到失败日志先分族
-  （见下节时间成本原则），修完连同原因一起再推。
-- 历史 `feat/local-*` 分支保留作考古对照，不再新增；现存未合的 PR 按原样验收合并。
+- 直接在 `main` 施工，不开新分支：功能/修复/重构都提交 main，CI 绿后按 `vX.Y.Z` 打 tag。
+- 一次推送一批：攒改动 → 一次 push → 红就修完再推；禁止一个提交一次 build。
+  docs-only 改动被 `build.yml` 的 `paths-ignore` 跳过，不触发 CI。
+- main 红了当班修：拿失败日志先分族（下节），修完连同原因再推。
+- 历史 `feat/local-*` 分支只作考古；不再新增，存量 PR 按原样验收。
 
-## 调试的时间成本原则（MANDATORY）
+## 调试时间成本（MANDATORY）
 
-一切调试先算时间账，优先长期时效，不为单点问题反复烧整轮编译：
+一切调试先算时间账，优先长期时效：
 
-1. **先分族，再动手**：本仓库测试失败往往成族出现（几十个同根因）。先取一份失败清单按报错分族
-   （如 UnsafeDirectory/字形降级/POSIX 专属/路径分隔符），一族一策，禁止逐个盲修。
-2. **编译是最贵的操作**：全量 `cargo test -p xai-grok-pager --lib` ≈ 编译 6–11 分钟 + 跑 4 分钟；
-   改共享 crate（xai-grok-config / xai-grok-agent / …）会级联重编整棵依赖树。因此：
-   - 语法/类型验证用 `cargo check -p <pkg>`（快一个量级）；
-   - 行为验证按模块过滤：`cargo test -p xai-grok-pager --lib <module::>`；
-   - 一次改动批量收集信息后只跑一轮，禁止"改一行→全量→再改一行"的循环。
-   - **编译/测试输出禁止接 `tail`/`head` 截断管道**（乐观跑法）：一旦失败，断言详情
-     已被管道丢弃，只能整轮重跑，时间成本翻倍。完整输出让它直落后台日志（不接
-     管道）或 `> 文件 2>&1`；失败后只对**已写完的日志转储文件**做 tail/grep 取详情。
-3. **不阻塞死等长任务**：长编译/全量测试放后台跑，期间做不冲突的分析/阅读，完成看通知；
-   禁止连续 TaskOutput 大超时阻塞。Windows 上 cargo 被 kill 可能留下冻结进程，用
-   `tasklist | grep cargo/rustc` 检查，必要时 `taskkill //F //IM cargo.exe`。
-4. **本机是 Windows 开发机，上游基线是 Linux CI**：失败先判断是不是环境族
-   （8.3 短名含 `~`、路径分隔符 `\` vs `/`、HOME 被 USERPROFILE 覆盖、POSIX shell 缺失、
-   终端字形探测、`File::open` 开目录需 `custom_flags(FILE_FLAG_BACKUP_SEMANTICS)`、
-   夹具文件名避开保留设备名 `nul/con/aux/com1…`——写入进黑洞还显示"成功"），是环境族的按
-   "屏蔽噪声（cfg 门控/播种全局）"处理，真产品 bug 才修。目录身份用 creation_time（mtime
-   随子项增删变化），但注意 ~15 秒内同名重建的隧道化会让 creation_time 也骗人。
-   **Windows 测试门禁（MANDATORY，2026-09-19 定稿）——本机任何 cargo test 一律经门控，
-   禁止裸跑**：
-   - 唯一入口：`scripts-local/ctest.sh -p <pkg> --lib`（L0 白名单拦截非白名单 crate +
-     L1 自动注入 `RUST_MIN_STACK=32MB`/`TMP=D:\cargo-tmp` + L2 自动拼
-     `docs-local/win-skip.txt` 的 `--skip`）。裸 `cargo test` 会把 win-skip 已定案的
-     已知必挂测试（flock/信号/POSIX 路径形态等族）重新放进输出污染结果，
-     视为违反本规则；一次性分析确需裸跑时用 `GATE_FORCE=1` 显式放行并事后恢复。
-   - `win-skip.txt` 是已知必挂测试的唯一台账（每条带根因注释）：新确认的环境族失败
-     先登记再继续跑，不逐个排查；修复某族后从清单撤销并登记 PATCHES.md。
-     处置标准：确认 win 不兼容或不重要的 → 门控；重要且非兼容性问题的 → 评估修复。
-   - 分诊流水线与工具见 docs-local/WIN-TEST-GATE.md：静态扫描 `win_scan.py`（零编译）
-     → 抽样 `win_sample.py` → 只对失败模块深排；溢出族已由 L1 消解，孤例才打
-     `#[cfg(windows)] #[ignore]` LOCAL 补丁并登记 PATCHES.md。
-   - 上游套件整包回归一律 WSL / Linux CI（L4），禁止在本机逐个排查（见第 11 条）。
-11. **上游（Grok 同步）测试套件在 Windows 上不可作为回归依据**：约九成用例依赖 Linux 行为
-   （POSIX 路径/权限/线程栈/终端探测），本机跑它是无底洞。LOCAL 改动的验证 = 
-   `cargo check`（编译正确性）+ **本地自有 crate 的 lib 测试**（xai-chat-state/sampler/
-   sampling-types/compaction/pager 等本地主题）；上游 shell 套件只做编译级验证，
-   套件级回归留给 Linux CI 或专用会话批量处理，禁止在本机全量跑上游套件排查。
-5. **临时目录不走 C 盘**：走 `ctest.sh` 时自动注入；裸跑 cargo 命令才需手动带
-   `TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp'` 前缀（目录已存在）。
-6. **上游同步会覆盖同步文件**：`Synced from monorepo` 提交会冲掉同步文件里的本地改动；
-   对同步文件打的 LOCAL 补丁（cfg 门控等）要在 docs-local/PATCHES.md 有据可查，便于同步后重放。
-7. **最便宜的决定性实验先行**：归因"是我的改动还是既有问题"用 A/B——`git stash push -- <file>`
-   跑原始版对比，比理论推演快且可靠（本轮一击排除 FileIdentity 嫌疑）。快问题（哪个用例挂）
-   别排在慢构建后面：cargo 构建锁全局互斥，探针会被卡到超时。多主题验证时把小 crate 的
-   快验证放最前，长链大编译放最后。
-   **A/B 适用边界（2026-10-03 定）**：本仓库是 Rust——编译时间成本高，且任何改动
-   都触发 cache miss 级联重编，"改动前先跑一遍原始版对照"是 Go 等快编译语言的习惯
-   打法，在这里不是首选。基线结论优先零编译获取：读代码手推、既有 CI/测试日志、
-   grep 现场；确需运行时对照时用已构建产物，或并入修后唯一一轮验证，禁止为"对照"
-   单独多烧一整轮重编（v1.0.41 修前 A/B + 修后验证两轮近全量 shell 测试编译即反例）。
-8. **lib test 过滤省跑不省编**：`cargo test --lib <filter>` 也要整编测试二进制，为验证一行
-   改动选"重编级联最小"的 crate，别只看过滤名。旁支 crate 自己的 `--lib`（如
-   xai-grok-pager-render）在只测 pager 时从没编过——新套件先跑基线再谈回归。
-   rustc 连续在不同 crate 上 ACCESS_VIOLATION（0xc0000005）≠ 代码错误，是增量缓存损坏：
-   `rm -rf target/debug/incremental` + `CARGO_INCREMENTAL=0` 重试，禁止盲目原样重跑。
-9. **大杂烩单测先拆分再调试**：单个 `#[test]` 打包多场景时失败无法定位，被迫探针重跑整轮；
-   继承的先拆（LOCAL 标注），让失败自报用例名。挂起 ≠ 并发 bug：Barrier/锁同步测试挂死
+1. **先分族再动手**。失败常成族（几十个同根因），按报错分族、一族一策，禁止逐个盲修。
+2. **编译最贵**。全量 pager lib test ≈ 6–11 分钟编译 + 4 分钟跑；共享 crate 会级联重编。
+   语法/类型验证用 `cargo check -p <pkg>`；行为验证按模块过滤；一轮批量收集信息，
+   禁止"改一行→全量→再改一行"。**编译/测试输出禁止接 `tail`/`head` 管道**：失败
+   详情会被丢弃，只能整轮重跑；完整输出直落后台日志或 `> file 2>&1`，失败后只对
+   已写完的日志 tail/grep。
+3. **长任务放后台**。长编译/全量测试放后台，期间做不冲突的分析；禁止连续大超时阻塞。
+   Windows 上 cargo 被 kill 可能留冻结进程：`tasklist | grep cargo/rustc`，必要时
+   `taskkill //F //IM cargo.exe`。
+4. **Windows 环境与测试门禁（MANDATORY）**。本机 Windows，上游基线 Linux CI。失败先判
+   环境族：8.3 短名 `~`、路径分隔符、HOME/USERPROFILE、POSIX shell、终端字形、
+   `File::open` 开目录、保留设备名 `nul/con/aux/com1…`（写入进黑洞仍报成功）。环境族
+   按"屏蔽噪声"处理，真 bug 才修。目录身份用 creation_time（mtime 随子项变化；~15 秒内同名重建也会骗人）。
+   - 本机任何 cargo test 一律走 `scripts-local/ctest.sh -p <pkg> --lib`（白名单 +
+     `RUST_MIN_STACK=32MB` + `TMP=D:\cargo-tmp` + 自动拼 `docs-local/win-skip.txt`
+     的 `--skip`）。禁止裸跑；一次性分析确需裸跑用 `GATE_FORCE=1`，事后恢复。
+   - `win-skip.txt` 是已知必挂测试的唯一台账（每条带根因）。新环境族先登记再跑；
+     处置：不兼容/不重要 → 门控，重要 → 评估修复；修复后撤销并记 PATCHES.md。
+   - 分诊见 `docs-local/WIN-TEST-GATE.md`：`win_scan.py`（零编译）→ `win_sample.py`
+     → 只对失败模块深排；孤例才打 `#[cfg(windows)] #[ignore]` 并登记 PATCHES.md。
+   - **上游（Grok 同步）套件整包回归一律 WSL / Linux CI**，禁止本机逐个排查。
+     LOCAL 改动验证 = `cargo check` + 本地自有 crate 的 lib 测试（xai-chat-state /
+     sampler / sampling-types / compaction / pager 等）。
+5. **临时目录不走 C 盘**。走 `ctest.sh` 自动注入；裸跑 cargo 手动带
+   `TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp'`。
+6. **上游同步会覆盖同步文件**。对同步文件打的 LOCAL 补丁（cfg 门控等）必须在
+   `docs-local/PATCHES.md` 有据可查，便于同步后重放。
+7. **A/B 先算成本**。归因"我的改动还是既有问题"时，优先零编译证据（读码、既有 CI
+   日志、grep）；确需运行时对照时用已构建产物，或并入修后唯一一轮验证。禁止为对照
+   单独多烧一轮重编。多主题验证时小 crate 快验证放最前、长链大编译放最后；快问题
+   别排在慢构建后面（cargo 构建锁全局互斥，探针会卡到超时）。
+8. **lib test 过滤省跑不省编**。选重编级联最小的 crate；旁支 crate 新套件先跑基线。
+   rustc 连续 ACCESS_VIOLATION（0xc0000005）≠ 代码错误，是增量缓存损坏：
+   `rm -rf target/debug/incremental` + `CARGO_INCREMENTAL=0` 重试。
+9. **大杂烩单测先拆分再调试**（LOCAL 标注），让失败自报用例名。Barrier/锁测试挂死
    往往是"被测流程在锚点前就失败"的放大，先查早期错误再怀疑并发。
-10. **已验证的主题立刻提交**，不把全部改动押在一盏统一绿灯上；失败重试（如 rustc 崩溃）
-    与提交推送解耦，绿一块走一块。
+10. **已验证的主题立刻提交**。失败重试与提交推送解耦，绿一块走一块。
 
-## 记录与归档约定（2026-11-13 治理）
+## 记录与归档
 
-本文件只放**仍在生效的规则**与**一行式活跃待办**。过程记录、发版流水、已完成
-事项一律进 `docs-local/` 专题或 `docs-local/archive/`，不再在 AGENTS.md 累积。
+本文件只放仍生效的规则与一行式活跃待办；过程记录、发版流水、已完成事项进
+`docs-local/` 专题或 `docs-local/archive/`。
 
-- 新待办一行：`- 主题 — 当前状态；指针`；完成后当轮删除，详情归档。
-- 一次性记录（排查/事故/审计）收口当天移入 archive，索引只追加。
-- 引用文件/链接前先核对真实存在。
-- 本文件超过约 15 KB 或待办超过 50 条时做一次治理（归档 + 合并）。
-- 治理前快照：`docs-local/archive/agents-md-todo-handoff-snapshot-2026-11-13.md`
-  （2026-09~11 的全部待办与交接原文）；`docs-local/archive/agents-md-snapshot-2026-11-16.md`
-  （2026-11-16 治理前全文）。
+- 新待办一行：`- 主题 — 状态；指针`；完成后当轮删除，详情归档。
+- 一次性记录收口当天移入 archive，索引只追加。
+- 引用文件/链接前先核对存在。
+- 预算：本文件 ≤10 KB、待办 ≤50 条；超了做治理并留快照。
+- 治理前快照：`docs-local/archive/agents-md-snapshot-2026-11-20.md`（本次）；
+  历史：`agents-md-snapshot-2026-11-16.md`、`agents-md-todo-handoff-snapshot-2026-11-13.md`。
 
-## 活跃待办（2026-11-16）
+## 活跃待办（2026-11-20）
 
-### 施工中 / 待合
-- 订阅到期体验 + 启动/退出 span — v1.0.80 已发版部署；活体验收项见「待活体验证」；见 PATCHES 七十六期、`docs-local/startup-perf/span-plan.md` §10。
-- 启动 500ms 目标 — v1.0.82 已发版部署：首帧 193ms / interactive 203ms，session 创建 304ms（workspace 诊断 LSP 也懒构建）。剩余 `tool_registry` 130–151ms 与 `skills` 42–63ms；见 PATCHES 七十八期、`docs-local/startup-perf/README.md` §5。
-- 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪（改历史）、请求级修复持久化仍等 dump 证据；B/C 组未开工。见 PATCHES 七十五期、`docs-local/agent-cli-tracking/TODO.md` ①。
-- token 经济二轮 — 2026-11-20 路线已下钻：P0 观测（账本 `reasoningReplayTokens`/`toolResultTokens` + `/stats` composition 行）随首批提交待 CI；P1 冷窗口 replay diet 为下一批主施工面。见 `docs-local/token-economy-port/harness-cost-roadmap-2026-11-20.md`、`harness-cost-drilldown-2026-11-20.md`。
-- 压缩指令（`/compact <instructions>`）— v1.0.75 已发版并部署，待活体验收；见 `docs-local/compact-instructions-handoff.md`。
-- IP 端点自签证书放行 — 分支 `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
+### 施工中
+- 订阅到期体验 + 启动/退出 span — v1.0.80 已部署，待活体验收；PATCHES 76、`startup-perf/span-plan.md` §10。
+- 启动 500ms 目标 — v1.0.82：首帧 193/203ms、session 304ms；余 `tool_registry` 130–151ms、`skills` 42–63ms；PATCHES 78、`startup-perf/README.md` §5。
+- 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪、请求级修复持久化等 dump；B/C 组未开工；PATCHES 75、`agent-cli-tracking/TODO.md` ①。
+- token 经济二轮 — P0 观测（账本 composition + `/stats` 行）已随 887dabc2 推送，build 44725198196 双绿；P1 冷窗口 replay diet 为下一批；`token-economy-port/harness-cost-drilldown-2026-11-20.md`。
+- IP 端点自签证书放行 — `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 
-### 待活体验证（随新客户端）
-- 客户端循环检测（`/loop-detect abort|record`、`/stats` 汇总行、`~/.grok/cache/loop-detect.jsonl`）。
-- 视觉桥（T1–T3+D8/D9）、空闲自动压缩（`shell.idle_compact.*` 事件 + 下一轮 TTFT）、cache P1/P2（触发点后首轮命中）、`/usage` 额度估算口径。
-- `/stats` 的 `g` 分组与缓存断崖汇总行；`/compress-fast` 在 `prune_mode = append` 模型上清掉旧结果并写入失效标记。
-- LSP 四项（诊断/懒启动/rename/面板）、`[api_dump]` 落盘、09-29 上游同步抽查、`/usage` 套餐块。
+### 待活体验证
+- 循环检测（`/loop-detect abort|record`、`/stats` 汇总行、`~/.grok/cache/loop-detect.jsonl`）。
+- 视觉桥、空闲自动压缩、cache P1/P2 触发后首轮命中、`/usage` 额度估算口径。
+- `/stats` 的 `g` 分组与断崖汇总行；`/compress-fast` 在 append 模型上的失效标记。
+- LSP 四项（诊断/懒启动/rename/面板）、`[api_dump]` 落盘、09-29 同步抽查、`/usage` 套餐块。
+- `/compact <instructions>`（v1.0.75 已部署）。
 
 ### 未开工 / 待拍板
-- workflow-pi-port P2 T2（deferred tools）；kimicode T2b（replay 双路径）；step-code P3/P4；dsh-port P1。
-- zcode 3.17.2 P1（provider-tool-rounds / foldReminders / post-compact 回补 / hooks `onError` / superpowers 三件 A/B）；opencode diff 面板；webdav sync；`/dump`；startup-perf 缓解；其余 21 套主题；harness-model-fit 建议；agent-cli-refresh P3（prompt snapshot）。
-- qwen 1.0 增补 — `/context [detail]` 已有（per-tool 明细）；idle cost（P0 余项）、microcompaction 规格（并入 P1）、调度闸门（P2）；`docs-local/agent-cli-tracking/notes/qwen-code-1.0-2026-11.md`。
+- workflow-pi-port P2 T2；kimicode T2b；step-code P3/P4；dsh-port P1。
+- zcode 3.17.2 P1；opencode diff；webdav sync；`/dump`；startup-perf 缓解；21 套主题；harness-model-fit；agent-cli-refresh P3。
+- qwen 1.0 增补 — idle cost（P0 余项）、microcompaction 规格（并入 P1）、调度闸门（P2）；`agent-cli-tracking/notes/qwen-code-1.0-2026-11.md`。
 
 ### 长期挂起
-- Ctrl+Enter 幽灵气球（P2，`docs-local/issues/`）；quota 他机对账；limit-probe T3；dump 自动清理；model-picker T2。
+- Ctrl+Enter 幽灵气球（P2）；quota 他机对账；limit-probe T3；dump 自动清理；model-picker T2。
 
-## 当前版本与最近发布（2026-11-18）
+## 当前版本
 
-- 本机 `grok 1.0.82 (12cce666b3f5)`，部署 `D:\tool-cli\grok2\grok2.exe`；回滚 `grok2.exe.1.0.81-7374bc42.bak`，`~/.grok/bin` 备份 `*.bak-1.0.81-fork`。
-- v1.0.82：workspace 诊断 LSP 懒构建（session 创建不再扫 PATH / 拉 server）+ `session.lsp.lazy_build` 统一事件；`pre_spawn_ms` 111ms → 11ms，session 创建 380ms → 304ms。
-- v1.0.81：`features.remote_fetch = false` 硬跳过计费/订阅巡检、shell 侧 LSP 懒构建、首帧分段（`startup.first_frame`）。
-- v1.0.79：客户端循环检测（ABAB 工具轮转、正文/思考复读）；默认中止回合，`/loop-detect record` 只记账。
-- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~七十八期；治理前原文快照：`docs-local/archive/agents-md-snapshot-2026-11-16.md`。
+- 本机 `grok 1.0.82 (12cce666b3f5)`，部署 `D:\tool-cli\grok2\grok2.exe`；回滚 `grok2.exe.1.0.81-7374bc42.bak`。
+- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~七十八期。最近：v1.0.82 lazy LSP、v1.0.81 `remote_fetch` 硬跳过 + 首帧分段、v1.0.79 loop detect。
 
 ## 文档地图（docs-local）
 
-- 经济性/缓存：`token-economy-audit-2026-11/`、`token-economy-port/`（含现行路线 `harness-cost-roadmap-2026-11-20.md` 与缓存 TTL 口径）、`cache-strategy-port/`、`status-line-perf-wiki.md`、`limit-inference.md`、`usage/`、`usage-quota-estimate-todo.md`。
+- 经济性/缓存：`token-economy-audit-2026-11/`、`token-economy-port/`（路线 + 下钻 + TTL）、`cache-strategy-port/`、`status-line-perf-wiki.md`、`limit-inference.md`、`usage/`、`usage-quota-estimate-todo.md`。
 - harness/模型：`harness-model-fit/`、`agent-cli-refresh-2026-11/`、`agent-cli-tracking/`、`model-limits-config.md`、`dsh-port/`。
 - 移植/特性：`workflow-pi-port/`、`kimicode-port/`、`step-code-port/`、`opencode-port/`、`lsp-port/`、`vision-bridge/`、`subagent-model-group-todo.md`、`port-roadmap.md`、`fork-feature-inventory.md`。
 - 上游/兼容：`sync-upstream-2026-09-29.md`、`sync-upstream-2026-09-23.md`、`upstream-responses-event-compat.md`、`PATCHES.md`。

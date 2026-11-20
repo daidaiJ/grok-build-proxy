@@ -22,3 +22,4 @@
 | [qwen-code-mimo-xml-400-source-study-2026-09-22.md](qwen-code-mimo-xml-400-source-study-2026-09-22.md) | 姊妹篇源码调研，随 mimo 分析同组归档。⚠️ 文内引用的 `third-party-model-toolcall-issues-2026-09-22.md` 从未入库且已不在工作区，链接是死的 | 2026-09-30 |
 | [agents-md-todo-handoff-snapshot-2026-11-13.md](agents-md-todo-handoff-snapshot-2026-11-13.md) | AGENTS.md 待办与交接历史快照（治理前原文，TODO 29 KB + Handoff 36 KB），防止每次会话读入历史流水 | 2026-11-13 |
 | [agents-md-snapshot-2026-11-16.md](agents-md-snapshot-2026-11-16.md) | AGENTS.md 治理前全文快照（v1.0.79 交接与待办），后续读 AGENTS.md 即可 | 2026-11-16 |
+| [agents-md-snapshot-2026-11-20.md](agents-md-snapshot-2026-11-20.md) | AGENTS.md 第二轮治理前全文（13.4 KB → 8.3 KB：压缩调试规则、合并 Windows 门禁、待办收敛、发版流水移入 PATCHES） | 2026-11-20 |
