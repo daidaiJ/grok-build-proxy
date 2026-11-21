@@ -122,7 +122,34 @@ Codex CLI 的压缩不是“把整段对话缩成一段”，而是产出一份�
 它的问题也明确：删除工具输出后没有恢复路径，模型会重读；摘要不可逆。
 我们采用它的模板，但把“原始目标/约束/决策日志”放在摘要之外，避免二次摘要。
 
-### 5.3 我们的 RelayBrief
+### 5.3 已落地 v1：RelayAnchor
+
+第一版先保护最容易漂移的两类信息，不引入新的摘要调用：
+
+- `original_goal`：首次压缩时从真实用户消息中取第一条任务型请求，之后永不改写。
+- `user_messages`：真实用户消息逐字追加、去重、限 24 条 / 24k 字符；
+  首条目标固定在首位，超限时保留最新消息。
+- `generation` / `compaction_count`：每次压缩递增，用于观测连续压缩。
+- 载体：`ConversationItem::user_meta`，`SyntheticReason::CompactionMeta`，
+  内容为 `<relay_anchor>{json}</relay_anchor>`。它随压缩历史持久化，
+  后续压缩解析旧 anchor 后只追加新消息。
+- 注入位置：压缩历史中 system + `<user_info>` 之后；若已有 anchor 则原位替换，
+  保证重复压缩不产生多份。
+- 观测：`shell.relay_compact` 记录 generation、用户消息数、新增用户消息数、
+  anchor 字符数、summary_count；连续压缩且没有新用户消息时打 warning。
+- 开关：默认开启；`[compaction] relay_anchor = false` 恢复旧的
+  summary-only 压缩历史（不生成、不解析、不注入 anchor，也不写
+  `shell.relay_compact`）。
+
+实现文件：
+
+- `crates/codegen/xai-chat-state/src/compaction_relay.rs`
+- `crates/codegen/xai-grok-shell/src/session/compaction.rs`
+
+v1 解决“目标/用户意图被二次摘要磨掉”。决策、已完成项、下一步仍由现有
+九段式 handoff 摘要承载；下一版再把这些字段结构化。
+
+### 5.4 完整 RelayBrief（后续）
 
 每次压缩维护一份结构化 `RelayBrief`，落盘 `<session_dir>/relay_brief.json`，
 并在新历史头部注入一份紧凑文本（约 2–4k tokens）：
@@ -172,7 +199,7 @@ Codex CLI 的压缩不是“把整段对话缩成一段”，而是产出一份�
 - 每次压缩后首轮成本与压缩前同量级，不出现持续膨胀；
 - `session.relay_compact` 可复盘每次压缩的字段变化。
 
-### 5.4 与现有压缩引擎的接入点
+### 5.5 与现有压缩引擎的接入点
 
 待读代码确认（Batch 3 开工前）：
 
@@ -195,6 +222,8 @@ Codex CLI 的压缩不是“把整段对话缩成一段”，而是产出一份�
 
 - `GROK_REPLAY_DIET=0` 立即关闭 diet；历史已被裁剪的会话不会自动恢复原文，需 sidecar
   或重新执行工具。
+- `[compaction] relay_anchor = false` 恢复旧压缩历史；下一次压缩起不再注入 anchor，
+  已存在的 anchor 会随本次压缩消失。
 - diet 只删除 reasoning 和替换旧工具结果，不改 system、user、assistant 工具调用配对。
 - 压缩 brief 写入失败时保留旧 brief 并继续使用旧历史，不阻塞会话。
 - 每次重写都记录 `prompt_tokens_before/after` 与 `bytes_freed`，按会话核对净收益。

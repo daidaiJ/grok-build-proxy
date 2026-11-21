@@ -1948,6 +1948,57 @@ impl SessionActor {
             .compaction
             .count
             .load(std::sync::atomic::Ordering::Relaxed);
+        // LOCAL(token-economy P1): carry the original goal and verbatim user
+        // messages across compactions outside the LLM summary. Existing fields
+        // are append-only; `original_goal` is captured once. `[compaction]
+        // relay_anchor = false` restores the legacy summary-only history.
+        let relay_anchor_enabled = self
+            .agent
+            .borrow()
+            .compaction_policy()
+            .relay_anchor_enabled;
+        let relay_anchor = if relay_anchor_enabled {
+            let previous_relay_anchor =
+                xai_chat_state::compaction_relay::parse_relay_anchor(&conversation);
+            let anchor = xai_chat_state::compaction_relay::extract_relay_anchor(
+                &conversation,
+                previous_relay_anchor.as_ref(),
+                summary_count,
+                self.goal_objective_for_compaction().as_deref(),
+            );
+            let relay_chars =
+                xai_chat_state::compaction_relay::render_relay_anchor(&anchor).len();
+            tracing::info!(
+                relay_generation = anchor.generation,
+                relay_user_messages = anchor.user_messages.len(),
+                relay_new_user_messages = anchor.new_user_messages,
+                relay_chars,
+                summary_count,
+                "compaction: relay anchor carried forward"
+            );
+            if previous_relay_anchor.is_some() && anchor.new_user_messages == 0 {
+                tracing::warn!(
+                    session_id = %self.session_info.id.0,
+                    relay_generation = anchor.generation,
+                    summary_count,
+                    "compaction: no new real user messages since the previous relay anchor; verify the handoff still reflects progress"
+                );
+            }
+            xai_grok_telemetry::unified_log::info(
+                "shell.relay_compact",
+                Some(self.session_info.id.0.as_ref()),
+                Some(serde_json::json!({
+                    "relay_generation": anchor.generation,
+                    "relay_user_messages": anchor.user_messages.len(),
+                    "relay_new_user_messages": anchor.new_user_messages,
+                    "relay_chars": relay_chars,
+                    "summary_count": summary_count,
+                })),
+            );
+            Some(anchor)
+        } else {
+            None
+        };
         let apply_start = std::time::Instant::now();
         let raw_compacted = build_compacted_history(CompactedHistoryInput {
             system_message: system_message.clone(),
@@ -2035,7 +2086,7 @@ impl SessionActor {
         } else {
             self.startup_hints.inherited_prefix_len.unwrap_or(0)
         };
-        let compacted_history = if prefix_len == 0 {
+        let mut compacted_history = if prefix_len == 0 {
             compacted_history
         } else {
             self.resolve_forked_compacted_history(
@@ -2046,6 +2097,9 @@ impl SessionActor {
             )
             .await
         };
+        if let Some(anchor) = &relay_anchor {
+            xai_chat_state::compaction_relay::ensure_relay_anchor(&mut compacted_history, anchor);
+        }
         self.chat_state_handle
             .replace_conversation_for_compaction(compacted_history);
         self.reseed_active_goal_after_compaction().await;

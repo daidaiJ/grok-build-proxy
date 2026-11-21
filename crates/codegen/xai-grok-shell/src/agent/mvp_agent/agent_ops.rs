@@ -4597,6 +4597,7 @@ async fn build_lsp_backend_from_registry(
             .cfg
             .borrow()
             .is_feature_enabled(crate::agent::config::Feature::CompactionVerbatimInput);
+        let compaction_relay_anchor = self.cfg.borrow().compaction.relay_anchor.unwrap_or(true);
         let long_reasoning_reminder = self
             .cfg
             .borrow()
@@ -5032,6 +5033,7 @@ async fn build_lsp_backend_from_registry(
                     system_prompt_label,
                     compaction_mode,
                     compaction_verbatim_input,
+                    compaction_relay_anchor,
                     long_reasoning_reminder,
                     compaction_tool_choice,
                     two_pass_enabled,

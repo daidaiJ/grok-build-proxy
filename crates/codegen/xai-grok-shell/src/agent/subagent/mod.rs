@@ -463,6 +463,12 @@ impl SubagentSpawnContext {
     pub(crate) fn resolve_compaction_verbatim_input(&self) -> bool {
         self.resolve_feature(crate::agent::config::Feature::CompactionVerbatimInput)
     }
+    pub(crate) fn resolve_compaction_relay_anchor(&self) -> bool {
+        self.agent_config
+            .as_ref()
+            .and_then(|config| config.compaction.relay_anchor)
+            .unwrap_or(true)
+    }
     pub(crate) fn resolve_long_reasoning_reminder(
         &self,
     ) -> crate::session::long_reasoning_reminder::LongReasoningReminder {

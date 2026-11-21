@@ -274,6 +274,9 @@ fn plan_tool_result_stubs(
             tool_name,
         });
     }
+    // Reverse iteration finds the newest first; report oldest-first so plans
+    // are stable and match conversation order.
+    targets.sort_by_key(|target| target.index);
     targets
 }
 
@@ -545,6 +548,7 @@ mod tests {
         ];
         let policy = ReplayDietPolicy {
             keep_recent_tool_results: 1,
+            keep_recent_user_turns: 1,
             ..policy()
         };
         let plan = plan_replay_diet(&conversation, policy);

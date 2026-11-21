@@ -588,6 +588,11 @@ pub struct FeedbackUserConfig {
 pub struct CompactionConfig {
     pub memory_flush: Option<crate::config::MemoryFlushSettings>,
     pub pruning: Option<crate::config::PruningSettings>,
+    /// LOCAL(token-economy P1): carry the original goal and verbatim user
+    /// messages across compactions via a relay anchor. Defaults to on;
+    /// `relay_anchor = false` restores the legacy summary-only history.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relay_anchor: Option<bool>,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]

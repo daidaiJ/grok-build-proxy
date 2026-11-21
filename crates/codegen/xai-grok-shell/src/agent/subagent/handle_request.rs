@@ -1529,6 +1529,7 @@ pub(crate) async fn run_shell_child(
         xai_grok_agent::DEFAULT_SYSTEM_PROMPT_LABEL.to_string(),
         pins.mode,
         ctx.resolve_compaction_verbatim_input(),
+        ctx.resolve_compaction_relay_anchor(),
         ctx.resolve_long_reasoning_reminder(),
         ctx.resolve_compaction_tool_choice(),
         pins.two_pass,

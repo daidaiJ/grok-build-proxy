@@ -20,6 +20,12 @@ pub struct CompactionPolicy {
     /// At compaction, that note and the recent tail are summarized together (pass 2).
     /// Resolved from the `two_pass_compaction` config flag at session build; `false` keeps the legacy single-pass path.
     pub two_pass_enabled: bool,
+
+    /// LOCAL(token-economy P1): carry the original goal and verbatim user
+    /// messages across compactions via a deterministic relay anchor.
+    /// Defaults to on; `[compaction] relay_anchor = false` restores the legacy
+    /// summary-only history.
+    pub relay_anchor_enabled: bool,
 }
 
 impl Default for CompactionPolicy {
@@ -30,6 +36,7 @@ impl Default for CompactionPolicy {
             memory_flush_enabled: false,
             wall_clock_budget_secs: 300,
             two_pass_enabled: false,
+            relay_anchor_enabled: true,
         }
     }
 }
