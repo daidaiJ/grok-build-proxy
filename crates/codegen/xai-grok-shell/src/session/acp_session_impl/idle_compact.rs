@@ -313,7 +313,7 @@ impl SessionActor {
                 return;
             }
         };
-        let trigger_info = crate::session::compaction::AutoCompactTriggerInfo {
+        let trigger_info = crate::session::acp_session::compaction::AutoCompactTriggerInfo {
             tokens_used: pre_tokens,
             context_window,
             percentage: xai_token_estimation::usage_percentage_u8(pre_tokens, context_window),
@@ -383,7 +383,7 @@ impl SessionActor {
 
     async fn run_idle_compact_select(
         self: &Arc<Self>,
-        trigger_info: crate::session::compaction::AutoCompactTriggerInfo,
+        trigger_info: crate::session::acp_session::compaction::AutoCompactTriggerInfo,
     ) {
         // Run the compact, but abort it the moment the session stops being idle
         // (user prompt promoted, synthetic turn, finalization). Dropping the
