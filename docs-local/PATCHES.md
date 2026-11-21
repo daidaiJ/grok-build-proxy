@@ -4975,8 +4975,11 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
   编译失败，`compaction_relay.rs` 三处 `synthetic_user(String)` 需借用。
 - 修复提交 `488c4beb`；CI/release 结果待回填。
 
-### Bench（进行中）
+### Bench（glm-5.3-flash，5 轮）
 
-- 脚本（临时）：4/5 代连续压缩 × legacy/relay × `glm-5.3-flash`/`auto`；
-  统计 post/pre token、摘要增长、anchor 开销、事实覆盖率、证据支撑回答、
-  逐字用户消息保留率。结果回填到本篇与专题文档。
+- legacy vs relay：压缩后/前 ~8.9% vs ~9.2%（r5）；摘要 1,844 vs 1,653 tokens；
+  anchor 137→289 tokens（占 post 5.7→8.5%），净 post +3.1%；
+  5 轮压缩 completion 12,537 vs 11,041（−11.9%），list cost $0.0558 vs $0.0475。
+- 覆盖率/逐字用户消息保留率均 1.0；关键词准确率 0.907 vs 0.934、judge
+  0.980 vs 0.909，5 轮内无显著差别。详见专题文档 §8。
+- `auto` 模型侧仍在跑；不影响 glm 结论。
