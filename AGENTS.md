@@ -89,7 +89,7 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 - 订阅到期体验 + 启动/退出 span — v1.0.80 已部署，待活体验收；PATCHES 76、`startup-perf/span-plan.md` §10。
 - 启动 500ms 目标 — v1.0.82：首帧 193/203ms、session 304ms；余 `tool_registry` 130–151ms、`skills` 42–63ms；PATCHES 78、`startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪、请求级修复持久化等 dump；B/C 组未开工；PATCHES 75、`agent-cli-tracking/TODO.md` ①。
-- token 经济二轮 — P0 已部署；P1 轮内 replay diet + relay（默认开，`relay_summary_verbatim_missing` 观察）+ 空闲等待压缩（270s/ROI 门控）待 CI；`token-economy-port/replay-diet-2026-11-21.md`。
+- token 经济二轮 — P0 已部署；P1 轮内 replay diet + relay（默认开，`relay_summary_verbatim_missing` 观察）+ 空闲等待压缩（270s/ROI 门控）已推，CI 44896834229 双绿；`token-economy-port/replay-diet-2026-11-21.md`。
 - IP 端点自签证书放行 — `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 
 ### 待活体验证

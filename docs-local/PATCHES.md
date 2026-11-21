@@ -4977,7 +4977,7 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
   replay_diet 两处期望失败（见上修复）。
 - `dcfc2ead` run 44887644926：linux/windows 均在 `xai-chat-state` lib test
   编译失败，`compaction_relay.rs` 三处 `synthetic_user(String)` 需借用。
-- 修复提交 `488c4beb`；CI/release 结果待回填。
+- 修复提交 `488c4beb`；run 44893464527 linux/windows 双绿。
 
 ### Bench（glm-5.3-flash，5 轮）
 
@@ -5014,3 +5014,4 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
   `util/config/resolve/compaction.rs`（设置）、`session/compaction_config.rs`
   （冷却/增长/上次 post）、`spawn.rs`（初始化）、`session/compaction.rs`
   （记录 `last_compact_post_tokens`，`reason_override` 直接作为通知文案）。
+- CI：run 44896834229 linux/windows 双绿（含 `f4b95872` 模块路径修复）。
