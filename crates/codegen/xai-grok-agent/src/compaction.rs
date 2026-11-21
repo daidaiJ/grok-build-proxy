@@ -23,8 +23,9 @@ pub struct CompactionPolicy {
 
     /// LOCAL(token-economy P1): carry the original goal and verbatim user
     /// messages across compactions via a deterministic relay anchor.
-    /// Defaults to on; `[compaction] relay_anchor = false` restores the legacy
-    /// summary-only history.
+    /// Defaults to on as long-horizon insurance; the 5-round bench showed no
+    /// measurable short-run win, so `shell.relay_compact` now reports how often
+    /// the summary would have dropped an anchor message.
     pub relay_anchor_enabled: bool,
 }
 

@@ -4949,7 +4949,7 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
 - 修复：stub 目标按 index 升序上报（`targets.sort_by_key`）；幂等测试显式
   `keep_recent_user_turns: 1`。
 
-### Relay anchor（dcfc2ead，默认开启）
+### Relay anchor（dcfc2ead，默认开启，长程观察）
 
 - 新 `xai-chat-state/src/compaction_relay.rs`：`RelayAnchor { generation,
   original_goal, user_messages, compaction_count }`；首次压缩捕获
@@ -4964,6 +4964,10 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
 - 配置：`xai-grok-agent::CompactionPolicy.relay_anchor_enabled` 默认 true；
   `[compaction] relay_anchor = false` 恢复旧 summary-only 历史
   （不生成/解析/注入，也不写 relay 事件）；spawn 时读取，主会话与子代理同口径。
+- 长程观察指标：`shell.relay_compact` 新增
+  `relay_summary_verbatim_hits/missing`，统计摘要逐字覆盖的 anchor 用户消息数；
+  missing>0 即 summary-only 路径会丢失/改写的用户约束。5 轮 bench 没有测出
+  短期平均收益，默认开启的定位是长程保险与观察，见专题文档 §8.3。
 - 接线：`agent/config.rs`、`mvp_agent/agent_ops.rs`、`subagent/mod.rs`、
   `subagent/handle_request.rs`、`session/acp_session_impl/spawn.rs`。
 
@@ -4987,3 +4991,8 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
   completion +5.2%、净 post +11.3%，关键词 0.897 vs 0.946、judge
   0.906 vs 0.917，仍无显著差别。成本效应两次方向不一致，5 轮不足以证明
   relay 的平均收益；详见专题文档 §8。
+- **处置**：`relay_anchor` 保持默认开启，作为长程会话保险；新增
+  `relay_summary_verbatim_missing` 观察指标，用真实压缩链回收收益。复盘：
+  机制是 token 置换而非削减；legacy 在本 bench 已 100% 保留用户消息，质量
+  维度没有提升空间；摘要只占压缩后上下文 8–9%，不是成本主项；长会话 replay
+  的旧 reasoning / 大工具结果未被该 bench 覆盖。详见专题文档 §8.3。

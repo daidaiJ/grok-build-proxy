@@ -1968,11 +1968,21 @@ impl SessionActor {
             );
             let relay_chars =
                 xai_chat_state::compaction_relay::render_relay_anchor(&anchor).len();
+            // Observed payoff: messages the summary did not carry verbatim.
+            // A consistently zero count means the anchor is redundant on this
+            // model; a non-zero count is the long-horizon case it protects.
+            let (relay_summary_verbatim_hits, relay_summary_verbatim_missing) =
+                xai_chat_state::compaction_relay::summary_verbatim_coverage(
+                    &generate_session_compact,
+                    &anchor.user_messages,
+                );
             tracing::info!(
                 relay_generation = anchor.generation,
                 relay_user_messages = anchor.user_messages.len(),
                 relay_new_user_messages = anchor.new_user_messages,
                 relay_chars,
+                relay_summary_verbatim_hits,
+                relay_summary_verbatim_missing,
                 summary_count,
                 "compaction: relay anchor carried forward"
             );
@@ -1992,6 +2002,8 @@ impl SessionActor {
                     "relay_user_messages": anchor.user_messages.len(),
                     "relay_new_user_messages": anchor.new_user_messages,
                     "relay_chars": relay_chars,
+                    "relay_summary_verbatim_hits": relay_summary_verbatim_hits,
+                    "relay_summary_verbatim_missing": relay_summary_verbatim_missing,
                     "summary_count": summary_count,
                 })),
             );

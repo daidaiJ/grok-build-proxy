@@ -137,10 +137,12 @@ Codex CLI 的压缩不是“把整段对话缩成一段”，而是产出一份�
   保证重复压缩不产生多份。
 - 观测：`shell.relay_compact` 记录 generation、用户消息数、新增用户消息数、
   anchor 字符数、summary_count；连续压缩且没有新用户消息时打 warning。
-- 开关：默认开启；`[compaction] relay_anchor = false` 恢复旧的
+- 开关：默认开启，作为长程保险；`[compaction] relay_anchor = false` 恢复旧的
   summary-only 压缩历史（不生成、不解析、不注入 anchor，也不写
   `shell.relay_compact`）。该值在会话创建/恢复时读取，已运行会话需重开或
-  resume 后生效。
+  resume 后生效。5 轮 bench 没有测出平均收益，默认开启的目的改为长程观察：
+  `shell.relay_compact` 新增 `relay_summary_verbatim_hits/missing`，用于统计
+  摘要是否真的漏掉了 anchor 消息。
 
 实现文件：
 
@@ -263,9 +265,12 @@ temperature 0、effort low。每轮落盘原始会话、压缩原文、清洗后
 3. **anchor 的价值是保证性，不是这 5 轮的平均分**：摘要被截断、模型变弱、
    压缩轮次继续增加、或用户消息很多时，legacy 的第 6 节可能压缩/遗漏；
    anchor 把 original_goal 和用户消息放在摘要之外，代价是 3% 左右的净上下文。
-4. **默认策略**：保持 relay 默认开启，作为低成本保险；如果只按 glm 5 轮成本
-   优先，legacy 并不更差。要证明 relay 的准确率收益，需要 8–12 轮、更弱的
-   摘要模型或更紧的摘要预算，本轮不继续烧 token。
+4. **默认策略**：保持默认开启，按长程会话继续观察。本次 5 轮没有测出平均收益，
+   所以默认开启不再被表述为“短期成本/质量提升”，而是长程保险；同时新增
+   `relay_summary_verbatim_hits/missing` 指标，统计摘要实际漏掉的 anchor
+   消息数。若长程会话里 `missing` 长期为 0，就说明 anchor 在该模型上是冗余的，
+   应改为默认关闭；若 `missing` 经常 >0，则说明它在真实压缩链里确实兜住了
+   信息丢失。要证明准确率收益，仍需 8–12 轮且能诱导摘要丢失的 drift 场景。
 
 限制：单一合成任务、每轮一个样本；char/4 估算对中文偏低（实际 prompt
 tokens 约为估算的 1.8 倍）；anchor 为 Python 等价实现，真实 Rust 路径由 CI
@@ -299,5 +304,34 @@ LightVela 模型。
   relay 压缩输出 +5.2%、净 post +11.3%。5 轮样本不足以证明 relay 的平均收益。
 - 能确认的是机制正确：anchor 只注入一次、不混入摘要、逐字用户消息保留率
   1.0，r5 毛开销 289 tokens。价值在“保证性”，不在当前平均分。
-- 默认值选择：按成本优先可以把 `relay_anchor` 默认改为 false；按长程保险
-  保持 true。当前代码保持 true，等更长轮次或更弱摘要模型再验证。
+- 默认值：`relay_anchor` 保持默认开启（长程观察）；不再把“摘要长度变化”当作
+  平均成本收益。观察口径是 `shell.relay_compact` 的
+  `relay_summary_verbatim_missing`：它统计摘要没有逐字覆盖的 anchor 消息数，
+  也就是 summary-only 路径在真实压缩链里丢掉/改写的用户约束。长程会话里
+  长期为 0 则 anchor 冗余，应关闭；经常 >0 则说明保险在赔付。
+
+### 8.3 为什么没有效果（复盘）
+
+1. **机制是 token 置换，不是 token 削减。** anchor 137→289 tokens，摘要比
+   legacy 短 10–21%，两者相抵后 r5 净 post 仍 +3.1%（glm）/ +11.3%（auto）。
+   如果目标是“压缩量”，这个机制按设计就不可能赢：它把逐字用户消息从摘要里
+   挪到 anchor，保真度换的是上下文大小。
+2. **质量维度没有可提升空间。** legacy 在 5 轮里覆盖率 1.0、逐字用户消息
+   保留率 1.0；九段式 prompt 第 6 节已经完整保留用户消息。anchor 只在摘要
+   截断/遗漏时才有价值，而 5 轮、强摘要模型、小合成历史没有制造这种失败。
+   关键词 +2.7 点、judge −7.1 点方向相反，都在 5 轮噪声内。
+3. **优化的是成本里最小的一项。** 成本由“缓存输入 × 调用次数”主导；压缩后
+   上下文只有 pre 的 8–9%，摘要本身 1–2k tokens。摘要再省 100–200 tokens/
+   次，anchor 又加回 137–289 tokens，相对单会话上亿 prompt tokens 是舍入误差，
+   更抵消不了压缩后的缓存 miss。
+4. **真正的大头没有被这个 bench 覆盖。** 长会话 replay 里旧 reasoning 占
+   20–52%、旧大工具结果占历史 35–38%；这些是 replay diet 的目标，而它需要
+   ≥20 calls/turn、prompt ≥200k 才触发，5 轮合成压缩 bench 从未进入该区间。
+   所以这次 bench 既不能证明 relay，也不能否定 replay diet。
+5. **统计功效不足。** 5 轮、每轮 1 个样本、judge 可能同后端；几分的差异
+   分不清。准确说法是“未测出收益”，不是“证明零收益”；点估计不足以支撑
+   “已证明收益”，但可以支撑“默认开启、长程观察”的决策。
+6. **处置（2026-11-21 拍板）**：`relay_anchor` 保持默认开启，作为长程会话的
+   保险；`shell.relay_compact` 记录 `relay_summary_verbatim_missing`，用真实
+   压缩链统计摘要漏掉的 anchor 消息。后续长程会话按该指标回收收益：长期
+   为 0 就改为默认关闭；经常 >0 则保留并评估准确率收益。

@@ -185,11 +185,46 @@ fn cap_user_messages(messages: Vec<String>, original_goal: Option<&str>) -> Vec<
     kept
 }
 
+/// Measure how often the generated summary already carries an anchor message
+/// verbatim. This is the anchor's observed payoff on real sessions: a missing
+/// message is one the summary-only history would have lost or paraphrased.
+///
+/// Matching normalizes whitespace and case; short messages (≤256 chars) must
+/// appear in full, long messages by their first 96 chars. Returns
+/// `(present, missing)` over non-empty messages.
+pub fn summary_verbatim_coverage(summary: &str, messages: &[String]) -> (usize, usize) {
+    let summary_norm = normalize_for_match(summary);
+    let mut present = 0usize;
+    let mut total = 0usize;
+    for message in messages {
+        let message_norm = normalize_for_match(message);
+        if message_norm.is_empty() {
+            continue;
+        }
+        total += 1;
+        let needle = if message_norm.chars().count() <= 256 {
+            message_norm
+        } else {
+            message_norm.chars().take(96).collect()
+        };
+        if summary_norm.contains(needle.as_str()) {
+            present += 1;
+        }
+    }
+    (present, total.saturating_sub(present))
+}
+
+fn normalize_for_match(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use xai_grok_sampling_types::{SyntheticReason, UserItem};
-
     fn real_user(text: &str) -> ConversationItem {
         ConversationItem::user(text)
     }
@@ -349,5 +384,39 @@ mod tests {
             parse_relay_anchor(&conversation).map(|a| a.generation),
             Some(2)
         );
+    }
+
+    #[test]
+    fn summary_verbatim_coverage_counts_full_short_messages() {
+        let messages = vec![
+            "Keep the API stable".to_string(),
+            "Do not touch the migration".to_string(),
+        ];
+        let summary = "## All User Messages\n- keep the   API stable\n- changed direction";
+        assert_eq!(summary_verbatim_coverage(summary, &messages), (1, 1));
+    }
+
+    #[test]
+    fn summary_verbatim_coverage_matches_long_message_prefix() {
+        let long = format!("{} END", "x".repeat(300));
+        let summary = format!("plan: {} ...", "x".repeat(96));
+        assert_eq!(
+            summary_verbatim_coverage(&summary, std::slice::from_ref(&long)),
+            (1, 0)
+        );
+    }
+
+    #[test]
+    fn summary_verbatim_coverage_treats_paraphrase_as_missing() {
+        let messages = vec!["Use the existing retry helper".to_string()];
+        let summary = "reuse the retry utility already in the tree";
+        assert_eq!(summary_verbatim_coverage(summary, &messages), (0, 1));
+    }
+
+    #[test]
+    fn summary_verbatim_coverage_ignores_empty_messages() {
+        let messages = vec![String::new(), "  \n ".to_string(), "goal".to_string()];
+        let summary = "the goal is unchanged";
+        assert_eq!(summary_verbatim_coverage(summary, &messages), (1, 0));
     }
 }
