@@ -4928,7 +4928,7 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
 - 新会话账本出现两个 camelCase 字段；`/stats` 能看到 composition 行；
   下一批 P1 按 drilldown §3.5 验收冷窗口触发与缓存断崖。
 
-## 八十期：长程压缩 P1——in-turn replay diet + relay anchor（2026-11-21，main 直推，待发版）
+## 八十期：长程压缩 P1——in-turn replay diet + relay anchor（2026-11-21，main 直推，v1.0.84 已发版）
 
 > 背景：`docs-local/token-economy-port/replay-diet-2026-11-21.md`。P0 观测显示
 > 缓存命中后成本主要由上下文水位 × 调用数驱动；本批先在回合内裁剪旧回放，
@@ -5015,3 +5015,16 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
   （冷却/增长/上次 post）、`spawn.rs`（初始化）、`session/compaction.rs`
   （记录 `last_compact_post_tokens`，`reason_override` 直接作为通知文案）。
 - CI：run 44896834229 linux/windows 双绿（含 `f4b95872` 模块路径修复）。
+
+### 发版 v1.0.84（tag `v1.0.84` → `b5cb7026`，2026-11-21）
+
+- release run 44900168801：linux + windows 双绿；GitHub release 已发布（非 draft），
+  Linux tar.gz 83,140,160 B、Windows zip 64,178,387 B。
+- Windows zip sha256 `060e669117453cfa85c6112b8af72a94f5ef9c335d6ff97a9e94e7f4098158e4`；
+  解包 `grok2.exe` sha256 `467a685d2f74cabe31cad47523354dd7febb8ff31342a00c5852285e5286564c`，
+  `--version` = `grok 1.0.84 (b5cb7026d927)`。
+- 本机三处部署同 hash `467a685d…`：`D:\tool-cli\grok2\grok2.exe`、
+  `C:\Users\panda\.grok\bin\grok.exe`、`C:\Users\panda\.grok\bin\agent.exe`。
+- 回滚（1.0.83，hash `73f22e45…`）：`grok2.exe.1.0.83-534af67a90eb.bak`、
+  `grok.exe.bak-1.0.83-fork`、`agent.exe.bak-1.0.83-fork`；运行中的旧进程改为
+  `grok2.exe.running-1.0.83`，重启 TUI 后生效 1.0.84。

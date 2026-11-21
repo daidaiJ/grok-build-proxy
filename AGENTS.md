@@ -2,16 +2,17 @@
 
 ## 🔄 Handoff 摘要
 
-### harness-cost-p0-p1 — in-progress
-- **当前状态：** P0 已随 v1.0.83 发版并部署（`grok 1.0.83 (534af67a90eb)`）；P1 未开工。
-- **关键证据：** `docs-local/token-economy-port/harness-cost-drilldown-2026-11-20.md`；release 44729663180 双绿，Windows zip sha256 `fba769d8…` 已核对；PATCHES 七十九期。
-- **验收标准：** 新会话账本 composition 字段与 `/stats` 行可见；P1 按 §3.5 验收。
+### harness-cost-p0-p1 — in-progress（长程观察）
+- **当前状态：** P0 随 v1.0.83、P1（replay diet + relay + idle-wait）随 v1.0.84 已发版并部署（`grok 1.0.84 (b5cb7026d927)`）。
+- **关键证据：** `docs-local/token-economy-port/replay-diet-2026-11-21.md`；release 44900168801 双绿，Windows zip sha256 `060e6691…` 已核对；PATCHES 七十九、八十期。
+- **验收标准：** 长程会话 `shell.relay_compact.relay_summary_verbatim_missing` 与 `shell.idle_wait_compact.fired/skipped` 可观测；P1 按 §3.5 验收。
 - **详情指针：** [`.handoff/harness-cost-p0-p1.md`](.handoff/harness-cost-p0-p1.md)
 
 ### 未验证事项
-- [x] release 44729663180 成功、Windows zip sha256 核对
-- [x] 本机部署 v1.0.83 并保留 1.0.82 回滚
+- [x] release 44900168801 双绿、Windows zip sha256 核对
+- [x] 本机部署 v1.0.84 并保留 1.0.83 回滚
 - [ ] 新会话账本 composition 字段落盘、`/stats` 行显示
+- [ ] 长程压缩的 relay verbatim_missing / idle-wait net 日志
 
 ## 代码理解（2026-10-03）
 
@@ -89,7 +90,7 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 - 订阅到期体验 + 启动/退出 span — v1.0.80 已部署，待活体验收；PATCHES 76、`startup-perf/span-plan.md` §10。
 - 启动 500ms 目标 — v1.0.82：首帧 193/203ms、session 304ms；余 `tool_registry` 130–151ms、`skills` 42–63ms；PATCHES 78、`startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪、请求级修复持久化等 dump；B/C 组未开工；PATCHES 75、`agent-cli-tracking/TODO.md` ①。
-- token 经济二轮 — P0 已部署；P1 轮内 replay diet + relay（默认开，`relay_summary_verbatim_missing` 观察）+ 空闲等待压缩（270s/ROI 门控）已推，CI 44896834229 双绿；`token-economy-port/replay-diet-2026-11-21.md`。
+- token 经济二轮 — P1 已随 v1.0.84 发版部署（replay diet + relay 默认开 + 空闲等待压缩 270s/ROI）；待长程观察 relay/idle-wait 日志；`token-economy-port/replay-diet-2026-11-21.md`。
 - IP 端点自签证书放行 — `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 
 ### 待活体验证
@@ -109,8 +110,8 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 
 ## 当前版本
 
-- 本机 `grok 1.0.83 (534af67a90eb)`，三处部署同 hash `73f22e45…`；回滚 `grok2.exe.1.0.82-12cce666b3f5.bak`。
-- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~七十九期。最近：v1.0.83 harness 成本 P0 观测、v1.0.82 lazy LSP、v1.0.81 `remote_fetch` 硬跳过 + 首帧分段。
+- 本机 `grok 1.0.84 (b5cb7026d927)`，三处部署同 hash `467a685d…`；回滚 `grok2.exe.1.0.83-534af67a90eb.bak`。
+- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~八十期。最近：v1.0.84 P1 长程压缩（replay diet + relay + idle-wait）、v1.0.83 harness 成本 P0 观测、v1.0.82 lazy LSP。
 
 ## 文档地图（docs-local）
 
