@@ -271,3 +271,29 @@ temperature 0、effort low。每轮落盘原始会话、压缩原文、清洗后
 tokens 约为估算的 1.8 倍）；anchor 为 Python 等价实现，真实 Rust 路径由 CI
 单测覆盖；judge 用 auto，可能路由到同一后端。原始会话与逐轮现场在
 `C:\Users\panda\AppData\Local\Temp\relay-compact-bench\`（临时目录）。
+
+### 8.1 auto 侧（实际路由 glm-5.3-flash）
+
+`auto` 的 10 次压缩响应全部回显 `model=glm-5.3-flash`，所以它不是独立模型，
+只能算同一后端的第二组样本。
+
+| 指标 | legacy | relay |
+|---|---:|---:|
+| post/pre r5 | 8.76% | 9.64% |
+| summary tokens r1→r5 | 909 → 1,785 | 907 → 1,859 |
+| anchor tokens r5 | 0 | 289（占 post 8.0%） |
+| 压缩后上下文 r5 | 3,234 | 3,600（+11.3%） |
+| 压缩 completion tokens（5 轮合计） | 12,300 | 12,939（+5.2%） |
+| 事实覆盖率 / 逐字用户消息 | 1.0 / 1.0 | 1.0 / 1.0 |
+| 关键词准确率均值 | 0.897 | 0.946 |
+| judge 均值 | 0.906 | 0.917 |
+
+### 8.2 合并结论
+
+- 两次运行都没有可分辨的准确率差别；`auto` 与 glm 同后端，不构成独立验证。
+- 成本效应不一致：glm 上 relay 压缩输出 −11.9%、净 post +3.1%；auto 上
+  relay 压缩输出 +5.2%、净 post +11.3%。5 轮样本不足以证明 relay 的平均收益。
+- 能确认的是机制正确：anchor 只注入一次、不混入摘要、逐字用户消息保留率
+  1.0，r5 毛开销 289 tokens。价值在“保证性”，不在当前平均分。
+- 默认值选择：按成本优先可以把 `relay_anchor` 默认改为 false；按长程保险
+  保持 true。当前代码保持 true，等更长轮次或更弱摘要模型再验证。
