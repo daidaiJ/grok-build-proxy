@@ -3,7 +3,6 @@
 //! These methods form a second `impl SessionActor` block that lives alongside the primary one in `acp_session.rs`.
 use super::SessionActor;
 use super::is_project_instructions;
-use crate::extensions::notification::MODEL_FAMILY_SWITCH_COMPACT_BANNER;
 use crate::remote::DEFAULT_CONTEXT_WINDOW;
 use crate::session::compaction_config::{
     AsyncCompactionCache, SUPPRESS_AUTH, SUPPRESS_NONE, SUPPRESS_STICKY, SUPPRESS_TURN,
@@ -2207,6 +2206,7 @@ impl SessionActor {
                 .await;
         }
         let tokens_after = self.chat_state_handle.get_total_tokens().await;
+        self.compaction.last_compact_post_tokens.set(tokens_after);
         {
             let span = tracing::Span::current();
             span.record("compaction_tokens_after", tokens_after as i64);
@@ -2517,11 +2517,10 @@ impl SessionActor {
         });
         self.signals_handle()
             .record_compaction(trigger_info.tokens_used);
-        let reason = if trigger_info.reason_override == Some(MODEL_FAMILY_SWITCH_COMPACT_BANNER) {
-            MODEL_FAMILY_SWITCH_COMPACT_BANNER.to_string()
-        } else {
-            format!("Context window {}% full", trigger_info.percentage)
-        };
+        let reason = trigger_info
+            .reason_override
+            .map(|reason| reason.to_string())
+            .unwrap_or_else(|| format!("Context window {}% full", trigger_info.percentage));
         self.send_xai_notification(XaiSessionUpdate::AutoCompactStarted {
             tokens_used: trigger_info.tokens_used,
             context_window: trigger_info.context_window,

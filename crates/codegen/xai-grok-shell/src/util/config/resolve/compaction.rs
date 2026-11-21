@@ -22,6 +22,116 @@ impl std::str::FromStr for CompactionToolChoice {
 
 pub(crate) const ENV_COMPACTION_TOOL_CHOICE: &str = "GROK_COMPACTION_TOOL_CHOICE";
 
+// LOCAL: idle-wait auto-compaction knobs. The toggle reads
+// `[compaction] idle_wait_compact`; the numeric bounds are env-only so a
+// long-running session can be tuned without a config rewrite.
+pub(crate) const ENV_IDLE_WAIT_COMPACT: &str = "GROK_IDLE_WAIT_COMPACT";
+pub(crate) const ENV_IDLE_WAIT_COMPACT_AFTER_SECS: &str = "GROK_IDLE_WAIT_COMPACT_AFTER_SECS";
+pub(crate) const ENV_IDLE_WAIT_EXPECTED_CALLS: &str = "GROK_IDLE_WAIT_EXPECTED_CALLS";
+pub(crate) const ENV_IDLE_WAIT_MIN_PROMPT_TOKENS: &str = "GROK_IDLE_WAIT_MIN_PROMPT_TOKENS";
+pub(crate) const ENV_IDLE_WAIT_MIN_NET_TOKENS: &str = "GROK_IDLE_WAIT_MIN_NET_TOKENS";
+pub(crate) const ENV_IDLE_WAIT_COOLDOWN_SECS: &str = "GROK_IDLE_WAIT_COOLDOWN_SECS";
+pub(crate) const ENV_IDLE_WAIT_MIN_GROWTH_TOKENS: &str = "GROK_IDLE_WAIT_MIN_GROWTH_TOKENS";
+
+pub(crate) const DEFAULT_IDLE_WAIT_AFTER_SECS: u64 = 270;
+pub(crate) const DEFAULT_IDLE_WAIT_EXPECTED_CALLS: u64 = 4;
+pub(crate) const DEFAULT_IDLE_WAIT_MIN_PROMPT_TOKENS: u64 = 100_000;
+pub(crate) const DEFAULT_IDLE_WAIT_MIN_NET_TOKENS: u64 = 50_000;
+pub(crate) const DEFAULT_IDLE_WAIT_COOLDOWN_SECS: u64 = 1_800;
+pub(crate) const DEFAULT_IDLE_WAIT_MIN_GROWTH_TOKENS: u64 = 16_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct IdleWaitCompactSettings {
+    pub enabled: bool,
+    pub after: std::time::Duration,
+    pub expected_future_calls: u64,
+    pub min_prompt_tokens: u64,
+    pub min_net_tokens: u64,
+    pub cooldown: std::time::Duration,
+    pub min_growth_tokens: u64,
+}
+
+impl IdleWaitCompactSettings {
+    /// Wait path disabled; used by the existing threshold-idle wrapper and its
+    /// tests so they keep their pre-wait behavior.
+    pub(crate) fn disabled() -> Self {
+        Self {
+            enabled: false,
+            after: std::time::Duration::from_secs(DEFAULT_IDLE_WAIT_AFTER_SECS),
+            expected_future_calls: DEFAULT_IDLE_WAIT_EXPECTED_CALLS,
+            min_prompt_tokens: DEFAULT_IDLE_WAIT_MIN_PROMPT_TOKENS,
+            min_net_tokens: DEFAULT_IDLE_WAIT_MIN_NET_TOKENS,
+            cooldown: std::time::Duration::from_secs(DEFAULT_IDLE_WAIT_COOLDOWN_SECS),
+            min_growth_tokens: DEFAULT_IDLE_WAIT_MIN_GROWTH_TOKENS,
+        }
+    }
+}
+
+fn env_bool(key: &str) -> Option<bool> {
+    let raw = std::env::var(key).ok()?;
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+fn env_u64(key: &str, default: u64) -> u64 {
+    std::env::var(key)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .unwrap_or(default)
+}
+
+fn idle_wait_compact_from_toml(value: Option<&toml::Value>) -> Option<bool> {
+    value?
+        .get("compaction")?
+        .get("idle_wait_compact")?
+        .as_bool()
+}
+
+/// Resolve the idle-wait compaction settings. Precedence for the toggle:
+/// `GROK_IDLE_WAIT_COMPACT`, then `[compaction] idle_wait_compact`, default on.
+/// The numeric bounds are env-only with conservative defaults.
+pub(crate) fn resolve_idle_wait_compact_settings() -> IdleWaitCompactSettings {
+    let config = crate::config::load_effective_config().ok();
+    let enabled = env_bool(ENV_IDLE_WAIT_COMPACT)
+        .or_else(|| idle_wait_compact_from_toml(config.as_ref()))
+        .unwrap_or(true);
+    IdleWaitCompactSettings {
+        enabled,
+        after: std::time::Duration::from_secs(
+            env_u64(
+                ENV_IDLE_WAIT_COMPACT_AFTER_SECS,
+                DEFAULT_IDLE_WAIT_AFTER_SECS,
+            )
+            .clamp(30, 3_600),
+        ),
+        expected_future_calls: env_u64(
+            ENV_IDLE_WAIT_EXPECTED_CALLS,
+            DEFAULT_IDLE_WAIT_EXPECTED_CALLS,
+        )
+        .clamp(1, 64),
+        min_prompt_tokens: env_u64(
+            ENV_IDLE_WAIT_MIN_PROMPT_TOKENS,
+            DEFAULT_IDLE_WAIT_MIN_PROMPT_TOKENS,
+        )
+        .max(1),
+        min_net_tokens: env_u64(
+            ENV_IDLE_WAIT_MIN_NET_TOKENS,
+            DEFAULT_IDLE_WAIT_MIN_NET_TOKENS,
+        )
+        .max(1),
+        cooldown: std::time::Duration::from_secs(
+            env_u64(ENV_IDLE_WAIT_COOLDOWN_SECS, DEFAULT_IDLE_WAIT_COOLDOWN_SECS).clamp(60, 86_400),
+        ),
+        min_growth_tokens: env_u64(
+            ENV_IDLE_WAIT_MIN_GROWTH_TOKENS,
+            DEFAULT_IDLE_WAIT_MIN_GROWTH_TOKENS,
+        ),
+    }
+}
+
 pub(crate) fn resolve_compaction_tool_choice_from(
     env: Option<&str>,
     config: Option<&str>,
@@ -172,5 +282,23 @@ mod compaction_tool_choice_tests {
         assert_eq!("AUTO".parse(), Ok(CompactionToolChoice::Auto));
         assert_eq!(" None ".parse(), Ok(CompactionToolChoice::None));
         assert!("required".parse::<CompactionToolChoice>().is_err());
+    }
+}
+
+#[cfg(test)]
+mod idle_wait_toggle_tests {
+    use super::idle_wait_compact_from_toml;
+
+    #[test]
+    fn reads_compaction_table_toggle() {
+        let value: toml::Value =
+            toml::from_str("[compaction]\nidle_wait_compact = false\n").expect("toml parses");
+        assert_eq!(idle_wait_compact_from_toml(Some(&value)), Some(false));
+    }
+
+    #[test]
+    fn missing_toggle_is_none() {
+        let value: toml::Value = toml::from_str("[compaction]\n").expect("toml parses");
+        assert_eq!(idle_wait_compact_from_toml(Some(&value)), None);
     }
 }

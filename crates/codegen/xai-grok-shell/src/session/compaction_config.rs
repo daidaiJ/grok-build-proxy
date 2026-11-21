@@ -187,6 +187,13 @@ pub(crate) struct CompactionConfig {
     /// paths can't double-compact; the idle task itself aborts when the session
     /// stops being idle.
     pub idle_compact_in_flight: std::sync::atomic::AtomicBool,
+    /// LOCAL(idle-wait): tokens observed right after the last successful
+    /// compaction. Used to estimate the next compacted context instead of a
+    /// fixed guess.
+    pub last_compact_post_tokens: std::cell::Cell<u64>,
+    /// LOCAL(idle-wait): one wait-triggered compact per cooldown/growth window.
+    pub last_idle_wait_compact_at: std::cell::Cell<Option<std::time::Instant>>,
+    pub last_idle_wait_compact_tokens: std::cell::Cell<u64>,
 }
 
 impl CompactionConfig {

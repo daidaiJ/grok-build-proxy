@@ -1304,6 +1304,9 @@ pub(crate) fn test_compaction_config(
         prefix_released: std::sync::atomic::AtomicBool::new(false),
         // LOCAL: idle auto-compact mutual exclusion with the inline pre-sample check.
         idle_compact_in_flight: std::sync::atomic::AtomicBool::new(false),
+        last_compact_post_tokens: std::cell::Cell::new(0),
+        last_idle_wait_compact_at: std::cell::Cell::new(None),
+        last_idle_wait_compact_tokens: std::cell::Cell::new(0),
         cancel: Default::default(),
     }
 }

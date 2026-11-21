@@ -4996,3 +4996,21 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
   机制是 token 置换而非削减；legacy 在本 bench 已 100% 保留用户消息，质量
   维度没有提升空间；摘要只占压缩后上下文 8–9%，不是成本主项；长会话 replay
   的旧 reasoning / 大工具结果未被该 bench 覆盖。详见专题文档 §8.3。
+
+### 空闲等待压缩（idle-wait，默认开启）
+
+- 触发：回合成功结束、会话空闲、仍有 outstanding background/monitor task，
+  空闲接近网关 TTL（默认 270s，给压缩留完成时间）。
+- 门控：pre ≥100k tokens；预计未来 4 次调用；`benefit=(pre-post)*N`，
+  `cost=pre+post+75%pre`（压缩调用 + 摘要 + 缓存 miss 缓冲）；net ≥50k 才
+  调用模型；30 min 冷却 + 16k 增长才允许第二次。
+- 去重：`idle_compact_in_flight` 互斥；同一空闲窗口一次；会话变忙、对话长度
+  变化、任务结束、记忆刷新、负收益均跳过并记录原因。
+- 日志：`shell.idle_wait_compact.fired/skipped`，字段含
+  `reason/pre_tokens/post_tokens_est/benefit_tokens/cost_tokens/net_tokens/outstanding_tasks/idle_secs`。
+- 配置：`[compaction] idle_wait_compact = false` 或 `GROK_IDLE_WAIT_COMPACT=0`；
+  数值旋钮为 env（`GROK_IDLE_WAIT_*`），见专题文档 §9。
+- 文件：`session/acp_session_impl/idle_compact.rs`（触发与 ROI）、
+  `util/config/resolve/compaction.rs`（设置）、`session/compaction_config.rs`
+  （冷却/增长/上次 post）、`spawn.rs`（初始化）、`session/compaction.rs`
+  （记录 `last_compact_post_tokens`，`reason_override` 直接作为通知文案）。

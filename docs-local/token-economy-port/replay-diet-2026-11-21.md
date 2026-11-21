@@ -335,3 +335,38 @@ LightVela 模型。
    保险；`shell.relay_compact` 记录 `relay_summary_verbatim_missing`，用真实
    压缩链统计摘要漏掉的 anchor 消息。后续长程会话按该指标回收收益：长期
    为 0 就改为默认关闭；经常 >0 则保留并评估准确率收益。
+
+## 9. 等待后台/监视器任务时的空闲自动压缩（2026-11-21）
+
+回合成功结束、会话空闲、仍有未完成的 background / monitor task 时，空闲接近
+网关缓存 TTL（默认 270s，给压缩留出完成时间，TTL 约 5 分钟）后评估一次压缩。
+此时下一次唤醒大概率已冷读；先压缩可以把冷读的 prompt 缩小。
+
+触发门控（全部满足才调用模型）：
+
+| 条件 | 默认 | 说明 |
+| --- | ---: | --- |
+| 空闲时长 | 270s | 5 分钟 TTL 前预留压缩时间；`GROK_IDLE_WAIT_COMPACT_AFTER_SECS` |
+| 未完成任务 | ≥1 | `TaskSnapshot::is_outstanding` |
+| 当前上下文 | ≥100k tokens | `GROK_IDLE_WAIT_MIN_PROMPT_TOKENS` |
+| 预计未来调用 | 4 | `GROK_IDLE_WAIT_EXPECTED_CALLS` |
+| 压缩后估算 | 上次压缩实测 post；缺失时 `pre/10` 夹在 4k–24k | 首次压缩用保守估计 |
+| 净收益 | ≥50k tokens | `benefit=(pre-post)*N`；`cost=pre+post+75%pre`（压缩调用 + 摘要 + 缓存 miss 缓冲）；`GROK_IDLE_WAIT_MIN_NET_TOKENS` |
+| 冷却 | 30 min | `GROK_IDLE_WAIT_COOLDOWN_SECS` |
+| 再次触发需增长 | 16k tokens | `GROK_IDLE_WAIT_MIN_GROWTH_TOKENS` |
+
+去重与跳过：`idle_compact_in_flight` 互斥；同一空闲窗口只跑一次；会话变忙、
+对话长度变化、任务在等待中结束、记忆刷新中、上下文未增长、净收益为负都
+清空 in-flight 并记录原因。开关：`[compaction] idle_wait_compact = false` 或
+`GROK_IDLE_WAIT_COMPACT=0`。
+
+日志：`shell.idle_wait_compact.fired` / `.skipped`，字段含
+`reason / pre_tokens / post_tokens_est / benefit_tokens / cost_tokens /
+net_tokens / outstanding_tasks / idle_secs`。用这些字段回看长程会话里
+“冷窗口压缩”是否真的发生、是否划算；连续 `negative_net_benefit` 说明该会话
+不该压缩，`no_outstanding_tasks` 说明没有等待场景。
+
+边界：只覆盖回合结束后的空闲等待。回合内 `get_task_output` 阻塞时
+`running_task` 仍为 Some，此时不压缩——在 pending `tool_call` 上重写历史会让
+随后的 `tool_result` 找不到匹配调用。回合内等待的收益由下一次请求前的
+inline 检查兜底。
