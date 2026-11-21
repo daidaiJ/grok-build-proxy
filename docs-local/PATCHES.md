@@ -4982,7 +4982,8 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
   5 轮压缩 completion 12,537 vs 11,041（−11.9%），list cost $0.0558 vs $0.0475。
 - 覆盖率/逐字用户消息保留率均 1.0；关键词准确率 0.907 vs 0.934、judge
   0.980 vs 0.909，5 轮内无显著差别。
-- `auto` 侧 10 次压缩全部回显 `glm-5.3-flash`，同后端第二组样本：relay
+- `auto` 是 TCS Debian 的 LightVela 聚合入口（`providerOverride: lightvela`，
+  `model: auto`），10 次压缩全部回显 `glm-5.3-flash`，同后端第二组样本：relay
   completion +5.2%、净 post +11.3%，关键词 0.897 vs 0.946、judge
   0.906 vs 0.917，仍无显著差别。成本效应两次方向不一致，5 轮不足以证明
   relay 的平均收益；详见专题文档 §8。

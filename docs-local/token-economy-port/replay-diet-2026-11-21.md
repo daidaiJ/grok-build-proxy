@@ -272,10 +272,14 @@ tokens 约为估算的 1.8 倍）；anchor 为 Python 等价实现，真实 Rust
 单测覆盖；judge 用 auto，可能路由到同一后端。原始会话与逐轮现场在
 `C:\Users\panda\AppData\Local\Temp\relay-compact-bench\`（临时目录）。
 
-### 8.1 auto 侧（实际路由 glm-5.3-flash）
+### 8.1 auto 侧（TCS Debian 的 LightVela 聚合网关，实际路由 glm-5.3-flash）
 
-`auto` 的 10 次压缩响应全部回显 `model=glm-5.3-flash`，所以它不是独立模型，
-只能算同一后端的第二组样本。
+`auto` 不是本地别名，而是 TCS Debian `/etc/agentgateway/config.yaml` 里的
+LightVela 聚合入口：`providerOverride: lightvela`、
+`baseUrl: https://token.lightvela.com/v1`、`model: auto`。配置注释明确写了
+上游按请求自动选模型，“实测落到 z-ai/glm-5.3-flash”。本次 10 次压缩响应
+全部回显 `model=glm-5.3-flash`，所以它是同一后端的第二组样本，不是独立的
+LightVela 模型。
 
 | 指标 | legacy | relay |
 |---|---:|---:|
