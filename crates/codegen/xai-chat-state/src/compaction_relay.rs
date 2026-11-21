@@ -194,6 +194,10 @@ fn cap_user_messages(messages: Vec<String>, original_goal: Option<&str>) -> Vec<
 /// `(present, missing)` over non-empty messages.
 pub fn summary_verbatim_coverage(summary: &str, messages: &[String]) -> (usize, usize) {
     let summary_norm = normalize_for_match(summary);
+    // Summaries sometimes quote Windows paths JSON-escaped (`D:\\work`);
+    // compare against the unescaped form too so an escape does not read as a
+    // lost constraint.
+    let summary_unescaped = summary_norm.replace("\\\\", "\\");
     let mut present = 0usize;
     let mut total = 0usize;
     for message in messages {
@@ -207,7 +211,7 @@ pub fn summary_verbatim_coverage(summary: &str, messages: &[String]) -> (usize, 
         } else {
             message_norm.chars().take(96).collect()
         };
-        if summary_norm.contains(needle.as_str()) {
+        if summary_norm.contains(needle.as_str()) || summary_unescaped.contains(needle.as_str()) {
             present += 1;
         }
     }
@@ -417,6 +421,13 @@ mod tests {
     fn summary_verbatim_coverage_ignores_empty_messages() {
         let messages = vec![String::new(), "  \n ".to_string(), "goal".to_string()];
         let summary = "the goal is unchanged";
+        assert_eq!(summary_verbatim_coverage(summary, &messages), (1, 0));
+    }
+
+    #[test]
+    fn summary_verbatim_coverage_handles_escaped_backslashes() {
+        let messages = vec![r"write D:\work\out.txt".to_string()];
+        let summary = r"write D:\\work\\out.txt";
         assert_eq!(summary_verbatim_coverage(summary, &messages), (1, 0));
     }
 }
