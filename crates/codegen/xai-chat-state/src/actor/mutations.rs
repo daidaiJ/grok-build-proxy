@@ -8,6 +8,10 @@ use xai_grok_sampling_types::{
 };
 
 use super::ChatStateActor;
+use super::replay_diet::{
+    ReplayDietMark, ReplayDietPolicy, ReplayDietSkip, apply_replay_diet, plan_replay_diet,
+    replay_diet_gate,
+};
 use super::request_builder::{HARD_CLEAR_PLACEHOLDER, append_prune_marker};
 use crate::events::ChatStateEvent;
 use crate::types::{ChatStateSnapshot, CompressFastOutcome, CompressFastSkip};
@@ -434,6 +438,111 @@ impl ChatStateActor {
             bytes_freed,
             skipped: None,
         }
+    }
+
+    /// LOCAL(token-economy P1): one in-turn replay diet per prompt turn.
+    ///
+    /// The turn loop calls this before every request build with its loop
+    /// counter. The gate keeps short turns and turns below the context budget
+    /// untouched; the plan is deterministic, so a resumed or retried turn sees
+    /// the same rewrite. Persisting through `replace_history` means later
+    /// requests and future resumes stop replaying the archived bytes.
+    pub(super) fn maybe_apply_replay_diet(&mut self, turn_calls: u32) {
+        let policy = ReplayDietPolicy::from_env();
+        let prompt_tokens = self
+            .state
+            .total_tokens
+            .max(super::state::estimate_conversation_tokens(
+                &self.state.conversation,
+            ));
+        let backend_supported =
+            self.state.sampling_config.api_backend != xai_grok_sampling_types::ApiBackend::Messages;
+        if let Err(skip) = replay_diet_gate(
+            policy,
+            backend_supported,
+            turn_calls,
+            prompt_tokens,
+            self.state.prompt_index,
+            self.state.last_compaction_prompt_index,
+            self.state.replay_diet_last,
+        ) {
+            tracing::debug!(
+                ?skip,
+                turn_calls,
+                prompt_tokens,
+                prompt_index = self.state.prompt_index,
+                "ChatState: replay diet skipped"
+            );
+            return;
+        }
+
+        let plan = plan_replay_diet(&self.state.conversation, policy);
+        if plan.est_reclaim_tokens < policy.min_reclaim_tokens {
+            tracing::debug!(
+                reclaim_tokens = plan.est_reclaim_tokens,
+                min_reclaim_tokens = policy.min_reclaim_tokens,
+                turn_calls,
+                "ChatState: replay diet below reclaim threshold"
+            );
+            return;
+        }
+
+        let mut items = self.state.conversation.clone();
+        let outcome = apply_replay_diet(&mut items, &plan, policy);
+        if outcome.removed_reasoning == 0 && outcome.stubbed_tool_results == 0 {
+            tracing::debug!(
+                skip = ?ReplayDietSkip::NothingCleanable,
+                turn_calls,
+                "ChatState: replay diet found nothing to rewrite"
+            );
+            return;
+        }
+
+        self.rewrite_for_replay_diet(items);
+        self.state.replay_diet_last = Some(ReplayDietMark {
+            prompt_index: self.state.prompt_index,
+            turn_calls,
+        });
+        let prompt_tokens_after = self.state.total_tokens;
+        tracing::info!(
+            removed_reasoning = outcome.removed_reasoning,
+            stubbed_tool_results = outcome.stubbed_tool_results,
+            bytes_freed = outcome.bytes_freed,
+            est_tokens_freed = outcome.est_tokens_freed,
+            turn_calls,
+            prompt_index = self.state.prompt_index,
+            prompt_tokens_before = prompt_tokens,
+            prompt_tokens_after,
+            "ChatState: in-turn replay diet applied"
+        );
+        self.send_event(ChatStateEvent::ReplayDietApplied {
+            reason: "turn_budget",
+            removed_reasoning: outcome.removed_reasoning,
+            stubbed_tool_results: outcome.stubbed_tool_results,
+            bytes_freed: outcome.bytes_freed,
+            est_tokens_freed: outcome.est_tokens_freed,
+            turn_calls,
+            prompt_tokens_before: prompt_tokens,
+            prompt_tokens_after,
+        });
+    }
+
+    /// In-place replay-diet rewrite. Mirrors `replace_conversation` but stays
+    /// silent: the conversation path changed, not the prompt, so session
+    /// consumers must not re-inject memory or reset idle bookkeeping.
+    fn rewrite_for_replay_diet(&mut self, items: Vec<ConversationItem>) {
+        self.snapshot_turn_slice();
+        self.persistence.replace_history(&items);
+        let base_estimate = super::state::estimate_conversation_tokens(&items);
+        let estimated_tokens = self.reseed_total_tokens(base_estimate);
+        self.state.conversation = items;
+        self.state.estimated_tokens_since_model = 0;
+        self.state.total_tokens = estimated_tokens;
+        self.state.estimate_at_last_response = base_estimate;
+        self.rebase_turn_capture_offset();
+        self.send_event(ChatStateEvent::TokensUpdated {
+            total_tokens: estimated_tokens,
+        });
     }
 
     /// Approximate byte footprint of all string content in the conversation.

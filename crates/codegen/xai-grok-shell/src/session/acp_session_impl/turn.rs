@@ -3170,6 +3170,9 @@ impl SessionActor {
             }
             self.persist_tool_definitions_artifact(&effective_tools)
                 .await;
+            // LOCAL(token-economy P1): one replay diet per turn after the call
+            // budget is crossed. Mailbox order lands it before the build below.
+            self.chat_state_handle.apply_replay_diet(loop_index);
             let build_req_start = std::time::Instant::now();
             let build_request_span =
                 xai_grok_telemetry::region::Region::from_span(tracing::info_span!(

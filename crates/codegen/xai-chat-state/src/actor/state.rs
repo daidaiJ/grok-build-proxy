@@ -211,6 +211,10 @@ pub(crate) struct ChatState {
     /// journaled. `None` freezes the next build's head; reset on compaction
     /// reseed and model switch (both rewrite the cached namespace).
     pub(super) in_history_wire: Option<InHistoryWireState>,
+    /// LOCAL(token-economy P1): turn that already paid for an in-turn replay
+    /// diet. Transient: a resume may run it once more, which the idempotent
+    /// plan turns into a no-op.
+    pub(super) replay_diet_last: Option<super::replay_diet::ReplayDietMark>,
 }
 
 /// LOCAL(cache-port): the two wire coordinates in-history placement must keep
@@ -282,6 +286,7 @@ impl ChatState {
             harness_trace_buffer: Vec::new(),
             in_history_wire: None,
             harness_trace_turns: Vec::new(),
+            replay_diet_last: None,
         }
     }
 

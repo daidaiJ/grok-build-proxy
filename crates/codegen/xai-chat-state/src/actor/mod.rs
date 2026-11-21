@@ -7,6 +7,7 @@
 
 mod mutations;
 mod queries;
+pub mod replay_diet;
 pub(crate) mod request_builder;
 pub mod state;
 
@@ -358,6 +359,9 @@ impl ChatStateActor {
                     req_id,
                 );
                 let _ = reply.send(request);
+            }
+            ChatStateCommand::ApplyReplayDiet { turn_calls } => {
+                self.maybe_apply_replay_diet(turn_calls);
             }
             ChatStateCommand::GetConversation { reply } => {
                 tracing::debug!(

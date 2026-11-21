@@ -588,6 +588,31 @@ pub(super) async fn run_session(
                             session.memory.context_injected
                                 .store(false, std::sync::atomic::Ordering::Relaxed);
                         }
+                        Some(xai_chat_state::ChatStateEvent::ReplayDietApplied {
+                            reason,
+                            removed_reasoning,
+                            stubbed_tool_results,
+                            bytes_freed,
+                            est_tokens_freed,
+                            turn_calls,
+                            prompt_tokens_before,
+                            prompt_tokens_after,
+                        }) => {
+                            xai_grok_telemetry::unified_log::info(
+                                "shell.replay_diet",
+                                Some(session.session_info.id.0.as_ref()),
+                                Some(serde_json::json!({
+                                    "reason": reason,
+                                    "removed_reasoning": removed_reasoning,
+                                    "stubbed_tool_results": stubbed_tool_results,
+                                    "bytes_freed": bytes_freed,
+                                    "est_tokens_freed": est_tokens_freed,
+                                    "turn_calls": turn_calls,
+                                    "prompt_tokens_before": prompt_tokens_before,
+                                    "prompt_tokens_after": prompt_tokens_after,
+                                })),
+                            );
+                        }
                         Some(xai_chat_state::ChatStateEvent::ImageBudget {
                             body_bytes,
                             trigger_bytes,

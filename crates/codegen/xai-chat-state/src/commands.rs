@@ -240,6 +240,11 @@ pub enum ChatStateCommand {
         reply: oneshot::Sender<ConversationRequest>,
     },
 
+    /// LOCAL(token-economy P1): run at most one in-turn replay diet before the
+    /// next request build. `turn_calls` is the turn loop's 1-based model-call
+    /// counter. Fire-and-forget; mailbox order puts it before the build.
+    ApplyReplayDiet { turn_calls: u32 },
+
     /// Get a clone of the full conversation.
     GetConversation {
         reply: oneshot::Sender<Vec<ConversationItem>>,

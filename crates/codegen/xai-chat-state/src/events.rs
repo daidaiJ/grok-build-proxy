@@ -17,6 +17,20 @@ pub enum ChatStateEvent {
     /// reset idle-flush counters, memory injection flags, etc.
     ConversationReset { new_len: usize },
 
+    /// LOCAL(token-economy P1): one in-turn replay diet rewrote history.
+    /// Observability only; the session logs it so savings can be joined with
+    /// the model-usage ledger.
+    ReplayDietApplied {
+        reason: &'static str,
+        removed_reasoning: usize,
+        stubbed_tool_results: usize,
+        bytes_freed: u64,
+        est_tokens_freed: u64,
+        turn_calls: u32,
+        prompt_tokens_before: u64,
+        prompt_tokens_after: u64,
+    },
+
     /// Image byte-budget record for a built request (observability only).
     /// `evicted == 0` means the body was under the trigger and every image was kept.
     ImageBudget {

@@ -455,6 +455,15 @@ impl ChatStateHandle {
         .await
     }
 
+    /// LOCAL(token-economy P1): offer the actor a replay diet for this turn.
+    /// Fire-and-forget so the build request that follows stays ordered behind
+    /// it on the same mailbox.
+    pub fn apply_replay_diet(&self, turn_calls: u32) {
+        let _ = self
+            .cmd_tx
+            .send(ChatStateCommand::ApplyReplayDiet { turn_calls });
+    }
+
     /// Get a clone of the full conversation.
     pub async fn get_conversation(&self) -> Vec<ConversationItem> {
         self.query("GetConversation", |reply| {
