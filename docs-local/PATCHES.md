@@ -4927,3 +4927,56 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
 
 - 新会话账本出现两个 camelCase 字段；`/stats` 能看到 composition 行；
   下一批 P1 按 drilldown §3.5 验收冷窗口触发与缓存断崖。
+
+## 八十期：长程压缩 P1——in-turn replay diet + relay anchor（2026-11-21，main 直推，待发版）
+
+> 背景：`docs-local/token-economy-port/replay-diet-2026-11-21.md`。P0 观测显示
+> 缓存命中后成本主要由上下文水位 × 调用数驱动；本批先在回合内裁剪旧回放，
+> 再给连续压缩加一条摘要之外的锚点。
+
+### In-turn replay diet（d07a34e0）
+
+- 新 `xai-chat-state/src/actor/replay_diet.rs`：只在长回合内触发（默认 ≥20 次
+  调用且 prompt ≥200k tokens、可回收 ≥64k tokens），删除旧 prompt-turn 的
+  reasoning，把旧的大工具结果替换为 `[Archived earlier tool result: ...]` stub；
+  保留最近 10 个工具结果、最近 2 个用户轮、小结果与带图结果。
+- 接入：`actor/mutations.rs` 的 `maybe_apply_replay_diet` + `replace_history`
+  持久化；`commands.rs` `ApplyReplayDiet`；`events.rs` `ReplayDietApplied`；
+  `handle.rs` fire-and-forget；shell `turn.rs` 在每次请求构建前调用，
+  `run_loop.rs` 记录 `shell.replay_diet`。
+- 开关：`GROK_REPLAY_DIET=0`；阈值环境变量
+  `GROK_REPLAY_DIET_MIN_CALLS` / `_MIN_PROMPT_TOKENS` / `_MIN_RECLAIM_TOKENS`。
+- 修复：stub 目标按 index 升序上报（`targets.sort_by_key`）；幂等测试显式
+  `keep_recent_user_turns: 1`。
+
+### Relay anchor（dcfc2ead，默认开启）
+
+- 新 `xai-chat-state/src/compaction_relay.rs`：`RelayAnchor { generation,
+  original_goal, user_messages, compaction_count }`；首次压缩捕获
+  `original_goal`，之后只追加/去重真实用户消息，上限 24 条 / 24k 字符；
+  渲染为 `<relay_anchor>{json}</relay_anchor>` 的 `user_meta`
+  （`SyntheticReason::CompactionMeta`），压缩后注入 system + user_info 之后；
+  已有 anchor 原位替换。
+- shell `session/compaction.rs`：压缩前解析旧 anchor + 提取新 anchor，
+  压缩后 `ensure_relay_anchor`；检查点写克隆并注入 anchor，避免 rewind 丢失；
+  连续压缩无新用户消息时打 warning；`shell.relay_compact` 记录 generation、
+  消息数、新增数、字符数、summary_count。
+- 配置：`xai-grok-agent::CompactionPolicy.relay_anchor_enabled` 默认 true；
+  `[compaction] relay_anchor = false` 恢复旧 summary-only 历史
+  （不生成/解析/注入，也不写 relay 事件）；spawn 时读取，主会话与子代理同口径。
+- 接线：`agent/config.rs`、`mvp_agent/agent_ops.rs`、`subagent/mod.rs`、
+  `subagent/handle_request.rs`、`session/acp_session_impl/spawn.rs`。
+
+### CI
+
+- `d07a34e0` run 44886290734：编译通过；Windows portable tests 因
+  replay_diet 两处期望失败（见上修复）。
+- `dcfc2ead` run 44887644926：linux/windows 均在 `xai-chat-state` lib test
+  编译失败，`compaction_relay.rs` 三处 `synthetic_user(String)` 需借用。
+- 修复提交 `488c4beb`；CI/release 结果待回填。
+
+### Bench（进行中）
+
+- 脚本（临时）：4/5 代连续压缩 × legacy/relay × `glm-5.3-flash`/`auto`；
+  统计 post/pre token、摘要增长、anchor 开销、事实覆盖率、证据支撑回答、
+  逐字用户消息保留率。结果回填到本篇与专题文档。
