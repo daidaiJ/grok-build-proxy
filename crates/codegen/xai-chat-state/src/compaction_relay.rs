@@ -241,7 +241,7 @@ mod tests {
             real_user("build a long-running feature"),
             real_user("use the relay design"),
             real_user("now fix the drift"),
-            synthetic_user(render_relay_anchor(&previous)),
+            synthetic_user(&render_relay_anchor(&previous)),
         ];
         let anchor = extract_relay_anchor(&conversation, Some(&previous), 2, None);
         assert_eq!(anchor.generation, 3);
@@ -298,7 +298,7 @@ mod tests {
             compaction_count: 3,
             new_user_messages: 0,
         };
-        let item = synthetic_user(render_relay_anchor(&anchor));
+        let item = synthetic_user(&render_relay_anchor(&anchor));
         let parsed = parse_relay_anchor(&[item]).expect("anchor parses");
         assert_eq!(parsed, anchor);
     }
@@ -323,7 +323,7 @@ mod tests {
             ConversationItem::system("sys"),
             synthetic_user("<user_info>prefix</user_info>"),
             real_user("goal"),
-            synthetic_user(render_relay_anchor(&first)),
+            synthetic_user(&render_relay_anchor(&first)),
         ];
         ensure_relay_anchor(&mut conversation, &first);
         let anchor_count = conversation

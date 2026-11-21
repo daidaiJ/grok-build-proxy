@@ -2071,8 +2071,17 @@ impl SessionActor {
         );
         self.chat_state_handle
             .record_compaction_at(prompt_index_at_compaction);
+        // LOCAL(token-economy P1): keep the anchor in the checkpoint so a
+        // rewind to this checkpoint does not lose it.
+        let checkpoint_history = relay_anchor.as_ref().map(|anchor| {
+            let mut history = compacted_history.clone();
+            xai_chat_state::compaction_relay::ensure_relay_anchor(&mut history, anchor);
+            history
+        });
         self.persist_compaction_checkpoint(
-            &compacted_history,
+            checkpoint_history
+                .as_deref()
+                .unwrap_or(compacted_history.as_slice()),
             prompt_index_at_compaction,
             auto_continue,
             original_user_info,

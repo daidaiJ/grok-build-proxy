@@ -139,7 +139,8 @@ Codex CLI 的压缩不是“把整段对话缩成一段”，而是产出一份�
   anchor 字符数、summary_count；连续压缩且没有新用户消息时打 warning。
 - 开关：默认开启；`[compaction] relay_anchor = false` 恢复旧的
   summary-only 压缩历史（不生成、不解析、不注入 anchor，也不写
-  `shell.relay_compact`）。
+  `shell.relay_compact`）。该值在会话创建/恢复时读取，已运行会话需重开或
+  resume 后生效。
 
 实现文件：
 
@@ -222,8 +223,8 @@ v1 解决“目标/用户意图被二次摘要磨掉”。决策、已完成项�
 
 - `GROK_REPLAY_DIET=0` 立即关闭 diet；历史已被裁剪的会话不会自动恢复原文，需 sidecar
   或重新执行工具。
-- `[compaction] relay_anchor = false` 恢复旧压缩历史；下一次压缩起不再注入 anchor，
-  已存在的 anchor 会随本次压缩消失。
+- `[compaction] relay_anchor = false` 恢复旧压缩历史；新会话/恢复会话的下一次压缩起
+  不再注入 anchor，已存在的 anchor 会随本次压缩消失。已运行会话保持启动时的策略。
 - diet 只删除 reasoning 和替换旧工具结果，不改 system、user、assistant 工具调用配对。
 - 压缩 brief 写入失败时保留旧 brief 并继续使用旧历史，不阻塞会话。
 - 每次重写都记录 `prompt_tokens_before/after` 与 `bytes_freed`，按会话核对净收益。
