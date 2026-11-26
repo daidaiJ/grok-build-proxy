@@ -370,3 +370,19 @@ net_tokens / outstanding_tasks / idle_secs`。用这些字段回看长程会话�
 `running_task` 仍为 Some，此时不压缩——在 pending `tool_call` 上重写历史会让
 随后的 `tool_result` 找不到匹配调用。回合内等待的收益由下一次请求前的
 inline 检查兜底。
+
+## 10. 部署后首阶段台账（2026-11-22–11-26）
+
+首阶段（8 次 diet、6 个会话、2 次全量压缩）的逐调用账本、缓存断崖、
+成本分解和后续观察门限见
+[`p1-observation-2026-11-26.md`](p1-observation-2026-11-26.md)。
+
+摘要：长回合输入侧成本 **-9.3%**（常规 6 天基线）到 **-27%**（变更前
+高上下文基线），总成本 **-4.6%** 到 **-22%**，差额来自 post 输出量 +46%；
+命中中位数仍为 99.0%，均值下降集中在 9 次 history rewrite 后的第一调用，
+7/9 下一调用恢复。工具结果回放 62.4k → 45.2k/call（-28%），reasoning
+回放 32.8k → 42.8k/call，是下一轮首要优化项。idle-wait 0 次触发；
+sidecar/`read_tool_result` 未发版。
+
+复现：`python scripts-local/p1_cost_report.py`。后续在 2026-12-10 或累计
+10 个长会话后按同一口径追加结论。
