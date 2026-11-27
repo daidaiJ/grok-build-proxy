@@ -464,6 +464,14 @@ impl ChatStateHandle {
             .send(ChatStateCommand::ApplyReplayDiet { turn_calls });
     }
 
+    /// Override the replay-diet policy resolved by the session shell.
+    /// Mailbox order keeps it ahead of the first request build.
+    pub fn set_replay_diet_policy(&self, policy: crate::actor::replay_diet::ReplayDietPolicy) {
+        let _ = self
+            .cmd_tx
+            .send(ChatStateCommand::SetReplayDietPolicy { policy });
+    }
+
     /// Get a clone of the full conversation.
     pub async fn get_conversation(&self) -> Vec<ConversationItem> {
         self.query("GetConversation", |reply| {

@@ -132,6 +132,33 @@ pub(crate) fn resolve_idle_wait_compact_settings() -> IdleWaitCompactSettings {
     }
 }
 
+pub(crate) const ENV_REPLAY_DIET: &str = "GROK_REPLAY_DIET";
+
+fn replay_diet_from_toml(value: Option<&toml::Value>) -> Option<bool> {
+    value?
+        .get("compaction")?
+        .get("replay_diet")?
+        .as_bool()
+}
+
+/// `GROK_REPLAY_DIET` wins over `[compaction] replay_diet`; default on.
+fn resolve_replay_diet_enabled(from_env: Option<bool>, from_toml: Option<bool>) -> bool {
+    from_env.or(from_toml).unwrap_or(true)
+}
+
+/// Resolve the replay-diet policy once per session. Thresholds stay env-only;
+/// the config-file tier controls the master switch.
+pub(crate) fn resolve_replay_diet_policy() -> xai_chat_state::ReplayDietPolicy {
+    let config = crate::config::load_effective_config().ok();
+    let enabled = resolve_replay_diet_enabled(
+        env_bool(ENV_REPLAY_DIET),
+        replay_diet_from_toml(config.as_ref()),
+    );
+    let mut policy = xai_chat_state::ReplayDietPolicy::from_env();
+    policy.enabled = enabled;
+    policy
+}
+
 pub(crate) fn resolve_compaction_tool_choice_from(
     env: Option<&str>,
     config: Option<&str>,
@@ -282,6 +309,32 @@ mod compaction_tool_choice_tests {
         assert_eq!("AUTO".parse(), Ok(CompactionToolChoice::Auto));
         assert_eq!(" None ".parse(), Ok(CompactionToolChoice::None));
         assert!("required".parse::<CompactionToolChoice>().is_err());
+    }
+}
+
+#[cfg(test)]
+mod replay_diet_toggle_tests {
+    use super::{replay_diet_from_toml, resolve_replay_diet_enabled};
+
+    #[test]
+    fn reads_compaction_table_toggle() {
+        let value: toml::Value =
+            toml::from_str("[compaction]\nreplay_diet = false\n").expect("toml parses");
+        assert_eq!(replay_diet_from_toml(Some(&value)), Some(false));
+    }
+
+    #[test]
+    fn missing_toggle_is_none() {
+        let value: toml::Value = toml::from_str("[compaction]\n").expect("toml parses");
+        assert_eq!(replay_diet_from_toml(Some(&value)), None);
+    }
+
+    #[test]
+    fn env_wins_and_default_is_on() {
+        assert!(!resolve_replay_diet_enabled(Some(false), Some(true)));
+        assert!(resolve_replay_diet_enabled(Some(true), Some(false)));
+        assert!(!resolve_replay_diet_enabled(None, Some(false)));
+        assert!(resolve_replay_diet_enabled(None, None));
     }
 }
 

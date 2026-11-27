@@ -5028,3 +5028,39 @@ BYOK 上 ABAB 工具轮转、正文复读、思考复读与连续相同工具共
 - 回滚（1.0.83，hash `73f22e45…`）：`grok2.exe.1.0.83-534af67a90eb.bak`、
   `grok.exe.bak-1.0.83-fork`、`agent.exe.bak-1.0.83-fork`；运行中的旧进程改为
   `grok2.exe.running-1.0.83`，重启 TUI 后生效 1.0.84。
+
+## 八十一期：replay diet 配置文件开关（2026-11-27，v1.0.85）
+
+### 背景
+
+v1.0.84 的 in-turn replay diet 每次改写历史都会产生一次 56k–111k 的冷读；
+状态行 `cache` 是会话累计值，导致长会话从 99% 掉到 97.3–98.0%。此前
+`GROK_REPLAY_DIET` 只支持环境变量，A/B 需要改启动方式；本期补
+`[compaction] replay_diet`。
+
+### 改动
+
+- `util/config/resolve/compaction.rs`：新增 `resolve_replay_diet_policy()`；
+  优先级 `GROK_REPLAY_DIET` > `[compaction] replay_diet` > 默认开启。
+  阈值旋钮仍走 env（`GROK_REPLAY_DIET_MIN_*`）。
+- `spawn.rs`：会话启动时把解析后的 `ReplayDietPolicy` 发给 actor，先于首个
+  request build。
+- `xai-chat-state`：新增 `ChatStateCommand::SetReplayDietPolicy` 与
+  `ChatStateHandle::set_replay_diet_policy`；actor 保存策略，
+  `maybe_apply_replay_diet` 不再每次读 env。
+- 测试：`replay_diet_toggle_tests` 覆盖 TOML 读取、缺失键、env 优先级与默认值。
+- 文档：`token-economy-port/replay-diet-2026-11-21.md` 增补 §11。
+
+### 用法
+
+```toml
+[compaction]
+replay_diet = false   # 等价于 v1.0.83 的回合内行为；默认 true
+```
+
+环境变量仍优先；改配置后需开新会话（策略在 spawn 时解析）。已 diet 过的
+历史不会恢复。
+
+### 发版
+
+- tag `v1.0.85`；CI/release 结果与 sha256 待回填。

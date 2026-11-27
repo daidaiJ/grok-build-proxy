@@ -9,7 +9,7 @@ use xai_grok_sampling_types::{
 
 use super::ChatStateActor;
 use super::replay_diet::{
-    ReplayDietMark, ReplayDietPolicy, ReplayDietSkip, apply_replay_diet, plan_replay_diet,
+    ReplayDietMark, ReplayDietSkip, apply_replay_diet, plan_replay_diet,
     replay_diet_gate,
 };
 use super::request_builder::{HARD_CLEAR_PLACEHOLDER, append_prune_marker};
@@ -448,7 +448,7 @@ impl ChatStateActor {
     /// the same rewrite. Persisting through `replace_history` means later
     /// requests and future resumes stop replaying the archived bytes.
     pub(super) fn maybe_apply_replay_diet(&mut self, turn_calls: u32) {
-        let policy = ReplayDietPolicy::from_env();
+        let policy = self.replay_diet;
         let prompt_tokens = self
             .state
             .total_tokens

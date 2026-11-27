@@ -23,6 +23,7 @@ use crate::handle::ChatStateHandle;
 use crate::persistence::ChatPersistence;
 use crate::types::{PruningConfig, TurnCapture};
 
+use replay_diet::ReplayDietPolicy;
 use state::ChatState;
 use xai_grok_sampling_types::{ConversationItem, SamplingConfig};
 
@@ -33,6 +34,9 @@ pub struct ChatStateActor {
     state: ChatState,
     /// Pruning configuration for tool-result trimming.
     pruning_config: PruningConfig,
+    /// In-turn replay-diet policy. The shell overrides the env default with
+    /// `[compaction] replay_diet` right after spawn.
+    replay_diet: ReplayDietPolicy,
     /// Persistence implementation — owned exclusively, called with `&mut self`.
     persistence: Box<dyn ChatPersistence>,
     /// Channel to receive commands from handles.
@@ -83,6 +87,7 @@ impl ChatStateActor {
         let actor = ChatStateActor {
             state: ChatState::new(initial_conversation, sampling_config),
             pruning_config,
+            replay_diet: ReplayDietPolicy::from_env(),
             persistence,
             cmd_rx,
             event_tx,
@@ -362,6 +367,9 @@ impl ChatStateActor {
             }
             ChatStateCommand::ApplyReplayDiet { turn_calls } => {
                 self.maybe_apply_replay_diet(turn_calls);
+            }
+            ChatStateCommand::SetReplayDietPolicy { policy } => {
+                self.replay_diet = policy;
             }
             ChatStateCommand::GetConversation { reply } => {
                 tracing::debug!(

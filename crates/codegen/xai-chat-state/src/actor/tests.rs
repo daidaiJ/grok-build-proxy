@@ -4092,6 +4092,59 @@ async fn push_turns(handle: &crate::handle::ChatStateHandle, turns: usize, conte
     let _ = handle.get_conversation_len().await;
 }
 
+/// `SetReplayDietPolicy` must beat the env default: disabled means no stub is
+/// written even when the turn would otherwise pass every diet gate.
+#[tokio::test]
+async fn replay_diet_policy_override_disables_rewrite() {
+    use crate::ReplayDietPolicy;
+
+    let harness = TestHarness::new();
+    harness.handle.set_replay_diet_policy(ReplayDietPolicy {
+        enabled: false,
+        ..Default::default()
+    });
+    push_turns(&harness.handle, 14, 80_000).await;
+    harness.handle.apply_replay_diet(30);
+    let _ = harness.handle.get_conversation_len().await;
+
+    let conv = harness.handle.get_conversation().await;
+    assert!(
+        conv.iter().all(|item| !matches!(
+            item,
+            ConversationItem::ToolResult(tr) if tr.content.starts_with(
+                crate::actor::replay_diet::REPLAY_DIET_STUB_PREFIX
+            )
+        )),
+        "disabled policy must leave tool results verbatim"
+    );
+}
+
+/// The same turn budget with the policy on rewrites old tool results, proving
+/// the test above is exercising the override rather than a gate miss.
+#[tokio::test]
+async fn replay_diet_policy_override_enables_rewrite() {
+    use crate::ReplayDietPolicy;
+
+    let harness = TestHarness::new();
+    harness
+        .handle
+        .set_replay_diet_policy(ReplayDietPolicy::default());
+    push_turns(&harness.handle, 14, 80_000).await;
+    harness.handle.apply_replay_diet(30);
+    let _ = harness.handle.get_conversation_len().await;
+
+    let conv = harness.handle.get_conversation().await;
+    assert!(
+        conv.iter().any(|item| matches!(
+            item,
+            ConversationItem::ToolResult(tr) if tr.content.starts_with(
+                crate::actor::replay_diet::REPLAY_DIET_STUB_PREFIX
+            )
+        )),
+        "enabled policy should stub at least one old tool result"
+    );
+}
+
 /// After fewer turns than `hard_clear_age_turns` the retained conversation
 /// must not be touched (fast-exit path).
 #[tokio::test]

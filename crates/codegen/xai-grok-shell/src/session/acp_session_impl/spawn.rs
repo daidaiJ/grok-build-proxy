@@ -641,6 +641,8 @@ pub(crate) async fn spawn_session_actor(
         chat_state_event_tx,
         tokio_util::sync::CancellationToken::new(),
     );
+    chat_state_handle
+        .set_replay_diet_policy(crate::util::config::resolve_replay_diet_policy());
     drop(chat_state_guard);
     async {
         if (!initial_prompt_texts.is_empty()

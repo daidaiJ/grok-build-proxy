@@ -8,6 +8,7 @@ use xai_grok_sampling_types::{
     ToolSpec, TraceContext,
 };
 
+use crate::actor::replay_diet::ReplayDietPolicy;
 use crate::types::{
     AutoCompactTrigger, ChatStateSnapshot, ConversationCounts, Credentials, NotificationMeta,
     TurnCapture,
@@ -244,6 +245,11 @@ pub enum ChatStateCommand {
     /// next request build. `turn_calls` is the turn loop's 1-based model-call
     /// counter. Fire-and-forget; mailbox order puts it before the build.
     ApplyReplayDiet { turn_calls: u32 },
+
+    /// Replace the session's replay-diet policy. The session shell resolves
+    /// `[compaction] replay_diet` once at spawn and sends it here; the actor's
+    /// env-derived default covers non-shell embeddings and tests.
+    SetReplayDietPolicy { policy: ReplayDietPolicy },
 
     /// Get a clone of the full conversation.
     GetConversation {

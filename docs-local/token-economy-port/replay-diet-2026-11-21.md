@@ -386,3 +386,24 @@ sidecar/`read_tool_result` 未发版。
 
 复现：`python scripts-local/p1_cost_report.py`。后续在 2026-12-10 或累计
 10 个长会话后按同一口径追加结论。
+
+## 11. 配置文件开关（v1.0.85，2026-11-27）
+
+in-turn diet 新增配置文件总开关，便于 A/B：
+
+```toml
+[compaction]
+replay_diet = false   # 关闭回合内裁剪；默认 true
+```
+
+优先级：`GROK_REPLAY_DIET` 环境变量 > `[compaction] replay_diet` > 默认开启。
+`GROK_REPLAY_DIET_MIN_CALLS` / `_MIN_PROMPT_TOKENS` / `_MIN_RECLAIM_TOKENS`
+仍是 env-only 的阈值旋钮。
+
+策略在会话 spawn 时解析一次；改配置或改 env 后用新会话验证。`false` 只影响
+后续回合，已经改写过的历史不会恢复。状态行 `cache` 仍为会话累计值，A/B 时
+建议同时看 `~/.grok/cache/model-usage.jsonl` 的 token 加权命中与单调用中位数。
+
+关闭 diet 后，v1.0.83 的回合内行为恢复：不再删除旧 reasoning，也不再把旧
+工具结果替换成 `[Archived earlier tool result:` stub；relay、idle-wait、
+压缩等其它机制不受影响。
