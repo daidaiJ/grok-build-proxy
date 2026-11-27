@@ -5048,8 +5048,13 @@ v1.0.84 的 in-turn replay diet 每次改写历史都会产生一次 56k–111k 
 - `xai-chat-state`：新增 `ChatStateCommand::SetReplayDietPolicy` 与
   `ChatStateHandle::set_replay_diet_policy`；actor 保存策略，
   `maybe_apply_replay_diet` 不再每次读 env。
-- 测试：`replay_diet_toggle_tests` 覆盖 TOML 读取、缺失键、env 优先级与默认值。
-- 文档：`token-economy-port/replay-diet-2026-11-21.md` 增补 §11。
+- 测试：`replay_diet_toggle_tests` 覆盖 TOML 读取、缺失键、env 优先级与默认值；
+  actor 侧新增 disabled/enabled 两组策略覆盖测试。
+- 文档：`token-economy-port/replay-diet-2026-11-21.md` 增补 §11；用户指南
+  `29-local-enhancements.md` 增加 replay diet 配置段。
+- 测试夹具修正：首轮 Windows 失败为测试自身问题——默认 pruning 在 14 个
+  prompt turn 后先清空旧工具结果，enabled 断言看不到 stub。两组测试改用
+  `with_disabled_pruning()`，关闭保留期 pruning 后再断言，逻辑本身未变。
 
 ### 用法
 
@@ -5063,4 +5068,19 @@ replay_diet = false   # 等价于 v1.0.83 的回合内行为；默认 true
 
 ### 发版
 
-- tag `v1.0.85`；CI/release 结果与 sha256 待回填。
+- tag `v1.0.85` → `14cc5191`（含测试夹具修正）；main CI run `45997587569`
+  Linux + Windows 双绿（重跑后）。
+- release run `46002120345` 双绿：linux 12:51–13:22，windows 12:51–13:21；
+  GitHub release 非 draft、非 prerelease，4 个资产。
+- Linux tar.gz 83,161,221 B；Windows zip 64,176,821 B，sha256
+  `50627caf9658ce514a66c60b98fbf03b5858989528c107283d649b352ebaa467`。
+- 解包 `grok2.exe` sha256 `e8d7325a19aef959b334c9ad6dd808a6cda5c764a95351955843c0fcc91209ce`，
+  `--version` = `grok 1.0.85 (14cc51915d84)`。
+- 本机三处部署同 hash `e8d7325a…`：`D:\tool-cli\grok2\grok2.exe`、
+  `C:\Users\panda\.grok\bin\grok.exe`、`C:\Users\panda\.grok\bin\agent.exe`。
+- 回滚（1.0.84，hash `467a685d…`）：`grok2.exe.1.0.84-467a685d2f74.bak`、
+  `grok.exe.bak-1.0.84-fork`、`agent.exe.bak-1.0.84-fork`；运行中的旧进程改为
+  `grok2.exe.running-1.0.84`，重启 TUI 后生效 1.0.85。
+- A/B 起点：`~/.grok/config.toml` 已写入 `[compaction] replay_diet = false`
+  （A 组，v1.0.83 行为），备份 `config.toml.bak-2026-11-27-replay-diet`；
+  B 组改为 `true` 后开新会话。

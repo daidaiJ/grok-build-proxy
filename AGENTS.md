@@ -3,15 +3,16 @@
 ## 🔄 Handoff 摘要
 
 ### harness-cost-p0-p1 — in-progress（长程观察）
-- **当前状态：** P0 随 v1.0.83、P1（replay diet + relay + idle-wait）随 v1.0.84 已发版并部署（`grok 1.0.84 (b5cb7026d927)`）。
-- **关键证据：** `docs-local/token-economy-port/p1-observation-2026-11-26.md`（首阶段：长回合输入成本 -9~-27%，命中中位 99%）；`replay-diet-2026-11-21.md`；release 44900168801 双绿，Windows zip sha256 `060e6691…` 已核对；PATCHES 七十九、八十期。
-- **验收标准：** 长程会话 `shell.relay_compact.relay_summary_verbatim_missing` 与 `shell.idle_wait_compact.fired/skipped` 可观测；P1 按 §3.5 验收。
+- **当前状态：** P0 v1.0.83、P1（replay diet + relay + idle-wait）v1.0.84、replay diet 配置开关 v1.0.85 已发版并部署（`grok 1.0.85 (14cc51915d84)`）。
+- **关键证据：** `docs-local/token-economy-port/p1-observation-2026-11-26.md`（首阶段：长回合输入成本 -9~-27%，命中中位 99%）；`replay-diet-2026-11-21.md`；release 46002120345 双绿，Windows zip sha256 `50627caf…` 已核对；PATCHES 七十九~八十一期。
+- **验收标准：** 长程会话 `shell.relay_compact.relay_summary_verbatim_missing` 与 `shell.idle_wait_compact.fired/skipped` 可观测；P1 按 §3.5 验收；replay diet A/B 用 `[compaction] replay_diet` 开关。
 - **详情指针：** [`.handoff/harness-cost-p0-p1.md`](.handoff/harness-cost-p0-p1.md)
 
 ### 未验证事项
-- [x] release 44900168801 双绿、Windows zip sha256 核对
-- [x] 本机部署 v1.0.84 并保留 1.0.83 回滚
+- [x] release 46002120345 双绿、Windows zip sha256 核对
+- [x] 本机部署 v1.0.85 并保留 1.0.84 回滚
 - [x] 账本 composition 字段落盘；`/stats` 行待抽样
+- [ ] replay diet A/B：本机 config 已设 `replay_diet = false`（A 组），B 组改 `true` 后用新会话对照
 - [ ] relay 已见 2 次（24 条缺 1）；idle-wait 仍 0 fired，待 net 样本
 
 ## 代码理解（2026-10-03）
@@ -91,6 +92,7 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 - 启动 500ms 目标 — v1.0.82：首帧 193/203ms、session 304ms；余 `tool_registry` 130–151ms、`skills` 42–63ms；PATCHES 78、`startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪、请求级修复持久化等 dump；B/C 组未开工；PATCHES 75、`agent-cli-tracking/TODO.md` ①。
 - token 经济二轮 — P1 首阶段台账（11-22–26）已出：长回合输入成本 -9~-27%、命中中位 99%、idle-wait 0 fired；待 12-10 或 10 个长会话续观；`token-economy-port/p1-observation-2026-11-26.md`。
+- replay diet A/B — v1.0.85 配置开关已发；A=`[compaction] replay_diet=false`（本机已设），B=`true`；两组用新会话、看账本 token 加权命中与 `$/call`；PATCHES 八十一期。
 - IP 端点自签证书放行 — `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 
 ### 待活体验证
@@ -111,8 +113,8 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 
 ## 当前版本
 
-- 本机 `grok 1.0.84 (b5cb7026d927)`，三处部署同 hash `467a685d…`；回滚 `grok2.exe.1.0.83-534af67a90eb.bak`。
-- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~八十期。最近：v1.0.84 P1 长程压缩（replay diet + relay + idle-wait）、v1.0.83 harness 成本 P0 观测、v1.0.82 lazy LSP。
+- 本机 `grok 1.0.85 (14cc51915d84)`，三处部署同 hash `e8d7325a…`；回滚 `grok2.exe.1.0.84-467a685d2f74.bak`。
+- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~八十一期。最近：v1.0.85 replay diet 配置开关（`[compaction] replay_diet`）、v1.0.84 P1 长程压缩、v1.0.83 harness 成本 P0 观测。
 
 ## 文档地图（docs-local）
 
