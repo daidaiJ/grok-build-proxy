@@ -92,7 +92,7 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 - 启动 500ms 目标 — v1.0.82：首帧 193/203ms、session 304ms；余 `tool_registry` 130–151ms、`skills` 42–63ms；PATCHES 78、`startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪、请求级修复持久化等 dump；B/C 组未开工；PATCHES 75、`agent-cli-tracking/TODO.md` ①。
 - token 经济二轮 — P1 首阶段台账（11-22–26）已出：长回合输入成本 -9~-27%、命中中位 99%、idle-wait 0 fired；待 12-10 或 10 个长会话续观；`token-economy-port/p1-observation-2026-11-26.md`。
-- replay diet A/B — v1.0.85 配置开关已发；A=`[compaction] replay_diet=false`（本机已设），B=`true`；两组用新会话、看账本 token 加权命中与 `$/call`；PATCHES 八十一期。
+- replay diet A/B — v1.0.85 配置开关已发；A=`replay_diet=false`（本机已设），B=`true`；启动/统计用 `docs-local/replay-diet-ab/`（`ab_launch.sh` + `ab_report.py`）；PATCHES 八十一期。
 - IP 端点自签证书放行 — `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 
 ### 待活体验证
