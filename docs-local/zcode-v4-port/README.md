@@ -36,6 +36,9 @@
 
 - 3.18.0 → 4.0.0：2,283 文件 / +155,247 / −25,117；其中 3.18.2 → 4.0.0 占 2,209 文件 /
   +149,753 / −24,801。**v4.0.0 是一次大版本，不是 3.18 的补丁尾巴。**
+- 远端复核（2026-11-27）：经 `https://ghproxy.net/...` 执行 `git ls-remote`，`refs/heads/main`
+  仍为 `a4b4445`，本轮结论对应当前上游 head。本机直连 github.com 的 `ls-remote` 超时
+  （约 3 分钟无输出），远端查询与拉取走代理。
 - 新增官方插件包：`design-plugin`（HTML 设计稿/原型/HTML deck 技能）、`documents-plugin`、
   `spreadsheets-plugin`、`pdf-plugin`、`presentations-plugin`（后四者绑 LibreOffice 预装与
   文档工具链）、`node-repl-host`。CLI 内核新增 `core/src/mcp/runtime/`、`core/src/skills/`、
@@ -260,6 +263,8 @@ needs-auth；无 MCP 会话的 tools 段字节不变。
 ## 8. 刷新方法与存疑
 
 ```bash
+# 本机直连 github.com 的 ls-remote 超时；远端查询与 fetch 走代理：
+git ls-remote https://ghproxy.net/https://github.com/zai-org/ZCode.git HEAD refs/heads/main
 git -C D:/CODE/ai/zcode fetch --all --tags
 git -C D:/CODE/ai/zcode log --oneline a9fe401e..HEAD
 git -C D:/CODE/ai/zcode diff --stat b95ebaf..HEAD
