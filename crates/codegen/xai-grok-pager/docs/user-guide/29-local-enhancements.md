@@ -274,6 +274,21 @@ ttl_secs = 3600
 
 ---
 
+## Replay diet (in-turn history trimming)
+
+**What it does.** On long turns (default: ≥20 model calls and ≥200k prompt tokens), the session may drop old reasoning and replace old large tool results with short `[Archived earlier tool result: …]` stubs before the next request. It is independent of `/compact`: no summary is written and the compression counter does not move. The tradeoff is a one-time prompt-cache break at the rewrite point; the status-line `cache` value is cumulative, so the hit rate can settle 1–2 points lower for the rest of that session.
+
+```toml
+[compaction]
+replay_diet = false   # default true; false restores the pre-v1.0.84 in-turn behavior
+```
+
+Precedence is `GROK_REPLAY_DIET` > `[compaction] replay_diet` > default on. The policy is read when a session starts, so use `/new` after toggling; already-rewritten history stays rewritten. Threshold overrides remain env-only: `GROK_REPLAY_DIET_MIN_CALLS`, `GROK_REPLAY_DIET_MIN_PROMPT_TOKENS`, `GROK_REPLAY_DIET_MIN_RECLAIM_TOKENS`.
+
+**When to disable it:** A/B testing cache behavior, or sessions where the 1–2 point cumulative hit-rate drop costs more than the replayed-token savings. Keep it on for long tool-heavy turns; the P1 ledger measured 9–27% lower input cost on long turns.
+
+---
+
 ## Usage ledger, cache breaks, and `/stats` grouping
 
 Every model call — the main turn plus recap, turn summary, title, goal, and
