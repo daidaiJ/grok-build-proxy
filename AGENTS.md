@@ -103,6 +103,7 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 ### 未开工 / 待拍板
 - workflow-pi-port P2 T2；kimicode T2b；step-code P3/P4；dsh-port P1。
 - zcode 3.17.2 P1；opencode diff；webdav sync；`/dump`；startup-perf 缓解；21 套主题；harness-model-fit；agent-cli-refresh P3。
+- zcode v4.0.0 增补 — P1 推理修复持久化 + tool `is_error`，P2 压缩文件回补 / 停滞提醒 / MCP 状态待拍板；见 `docs-local/zcode-v4-port/README.md`。
 - qwen 1.0 增补 — idle cost（P0 余项）、microcompaction 规格（并入 P1）、调度闸门（P2）；`agent-cli-tracking/notes/qwen-code-1.0-2026-11.md`。
 
 ### 长期挂起

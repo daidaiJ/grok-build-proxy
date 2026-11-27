@@ -1073,3 +1073,21 @@
   部署 `grok 1.0.70 (6515ad9e6c24)`（`D:\tool\cli`，回滚点
   `*.1.0.69-ac859850.bak`）。
 
+
+### 2026-11-27 zcode 4.0.0 CLI 刷新（调研入库，推理修复 / is_error / MCP 状态）
+
+- **内容**：父目录 zcode 从 v3.17.2（`a9fe401e`）拉到 v4.0.0（`a4b4445`，根 4.0.0 /
+  CLI 0.18.0）；3.18.0→4.0.0 diff 2,283 文件 / +155,247 / −25,117。新增
+  [`zcode-v4-port/README.md`](zcode-v4-port/README.md) 决策摘要与 P1/P2 台账，
+  逐条机制 / file:line 在 [`agent-cli-tracking/notes/zcode.md`](agent-cli-tracking/notes/zcode.md)
+  「2026-11-27 刷新」节，定级 / 防误报 / 负面清单在 `agent-cli-tracking/ADOPTION.md` §11。
+- **重点**：P1 = OpenAI encrypted reasoning + Anthropic signature 修复持久化
+  （`signedReasoningReset` 标记 + 投影卫生）、tool result `is_error` 上线 + 冷恢复 +
+  Hook 失败路由；P2 = 压缩后文件正文回补、后台 subagent 停滞提醒、MCP 首提示等待收缩 +
+  `search_tool` per-server 状态事实、`[skills]` 配置重载、Bash 前台长 sleep 拦截。
+- **去伪**：skills 文件 watcher/增量公告、MCP failed/needs-auth 公告、压缩后运行中任务状态、
+  subagent 崩溃对账、MCP 配置热重载/执行期等待、output-limit 续写提醒持久化 fork 均已有；
+  v4 无 TUI 包改动；文档/设计插件、browser-state、CUA broker 不移植。
+- **验证**：纯文档；路径与行号在本机 zcode v4.0.0 与 fork 源码实读；未改 fork 代码。
+- **遗留**：P1/P2 待拍板；`[api_dump]` 未见真实多网关 encrypted-content 现场；
+  首提示 2 秒 grace 的实际命中率未采。

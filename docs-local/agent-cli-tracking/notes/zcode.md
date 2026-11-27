@@ -242,14 +242,305 @@ Z.ai（智谱海外品牌）/BigModel 的官方 AI 编程工作台：桌面（El
 - 3.17.1 / 3.17.2（`a60ba6a7` / `a9fe401e`）：provider-builtin-tool-compat、provider-tool-rounds、session-features header、workspace-mcp-trust、session-lifecycle、CONTRACT.md 契约治理铺开、zcode-site-plugin、tool-search 公告重构、input-prediction/local-ttft、dynamic-workflow 因果绑定分析。
 - 早于 3.17 已有：ToolSearch/DeferredToolCall、FillWorkflowHole、ApplyPatch、Bash 图片输出、插件 seed 框架、superpowers 14 技能、skills-lock。
 
+## 2026-11-27 刷新：v3.17.2 → v4.0.0（CLI 面）
+
+> 决策摘要与待办台账见 [`../../zcode-v4-port/README.md`](../../zcode-v4-port/README.md)；
+> 本文只做机制逐条与源码锚点（单一事实源）。v3.18.0 的 Prompt Snapshot / 停滞提醒 /
+> 修复持久化三项已由 [`../../agent-cli-refresh-2026-11/README.md`](../../agent-cli-refresh-2026-11/README.md)
+> 定级，本节只写 v4 的增补与收敛。
+
+### 同步与去伪
+
+- 版本链：`a9fe401e`（v3.17.2，2026-11-03）→ `b95ebaf`（v3.18.0，2026-11-11）→
+  `c590468`（v3.18.1，2026-11-12）→ `fec9759`（v3.18.2，2026-11-12）→
+  `a4b4445`（v4.0.0，2026-11-23）。根 `package.json` 4.0.0；CLI 工作区 0.18.0。
+- `b95ebaf..HEAD` 2,283 文件 / +155,247 / −25,117；其中 `fec9759..HEAD` 2,209 文件 /
+  +149,753 / −24,801。**v4.0.0 是大版本，不是 3.18 的补丁尾巴。**
+- 新增插件/宿主包：`design-plugin`（HTML 设计稿/原型/HTML deck 技能）、`documents-plugin`、
+  `spreadsheets-plugin`、`pdf-plugin`、`presentations-plugin`（文档四件绑 LibreOffice）、
+  `node-repl-host`。新增 CLI 内核面：`core/src/mcp/runtime/`、`core/src/skills/`、
+  `core/src/tool/cmd-readonly/`、`wait-for-mcp-servers`、`levenshtein`、`mcp-diagnostics`；
+  adapters 新增 `mcp/{config-loader,config-source,tool-catalog-cache,transport-errors}`、
+  `watch/`、`skills/catalog`、`fs/symlink-guard`、`memory-diagnostics/`。
+- **TUI 包无 v4 改动**：`apps/zcode-cli/packages/tui` 不在 diff 的 M/A 列表里。
+- 去伪：diff 大但文档/插件资源占多数；判定新增资产仍用 `git ls-tree -r <old> | grep <path>`
+  与 `<new>` 交叉核对。本轮没有出现上次的目录大重排。
+
+### 推理回放：encrypted reasoning / signature repair（v4 最强稳定性项）
+
+zcode v4 把「一次性修复」从 Anthropic signature 扩到 OpenAI Responses encrypted reasoning，
+并补了请求投影卫生：
+
+- **投影卫生**（`docs/openai-responses-tool-continuation-boundary.md:34-40`）：
+  跨 provider/model 丢弃 encrypted reasoning；`itemId` 存在但 encrypted content 为空时丢弃；
+  每条 assistant 消息里尾部无 text/tool call 的 reasoning 丢弃；`store != false` 时丢弃带
+  `itemId` 的 reasoning。规则确定性，保证请求前缀稳定。
+- **修复重试**（同文档 `:42-59`）：HTTP 400 且命中 `invalid_encrypted_content`，或文案含
+  encrypted content + “could not be verified”/“has expired”，删除本请求副本里的 encrypted
+  reasoning 重试一次；不占普通重试预算。Anthropic signature 同规则
+  （`apps/zcode-cli/docs/design/v2/model/anthropic-reasoning-history-replay.md:168-206`）。
+- **持久化标记**（`anthropic-reasoning-history-replay.md:219-248`）：修复成功后 assistant
+  消息带 `signedReasoningReset: true`；后续投影删标记前的签名/加密 reasoning，冷恢复仍生效。
+  OpenAI Responses 与 Anthropic 共用该标记，切换 provider 也保持请求有效。
+- **协议边界**（`docs/openai-responses-tool-continuation-boundary.md:15-32`）：
+  `store:false` + `include:["reasoning.encrypted_content"]`；reasoning 绑定 model/service。
+
+fork 对照：
+
+- `crates/codegen/xai-grok-sampler/src/retry.rs:104-105` 把 `is_encrypted_content_error()`
+  直接 `EmitToSession`；`crates/codegen/xai-grok-shell/src/session/acp_session_impl/sampler_turn.rs:1443-1462`
+  给终态友好错误「另开 session」。**没有修复重试、没有标记。**
+- `crates/codegen/xai-grok-sampling-types/src/error.rs:366-377` 只认 400 + 文案含
+  `encrypted_content`；未覆盖 `invalid_encrypted_content` 结构化码与 “could not be verified”/
+  “has expired” 文案，也没有 Anthropic signature 检测。
+- `crates/codegen/xai-grok-sampling-types/src/conversation/responses.rs:211-217` 把每个
+  `ConversationItem::Reasoning` 原样回放，只清 `status`；未做跨模型/空 encrypted/尾部过滤。
+  `crates/codegen/xai-grok-sampling-types/src/conversation/messages.rs:340-353` 把 reasoning
+  转成 Anthropic `Thinking`，同样原样发送。
+- `crates/codegen/xai-grok-sampler/src/client.rs:1594-1615` 已设 `store:false` 并注入
+  `include: reasoning.encrypted_content`，所以 encrypted-content 路径是活的。
+- 可复用的请求级改写先例：`crates/codegen/xai-grok-sampler/src/actor/request_task.rs:381,414-450`
+  的 `RetryWithImageStrip`；R1 可新增 `RetryWithReasoningReset`，在请求副本上删 reasoning。
+- `AssistantItem` 已有 `model_id/model_fingerprint/reasoning_effort`
+  （`crates/codegen/xai-grok-sampling-types/src/conversation.rs:273-294`），加
+  `reasoning_reset: bool`（serde default）不破旧存档。
+
+### 工具结果 `is_error` 与 Hook 失败路由
+
+zcode v4 的口径：
+
+- provider-neutral tool result 必须带 `isError`，adapter 映射到 provider 能理解的失败形态，
+  例如 Anthropic `is_error`；不靠正文里的 `{ "error": ... }` 表达失败
+  （`apps/zcode-cli/docs/design/v2/tool/00-tool-change-chain.md:1465`）。
+- completed part 持久化 `metadata.providerIsError: true`；冷恢复按它还原 `is_error`，
+  与 live 请求同字节；旧 part 缺字段按成功回放，不按正文推断
+  （`apps/zcode-cli/docs/design/v2/session-persistence.md`「Completed tool metadata」）。
+- Hook 用同一判定 `isToolOutputError` 选 `PostToolUseFailure`：Bash 非零/超时/取消、
+  MCP `isError: true`；`PostToolUse` 与 `PostToolUseFailure` 一般只跑一个
+  （`apps/zcode-cli/docs/design/v2/hooks.md`「失败的定义」）。
+
+fork 对照：
+
+- `crates/codegen/xai-grok-sampling-types/src/conversation.rs:298-310` `ToolResultItem` 只有
+  `tool_call_id/content/images`；构造器在 `:1408-1429`。
+- `crates/codegen/xai-grok-sampling-types/src/messages.rs:124-129` Anthropic `ToolResult`
+  只有 `tool_use_id/content/cache_control`；构造点在
+  `crates/codegen/xai-grok-sampling-types/src/conversation/messages.rs:325-329`。
+- 中心成功路径 `crates/codegen/xai-grok-shell/src/session/acp_session_impl/tool_calls.rs:3135-3146`
+  构造 `ConversationItem::tool_result`；错误路径 `:2867`、`:3539` 也只传文本。
+- 内部语义已有：`crates/codegen/xai-grok-tools/src/types/output.rs:619-651` 的
+  `ToolOutput::is_error`（Bash 非零、grep >1、Read 失败、Skill !success 等）。
+- Hook 路由：`crates/codegen/xai-grok-shell/src/session/acp_session_impl/tool_calls.rs:40-45,1104`
+  的 `is_mcp_error_result` 只把 MCP 错误送去 `PostToolUseFailure`；内置逻辑错误
+  （Bash 非零、文件不存在）仍走 `PostToolUse`。
+- 冷恢复：chat-state JSONL 直接 serde `ConversationItem`；加字段带 `serde(default)` 即可，
+  旧会话按 false。
+
+### 压缩：文件正文回补与 task_status
+
+zcode v4：
+
+- 文件回补（`apps/zcode-cli/docs/design/v2/rewind-compact.md:141-148`）：summary 返回后从
+  compact 前 read state 按时间取 5 个，重读磁盘当前内容；单文件 >5k token 或超 Read 上限只放
+  引用提示；总量 >50k 丢弃；跳过 plan 文件、指令文件、`.git/` 等；不走工具调用流程，
+  只按读权限 deny 规则过滤；补回内容随 compaction 持久化，冷恢复不重读。
+- read state 只存 `contentSha256`（UTF-16LE），旧快照保留正文
+  （`apps/zcode-cli/docs/design/v2/tool/17-read-file-state-resume.md:105-148`）。
+- `task_status`（`rewind-compact.md:149-155`）：运行中 agent、30 秒内结束的 agent、运行中的
+  后台 Bash；带 `SendMessage`/`TaskStop`/输出路径提示。
+
+fork 对照：
+
+- 已有压缩后状态提醒：运行中后台任务、子代理、待办、计划循环、工作流、技能名单、MCP、
+  AGENTS.md、计划模式（`crates/codegen/xai-grok-shell/src/session/compaction.rs:1468-1525`、
+  `crates/codegen/xai-grok-shell/src/session/helpers/compaction_context.rs:157-234`、
+  `compaction.rs:1763-1780`）。**task_status 的主体已覆盖**，只差「30 秒内已结束」细节。
+- 文件正文不回补；只有图片/PDF 资产保留（`retain_session_asset_files`，
+  `compaction.rs:1665` 附近）。
+- rewind 快照存正文（`crates/codegen/xai-grok-workspace/src/session/file_state.rs:197-293`），
+  但由文件写入的 checkpoint 采集（`capture_file_state`、`add_before_snapshot_for_prompt`，
+  `file_state.rs:641`），**不是 Read 的 live read ledger**，不能直接当压缩回补的数据源。
+- 需要新增 session 级 read ledger（path、时间、hash、partial view），由 Read/Write/Edit
+  成功路径写入；压缩时选文件、读盘、拼 user 侧 reminder。
+
+### 子代理：停滞提醒与跨进程对账
+
+zcode v4：
+
+- 后台 agent 无进展提醒（`apps/zcode-cli/docs/design/v2/tool/07-subagent.md:116-146`）：
+  进展 = 模型请求/回复、工具开始/结束、审批结束；Bash 心跳与流式 token 不算；15 分钟首次，
+  之后 30/60… 上限 4 小时；有新进展清零；投递前复验（结束、新进展、等审批、
+  executionId 变化则丢弃）；措辞避开 `<task-notification>`。
+- 上一代 runtime 遗留的 `running` agent 对账（同文档 `:178-244`）：冷启动把
+  `metadata.json` 里 running 的 agent 标 failed，原因「runtime process exited before it
+  finished」；`SendMessage` 可按 metadata 恢复，`resumedAt` 只让更晚的通知生效。
+- 立即发送抢占时，前台 subagent 转后台而不是取消（同文档 `:401-420`，
+  `InputPreemptionAbortReason` / `requestBackground`）。
+
+fork 对照：
+
+- 跨进程对账**已有**：`crates/codegen/xai-grok-shell/src/agent/subagent/mod.rs:2529-2675`
+  （`ORPHAN_RECONCILE_REASON`、`running_orphan_meta`、`reconcile_orphaned_subagents_with_backend`，
+  每个 id 只发一次 `SubagentFinished`）。**不要重复实现。**
+- `SendMessage` 只接受 active agent：`crates/codegen/xai-grok-tools/src/implementations/grok_build/send_subagent_message.rs:100-124`
+  的 `NotActiveOrFinalizing` 归为 Rejected；没有「结束后按 metadata 恢复」。
+- 没有停滞计时器；后台任务靠 `get_command_or_subagent_output` / 通知轮询。
+- 立即发送走 `cancel_turn_for_send_now`
+  （`crates/codegen/xai-grok-shell/src/session/acp_session_impl/cancel.rs:132`），没有
+  「前台 subagent 转后台」分支。
+
+### MCP：动态目录、状态事实与首提示等待
+
+zcode v4（`docs/mcp-async-tool-catalog-cache.md`）：
+
+- 合同（`:5`）：交互 session 后台启动 MCP，首请求只读已发布内存快照；headless/automation/
+  闲时任务保留首发等待；连接就绪不自行发起模型请求。
+- 状态分类（`:167-181`）：`pending`（connecting 且无授权等待）、`needs_auth`（授权等待或
+  failed + `oauth_authorization_failed`）、`failed`（failed/disconnected/untrusted 等）；
+  公告带当前 facts，同状态去重。
+- 搜索/等待（`:226-241`）：ToolSearch 只有 pending 也可用；无匹配或 select 缺失项先刷新，
+  相关 server 仍 pending 时最多等 5 秒；执行期对同一回复的未注册工具共用 10 秒等待；
+  `WaitForMcpServers` 只在 ToolSearch off 时作为提示工具出现。
+- 工具定义冻结/离开（`:211-225`）：已交付定义不因失败撤销；离开会话视图后由配置变化/
+  显式重连恢复。
+
+fork 对照：
+
+- 配置热重载已有：`crates/codegen/xai-grok-shell/src/agent/app.rs:1256-1280`（global +
+  project 两路）。
+- 失败/needs-auth 公告已有：`crates/codegen/xai-grok-shell/src/session/acp_session_impl/mcp_failed_reminder.rs`
+  （分集公告、`McpAnnounced` 去重、auth 升级重公告）。
+- 执行期等待已有：`crates/codegen/xai-grok-mcp/src/servers.rs:3645` 的 `ensure_initialized`
+  会唤醒 `Initializing` 上停等的调用方；`mcp.rs:1144` 有 `is_server_pending`。
+- 首提示前仍等最多 2 秒：`crates/codegen/xai-grok-shell/src/session/acp_session_impl/mcp_snapshot.rs:15`
+  `MCP_STARTUP_GRACE = 2s`，`prompt_build.rs:629` 调用 `wait_for_mcp_startup_grace()`。
+- `search_tool` 只有 `ready/partial` + 通用提示
+  （`crates/codegen/xai-grok-tools/src/implementations/search_tool/mod.rs:318-341`）；
+  `SearchSnapshot` 只有 `is_ready`（`crates/codegen/xai-grok-tools/src/types/tool_index.rs:32-38`）；
+  server 状态在 `McpServerStatusPayload`（`crates/codegen/xai-grok-shell/src/session/mcp_dispatcher.rs:48-77`），
+  目前只发客户端，不进模型搜索结论。
+
+### Skills：实时目录大部分已覆盖
+
+zcode v4（`docs/skills-live-catalog.md`）：
+
+- watcher：监听 skill 根，1 秒绑定超时，反复失败最多建 2 个 watcher 后停用；flush 跳过去抖
+  立即重读（`:42-74`）。
+- 列表：从有效历史回放 `skills_listing` metadata 的 `skillsListingDelta.fingerprints` 得到
+  已发集合；增量公告；删除不公告；冷恢复不改写已恢复列表（`:82-90`、`:98-105`）。
+- Skill 工具未命中先 flush 一次；仍无则 `SkillNotFoundError`，编辑距离 ≤2 时附
+  `Did you mean`（`:107-113`）。子 agent 列表启动时固定，未命中不 flush（`:116-124`）。
+- 插件 skill 读正文前重跑插件扫描，拒绝链接/junction（`:113`）。
+
+fork 对照：
+
+- **大部分已有**：`SkillsFileWatcher`（`crates/codegen/xai-grok-shell/src/config/watcher.rs:674`，
+  `agent/app.rs:164-176` 注入 internal `reload_skills`）、`reload_skills_from_disk`
+  （`session/acp_session_impl/session_setup.rs:201`）、`SkillManager` 增量公告
+  （`crates/codegen/xai-grok-tools/src/types/skill_discovery_tracker/`）、已公告名单持久化
+  （`crates/codegen/xai-grok-agent/src/builder.rs:96,1197`、
+  `crates/codegen/xai-grok-shell/src/session/announcement_state.rs:20`）。
+- 缺：`ConfigUpdate::Skills` 只打日志（`crates/codegen/xai-grok-shell/src/agent/app.rs:1319-1324`），
+  改 `[skills] paths` 不触发重载；Skill 未命中 flush 未核；`Did you mean` 目前只有路径版
+  （`crates/codegen/xai-grok-tools/src/util/path_suggestions.rs:36`）。
+- watcher 绑定超时/2 次失败停用未实现；本机 Windows 网络共享路径若出现挂起再补。
+
+### Bash：前台 sleep 拦截与 is_error
+
+zcode v4（`apps/zcode-cli/docs/design/v2/tool/04-bash.md`）：
+
+- 前台 sleep 拦截（`:141-160`）：`validateInput` 在 hook/权限前拒绝第一个顶层子命令为
+  `sleep N`（N≥25 秒）的前台命令，errorCode 10；允许前置赋值、`timeout 40 sleep 30`、
+  `echo a; sleep 30`、`sleep 25s`；`run_in_background`/不支持后台/`cmd`/`legacy-shell` 放行；
+  提示改用后台 until-loop 或 `run_in_background`。
+- `is_error` 语义（`:82-92`）：Bash 非零退出按失败投影；`grep` 无匹配、`diff` 有差异、
+  `test` false 这类语义非零不算 provider error；硬超时/取消算失败。
+- 超时转后台文案带 `timedOutAfterMs`；后台完成/失败/超时/取消/output-limit 都进
+  `<task-notification>`（`:101-115`）。
+
+fork 对照：
+
+- `crates/codegen/xai-grok-tools/src/implementations/grok_build/bash/mod.rs` 没有 sleep 校验；
+  `:3174` 的 `foreground_command_timeout` 测试直接用 `sleep 999` 跑到超时，说明当前行为是
+  「等满预算」。
+- `ToolOutput::is_error` 已按语义判定（`output.rs:619-651`），Bash `exit_code != 0`；
+  `grep > 1` 才算错。内部语义已对齐，缺的是 R2 的 provider 线与持久化。
+- 超时转后台已有配置（`auto_background_on_timeout` / `foreground_block_budget_ms`，
+  `bash/mod.rs:139-157`），但默认关闭，由 contract 决定；与 zcode 的「eligible 命令到期转后台、
+  首 token sleep 返回 timed_out」不完全同形，本轮不跟。
+
+### 元上下文：silent reminder / total tokens / 回复语言
+
+zcode v4（`apps/zcode-cli/docs/design/v2/loop/meta-user-context.md`）：
+
+- silent-turn reminder 改为时间窗：最近提醒或本轮起点后至少 1 条 silent assistant，且
+  `now - anchor >= 60s`；无每段上限；时间从历史条目的 `time` 派生，冷恢复还原。
+- total-tokens 提醒默认关闭；CLI `--total-tokens-reminder on|off` 或 App 设置，runtime 创建时
+  固定；off 时 system 不出现预算行，历史里已存的提醒原样回放。
+- 回复语言（`docs/i18n/agent-reply-language.md`）：不进 system prompt，是一条 `language`
+  输入附件，只在值变化时追加；清空时追加清除公告；compaction 后重述最近一次语言；
+  subagent/workflow actor 不收；会话标题用最近公告语言。
+
+fork 对照：
+
+- 无 total-tokens 提醒；v4 默认关闭，**维持不做**。
+- 无 silent-turn 时间窗；fork 的 idle prompt 是另一套（`extensions/idle_prompt.rs`），
+  本轮不跟。
+- 无回复语言附件；如要做，落点是配置读取 + 每轮输入附件 + 压缩重述，R10。
+
+### Hooks：失败定义与 onError
+
+- zcode v4 把「失败」定义为执行抛错 + 结果是错误结果（`isToolOutputError`），
+  `PostToolUseFailure` 的 `error.message` 是模型看到的正文，`error.type` 为
+  `tool_execution_failed`；执行前的拒绝/权限/校验失败两种事件都不跑
+  （`apps/zcode-cli/docs/design/v2/hooks.md`「失败的定义」）。
+- `onError: allow|deny` 仍是 3.17 的遗留项（ADOPTION §9.1.6），v4 未改语义；fork 仍未做，
+  与 R2 分开。
+- stderr 只在 hook 阻断（exit 2）或 `onError: deny` 时进模型上下文，其余只记诊断。
+
+### 新包/新面与不移植
+
+- 新增 `design/documents/spreadsheets/pdf/presentations` 五个官方插件包，全部是文档/设计
+  生成技能与资源；文档四件绑 LibreOffice 预装、字体下载、转换器与平台包。
+- `node-repl-host`、`browser-state`、CUA in-process broker、`memory-diagnostics`、
+  `draft model migration`、`site plugin` 绑桌面/Web/官方服务端或诊断管线。
+- `--browser-state/--no-browser-state`、`--total-tokens-reminder`、`--agent-always-background`
+  等新 CLI flag 随上述形态；终端 fork 不跟。
+- provider-regression 夹具、SEA 跨目标打包、i18n 界面语言铺开属于工程/发行侧资产。
+
+### 版本归因（避免把旧特性当新增）
+
+- 3.18.0（`b95ebaf`）：Prompt Snapshot、后台 subagent 停滞提醒、一次性修复持久化
+  （Anthropic signature）、运行中 UX 批量。
+- 3.18.1/3.18.2（`c590468`/`fec9759`）：补丁与文档修订，148 文件 / +5,870 / −692。
+- 4.0.0（`a4b4445`）：MCP 动态目录与异步连接、skills 实时目录、OpenAI encrypted reasoning
+  修复与投影卫生、tool result `is_error` 持久化、Hook 失败定义、压缩后文件回补与
+  `task_status`、Bash sleep 拦截、回复语言、文档/设计插件、browser-state、node-repl-host。
+- 早于 3.18 已有：ToolSearch/DeferredToolCall、MCP 配置热重载、MCP failed reminder、
+  subagent 崩溃对账、七事件 hooks、skills 文件 watcher、压缩后运行中任务状态。
+
+### 本轮存疑
+
+- reasoning 修复、MCP 动态目录、skills 实时目录的证据以设计文档与单测为主，**未跑真实
+  多网关 BYOK**；`include: reasoning.encrypted_content` 与 `store:false` 在第三方
+  OpenAI-compatible 网关上的行为需 `[api_dump]` 取证。
+- zcode 自报 skills watcher 在 Windows 网络共享路径有过「绑定反复报错」回归
+  （`docs/skills-live-catalog.md:63-74`）；fork watcher 目前只记日志，本机出现挂起再补超时/断路。
+- fork 的首提示 2 秒 grace 实际命中率未采；`codebase-memory-mcp` 与 `ssh-mcp` 的握手耗时
+  分布未知，R5 先量测再改。
+- 5k/50k 上限来自 zcode 的 token 估算口径；fork 落地时需按 `xai-token-estimation` 重新标定。
+
 ## 版本与活跃度
 
-- 版本 **v3.17.2**（根 `package.json`；CLI 工作区 `apps/zcode-cli/package.json` 0.17.1；README
-  更新日志 2026-11-03）。
+- 版本 **v4.0.0**（根 `package.json`；CLI 工作区 `apps/zcode-cli/package.json` 0.18.0；README
+  更新日志 2026-11-23）。
 - 公开快照：v3.14.3（`29628c9`）→ v3.15.1（`aac47556`）→ 2026-10-19 / 10-20 两次
   `chore: sync ZCode source`（`0a1fc56d` / `3c5b2276`，v3.16.2）→ 2026-10-30 / 11-03
-  （`a60ba6a7` / `a9fe401e`，v3.17.1 / v3.17.2）；仓库已从单提交快照变为持续同步，
-  文件数 7,060 → 18,266 → 5,315 文件变更的一次大重排（+226k / −613k 行，勿按行数估特性）。
+  （`a60ba6a7` / `a9fe401e`，v3.17.1 / v3.17.2）→ 2026-11-11 / 11-12
+  （`b95ebaf` / `c590468` / `fec9759`，v3.18.0 / 3.18.1 / 3.18.2）→ 2026-11-23
+  （`a4b4445`，v4.0.0）；仓库已从单提交快照变为持续同步，文件数 7,060 → 18,266 → 5,315
+  文件变更的一次大重排（+226k / −613k 行），v4.0.0 再增 2,283 文件 / +155k / −25k，
+  勿按行数估特性。
 - 官方产品在营（zcode.z.ai 网关、官方插件市场 CDN、Feishu/Discord 社区），**活跃维护中**。
 
 ## 存疑 / 仅文档宣称

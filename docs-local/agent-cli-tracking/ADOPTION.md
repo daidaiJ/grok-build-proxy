@@ -386,3 +386,66 @@ P1/P2 按 §3/§4 表内级别随迭代带入；每项引入后在本文勾选�
 Web Shell composer 指标（无 TUI 载体）、Agent Plugins v1 / Qoder 插件生态（生态位竞争）。
 
 **顺序**：10.1（解锁度量）→ 10.2（并入既有 P1）→ 10.3（独立小件）→ 10.4（先量后拍）。
+
+## 11. zcode 4.0.0 四轮增补（2026-11-27）
+
+> 背景：zcode 从 v3.18.0（`b95ebaf`，2026-11-11）走到 v4.0.0（`a4b4445`，2026-11-23），
+> 根 `package.json` 4.0.0、CLI 工作区 0.18.0；3.18.0→4.0.0 diff 2,283 文件 /
+> +155,247 / −25,117。机制逐条与源码锚点见 [notes/zcode.md](notes/zcode.md)
+> 「2026-11-27 刷新」节；决策摘要与待办台账见
+> [`zcode-v4-port/README.md`](../zcode-v4-port/README.md)。本轮**不改 §1–§10 既有判定**，
+> 只追加 v4 新面、防误报与落地顺位。3.18.0 已定级的 Prompt Snapshot / 停滞提醒 /
+> 修复持久化不再重复。
+
+### 11.1 新候选与收敛
+
+| # | 特性 | 来源锚点 | 现状对照 | 落点 | 级别 |
+|---|---|---|---|---|---|
+| 11.1.1 | **推理回放修复持久化**：OpenAI encrypted reasoning 400（`invalid_encrypted_content` / “could not be verified” / “has expired”）删 reasoning 重试一次；Anthropic signature 同规则；成功后写 `signedReasoningReset` 标记，后续投影删标记前的签名 reasoning。投影卫生：跨模型/跨 provider 丢弃、`itemId` 无 encrypted 丢弃、尾部 reasoning 丢弃 | `docs/openai-responses-tool-continuation-boundary.md:34-59`、`apps/zcode-cli/docs/design/v2/model/anthropic-reasoning-history-replay.md:168-248` | fork 把 encrypted_content 错误当终态（`retry.rs:104`、`sampler_turn.rs:1443-1462`）；reasoning 原样回放（`responses.rs:211-217`）；无标记 | `xai-grok-sampler` 重试 + `xai-grok-sampling-types` 投影 + chat-state 标记 | ⭐ **P1**（§2 一次性修复持久化的 v4 扩展） |
+| 11.1.2 | **tool result `is_error` 持久化**：provider-neutral 结果带 `isError`，Anthropic 映射 `is_error`；completed part 持久化 `providerIsError`，冷恢复同字节；Hook 用同一判定选 `PostToolUseFailure`（Bash 非零/超时/取消、MCP `isError`） | `apps/zcode-cli/docs/design/v2/tool/00-tool-change-chain.md:130-137,1465`、`session-persistence.md`「Completed tool metadata」、`hooks.md`「失败的定义」 | `ToolResultItem` 无字段（`conversation.rs:298-310`）；Anthropic `ToolResult` 无 `is_error`（`messages.rs:124-129`）；Hook 只路由 MCP 错误（`tool_calls.rs:40-45,1104`） | `xai-grok-sampling-types` + `tool_calls.rs` + chat-state | ⭐ **P1** |
+| 11.1.3 | **压缩后文件正文回补**：summary 后按 read state 取 5 个最近文件重读磁盘，单文件 5k / 总 50k token，超限只放引用提示；不走工具流程，只按读权限 deny 过滤 | `rewind-compact.md:141-148`、`tool/17-read-file-state-resume.md:105-148` | 运行中任务/子代理状态已有（`compaction.rs:1468-1525`）；文件正文不回补；rewind 快照只收写文件（`file_state.rs:197-293`） | `xai-grok-shell/session/compaction.rs` + 新增 read ledger | 🟢 **P1/P2** |
+| 11.1.4 | **后台 subagent 停滞提醒**：15 分钟首次，30/60… 上限 4 小时；进展 = 模型请求/回复、工具开始/结束、审批结束；投递前复验 | `tool/07-subagent.md:116-146` | 无停滞计时器；崩溃对账已有（`agent/subagent/mod.rs:2529-2675`），**不要重复实现** | `agent/subagent/` + session 定时器 | 🟢 **P2**（§3 原 P1 的 v4 收敛） |
+| 11.1.5 | **MCP 首提示等待收缩 + 状态事实**：交互 session 首请求只读已发布快照；`search_tool` 报 pending/needs-auth/failed；无匹配最多等 5 秒；执行期同一回复共用 10 秒 | `docs/mcp-async-tool-catalog-cache.md:5,167-181,226-241` | 配置热重载、failed/needs-auth 公告、执行期 `ensure_initialized` 已有；首提示仍等 2 秒（`mcp_snapshot.rs:15`、`prompt_build.rs:629`）；`search_tool` 只有 ready/partial（`search_tool/mod.rs:318-341`） | `mcp_snapshot.rs`、`prompt_build.rs`、`tool_index.rs`、`search_tool` | 🟢 **P2**（先量 TTFT） |
+| 11.1.6 | **`[skills]` 配置变化触发重载** | `docs/skills-live-catalog.md`（配置变化/插件变化触发全量重读） | `ConfigUpdate::Skills` 只打日志（`agent/app.rs:1319-1324`）；文件 watcher 只覆盖 skill 目录 | `app.rs` → `reload_skills_all_sessions()` | 🟢 **P2 小件** |
+| 11.1.7 | **Bash 前台长 sleep 拦截**：顶层 `sleep N`（N≥25 秒）在 hook/权限前拒绝，带 until-loop/background 指引 | `tool/04-bash.md:141-160` | 无校验；`sleep 999` 跑到超时（`bash/mod.rs:3174` 测试） | Bash 输入校验 | 🟢 **P2 小件** |
+| 11.1.8 | **压缩后 skill 名单增量补发**：从保留段 `skillsListingDelta.fingerprints` 回放已发行，只补缺失 | `docs/skills-live-catalog.md:82-90`、`rewind-compact.md` skills_listing 段 | `format_compaction_skill_listing` 总是全量（`listing.rs:605-615`） | `listing.rs` + `compaction.rs` | 🟡 **P3**（先量 token） |
+| 11.1.9 | **Skill/工具名 `Did you mean`**：编辑距离 ≤2 的建议；Skill 未命中先 flush 一次 | `docs/skills-live-catalog.md:107-113`、`tool/19-tool-search.md` | 只有路径建议（`path_suggestions.rs:36`） | `implementations/skills/`、`use_tool`/`search_tool` | 🟡 **P3** |
+| 11.1.10 | **回复语言附件**：不进 system prompt，值变化时追加 `language` 附件，清空时清除公告，compaction 重述 | `docs/i18n/agent-reply-language.md` | 无 | 配置 + 输入附件 + `compaction.rs` | 🟡 **P3**（可选） |
+| 11.1.11 | **subagent 默认后台 / 立即发送转后台 / SendMessage 恢复** | `tool/07-subagent.md:13,29,401-420` | 默认前台；`SendMessage` 只收 active（`send_subagent_message.rs:100-124`）；send-now 直接 cancel（`cancel.rs:132`） | subagent/turn steering | 🟢 **P3 独立决策** |
+
+### 11.2 本轮核实的「fork 已有」防误报
+
+| 项 | 核实结论 |
+|---|---|
+| skills 实时目录 | ✅ 大部分已有：`SkillsFileWatcher`（`config/watcher.rs:674`、`agent/app.rs:164-176`）+ `reload_skills_from_disk`（`session_setup.rs:201`）+ `SkillManager` 增量公告 + 已公告名单持久化（`builder.rs:96,1197`、`announcement_state.rs:20`）。缺 §11.1.6 与 §11.1.9；Skill 未命中 flush 未核 |
+| MCP failed/needs-auth 公告 | ✅ 已有 `mcp_failed_reminder.rs` 分集公告 + `McpAnnounced` 去重 + auth 升级重公告；缺的只是 `search_tool` 结果里的 facts |
+| 压缩后 `task_status` | ✅ 已有运行中后台任务/子代理/待办/计划循环/工作流（`compaction.rs:1468-1525`、`compaction_context.rs:157-234`）；只差 30 秒内已结束 agent 的细节 |
+| subagent 跨进程崩溃对账 | ✅ 已有（`agent/subagent/mod.rs:2529-2675`，含 process-restart 原因、running 孤儿识别、一次性 `SubagentFinished`） |
+| MCP 配置热重载 / 执行期等待 | ✅ 已有（`agent/app.rs:1256-1280`；`servers.rs:3645 ensure_initialized`、`mcp.rs:1144`） |
+| output-limit 续写提醒缓存稳定 | ✅ 已有（`reminders.rs:569,591-593`、`turn.rs:3800-3803` 写入 chat-state；zcode 的 hidden record 同目的） |
+| Prompt Snapshot / total-tokens | Prompt Snapshot 收益已由 resume 保留旧 head 覆盖（§9 / agent-cli-refresh §1）；fork 无 total-tokens 提醒，v4 默认关闭，维持不做 |
+| TUI | v4 无 TUI 包改动 |
+
+### 11.3 不移植增补
+
+- **文档/设计插件全家**：`documents-plugin`、`spreadsheets-plugin`、`pdf-plugin`、
+  `presentations-plugin`、`design-plugin`；前四者绑 LibreOffice 预装、字体下载、转换器与平台包。
+- **`node-repl-host`、browser-state、CUA in-process broker、memory-diagnostics、
+  draft model migration、site plugin**：绑桌面/Web/官方服务端或诊断管线；
+  `--browser-state/--no-browser-state`、`--total-tokens-reminder`、`--agent-always-background`
+  等 flag 同族。
+- **provider-regression 夹具、SEA 跨目标打包、i18n 界面语言铺开**：工程/发行侧资产。
+- 维持 §7.2 / §8.2 / §9.3 全部负面清单。
+
+### 11.4 落地顺序建议（本轮）
+
+1. **11.1.1 先做投影卫生**（零重试、低风险），再加 400 修复重试与 `reasoning_reset` 标记；
+   这是 §2 一次性修复持久化的完整版，直接解决换模型/换网关后的死会话。
+2. **11.1.2 紧随其后**：`is_error` 上线、Anthropic wire、Hook 失败路由、冷恢复字节一致，
+   作为一个独立提交；不要和 `hook onError`（§9.1.6）混在一起。
+3. **11.1.3 / 11.1.4** 按压缩轮与子代理轮排；`task_status` 的主体已覆盖，只补文件正文与
+   停滞计时器。
+4. **11.1.5 先量测**：采一次 `codebase-memory-mcp` / `ssh-mcp` 握手耗时与首提示 TTFT；
+   再决定 2 秒 grace 是否归零，以及 `search_tool` facts 的字段形态。
+5. **11.1.6 / 11.1.7 随手轮**：两个独立小件，互不依赖。
+6. **11.1.8 / 11.1.9 / 11.1.10 / 11.1.11 等拍板**；11.1.11 是 UX 决策，不随稳定性批次。

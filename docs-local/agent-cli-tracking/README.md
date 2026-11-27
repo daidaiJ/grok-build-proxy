@@ -15,7 +15,7 @@
 | kimi-code | [MoonshotAI/kimi-code](https://github.com/MoonshotAI/kimi-code) | `D:/CODE/ai/kimi-code` | `02d829e1` 2026-09-19 | 自研（pi TUI + agent-core-v2/kosong） |
 | crush | [charmbracelet/crush](https://github.com/charmbracelet/crush) | `D:/CODE/ai/crush` | `5e3fe4b` 2026-10-03 | Charm 官方自研（Go，fantasy/catwalk） |
 | goose | [aaif-goose/goose](https://github.com/aaif-goose/goose)（原 block/goose） | `D:/CODE/ai/goose` | `3bd8520` 2026-10-09 | Block 出品自研（Rust，AAIF 基金会治理） |
-| zcode | ZCode（Z.ai/智谱官方） | `D:/CODE/ai/zcode` | `a9fe401e` 2026-11-03（v3.17.2） | Z.ai 官方自研（TS，Claude Code 同构概念体系） |
+| zcode | ZCode（Z.ai/智谱官方） | `D:/CODE/ai/zcode` | `a4b4445` 2026-11-23（v4.0.0） | Z.ai 官方自研（TS，Claude Code 同构概念体系） |
 
 > 口碑注记（2026-10-11，用户口径）：opencode 与 MiMo-Code 社区口碑下降，其设计仅作机制参照，不再作为对齐对象。
 
@@ -65,6 +65,7 @@
 - [TODO.md](TODO.md) — 2026-09-28 补充挖掘批次的引入待办（客户端循环检测恢复 / 工具批次防洪水 / 未提交提醒）
 - [notes/opencode.md](notes/opencode.md) · [notes/mimo-code.md](notes/mimo-code.md) · [notes/qwen-code.md](notes/qwen-code.md) · [notes/minimax-code.md](notes/minimax-code.md) · [notes/kimi-code.md](notes/kimi-code.md) · [notes/crush.md](notes/crush.md) · [notes/goose.md](notes/goose.md) · [notes/zcode.md](notes/zcode.md) — 分仓库机制笔记（含仓库相对路径 file:line 引用）
 - [zcode-317-port/README.md](../zcode-317-port/README.md) — zcode v3.17.x 移植专题（决策摘要 + 待办台账，2026-11-07 起）
+- [zcode-v4-port/README.md](../zcode-v4-port/README.md) — zcode v4.0.0 移植增补（v3.18→v4 增量、防误报与 P1/P2 清单，2026-11-27 起）
 
 ## 2026-10-11 增补批次（crush / goose / zcode）
 
@@ -115,6 +116,24 @@
   §8.4 的 superpowers 三件 A/B **仍未做**。
 - 方法注记：快照 diff 5,315 文件会让 rename detection 被跳过，判定新增资产必须 `git ls-tree`
   双版本树核对，别信 A/D 标记。
+
+## 2026-11-27 刷新（zcode v3.17.2 → v4.0.0）
+
+- 版本链：v3.18.0（`b95ebaf`，11-11）→ 3.18.1（`c590468`）→ 3.18.2（`fec9759`，11-12）
+  → 4.0.0（`a4b4445`，11-23）；根 `package.json` 4.0.0，CLI 工作区 0.18.0。
+  3.18.0→4.0.0 diff 2,283 文件 / +155,247 / −25,117。
+- 本轮单独建专题 [`zcode-v4-port/README.md`](../zcode-v4-port/README.md)：决策摘要 + P1/P2 台账；
+  逐条机制与 file:line 在 [notes/zcode.md](notes/zcode.md)「2026-11-27 刷新」节，定级 / 防误报 /
+  负面清单在 [ADOPTION.md](ADOPTION.md) §11。
+- CLI 主线：**推理回放修复持久化**（OpenAI encrypted reasoning + Anthropic signature，
+  `signedReasoningReset` 标记与跨模型投影卫生）、**tool result `is_error` 持久化**（Anthropic
+  `is_error` + 冷恢复 + Hook 失败路由）、MCP 动态目录与 per-server 状态事实、skills 实时目录、
+  压缩后文件正文回补、后台 subagent 停滞提醒、Bash 前台长 sleep 拦截。
+- 防误报：skills 文件 watcher/增量公告、MCP failed/needs-auth 公告、压缩后运行中任务状态、
+  subagent 崩溃对账、MCP 配置热重载、MCP 执行期握手等待、output-limit 续写提醒持久化
+  **fork 均已有**，不再立项；v4 无 TUI 包改动。
+- 新插件 `design/documents/spreadsheets/pdf/presentations` 与 `node-repl-host`、
+  browser-state、CUA broker 绑桌面/文档工具链/官方服务端，不移植。
 
 ## 追踪更新方法
 
