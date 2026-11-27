@@ -49,6 +49,31 @@ impl TestHarness {
         Self::with_config(vec![], test_config_with_window(window))
     }
 
+    /// Replay-diet tests need old tool results to survive until the diet runs;
+    /// the default retention prune would clear them first.
+    fn with_disabled_pruning() -> Self {
+        let (mock, persistence_rx) = MockChatPersistence::new();
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let token = tokio_util::sync::CancellationToken::new();
+        let handle = ChatStateActor::spawn_with_pruning(
+            vec![],
+            test_config(),
+            crate::types::PruningConfig {
+                enabled: false,
+                ..Default::default()
+            },
+            Box::new(mock),
+            event_tx,
+            token.clone(),
+        );
+        Self {
+            handle,
+            event_rx,
+            persistence_rx,
+            _cancellation_token: token,
+        }
+    }
+
     fn with_config(items: Vec<ConversationItem>, config: SamplingConfig) -> Self {
         let (mock, persistence_rx) = MockChatPersistence::new();
         Self::with_persistence(items, config, mock, persistence_rx)
@@ -4098,7 +4123,7 @@ async fn push_turns(handle: &crate::handle::ChatStateHandle, turns: usize, conte
 async fn replay_diet_policy_override_disables_rewrite() {
     use crate::ReplayDietPolicy;
 
-    let harness = TestHarness::new();
+    let harness = TestHarness::with_disabled_pruning();
     harness.handle.set_replay_diet_policy(ReplayDietPolicy {
         enabled: false,
         ..Default::default()
@@ -4125,7 +4150,7 @@ async fn replay_diet_policy_override_disables_rewrite() {
 async fn replay_diet_policy_override_enables_rewrite() {
     use crate::ReplayDietPolicy;
 
-    let harness = TestHarness::new();
+    let harness = TestHarness::with_disabled_pruning();
     harness
         .handle
         .set_replay_diet_policy(ReplayDietPolicy::default());
