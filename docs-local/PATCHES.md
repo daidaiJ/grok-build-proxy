@@ -5085,7 +5085,7 @@ replay_diet = false   # 等价于 v1.0.83 的回合内行为；默认 true
   （A 组，v1.0.83 行为），备份 `config.toml.bak-2026-11-27-replay-diet`；
   B 组改为 `true` 后开新会话。
 
-## 八十二期：冷窗口 microcompaction 接线（2026-11-28，未发版）
+## 八十二期：冷窗口 microcompaction 接线（2026-11-28，v1.0.86）
 
 ### 背景
 
@@ -5135,3 +5135,19 @@ terminal 后台任务（bash/monitor）；普通回合结束后恒为 0。部署
   `GROK_IDLE_MICROCOMPACT_AFTER_SECS`，否则仍可能切断热缓存。
 - 改写持久化：旧 reasoning 删除、旧大工具结果替换为自描述 stub；需要细节时
   重跑工具。stub 与 in-turn diet 相同，可从 `REPLAY_DIET_STUB_PREFIX` 识别。
+
+### 发版（v1.0.86）
+
+- tag `v1.0.86` → `60b98dc1`；main build run `46118541808` 双绿
+  （windows 11m28s、linux 28m07s）。
+- release run `46120857404` 双绿：linux 07:21:52–07:45:34Z、
+  windows 07:21:51–07:45:36Z；GitHub release 非 draft、非 prerelease，4 个资产。
+- Windows zip 64,273,227 B，sha256
+  `18589be8f19128193eb69dad302a72a5e7a82e9bdfe8a3634a5a69130feacd22`。
+- 解包 `grok2.exe` sha256 `923f09e34bd46f2d1a539ddacedb02d66631935469cf77e0b2a57976fea92ff5`，
+  `--version` = `grok 1.0.86 (60b98dc19d36)`。
+- 本机三处部署同 hash `923f09e3…`：`D:\tool-cli\grok2\grok2.exe`、
+  `C:\Users\panda\.grok\bin\grok.exe`、`C:\Users\panda\.grok\bin\agent.exe`。
+- 回滚（1.0.85，hash `e8d7325a…`）：`grok2.exe.1.0.85-e8d7325a19ae.bak`、
+  `grok.exe.bak-1.0.85-fork`、`agent.exe.bak-1.0.85-fork`；运行中的旧进程改为
+  `grok2.exe.running-1.0.85`，重启 TUI 后生效 1.0.86。

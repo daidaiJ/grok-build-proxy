@@ -408,7 +408,7 @@ replay_diet = false   # 关闭回合内裁剪；默认 true
 工具结果替换成 `[Archived earlier tool result:` stub；relay、idle-wait、
 压缩等其它机制不受影响。
 
-## 12. 冷窗口 microcompaction 接线（2026-11-28，未发版）
+## 12. 冷窗口 microcompaction 接线（2026-11-28，v1.0.86）
 
 ### 12.1 为什么之前没触发
 
@@ -457,3 +457,15 @@ env：`GROK_IDLE_MICROCOMPACT`（开关）、`_AFTER_SECS`（默认 330）、
 zcode 的 microcompaction 以 60 分钟空闲为触发；本仓按网关实测 TTL 采用
 5.5 分钟，避免切断热缓存。裁剪参数沿用本仓 replay diet（保留最新 10 个
 工具结果、最近 2 个 prompt 轮的 reasoning），比 zcode 保守。
+
+### 12.6 发版与部署（v1.0.86）
+
+- tag `v1.0.86` → `60b98dc1`；build CI `46118541808` 双绿；release
+  `46120857404` 双绿。
+- Windows zip 64,273,227 B，sha256
+  `18589be8f19128193eb69dad302a72a5e7a82e9bdfe8a3634a5a69130feacd22`；
+  解包 `grok2.exe` sha256 `923f09e34bd46f2d1a539ddacedb02d66631935469cf77e0b2a57976fea92ff5`，
+  `--version` = `grok 1.0.86 (60b98dc19d36)`。
+- 三处部署同 hash `923f09e3…`；运行中的 1.0.85 保留为
+  `grok2.exe.running-1.0.85`，回滚备份 `*.1.0.85-e8d7325a19ae.bak` /
+  `*.bak-1.0.85-fork`，重启 TUI 后生效。

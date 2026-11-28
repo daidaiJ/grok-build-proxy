@@ -8,18 +8,18 @@
 ## 🔄 Handoff 摘要
 
 ### harness-cost-p0-p1 — in-progress（长程观察）
-- **当前状态：** P0 v1.0.83、P1（replay diet + relay + idle-wait）v1.0.84、replay diet 配置开关 v1.0.85 已发版并部署（`grok 1.0.85 (14cc51915d84)`）；冷窗口 microcompaction 已接线（未发版，PATCHES 八十二期）。
-- **关键证据：** `docs-local/token-economy-port/p1-observation-2026-11-26.md`（首阶段：长回合输入成本 -9~-27%，命中中位 99%）；`replay-diet-2026-11-21.md`；release 46002120345 双绿，Windows zip sha256 `50627caf…` 已核对；PATCHES 七十九~八十二期。
+- **当前状态：** P0 v1.0.83、P1 v1.0.84、replay diet 开关 v1.0.85、冷窗口 microcompaction v1.0.86 已发版并部署（`grok 1.0.86 (60b98dc19d36)`）；运行中的旧 TUI 仍为 1.0.85，重启后生效。
+- **关键证据：** `docs-local/token-economy-port/p1-observation-2026-11-26.md`（首阶段：长回合输入成本 -9~-27%，命中中位 99%）；`replay-diet-2026-11-21.md`；release 46120857404 双绿，v1.0.86 Windows zip sha256 `18589be8…` 已核对；PATCHES 七十九~八十二期。
 - **验收标准：** 长程会话 `shell.relay_compact.relay_summary_verbatim_missing`、`shell.idle_wait_compact.fired/skipped` 与 `shell.idle_microcompact.fired/skipped` 可观测；P1 按 §3.5 验收；replay diet A/B 用 `[compaction] replay_diet` 开关。
 - **详情指针：** [`.handoff/harness-cost-p0-p1.md`](.handoff/harness-cost-p0-p1.md)
 
 ### 未验证事项
-- [x] release 46002120345 双绿、Windows zip sha256 核对
-- [x] 本机部署 v1.0.85 并保留 1.0.84 回滚
+- [x] release 46120857404 双绿、v1.0.86 Windows zip sha256 `18589be8…` 核对
+- [x] 本机部署 v1.0.86 并保留 1.0.85 回滚（重启 TUI 后生效）
 - [x] 账本 composition 字段落盘；`/stats` 行待抽样
 - [ ] replay diet A/B：本机 config 已设 `replay_diet = false`（A 组），B 组改 `true` 后用新会话对照
-- [ ] relay 已见 2 次（24 条缺 1）；idle-wait 0 fired 根因=outstanding_tasks 门控（15 次 skipped 全为此因）；冷窗口 diet 已接线
-- [ ] 冷窗口 microcompact：普通空闲 >330s 应出现 `shell.idle_microcompact.fired`；有排队用户输入时应先出现 `shell.idle_maintenance.deferred` 且不压缩；下一条 prompt 首个请求不应新增 cache 未命中
+- [ ] relay 已见 2 次（24 条缺 1）；idle-wait 0 fired 根因=outstanding_tasks 门控（15 次 skipped 全为此因）；冷窗口 diet 已部署
+- [ ] 冷窗口 microcompact 活体验收（v1.0.86 已部署，重启后生效）：普通空闲 >330s 应出现 `shell.idle_microcompact.fired`；有排队用户输入时应先出现 `shell.idle_maintenance.deferred` 且不压缩；下一条 prompt 首个请求不应新增 cache 未命中
 
 ## 代码理解（2026-10-03）
 
@@ -73,8 +73,8 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 - 订阅到期体验 + 启动/退出 span — v1.0.80 已部署，待活体验收；PATCHES 76、`startup-perf/span-plan.md` §10。
 - 启动 500ms 目标 — v1.0.82：首帧 193/203ms、session 304ms；余 `tool_registry` 130–151ms、`skills` 42–63ms；PATCHES 78、`startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪、请求级修复持久化等 dump；B/C 组未开工；PATCHES 75、`agent-cli-tracking/TODO.md` ①。
-- token 经济二轮 — P1 首阶段台账（11-22–26）已出：长回合输入成本 -9~-27%、命中中位 99%；idle-wait 0 fired 已定位为 outstanding_tasks 门控，冷窗口 diet 已接线待部署；待 12-10 或 10 个长会话续观；`token-economy-port/p1-observation-2026-11-26.md`。
-- 冷窗口 microcompaction — 普通空闲 >330s 触发零模型调用 diet，已接线（v1.0.86 待发）；验收 `shell.idle_microcompact.fired/skipped`；PATCHES 八十二期。
+- token 经济二轮 — P1 首阶段台账（11-22–26）已出：长回合输入成本 -9~-27%、命中中位 99%；idle-wait 0 fired 已定位为 outstanding_tasks 门控，冷窗口 diet 已部署待验收；待 12-10 或 10 个长会话续观；`token-economy-port/p1-observation-2026-11-26.md`。
+- 冷窗口 microcompaction — v1.0.86 已发版并部署（`923f09e3…`），重启 TUI 后生效；验收 `shell.idle_microcompact.fired/skipped`；PATCHES 八十二期。
 - replay diet A/B — v1.0.85 配置开关已发；A=`[compaction] replay_diet=false`（本机已设），B=`true`；两组用新会话、看账本 token 加权命中与 `$/call`；PATCHES 八十一期。
 - IP 端点自签证书放行 — `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 
@@ -96,9 +96,8 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 
 ## 当前版本
 
-- 本机 `grok 1.0.85 (14cc51915d84)`，三处部署同 hash `e8d7325a…`；回滚 `grok2.exe.1.0.84-467a685d2f74.bak`。
-- 工作区未发版改动：冷窗口 microcompaction（PATCHES 八十二期）；发版后更新本节。
-- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~八十一期。最近：v1.0.85 replay diet 配置开关（`[compaction] replay_diet`）、v1.0.84 P1 长程压缩、v1.0.83 harness 成本 P0 观测。
+- 本机 `grok 1.0.86 (60b98dc19d36)`，三处部署同 hash `923f09e3…`；回滚 `grok2.exe.1.0.85-e8d7325a19ae.bak`（运行中旧进程 `grok2.exe.running-1.0.85`，重启 TUI 后生效）。
+- 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~八十二期。最近：v1.0.86 冷窗口 microcompaction、v1.0.85 replay diet 配置开关（`[compaction] replay_diet`）、v1.0.84 P1 长程压缩、v1.0.83 harness 成本 P0 观测。
 
 ## 文档地图（docs-local）
 
