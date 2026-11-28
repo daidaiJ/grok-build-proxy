@@ -12,6 +12,11 @@
 > （P1 部署后 5 天数据、成本分解、缓存断崖与后续观察门限；复现脚本
 > `scripts-local/p1_cost_report.py`）。
 >
+> **2026-11-28 dsh 缓存深挖**：见
+> [`deepseek-harness-cache-2026-11-28.md`](deepseek-harness-cache-2026-11-28.md)
+> （官方 harness 的 append-only 请求重建、in-history system/tool 更新、压缩/裁剪/
+> 图片省略的断崖记账、逐 step cache 计量与 pressure 投影）。
+>
 > 2026-11-14 实账与下一步：见 [`next-steps-2026-11-14.md`](next-steps-2026-11-14.md)
 > （17 小时用量：缓存重读占 78%；拟用 400K 窗口 × 72% = 288k 触发把活动上下文放进
 > 200–300k 甜区，全天成本约 +9%，压缩 23→17–19 次）。
