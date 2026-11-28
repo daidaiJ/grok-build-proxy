@@ -407,3 +407,53 @@ replay_diet = false   # 关闭回合内裁剪；默认 true
 关闭 diet 后，v1.0.83 的回合内行为恢复：不再删除旧 reasoning，也不再把旧
 工具结果替换成 `[Archived earlier tool result:` stub；relay、idle-wait、
 压缩等其它机制不受影响。
+
+## 12. 冷窗口 microcompaction 接线（2026-11-28，未发版）
+
+### 12.1 为什么之前没触发
+
+部署日志 `shell.idle_wait_compact.skipped` 16 条全部是 `no_outstanding_tasks`：
+`run_idle_wait_compact` 在等待网关 TTL 前就要求
+`outstanding_wait_tasks() > 0`，而该函数只统计 terminal 后台任务
+（bash/monitor）。普通回合结束后该值恒为 0，所以 LLM idle-wait 路径
+从未进入 token 门控；阈值路径 `[features] idle_auto_compact` 默认关，
+in-turn diet 又要求 `turn_calls >= 20`，都覆盖不到普通空闲。
+
+### 12.2 触发与顺序
+
+- **队列优先**：idle 维护开始前先看 `pending_inputs`。非空时记录
+  `shell.idle_maintenance.deferred(reason=queued_prompts)`，立即补踢
+  `maybe_start_running_task`，grace 后再补一次；只有队列为空才评估压缩。
+- **普通空闲（无 terminal 后台任务）**：等待 330s（> 网关 ~5 分钟 TTL）后，
+  调用零模型调用的 `apply_cold_window_diet`，复用 `plan_replay_diet` /
+  `apply_replay_diet`。
+- **仍有后台/监视器任务**：保留 v1.0.84 的 LLM idle-wait ROI 门控；
+  队列非空时同样先让队列跑。
+- 冷窗口门控：上下文 ≥60k、计划回收 ≥8k、`prompt_index` 未变化、未刚压缩、
+  本 prompt 未 diet 过；等待/开火前都会重新检查队列与空闲状态。
+
+### 12.3 观测
+
+- `shell.idle_microcompact.fired`：`reason=cold_window`，
+  `pre_tokens/post_tokens/est_reclaim_tokens/removed_reasoning/stubbed_tool_results/bytes_freed/idle_secs`。
+- `shell.idle_microcompact.skipped`：reason 含
+  `below_min_prompt_tokens/session_busy_at_fire/queued_prompts/...`。
+- `shell.idle_maintenance.deferred`：有排队用户输入，压缩让路。
+- 通用 `shell.replay_diet` 事件 reason = `cold_window`。
+
+### 12.4 配置
+
+```toml
+[compaction]
+idle_microcompact = true   # 冷窗口 diet；默认 true，独立于 replay_diet
+```
+
+env：`GROK_IDLE_MICROCOMPACT`（开关）、`_AFTER_SECS`（默认 330）、
+`_MIN_PROMPT_TOKENS`（60k）、`_MIN_RECLAIM_TOKENS`（8k）。`replay_diet=false`
+只关回合内路径，不影响冷窗口；A/B 时注意两者独立。
+
+### 12.5 与 zcode 的差异
+
+zcode 的 microcompaction 以 60 分钟空闲为触发；本仓按网关实测 TTL 采用
+5.5 分钟，避免切断热缓存。裁剪参数沿用本仓 replay diet（保留最新 10 个
+工具结果、最近 2 个 prompt 轮的 reasoning），比 zcode 保守。

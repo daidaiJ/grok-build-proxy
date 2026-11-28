@@ -5084,3 +5084,54 @@ replay_diet = false   # 等价于 v1.0.83 的回合内行为；默认 true
 - A/B 起点：`~/.grok/config.toml` 已写入 `[compaction] replay_diet = false`
   （A 组，v1.0.83 行为），备份 `config.toml.bak-2026-11-27-replay-diet`；
   B 组改为 `true` 后开新会话。
+
+## 八十二期：冷窗口 microcompaction 接线（2026-11-28，未发版）
+
+### 背景
+
+v1.0.84 的 idle-wait 压缩在普通空闲会话从未触发：`run_idle_wait_compact`
+在等待网关 TTL 之前就要求 `outstanding_wait_tasks > 0`，而该函数只统计
+terminal 后台任务（bash/monitor）；普通回合结束后恒为 0。部署日志里 15 次
+`shell.idle_wait_compact.skipped` 全部是 `no_outstanding_tasks`，0 次 fired。
+阈值路径 `[features] idle_auto_compact` 默认关，in-turn replay diet 又要求
+`turn_calls >= 20`，都覆盖不到普通空闲。代码已部署，缺的是触发条件。
+
+### 改动
+
+- `xai-chat-state`：新增 `ColdWindowDietPolicy` / `ColdWindowDietOutcome`、
+  `ChatStateCommand::ApplyColdWindowDiet`、`ChatStateHandle::apply_cold_window_diet`。
+  冷窗口门控独立于 in-turn diet：上下文下限、最小回收、`prompt_index` 未变化、
+  未刚压缩、本 prompt 未 diet 过。计划与应用复用 `plan_replay_diet` /
+  `apply_replay_diet`，零模型调用；`ReplayDietSkip` 增加 `PromptChanged` 与
+  snake_case 日志标签。
+- `xai-grok-shell`：`run_idle_wait_compact` 改为分派——仍有 outstanding 任务走
+  原 LLM 路径；普通空闲走 `run_cold_window_microcompact`，等待
+  `microcompact_after`（默认 330s，>5 分钟 TTL）后应用 diet。`prompt_index`
+  预期值随命令下发，actor 侧兜住“等待期间来了新 prompt”的竞态。
+- 配置：`[compaction] idle_microcompact`（默认开）+
+  `GROK_IDLE_MICROCOMPACT*`（等待秒数、上下文下限、最小回收）；默认
+  330s / 60k / 8k。`[compaction] replay_diet` 仍只控制 in-turn 路径，两者可
+  独立 A/B。
+- 队列优先：idle 维护启动前先看 `pending_inputs`；非空时记录
+  `shell.idle_maintenance.deferred`（reason `queued_prompts`）并补踢
+  `maybe_start_running_task`（立即一次 + grace 后一次），队列清空后才进入
+  压缩评估。LLM 与冷窗口两条路径在等待/开火前都记录
+  `queued_prompts_during_wait` / `queued_prompts` 跳过原因。
+- 日志：`shell.idle_microcompact.fired/skipped`，字段含
+  `reason/pre_tokens/post_tokens/est_reclaim_tokens/removed_reasoning/stubbed_tool_results/bytes_freed/idle_secs`；
+  通用 `shell.replay_diet` 事件 reason = `cold_window`。
+- 文件：`xai-chat-state/src/actor/replay_diet.rs`、`mutations.rs`、`commands.rs`、
+  `handle.rs`、`lib.rs`；`xai-grok-shell/src/session/acp_session_impl/idle_compact.rs`、
+  `util/config/resolve/compaction.rs`。
+- 测试：`cold_window_diet_rewrites_when_in_turn_diet_is_disabled`、
+  `cold_window_diet_skips_when_prompt_index_moved`；`plain_idle_takes_the_cold_window_path`
+  （根因门控回归）；配置 TOML/默认值测试。
+
+### 行为/限制
+
+- 只处理普通空闲（无 terminal 后台任务）。仍有后台任务时保持原 LLM idle-wait
+  路径，避免与任务唤醒竞争。
+- 冷窗口按 5 分钟网关 TTL 估算；TTL 更长的网关需调
+  `GROK_IDLE_MICROCOMPACT_AFTER_SECS`，否则仍可能切断热缓存。
+- 改写持久化：旧 reasoning 删除、旧大工具结果替换为自描述 stub；需要细节时
+  重跑工具。stub 与 in-turn diet 相同，可从 `REPLAY_DIET_STUB_PREFIX` 识别。

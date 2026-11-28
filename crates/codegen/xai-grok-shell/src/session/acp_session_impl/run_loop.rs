@@ -2455,10 +2455,11 @@ pub(super) async fn run_session(
                         // The task itself no-ops when `[features] idle_auto_compact` is off.
                         {
                             let s = session.clone();
+                            let tx = completion_tx.clone();
                             tokio::task::spawn_local(async move {
                                 let enabled =
                                     crate::util::config::resolve_idle_auto_compact_enabled();
-                                s.maybe_run_idle_auto_compact(enabled).await;
+                                s.maybe_run_idle_auto_compact(enabled, Some(tx)).await;
                             });
                         }
                     }

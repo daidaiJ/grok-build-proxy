@@ -472,6 +472,23 @@ impl ChatStateHandle {
             .send(ChatStateCommand::SetReplayDietPolicy { policy });
     }
 
+    /// LOCAL(token-economy P1): request one cold-window microcompaction.
+    /// Returns `None` when the actor is gone; the shell treats that as a skip.
+    pub async fn apply_cold_window_diet(
+        &self,
+        policy: crate::actor::replay_diet::ColdWindowDietPolicy,
+        expected_prompt_index: usize,
+    ) -> Option<crate::actor::replay_diet::ColdWindowDietOutcome> {
+        self.query("ApplyColdWindowDiet", |reply| {
+            ChatStateCommand::ApplyColdWindowDiet {
+                policy,
+                expected_prompt_index,
+                reply,
+            }
+        })
+        .await
+    }
+
     /// Get a clone of the full conversation.
     pub async fn get_conversation(&self) -> Vec<ConversationItem> {
         self.query("GetConversation", |reply| {

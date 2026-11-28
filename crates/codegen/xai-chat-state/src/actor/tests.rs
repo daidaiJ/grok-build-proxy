@@ -4170,6 +4170,80 @@ async fn replay_diet_policy_override_enables_rewrite() {
     );
 }
 
+/// Cold-window microcompaction must rewrite an idle conversation even when the
+/// in-turn diet is disabled: the triggers are independently configurable.
+#[tokio::test]
+async fn cold_window_diet_rewrites_when_in_turn_diet_is_disabled() {
+    use crate::{ColdWindowDietOutcome, ColdWindowDietPolicy, ReplayDietPolicy};
+
+    let harness = TestHarness::with_disabled_pruning();
+    harness.handle.set_replay_diet_policy(ReplayDietPolicy {
+        enabled: false,
+        ..Default::default()
+    });
+    push_turns(&harness.handle, 14, 80_000).await;
+    let prompt_index = harness.handle.get_prompt_index().await;
+    let outcome = harness
+        .handle
+        .apply_cold_window_diet(
+            ColdWindowDietPolicy {
+                enabled: true,
+                min_prompt_tokens: 1,
+                min_reclaim_tokens: 1,
+            },
+            prompt_index,
+        )
+        .await
+        .expect("actor reply");
+    assert!(
+        matches!(outcome, ColdWindowDietOutcome::Applied { .. }),
+        "cold-window diet should apply, got {outcome:?}"
+    );
+    let conv = harness.handle.get_conversation().await;
+    assert!(
+        conv.iter().any(|item| matches!(
+            item,
+            ConversationItem::ToolResult(tr) if tr.content.starts_with(
+                crate::actor::replay_diet::REPLAY_DIET_STUB_PREFIX
+            )
+        )),
+        "cold-window diet should stub at least one old tool result"
+    );
+}
+
+/// A prompt that landed between the shell's idle observation and the actor
+/// command must invalidate the rewrite.
+#[tokio::test]
+async fn cold_window_diet_skips_when_prompt_index_moved() {
+    use crate::{ColdWindowDietOutcome, ColdWindowDietPolicy, ReplayDietSkip};
+
+    let harness = TestHarness::with_disabled_pruning();
+    push_turns(&harness.handle, 14, 80_000).await;
+    let prompt_index = harness.handle.get_prompt_index().await;
+    let outcome = harness
+        .handle
+        .apply_cold_window_diet(
+            ColdWindowDietPolicy {
+                enabled: true,
+                min_prompt_tokens: 1,
+                min_reclaim_tokens: 1,
+            },
+            prompt_index + 1,
+        )
+        .await
+        .expect("actor reply");
+    assert!(
+        matches!(
+            outcome,
+            ColdWindowDietOutcome::Skipped {
+                reason: ReplayDietSkip::PromptChanged,
+                ..
+            }
+        ),
+        "expected prompt_changed skip, got {outcome:?}"
+    );
+}
+
 /// After fewer turns than `hard_clear_age_turns` the retained conversation
 /// must not be touched (fast-exit path).
 #[tokio::test]

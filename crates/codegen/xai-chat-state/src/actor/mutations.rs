@@ -9,8 +9,8 @@ use xai_grok_sampling_types::{
 
 use super::ChatStateActor;
 use super::replay_diet::{
-    ReplayDietMark, ReplayDietSkip, apply_replay_diet, plan_replay_diet,
-    replay_diet_gate,
+    ColdWindowDietOutcome, ColdWindowDietPolicy, ReplayDietMark, ReplayDietPolicy,
+    ReplayDietSkip, apply_replay_diet, plan_replay_diet, replay_diet_gate,
 };
 use super::request_builder::{HARD_CLEAR_PLACEHOLDER, append_prune_marker};
 use crate::events::ChatStateEvent;
@@ -477,31 +477,122 @@ impl ChatStateActor {
         }
 
         let plan = plan_replay_diet(&self.state.conversation, policy);
-        if plan.est_reclaim_tokens < policy.min_reclaim_tokens {
+        let _ = self.apply_replay_diet_plan(
+            &plan,
+            policy,
+            policy.min_reclaim_tokens,
+            prompt_tokens,
+            "turn_budget",
+            turn_calls,
+        );
+    }
+
+    /// LOCAL(token-economy P1): deterministic cold-window microcompaction.
+    ///
+    /// The session shell calls this only after the gateway cache TTL has
+    /// elapsed and the session is idle, so the history rewrite does not break
+    /// a warm prefix. No model call: the policy gates a context floor and a
+    /// minimum reclaim instead of a turn call budget.
+    pub(super) fn maybe_apply_cold_window_diet(
+        &mut self,
+        policy: ColdWindowDietPolicy,
+        expected_prompt_index: usize,
+    ) -> ColdWindowDietOutcome {
+        let base = self.replay_diet;
+        let prompt_tokens = self
+            .state
+            .total_tokens
+            .max(super::state::estimate_conversation_tokens(
+                &self.state.conversation,
+            ));
+        let skip = if !policy.enabled {
+            Some(ReplayDietSkip::Disabled)
+        } else if self.state.sampling_config.api_backend
+            == xai_grok_sampling_types::ApiBackend::Messages
+        {
+            Some(ReplayDietSkip::BackendUnsupported)
+        } else if prompt_tokens < policy.min_prompt_tokens {
+            Some(ReplayDietSkip::ContextBelowThreshold)
+        } else if self.state.prompt_index != expected_prompt_index {
+            Some(ReplayDietSkip::PromptChanged)
+        } else if self.state.last_compaction_prompt_index == Some(self.state.prompt_index) {
+            Some(ReplayDietSkip::RecentlyCompacted)
+        } else if self
+            .state
+            .replay_diet_last
+            .is_some_and(|mark| mark.prompt_index == self.state.prompt_index)
+        {
+            Some(ReplayDietSkip::AlreadyAppliedThisTurn)
+        } else {
+            None
+        };
+        if let Some(reason) = skip {
+            return ColdWindowDietOutcome::Skipped {
+                reason,
+                est_reclaim_tokens: 0,
+            };
+        }
+
+        let plan = plan_replay_diet(&self.state.conversation, base);
+        let est_reclaim_tokens = plan.est_reclaim_tokens;
+        match self.apply_replay_diet_plan(
+            &plan,
+            base,
+            policy.min_reclaim_tokens,
+            prompt_tokens,
+            "cold_window",
+            0,
+        ) {
+            Ok(outcome) => ColdWindowDietOutcome::Applied {
+                outcome,
+                prompt_tokens_before: prompt_tokens,
+                prompt_tokens_after: self.state.total_tokens,
+                est_reclaim_tokens,
+            },
+            Err(reason) => ColdWindowDietOutcome::Skipped {
+                reason,
+                est_reclaim_tokens,
+            },
+        }
+    }
+
+    /// Shared application: threshold, rewrite, mark, log, event. Callers own
+    /// the trigger-specific gates so the in-turn and cold-window paths stay
+    /// independently configurable.
+    fn apply_replay_diet_plan(
+        &mut self,
+        plan: &super::replay_diet::ReplayDietPlan,
+        policy: ReplayDietPolicy,
+        min_reclaim_tokens: u64,
+        prompt_tokens_before: u64,
+        reason: &'static str,
+        mark_turn_calls: u32,
+    ) -> Result<super::replay_diet::ReplayDietOutcome, ReplayDietSkip> {
+        if plan.est_reclaim_tokens < min_reclaim_tokens {
             tracing::debug!(
                 reclaim_tokens = plan.est_reclaim_tokens,
-                min_reclaim_tokens = policy.min_reclaim_tokens,
-                turn_calls,
+                min_reclaim_tokens,
+                reason,
                 "ChatState: replay diet below reclaim threshold"
             );
-            return;
+            return Err(ReplayDietSkip::BelowReclaimThreshold);
         }
 
         let mut items = self.state.conversation.clone();
-        let outcome = apply_replay_diet(&mut items, &plan, policy);
+        let outcome = apply_replay_diet(&mut items, plan, policy);
         if outcome.removed_reasoning == 0 && outcome.stubbed_tool_results == 0 {
             tracing::debug!(
                 skip = ?ReplayDietSkip::NothingCleanable,
-                turn_calls,
+                reason,
                 "ChatState: replay diet found nothing to rewrite"
             );
-            return;
+            return Err(ReplayDietSkip::NothingCleanable);
         }
 
         self.rewrite_for_replay_diet(items);
         self.state.replay_diet_last = Some(ReplayDietMark {
             prompt_index: self.state.prompt_index,
-            turn_calls,
+            turn_calls: mark_turn_calls,
         });
         let prompt_tokens_after = self.state.total_tokens;
         tracing::info!(
@@ -509,22 +600,24 @@ impl ChatStateActor {
             stubbed_tool_results = outcome.stubbed_tool_results,
             bytes_freed = outcome.bytes_freed,
             est_tokens_freed = outcome.est_tokens_freed,
-            turn_calls,
+            turn_calls = mark_turn_calls,
             prompt_index = self.state.prompt_index,
-            prompt_tokens_before = prompt_tokens,
+            prompt_tokens_before,
             prompt_tokens_after,
-            "ChatState: in-turn replay diet applied"
+            reason,
+            "ChatState: replay diet applied"
         );
         self.send_event(ChatStateEvent::ReplayDietApplied {
-            reason: "turn_budget",
+            reason,
             removed_reasoning: outcome.removed_reasoning,
             stubbed_tool_results: outcome.stubbed_tool_results,
             bytes_freed: outcome.bytes_freed,
             est_tokens_freed: outcome.est_tokens_freed,
-            turn_calls,
-            prompt_tokens_before: prompt_tokens,
+            turn_calls: mark_turn_calls,
+            prompt_tokens_before,
             prompt_tokens_after,
         });
+        Ok(outcome)
     }
 
     /// In-place replay-diet rewrite. Mirrors `replace_conversation` but stays

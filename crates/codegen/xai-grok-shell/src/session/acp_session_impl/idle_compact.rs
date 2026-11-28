@@ -51,6 +51,32 @@ pub(crate) struct IdleWaitCompactPlan {
     pub net_tokens: i64,
 }
 
+/// Which idle-maintenance path a settled session takes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IdleWaitPath {
+    /// Background/monitor tasks remain: compact before their wake-up.
+    LlmCompact,
+    /// Plain idle: deterministic diet once the cache TTL has passed.
+    ColdWindowDiet,
+    /// Plain idle with the cold-window diet disabled.
+    SkipNoOutstanding,
+}
+
+/// Root-cause guard for the cold-window path: plain idle must not require
+/// outstanding terminal tasks, which ordinary sessions never have.
+pub(crate) fn select_idle_wait_path(
+    outstanding_tasks: usize,
+    microcompact_enabled: bool,
+) -> IdleWaitPath {
+    if outstanding_tasks > 0 {
+        IdleWaitPath::LlmCompact
+    } else if microcompact_enabled {
+        IdleWaitPath::ColdWindowDiet
+    } else {
+        IdleWaitPath::SkipNoOutstanding
+    }
+}
+
 /// Decide whether an idle-wait compact is worth one model call.
 ///
 /// The next `N` calls are assumed cold (the wait reached the cache TTL):
@@ -97,10 +123,25 @@ pub(crate) fn plan_idle_wait_compact(
 impl SessionActor {
     /// Entry point spawned from the run loop at the post-turn idle settle point.
     /// `enabled` is resolved by the caller (feature flag + env), keeping this
-    /// body testable without touching process env.
-    pub(crate) async fn maybe_run_idle_auto_compact(self: Arc<Self>, enabled: bool) {
+    /// body testable without touching process env. The completion sender lets
+    /// the idle task kick a queued user prompt when the turn-completion kick
+    /// raced the finalization gate.
+    pub(crate) async fn maybe_run_idle_auto_compact(
+        self: Arc<Self>,
+        enabled: bool,
+        completion_tx: Option<
+            tokio::sync::mpsc::UnboundedSender<super::turn_task::TurnCompletionMsg>,
+        >,
+    ) {
         let wait = crate::util::config::resolve_idle_wait_compact_settings();
-        Self::maybe_run_idle_auto_compact_with_wait(self, enabled, wait, IDLE_COMPACT_GRACE).await
+        Self::maybe_run_idle_auto_compact_with_wait(
+            self,
+            enabled,
+            wait,
+            IDLE_COMPACT_GRACE,
+            completion_tx,
+        )
+        .await
     }
 
     /// Testable core for the existing threshold path; the wait path is off so
@@ -115,6 +156,7 @@ impl SessionActor {
             enabled,
             crate::util::config::IdleWaitCompactSettings::disabled(),
             grace,
+            None,
         )
         .await
     }
@@ -124,6 +166,9 @@ impl SessionActor {
         threshold_enabled: bool,
         wait: crate::util::config::IdleWaitCompactSettings,
         grace: std::time::Duration,
+        completion_tx: Option<
+            tokio::sync::mpsc::UnboundedSender<super::turn_task::TurnCompletionMsg>,
+        >,
     ) {
         if (!threshold_enabled && !wait.enabled) || self.startup_hints.is_subagent {
             return;
@@ -132,6 +177,21 @@ impl SessionActor {
             return;
         }
         let started = tokio::time::Instant::now();
+        // Queue priority: a queued user prompt outranks any idle maintenance.
+        // The turn-completion kick can race the finalization gate, so retry
+        // here instead of waiting for the background task to finish.
+        let queue_depth = {
+            let state = self.state.lock().await;
+            state.pending_inputs.len()
+        };
+        if queue_depth > 0 {
+            self.defer_idle_maintenance_for_queue(queue_depth, grace, completion_tx)
+                .await;
+            return;
+        }
+        // Do not hold the turn-completion sender across the long cache-TTL wait;
+        // the queue branch above is the only consumer.
+        drop(completion_tx);
         // The in-flight slot is claimed only when a compact is about to run, so
         // the inline pre-sampling check stays available while this task waits.
         let busy_now = {
@@ -190,9 +250,67 @@ impl SessionActor {
         }
     }
 
+    /// Queued user prompts run before any idle maintenance. Kicks the queue now
+    /// and once more after the grace, covering a turn-completion kick that lost
+    /// the race with the finalization gate.
+    async fn defer_idle_maintenance_for_queue(
+        self: Arc<Self>,
+        queue_depth: usize,
+        grace: std::time::Duration,
+        completion_tx: Option<
+            tokio::sync::mpsc::UnboundedSender<super::turn_task::TurnCompletionMsg>,
+        >,
+    ) {
+        xai_grok_telemetry::unified_log::info(
+            "shell.idle_maintenance.deferred",
+            Some(self.session_info.id.0.as_ref()),
+            Some(serde_json::json!({
+                "reason": "queued_prompts",
+                "queue_depth": queue_depth,
+            })),
+        );
+        let Some(tx) = completion_tx else {
+            return;
+        };
+        SessionActor::maybe_start_running_task(self.clone(), tx.clone()).await;
+        tokio::time::sleep(grace).await;
+        let still_queued = {
+            let state = self.state.lock().await;
+            state.pending_inputs.len()
+        };
+        if still_queued > 0 {
+            SessionActor::maybe_start_running_task(self, tx).await;
+        }
+    }
+
+    /// Idle maintenance selector. A session still waiting on background tasks
+    /// keeps the LLM compaction path (its wake-up will pay a cold read); a
+    /// plain idle session gets the deterministic cold-window diet, which needs
+    /// no model call.
+    async fn run_idle_wait_compact(
+        self: Arc<Self>,
+        settings: crate::util::config::IdleWaitCompactSettings,
+        started: tokio::time::Instant,
+    ) {
+        match select_idle_wait_path(
+            self.outstanding_wait_tasks().await,
+            settings.microcompact_enabled,
+        ) {
+            IdleWaitPath::LlmCompact => {
+                self.run_idle_wait_llm_compact(settings, started).await;
+            }
+            IdleWaitPath::ColdWindowDiet => {
+                self.run_cold_window_microcompact(settings, started).await;
+            }
+            IdleWaitPath::SkipNoOutstanding => {
+                self.log_idle_wait_skip("no_outstanding_tasks", 0, None, 0);
+            }
+        }
+    }
+
     /// Wait for the cache TTL, then compact only when the token gate says the
     /// next wake-up will save more than the call plus the cache miss.
-    async fn run_idle_wait_compact(
+    async fn run_idle_wait_llm_compact(
         self: Arc<Self>,
         settings: crate::util::config::IdleWaitCompactSettings,
         started: tokio::time::Instant,
@@ -209,7 +327,12 @@ impl SessionActor {
         }
         let remaining = settings.after.saturating_sub(started.elapsed());
         if self.wait_for_busy(remaining).await {
-            self.log_idle_wait_skip("session_busy_during_wait", 0, None, outstanding);
+            let reason = if self.queued_prompt_count().await > 0 {
+                "queued_prompts_during_wait"
+            } else {
+                "session_busy_during_wait"
+            };
+            self.log_idle_wait_skip(reason, 0, None, outstanding);
             return;
         }
         // A turn that started and ended between poll ticks still changes the
@@ -229,10 +352,17 @@ impl SessionActor {
             self.log_idle_wait_skip("tasks_finished_during_wait", 0, None, 0);
             return;
         }
-        let idle_now = {
+        let (queue_depth, idle_now) = {
             let state = self.state.lock().await;
-            is_session_idle_for_injection(&state)
+            (
+                state.pending_inputs.len(),
+                is_session_idle_for_injection(&state),
+            )
         };
+        if queue_depth > 0 {
+            self.log_idle_wait_skip("queued_prompts", 0, None, outstanding);
+            return;
+        }
         if !idle_now {
             self.log_idle_wait_skip("session_busy_at_fire", 0, None, outstanding);
             return;
@@ -381,6 +511,161 @@ impl SessionActor {
         self.clear_idle_compact_in_flight();
     }
 
+    /// Cold-window deterministic microcompaction: wait out the gateway prompt-
+    /// cache TTL, then run the replay diet with no model call. Rewriting while
+    /// the cache is warm would pay the prefix miss the diet is meant to avoid,
+    /// so this never fires before `microcompact_after`.
+    async fn run_cold_window_microcompact(
+        self: Arc<Self>,
+        settings: crate::util::config::IdleWaitCompactSettings,
+        started: tokio::time::Instant,
+    ) {
+        let prompt_index_at_start = self.chat_state_handle.get_prompt_index().await;
+        let mut pre_tokens = self.chat_state_handle.get_estimated_total_tokens().await;
+        if pre_tokens < settings.microcompact_min_prompt_tokens {
+            self.log_idle_microcompact_skip(
+                "below_min_prompt_tokens",
+                pre_tokens,
+                prompt_index_at_start,
+            );
+            return;
+        }
+        let count_at_start = self
+            .compaction
+            .count
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let len_at_start = self.chat_state_handle.get_conversation_len().await;
+        let remaining = settings.microcompact_after.saturating_sub(started.elapsed());
+        if self.wait_for_busy(remaining).await {
+            let reason = if self.queued_prompt_count().await > 0 {
+                "queued_prompts_during_wait"
+            } else {
+                "session_busy_during_wait"
+            };
+            self.log_idle_microcompact_skip(reason, pre_tokens, prompt_index_at_start);
+            return;
+        }
+        if self
+            .compaction
+            .count
+            .load(std::sync::atomic::Ordering::Relaxed)
+            != count_at_start
+            || self.chat_state_handle.get_conversation_len().await != len_at_start
+        {
+            self.log_idle_microcompact_skip(
+                "conversation_changed_during_wait",
+                pre_tokens,
+                prompt_index_at_start,
+            );
+            return;
+        }
+        let (queue_depth, idle_now) = {
+            let state = self.state.lock().await;
+            (
+                state.pending_inputs.len(),
+                is_session_idle_for_injection(&state),
+            )
+        };
+        if queue_depth > 0 {
+            self.log_idle_microcompact_skip(
+                "queued_prompts",
+                pre_tokens,
+                prompt_index_at_start,
+            );
+            return;
+        }
+        if !idle_now {
+            self.log_idle_microcompact_skip(
+                "session_busy_at_fire",
+                pre_tokens,
+                prompt_index_at_start,
+            );
+            return;
+        }
+        if self.compaction.is_suppressed() {
+            self.log_idle_microcompact_skip(
+                "compaction_suppressed",
+                pre_tokens,
+                prompt_index_at_start,
+            );
+            return;
+        }
+        if self
+            .memory
+            .is_flushing
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            self.log_idle_microcompact_skip(
+                "memory_flush_in_flight",
+                pre_tokens,
+                prompt_index_at_start,
+            );
+            return;
+        }
+        if self.outstanding_wait_tasks().await > 0 {
+            self.log_idle_microcompact_skip(
+                "tasks_started_during_wait",
+                pre_tokens,
+                prompt_index_at_start,
+            );
+            return;
+        }
+        pre_tokens = self.chat_state_handle.get_estimated_total_tokens().await;
+        let policy = xai_chat_state::ColdWindowDietPolicy {
+            enabled: true,
+            min_prompt_tokens: settings.microcompact_min_prompt_tokens,
+            min_reclaim_tokens: settings.microcompact_min_reclaim_tokens,
+        };
+        let outcome = self
+            .chat_state_handle
+            .apply_cold_window_diet(policy, prompt_index_at_start)
+            .await;
+        let idle_secs = started.elapsed().as_secs();
+        match outcome {
+            Some(xai_chat_state::ColdWindowDietOutcome::Applied {
+                outcome,
+                prompt_tokens_before,
+                prompt_tokens_after,
+                est_reclaim_tokens,
+            }) => {
+                xai_grok_telemetry::unified_log::info(
+                    "shell.idle_microcompact.fired",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "reason": "cold_window",
+                        "pre_tokens": prompt_tokens_before,
+                        "post_tokens": prompt_tokens_after,
+                        "est_reclaim_tokens": est_reclaim_tokens,
+                        "removed_reasoning": outcome.removed_reasoning,
+                        "stubbed_tool_results": outcome.stubbed_tool_results,
+                        "bytes_freed": outcome.bytes_freed,
+                        "est_tokens_freed": outcome.est_tokens_freed,
+                        "idle_secs": idle_secs,
+                        "prompt_index": prompt_index_at_start,
+                    })),
+                );
+            }
+            Some(xai_chat_state::ColdWindowDietOutcome::Skipped {
+                reason,
+                est_reclaim_tokens,
+            }) => {
+                self.log_idle_microcompact_skip_with_reclaim(
+                    reason.as_str(),
+                    pre_tokens,
+                    prompt_index_at_start,
+                    est_reclaim_tokens,
+                );
+            }
+            None => {
+                self.log_idle_microcompact_skip(
+                    "actor_unavailable",
+                    pre_tokens,
+                    prompt_index_at_start,
+                );
+            }
+        }
+    }
+
     async fn run_idle_compact_select(
         self: &Arc<Self>,
         trigger_info: crate::session::acp_session::compaction::AutoCompactTriggerInfo,
@@ -411,6 +696,10 @@ impl SessionActor {
             .count()
     }
 
+    async fn queued_prompt_count(&self) -> usize {
+        self.state.lock().await.pending_inputs.len()
+    }
+
     fn log_idle_wait_skip(
         &self,
         reason: &str,
@@ -426,6 +715,34 @@ impl SessionActor {
                 "pre_tokens": pre_tokens,
                 "last_post_tokens": last_post_tokens,
                 "outstanding_tasks": outstanding_tasks,
+            })),
+        );
+    }
+
+    fn log_idle_microcompact_skip(
+        &self,
+        reason: &str,
+        pre_tokens: u64,
+        prompt_index: usize,
+    ) {
+        self.log_idle_microcompact_skip_with_reclaim(reason, pre_tokens, prompt_index, 0);
+    }
+
+    fn log_idle_microcompact_skip_with_reclaim(
+        &self,
+        reason: &str,
+        pre_tokens: u64,
+        prompt_index: usize,
+        est_reclaim_tokens: u64,
+    ) {
+        xai_grok_telemetry::unified_log::info(
+            "shell.idle_microcompact.skipped",
+            Some(self.session_info.id.0.as_ref()),
+            Some(serde_json::json!({
+                "reason": reason,
+                "pre_tokens": pre_tokens,
+                "prompt_index": prompt_index,
+                "est_reclaim_tokens": est_reclaim_tokens,
             })),
         );
     }
@@ -542,5 +859,18 @@ mod idle_wait_plan_tests {
         let plan = plan_idle_wait_compact(100_000, Some(150_000), 4, 100_000, 20_000)
             .expect("stale post estimate should fall back");
         assert_eq!(plan.post_tokens, 10_000);
+    }
+
+    #[test]
+    fn plain_idle_takes_the_cold_window_path() {
+        assert_eq!(
+            select_idle_wait_path(0, true),
+            IdleWaitPath::ColdWindowDiet
+        );
+        assert_eq!(
+            select_idle_wait_path(0, false),
+            IdleWaitPath::SkipNoOutstanding
+        );
+        assert_eq!(select_idle_wait_path(1, true), IdleWaitPath::LlmCompact);
     }
 }

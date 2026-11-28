@@ -8,7 +8,9 @@ use xai_grok_sampling_types::{
     ToolSpec, TraceContext,
 };
 
-use crate::actor::replay_diet::ReplayDietPolicy;
+use crate::actor::replay_diet::{
+    ColdWindowDietOutcome, ColdWindowDietPolicy, ReplayDietPolicy,
+};
 use crate::types::{
     AutoCompactTrigger, ChatStateSnapshot, ConversationCounts, Credentials, NotificationMeta,
     TurnCapture,
@@ -250,6 +252,15 @@ pub enum ChatStateCommand {
     /// `[compaction] replay_diet` once at spawn and sends it here; the actor's
     /// env-derived default covers non-shell embeddings and tests.
     SetReplayDietPolicy { policy: ReplayDietPolicy },
+
+    /// LOCAL(token-economy P1): deterministic cold-window microcompaction.
+    /// `expected_prompt_index` guards against a turn that started after the
+    /// shell observed the session idle; the actor skips if it moved.
+    ApplyColdWindowDiet {
+        policy: ColdWindowDietPolicy,
+        expected_prompt_index: usize,
+        reply: oneshot::Sender<ColdWindowDietOutcome>,
+    },
 
     /// Get a clone of the full conversation.
     GetConversation {

@@ -93,6 +93,47 @@ impl ReplayDietPolicy {
     }
 }
 
+/// LOCAL(token-economy P1): cold-window microcompaction policy.
+///
+/// Runs the same deterministic replay-diet plan once a session has been idle
+/// past the gateway prompt-cache TTL. There is no model call; the cold window
+/// is what keeps the rewrite from paying a prefix-cache miss. The floor and
+/// reclaim minimum are separate from the in-turn policy: the in-turn diet must
+/// justify a hot-cache break, the cold-window diet only needs a worthwhile
+/// rewrite.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColdWindowDietPolicy {
+    pub enabled: bool,
+    pub min_prompt_tokens: u64,
+    pub min_reclaim_tokens: u64,
+}
+
+impl Default for ColdWindowDietPolicy {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_prompt_tokens: 60_000,
+            min_reclaim_tokens: 8_000,
+        }
+    }
+}
+
+/// Result of one cold-window diet attempt. Carries the plan estimate on both
+/// arms so the session log can explain a skip as well as a rewrite.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColdWindowDietOutcome {
+    Applied {
+        outcome: ReplayDietOutcome,
+        prompt_tokens_before: u64,
+        prompt_tokens_after: u64,
+        est_reclaim_tokens: u64,
+    },
+    Skipped {
+        reason: ReplayDietSkip,
+        est_reclaim_tokens: u64,
+    },
+}
+
 /// Why a turn was left alone. Logged at debug level by the actor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplayDietSkip {
@@ -102,8 +143,26 @@ pub enum ReplayDietSkip {
     ContextBelowThreshold,
     RecentlyCompacted,
     AlreadyAppliedThisTurn,
+    PromptChanged,
     NothingCleanable,
     BelowReclaimThreshold,
+}
+
+impl ReplayDietSkip {
+    /// Stable snake_case label for unified-log reasons.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::BackendUnsupported => "backend_unsupported",
+            Self::NotEnoughCalls => "not_enough_calls",
+            Self::ContextBelowThreshold => "context_below_threshold",
+            Self::RecentlyCompacted => "recently_compacted",
+            Self::AlreadyAppliedThisTurn => "already_applied_this_turn",
+            Self::PromptChanged => "prompt_changed",
+            Self::NothingCleanable => "nothing_cleanable",
+            Self::BelowReclaimThreshold => "below_reclaim_threshold",
+        }
+    }
 }
 
 /// Per-turn application mark. A turn gets at most one diet: a second rewrite

@@ -371,6 +371,14 @@ impl ChatStateActor {
             ChatStateCommand::SetReplayDietPolicy { policy } => {
                 self.replay_diet = policy;
             }
+            ChatStateCommand::ApplyColdWindowDiet {
+                policy,
+                expected_prompt_index,
+                reply,
+            } => {
+                let outcome = self.maybe_apply_cold_window_diet(policy, expected_prompt_index);
+                let _ = reply.send(outcome);
+            }
             ChatStateCommand::GetConversation { reply } => {
                 tracing::debug!(
                     conversation_len = self.state.conversation.len(),

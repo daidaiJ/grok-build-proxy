@@ -40,6 +40,23 @@ pub(crate) const DEFAULT_IDLE_WAIT_MIN_NET_TOKENS: u64 = 50_000;
 pub(crate) const DEFAULT_IDLE_WAIT_COOLDOWN_SECS: u64 = 1_800;
 pub(crate) const DEFAULT_IDLE_WAIT_MIN_GROWTH_TOKENS: u64 = 16_000;
 
+// LOCAL(token-economy P1): cold-window deterministic microcompaction. Fires on
+// plain idle after the gateway cache TTL, independently of background tasks,
+// and never calls the model. The toggle reads `[compaction] idle_microcompact`;
+// numeric bounds stay env-only.
+pub(crate) const ENV_IDLE_MICROCOMPACT: &str = "GROK_IDLE_MICROCOMPACT";
+pub(crate) const ENV_IDLE_MICROCOMPACT_AFTER_SECS: &str = "GROK_IDLE_MICROCOMPACT_AFTER_SECS";
+pub(crate) const ENV_IDLE_MICROCOMPACT_MIN_PROMPT_TOKENS: &str =
+    "GROK_IDLE_MICROCOMPACT_MIN_PROMPT_TOKENS";
+pub(crate) const ENV_IDLE_MICROCOMPACT_MIN_RECLAIM_TOKENS: &str =
+    "GROK_IDLE_MICROCOMPACT_MIN_RECLAIM_TOKENS";
+
+/// Wait a margin past the ~5 min gateway TTL before rewriting, so the prefix
+/// is cold even though the task starts a few seconds after the last request.
+pub(crate) const DEFAULT_IDLE_MICROCOMPACT_AFTER_SECS: u64 = 330;
+pub(crate) const DEFAULT_IDLE_MICROCOMPACT_MIN_PROMPT_TOKENS: u64 = 60_000;
+pub(crate) const DEFAULT_IDLE_MICROCOMPACT_MIN_RECLAIM_TOKENS: u64 = 8_000;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct IdleWaitCompactSettings {
     pub enabled: bool,
@@ -49,6 +66,10 @@ pub(crate) struct IdleWaitCompactSettings {
     pub min_net_tokens: u64,
     pub cooldown: std::time::Duration,
     pub min_growth_tokens: u64,
+    pub microcompact_enabled: bool,
+    pub microcompact_after: std::time::Duration,
+    pub microcompact_min_prompt_tokens: u64,
+    pub microcompact_min_reclaim_tokens: u64,
 }
 
 impl IdleWaitCompactSettings {
@@ -63,6 +84,12 @@ impl IdleWaitCompactSettings {
             min_net_tokens: DEFAULT_IDLE_WAIT_MIN_NET_TOKENS,
             cooldown: std::time::Duration::from_secs(DEFAULT_IDLE_WAIT_COOLDOWN_SECS),
             min_growth_tokens: DEFAULT_IDLE_WAIT_MIN_GROWTH_TOKENS,
+            microcompact_enabled: false,
+            microcompact_after: std::time::Duration::from_secs(
+                DEFAULT_IDLE_MICROCOMPACT_AFTER_SECS,
+            ),
+            microcompact_min_prompt_tokens: DEFAULT_IDLE_MICROCOMPACT_MIN_PROMPT_TOKENS,
+            microcompact_min_reclaim_tokens: DEFAULT_IDLE_MICROCOMPACT_MIN_RECLAIM_TOKENS,
         }
     }
 }
@@ -90,6 +117,13 @@ fn idle_wait_compact_from_toml(value: Option<&toml::Value>) -> Option<bool> {
         .as_bool()
 }
 
+fn idle_microcompact_from_toml(value: Option<&toml::Value>) -> Option<bool> {
+    value?
+        .get("compaction")?
+        .get("idle_microcompact")?
+        .as_bool()
+}
+
 /// Resolve the idle-wait compaction settings. Precedence for the toggle:
 /// `GROK_IDLE_WAIT_COMPACT`, then `[compaction] idle_wait_compact`, default on.
 /// The numeric bounds are env-only with conservative defaults.
@@ -97,6 +131,9 @@ pub(crate) fn resolve_idle_wait_compact_settings() -> IdleWaitCompactSettings {
     let config = crate::config::load_effective_config().ok();
     let enabled = env_bool(ENV_IDLE_WAIT_COMPACT)
         .or_else(|| idle_wait_compact_from_toml(config.as_ref()))
+        .unwrap_or(true);
+    let microcompact_enabled = env_bool(ENV_IDLE_MICROCOMPACT)
+        .or_else(|| idle_microcompact_from_toml(config.as_ref()))
         .unwrap_or(true);
     IdleWaitCompactSettings {
         enabled,
@@ -129,6 +166,24 @@ pub(crate) fn resolve_idle_wait_compact_settings() -> IdleWaitCompactSettings {
             ENV_IDLE_WAIT_MIN_GROWTH_TOKENS,
             DEFAULT_IDLE_WAIT_MIN_GROWTH_TOKENS,
         ),
+        microcompact_enabled,
+        microcompact_after: std::time::Duration::from_secs(
+            env_u64(
+                ENV_IDLE_MICROCOMPACT_AFTER_SECS,
+                DEFAULT_IDLE_MICROCOMPACT_AFTER_SECS,
+            )
+            .clamp(60, 7_200),
+        ),
+        microcompact_min_prompt_tokens: env_u64(
+            ENV_IDLE_MICROCOMPACT_MIN_PROMPT_TOKENS,
+            DEFAULT_IDLE_MICROCOMPACT_MIN_PROMPT_TOKENS,
+        )
+        .max(1),
+        microcompact_min_reclaim_tokens: env_u64(
+            ENV_IDLE_MICROCOMPACT_MIN_RECLAIM_TOKENS,
+            DEFAULT_IDLE_MICROCOMPACT_MIN_RECLAIM_TOKENS,
+        )
+        .max(1),
     }
 }
 
@@ -353,5 +408,28 @@ mod idle_wait_toggle_tests {
     fn missing_toggle_is_none() {
         let value: toml::Value = toml::from_str("[compaction]\n").expect("toml parses");
         assert_eq!(idle_wait_compact_from_toml(Some(&value)), None);
+    }
+}
+
+#[cfg(test)]
+mod idle_microcompact_toggle_tests {
+    use super::{DEFAULT_IDLE_MICROCOMPACT_AFTER_SECS, idle_microcompact_from_toml};
+
+    #[test]
+    fn reads_compaction_table_toggle() {
+        let value: toml::Value =
+            toml::from_str("[compaction]\nidle_microcompact = false\n").expect("toml parses");
+        assert_eq!(idle_microcompact_from_toml(Some(&value)), Some(false));
+    }
+
+    #[test]
+    fn missing_toggle_is_none() {
+        let value: toml::Value = toml::from_str("[compaction]\n").expect("toml parses");
+        assert_eq!(idle_microcompact_from_toml(Some(&value)), None);
+    }
+
+    #[test]
+    fn default_waits_past_the_five_minute_gateway_ttl() {
+        assert!(DEFAULT_IDLE_MICROCOMPACT_AFTER_SECS >= 300);
     }
 }

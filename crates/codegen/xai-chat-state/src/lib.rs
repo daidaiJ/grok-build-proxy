@@ -47,8 +47,9 @@ pub use actor::state::{
     estimate_tool_definitions_tokens, estimate_tool_specs_tokens,
 };
 pub use actor::replay_diet::{
-    ReplayDietMark, ReplayDietOutcome, ReplayDietPlan, ReplayDietPolicy, ReplayDietSkip,
-    StubTarget, apply_replay_diet, plan_replay_diet, replay_diet_gate,
+    ColdWindowDietOutcome, ColdWindowDietPolicy, ReplayDietMark, ReplayDietOutcome,
+    ReplayDietPlan, ReplayDietPolicy, ReplayDietSkip, StubTarget, apply_replay_diet,
+    plan_replay_diet, replay_diet_gate,
 };
 pub use commands::{ModelMetadata, StrictAppendAck, StrictAppendError};
 pub use compaction_mode::CompactionMode;
