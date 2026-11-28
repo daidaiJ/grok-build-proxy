@@ -1,11 +1,16 @@
 # 项目工作规则（LOCAL fork）
 
+> **本地构建/检查禁令（2026-11-28，用户拍板）：** 本机禁止运行
+> `cargo build` / `cargo check` / `cargo test`、`scripts-local/ctest.sh` 或
+> 等价编译命令，除非用户当次明确授权。构建会占用用户的存储与时间；
+> 验证一律走 CI 或只读代码审查（`rg`/读文件/脚本分析）。
+
 ## 🔄 Handoff 摘要
 
 ### harness-cost-p0-p1 — in-progress（长程观察）
-- **当前状态：** P0 v1.0.83、P1（replay diet + relay + idle-wait）v1.0.84、replay diet 配置开关 v1.0.85 已发版并部署（`grok 1.0.85 (14cc51915d84)`）。
-- **关键证据：** `docs-local/token-economy-port/p1-observation-2026-11-26.md`（首阶段：长回合输入成本 -9~-27%，命中中位 99%）；`replay-diet-2026-11-21.md`；release 46002120345 双绿，Windows zip sha256 `50627caf…` 已核对；PATCHES 七十九~八十一期。
-- **验收标准：** 长程会话 `shell.relay_compact.relay_summary_verbatim_missing` 与 `shell.idle_wait_compact.fired/skipped` 可观测；P1 按 §3.5 验收；replay diet A/B 用 `[compaction] replay_diet` 开关。
+- **当前状态：** P0 v1.0.83、P1（replay diet + relay + idle-wait）v1.0.84、replay diet 配置开关 v1.0.85 已发版并部署（`grok 1.0.85 (14cc51915d84)`）；冷窗口 microcompaction 已接线（未发版，PATCHES 八十二期）。
+- **关键证据：** `docs-local/token-economy-port/p1-observation-2026-11-26.md`（首阶段：长回合输入成本 -9~-27%，命中中位 99%）；`replay-diet-2026-11-21.md`；release 46002120345 双绿，Windows zip sha256 `50627caf…` 已核对；PATCHES 七十九~八十二期。
+- **验收标准：** 长程会话 `shell.relay_compact.relay_summary_verbatim_missing`、`shell.idle_wait_compact.fired/skipped` 与 `shell.idle_microcompact.fired/skipped` 可观测；P1 按 §3.5 验收；replay diet A/B 用 `[compaction] replay_diet` 开关。
 - **详情指针：** [`.handoff/harness-cost-p0-p1.md`](.handoff/harness-cost-p0-p1.md)
 
 ### 未验证事项
@@ -13,7 +18,8 @@
 - [x] 本机部署 v1.0.85 并保留 1.0.84 回滚
 - [x] 账本 composition 字段落盘；`/stats` 行待抽样
 - [ ] replay diet A/B：本机 config 已设 `replay_diet = false`（A 组），B 组改 `true` 后用新会话对照
-- [ ] relay 已见 2 次（24 条缺 1）；idle-wait 仍 0 fired，待 net 样本
+- [ ] relay 已见 2 次（24 条缺 1）；idle-wait 0 fired 根因=outstanding_tasks 门控（15 次 skipped 全为此因）；冷窗口 diet 已接线
+- [ ] 冷窗口 microcompact：普通空闲 >330s 应出现 `shell.idle_microcompact.fired`；有排队用户输入时应先出现 `shell.idle_maintenance.deferred` 且不压缩；下一条 prompt 首个请求不应新增 cache 未命中
 
 ## 代码理解（2026-10-03）
 
@@ -36,42 +42,18 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 一切调试先算时间账，优先长期时效：
 
 1. **先分族再动手**。失败常成族（几十个同根因），按报错分族、一族一策，禁止逐个盲修。
-2. **编译最贵**。全量 pager lib test ≈ 6–11 分钟编译 + 4 分钟跑；共享 crate 会级联重编。
-   语法/类型验证用 `cargo check -p <pkg>`；行为验证按模块过滤；一轮批量收集信息，
-   禁止"改一行→全量→再改一行"。**编译/测试输出禁止接 `tail`/`head` 管道**：失败
-   详情会被丢弃，只能整轮重跑；完整输出直落后台日志或 `> file 2>&1`，失败后只对
-   已写完的日志 tail/grep。
-3. **长任务放后台**。长编译/全量测试放后台，期间做不冲突的分析；禁止连续大超时阻塞。
-   Windows 上 cargo 被 kill 可能留冻结进程：`tasklist | grep cargo/rustc`，必要时
-   `taskkill //F //IM cargo.exe`。
-4. **Windows 环境与测试门禁（MANDATORY）**。本机 Windows，上游基线 Linux CI。失败先判
-   环境族：8.3 短名 `~`、路径分隔符、HOME/USERPROFILE、POSIX shell、终端字形、
-   `File::open` 开目录、保留设备名 `nul/con/aux/com1…`（写入进黑洞仍报成功）。环境族
-   按"屏蔽噪声"处理，真 bug 才修。目录身份用 creation_time（mtime 随子项变化；~15 秒内同名重建也会骗人）。
-   - 本机任何 cargo test 一律走 `scripts-local/ctest.sh -p <pkg> --lib`（白名单 +
-     `RUST_MIN_STACK=32MB` + `TMP=D:\cargo-tmp` + 自动拼 `docs-local/win-skip.txt`
-     的 `--skip`）。禁止裸跑；一次性分析确需裸跑用 `GATE_FORCE=1`，事后恢复。
-   - `win-skip.txt` 是已知必挂测试的唯一台账（每条带根因）。新环境族先登记再跑；
-     处置：不兼容/不重要 → 门控，重要 → 评估修复；修复后撤销并记 PATCHES.md。
-   - 分诊见 `docs-local/WIN-TEST-GATE.md`：`win_scan.py`（零编译）→ `win_sample.py`
-     → 只对失败模块深排；孤例才打 `#[cfg(windows)] #[ignore]` 并登记 PATCHES.md。
-   - **上游（Grok 同步）套件整包回归一律 WSL / Linux CI**，禁止本机逐个排查。
-     LOCAL 改动验证 = `cargo check` + 本地自有 crate 的 lib 测试（xai-chat-state /
-     sampler / sampling-types / compaction / pager 等）。
-5. **临时目录不走 C 盘**。走 `ctest.sh` 自动注入；裸跑 cargo 手动带
-   `TMP='D:\cargo-tmp' TEMP='D:\cargo-tmp'`。
-6. **上游同步会覆盖同步文件**。对同步文件打的 LOCAL 补丁（cfg 门控等）必须在
+   先读码、grep、看既有 CI 日志；确需运行时证据时先向用户申请，不要自行开构建。
+2. **一次批量收集信息**。禁止"改一行→全量→再改一行"；一轮改完再交 CI。
+   构建/测试输出不接 `tail`/`head` 管道，完整落盘后再检索。
+3. **临时目录不走 C 盘**。需要落盘时用 `D:\tmp` / `D:\cargo-tmp`，用完即删。
+4. **上游同步会覆盖同步文件**。对同步文件打的 LOCAL 补丁（cfg 门控等）必须在
    `docs-local/PATCHES.md` 有据可查，便于同步后重放。
-7. **A/B 先算成本**。归因"我的改动还是既有问题"时，优先零编译证据（读码、既有 CI
-   日志、grep）；确需运行时对照时用已构建产物，或并入修后唯一一轮验证。禁止为对照
-   单独多烧一轮重编。多主题验证时小 crate 快验证放最前、长链大编译放最后；快问题
-   别排在慢构建后面（cargo 构建锁全局互斥，探针会卡到超时）。
-8. **lib test 过滤省跑不省编**。选重编级联最小的 crate；旁支 crate 新套件先跑基线。
-   rustc 连续 ACCESS_VIOLATION（0xc0000005）≠ 代码错误，是增量缓存损坏：
-   `rm -rf target/debug/incremental` + `CARGO_INCREMENTAL=0` 重试。
-9. **大杂烩单测先拆分再调试**（LOCAL 标注），让失败自报用例名。Barrier/锁测试挂死
-   往往是"被测流程在锚点前就失败"的放大，先查早期错误再怀疑并发。
-10. **已验证的主题立刻提交**。失败重试与提交推送解耦，绿一块走一块。
+5. **A/B 先算成本**。优先零编译证据（读码、既有 CI 日志、grep）；确需运行时对照时
+   用已构建产物或并入唯一一轮 CI，禁止为对照单独多烧一轮构建。
+6. **已验证的主题立刻提交**。失败重试与提交推送解耦，绿一块走一块。
+7. **清理**。用户要求或收口时，删除本轮 `target/debug` 对应产物与
+   `D:\cargo-tmp`，保留 `target/release` 与用户备份。历史 Windows 测试门禁/
+   `win-skip.txt` 规则见 `docs-local/WIN-TEST-GATE.md`，仅在用户授权构建时使用。
 
 ## 记录与归档
 
@@ -91,7 +73,8 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 - 订阅到期体验 + 启动/退出 span — v1.0.80 已部署，待活体验收；PATCHES 76、`startup-perf/span-plan.md` §10。
 - 启动 500ms 目标 — v1.0.82：首帧 193/203ms、session 304ms；余 `tool_registry` 130–151ms、`skills` 42–63ms；PATCHES 78、`startup-perf/README.md` §5。
 - 客户端循环检测后续 — MiMo 跨 turn `ignored` 裁剪、请求级修复持久化等 dump；B/C 组未开工；PATCHES 75、`agent-cli-tracking/TODO.md` ①。
-- token 经济二轮 — P1 首阶段台账（11-22–26）已出：长回合输入成本 -9~-27%、命中中位 99%、idle-wait 0 fired；待 12-10 或 10 个长会话续观；`token-economy-port/p1-observation-2026-11-26.md`。
+- token 经济二轮 — P1 首阶段台账（11-22–26）已出：长回合输入成本 -9~-27%、命中中位 99%；idle-wait 0 fired 已定位为 outstanding_tasks 门控，冷窗口 diet 已接线待部署；待 12-10 或 10 个长会话续观；`token-economy-port/p1-observation-2026-11-26.md`。
+- 冷窗口 microcompaction — 普通空闲 >330s 触发零模型调用 diet，已接线（v1.0.86 待发）；验收 `shell.idle_microcompact.fired/skipped`；PATCHES 八十二期。
 - replay diet A/B — v1.0.85 配置开关已发；A=`[compaction] replay_diet=false`（本机已设），B=`true`；两组用新会话、看账本 token 加权命中与 `$/call`；PATCHES 八十一期。
 - IP 端点自签证书放行 — `feat/local-insecure-tls-ip-hosts` 待合；`[network] insecure_tls_hosts`。
 
@@ -114,6 +97,7 @@ scoped 索引。用法与陷阱：`~/.zcode/skills/cbm/SKILL.md`、
 ## 当前版本
 
 - 本机 `grok 1.0.85 (14cc51915d84)`，三处部署同 hash `e8d7325a…`；回滚 `grok2.exe.1.0.84-467a685d2f74.bak`。
+- 工作区未发版改动：冷窗口 microcompaction（PATCHES 八十二期）；发版后更新本节。
 - 发版详情与 sha256：`docs-local/PATCHES.md` 七十三~八十一期。最近：v1.0.85 replay diet 配置开关（`[compaction] replay_diet`）、v1.0.84 P1 长程压缩、v1.0.83 harness 成本 P0 观测。
 
 ## 文档地图（docs-local）
